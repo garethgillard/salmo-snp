@@ -1,0 +1,76 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% comment %}Printable report of a job (report.py): page 1 key numbers, figures and provenance, page 2 the top SNPs and
+   methods (portal.css /* report */ sets A4). Links point at the results page.{% endcomment %}
+{% block main %}
+<div class="sp-report sp-stack">
+  <p class="sp-noprint sp-small sp-muted mb-0"><button type="button" class="btn btn-sm btn-primary" onclick="window.print()">Print or save as PDF</button>
+    Two A4 pages; choose &lsquo;Save as PDF&rsquo; in the print dialog for a PDF.</p>
+  {% if synthetic %}<div class="sp-status sp-status-warn" role="status">{% include 'snpportal/_badges.html' with kind='synthetic' %}
+    Built with synthetic test data{% if job.synthetic_layers %} (layers: {{ job.synthetic_layers|join:", " }}){% endif %}: not real results.</div>{% endif %}
+  <div class="sp-status sp-status-not_checked" role="note">&#9432; {% include 'snpportal/_badges.html' with kind='provisional' %}
+    Prototype rules pending decision by G: {{ provisional|join:", "|default:"tiers" }}. Tiers rank functional evidence for the
+    {{ preset }} preset; they are not proof of an effect.</div>
+
+  <section aria-labelledby="kpi-h">
+    <h2 class="h6" id="kpi-h">Key numbers, {{ preset }} preset</h2>
+    <div class="sp-kpis">
+      {% for k in kpis %}{% if k.href %}<a class="sp-kpi{% if k.warn %} sp-kpi-warn{% endif %}" href="{{ k.href }}">{% else %}<div class="sp-kpi">{% endif %}
+        <b>{{ k.value }}</b><span>{{ k.label }}{% if k.provisional %} <abbr class="sp-prov-mark" title="Rules are PROVISIONAL, pending decision by G">P</abbr>{% endif %}</span>
+        {% if k.note %}<small>{{ k.note }}</small>{% endif %}
+      {% if k.href %}</a>{% else %}</div>{% endif %}{% endfor %}
+    </div>
+  </section>
+
+  {% if panel %}<section class="sp-card" aria-labelledby="panel-h">
+    <div class="sp-card-head"><h2 id="panel-h">Panel <span class="sp-mono">{{ panel.hash }}</span>, {{ panel.preset|default:"all" }} preset</h2>
+      <a class="ms-auto sp-small sp-noprint" href="{{ panel.url }}">Panel tab</a></div>
+    {% if panel.short %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ panel.short }}</div>{% endif %}
+    <div class="sp-kpis">{% for k in panel.kpis %}<div class="sp-kpi"><b>{{ k.value }}</b><span>{{ k.label }}{% if k.provisional %} <abbr class="sp-prov-mark" title="Rules are PROVISIONAL, pending decision by G">P</abbr>{% endif %}</span>{% if k.note %}<small>{{ k.note }}</small>{% endif %}</div>{% endfor %}</div>
+    <p class="sp-small sp-muted mt-2 mb-0">Design parameters {% include 'snpportal/_badges.html' with kind='provisional' %}: {{ panel.params }}{% if panel.chip %}; compared with {{ panel.chip|lower }}{% endif %}.</p>
+  </section>{% endif %}
+
+  {% if figs %}<div class="sp-report-figs">
+    {% for fig in figs %}<div{% if fig.name == 'ideogram' %} class="sp-report-main"{% endif %}>{% include 'snpportal/_figure.html' with fig=fig %}</div>{% endfor %}
+  </div>{% endif %}
+
+  <section class="sp-card sp-report-text" aria-labelledby="prov-h">
+    <h2 id="prov-h">Provenance</h2>
+    <ul class="sp-report-prov">{% for line in provenance %}<li>{{ line }}</li>{% endfor %}</ul>
+    <p class="sp-small sp-muted mt-2 mb-0">These results are deleted after {{ expires }} or on &lsquo;Delete now&rsquo;. The same
+      release and command reproduce them: see <a href="{% url 'snpportal:run_locally' %}">Run it locally</a>.</p>
+  </section>
+
+  <section class="sp-card sp-report-top" aria-labelledby="top-h">
+    <div class="sp-card-head"><h2 id="top-h">Top {{ rows|length }} SNPs, {{ preset }} preset</h2>
+      <a class="ms-auto sp-small sp-noprint" href="{{ table_url }}">All {{ matching|thousands }} in the table</a></div>
+    <p class="sp-small sp-muted mb-1">Ordered as the table: tier, then score, then file order.{% if filters %} Filters:
+      {% for k, v in filters.items %}{{ k }}={{ v }}{% if not forloop.last %}, {% endif %}{% endfor %} ({{ matching|thousands }} SNPs match).{% endif %}</p>
+    {% if rows %}<div class="table-responsive"><table class="table table-sm sp-small mb-0">
+      <thead><tr><th scope="col">SNP</th><th scope="col">Position</th>{% if 'ref' in columns %}<th scope="col">Alleles</th>{% endif %}
+        {% if 'tier' in columns %}<th scope="col">Tier</th><th scope="col" class="sp-num">Score</th><th scope="col">Evidence</th>{% endif %}
+        {% if 'gene_id' in columns %}<th scope="col">Nearest gene</th>{% endif %}{% if 'region_class' in columns %}<th scope="col">Region</th>{% endif %}
+        {% if 'known_locus' in columns %}<th scope="col">Known locus</th>{% endif %}{% if 'maf' in columns %}<th scope="col" class="sp-num">MAF</th>{% endif %}
+        {% if 'assay_status' in columns %}<th scope="col">Assay</th>{% endif %}</tr></thead>
+      <tbody>{% for r in rows %}<tr>
+        <th scope="row" class="fw-normal"><a href="{{ r.url }}">{{ r.snp }}</a></th><td class="sp-mono">{{ r.position }}</td>
+        {% if 'ref' in columns %}<td class="sp-mono">{{ r.alleles }}</td>{% endif %}
+        {% if 'tier' in columns %}<td>{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
+          <td class="sp-num">{{ r.score|default_if_none:"" }}</td><td>{{ r.evidence }}</td>{% endif %}
+        {% if 'gene_id' in columns %}<td>{{ r.gene }}</td>{% endif %}{% if 'region_class' in columns %}<td>{{ r.region }}</td>{% endif %}
+        {% if 'known_locus' in columns %}<td>{{ r.known }}</td>{% endif %}{% if 'maf' in columns %}<td class="sp-num">{{ r.maf }}</td>{% endif %}
+        {% if 'assay_status' in columns %}<td>{{ r.assay }}</td>{% endif %}
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="sp-small sp-muted mb-0">No SNPs match these filters.</p>{% endif %}
+  </section>
+
+  <section class="sp-card sp-report-text" aria-labelledby="methods-h">
+    <h2 id="methods-h">Methods</h2>
+    {% for p in paragraphs %}<p class="sp-small">{{ p }}</p>{% empty %}<p class="sp-small sp-muted">Methods text is not available for this release; see <a href="{% url 'snpportal:methods' %}">Methods</a>.</p>{% endfor %}
+    {% if refs %}<h3>References</h3>
+    <ul class="sp-small mb-0">{% for r in refs %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+  </section>
+
+</div>
+{% endblock main %}

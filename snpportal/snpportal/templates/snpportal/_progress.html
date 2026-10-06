@@ -1,0 +1,13 @@
+{# Progress panel; htmx polls it every second until the job ends (then the status view sends HX-Refresh). #}
+<div id="progress" class="sp-card" role="status" aria-live="polite"{% if job.state == 'queued' or job.state == 'running' %}
+     hx-get="{% url 'snpportal:status' key %}" hx-trigger="every 1s" hx-swap="outerHTML"{% endif %}>
+  {% if not job %}<h2>These results were deleted.</h2>
+  {% elif job.state == 'queued' %}<h2>Queued</h2><p class="mb-1">Waiting for other lists to finish. This page updates by itself.</p>
+  {% elif job.state == 'running' %}<h2>Scoring your list&hellip;</h2>
+    <ol class="sp-steps">
+      {% for stage, seconds in job.timings.items %}<li>{{ stage }} <span class="sp-muted">({{ seconds }} s)</span></li>{% endfor %}
+      <li class="now">{{ job.stage }}</li>
+    </ol>
+    <p class="sp-small sp-muted mb-0">This page updates by itself. Large lists (a million SNPs) take a few minutes.</p>
+  {% else %}<h2>Finished</h2><p class="mb-0"><a href="">Show the results</a></p>{% endif %}
+</div>

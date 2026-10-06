@@ -1,0 +1,230 @@
+"""Locus browser, evidence card and variant page on a release built from salmo-snpscore's fixture, offline: signal rows
+come from SYNTHETIC bigWigs written at test time (salmo-snpscore tests/bbi_writer.py) and served by its
+tests/range_server.py. With SNPSCORE_LIVE=1 one test reads the real salmobase bigWigs and prints timings."""
+import logging
+import os
+import re
+import shutil
+import sys
+import tempfile
+import time
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from unittest import mock, skipUnless
+
+from django.test import SimpleTestCase, override_settings
+from django.urls import reverse
+
+import snpscore
+from snpscore import bbi
+
+from . import jobs, locus
+
+SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
+FIXTURE = SNPSCORE / "tests" / "fixture"
+CONDITIONS = ["Brain_Immature_Female", "Brain_Mature_Male", "Gonad_Mature_Male", "Liver_Immature_Female"]
+VGLL3 = "r=25:28,980,000-29,010,000"
+SIGNAL_PATH = 'fill-opacity="0.85"'  # one per drawn signal row
+
+
+class Tiles(dict):
+    """A tile cache that keeps every key it was given."""
+
+    def get_many(self, keys):
+        return {k: self[k] for k in keys if k in self}
+
+    def set_many(self, values):
+        self.update(values)
+
+
+def svg_of(html):
+    """The first inline <svg> of a page."""
+    return re.search(r"<svg .*?</svg>", html, re.S).group(0)
+
+
+@skipUnless(FIXTURE.exists(), "needs the salmo-snpscore repo next to this one")
+class LocusTest(SimpleTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        sys.path.insert(0, str(SNPSCORE / "tests"))
+        from bbi_writer import synthetic_registry
+        from range_server import RangeServer
+        cls.tmp = tempfile.TemporaryDirectory()
+        root = Path(cls.tmp.name).resolve()
+        cls.release = root / "release"
+        if os.environ.get("SNPPORTAL_TEST_RELEASE"):
+            shutil.copytree(os.environ["SNPPORTAL_TEST_RELEASE"], cls.release)
+        else:
+            snpscore.build(SNPSCORE / "layers.yaml", FIXTURE, cls.release)
+        (root / "tracks").mkdir()
+        cls.patches = [mock.patch.object(bbi, "ALLOWED_HOSTS", {"127.0.0.1"}), mock.patch.object(bbi, "ALLOWED_SCHEMES", ("http",))]
+        [p.start() for p in cls.patches]
+        cls.server = RangeServer(root / "tracks", delay=2.0)
+        registry = synthetic_registry(root / "tracks", cls.server.url, CONDITIONS, slow=["Gonad_Mature_Male"])
+        cls.override = override_settings(SNPSCORE_RELEASE=str(cls.release), SNPPORTAL_RESULTS_DIR=str(root / "results"),
+                                          SNPPORTAL_WORKERS=0, SNPPORTAL_TRACKS=str(registry), SNPPORTAL_SIGNAL_DEADLINE=1.0)
+        cls.override.enable()
+        logging.disable(logging.WARNING)  # job log lines and 'no data from <slow track>'
+
+    @classmethod
+    def tearDownClass(cls):
+        logging.disable(logging.NOTSET)
+        cls.override.disable()
+        cls.server.close()
+        [p.stop() for p in cls.patches]
+        cls.tmp.cleanup()
+        super().tearDownClass()
+
+    def setUp(self):
+        self.tiles = Tiles()
+        patch = mock.patch.object(locus, "tile_cache", return_value=self.tiles)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def get(self, url, **headers):
+        response = self.client.get(url, **headers)
+        self.assertEqual(response.status_code, 200, url)
+        return response.content.decode()
+
+    def test_locus_page_lanes_and_signal(self):
+        page = self.get(f"{reverse('snpportal:locus')}?{VGLL3}&trait=maturation")
+        svg = svg_of(page)
+        root = ET.fromstring(svg)
+        self.assertEqual(root.get("role"), "img")
+        self.assertIn("ENSSSAG00000053708", svg)  # the vgll3 gene model
+        self.assertIn("~VGLL3", svg)
+        self.assertEqual(len(re.findall(r">((?:Imm|Mat) [FM]|Blastula|Gastrula|[EML] somito)</text>", svg)), 21)  # condition rows
+        self.assertIn("promoter", svg)  # regbuild
+        self.assertIn("504-fish panel: MAF 0.48, alt AF 0.48", svg)  # public variant at vgll3 Met54Thr (R1)
+        self.assertIn("AQUA-FAANG 12 fish: alt AF 0.67, DR2 1.00", svg)
+        self.assertIn("vgll3_Met54Thr", svg)
+        self.assertIn(">Published</text>", svg)  # the published-associations lane (R3) and its legend
+        self.assertIn(">missense</text>", svg)
+        self.assertIn(" RPM", svg)  # signal unit
+        # maturation: Brain and Gonad conditions of the synthetic registry; the slow Gonad track is hatched, not made up
+        self.assertEqual(svg.count(SIGNAL_PATH), 2)
+        self.assertIn("signal unavailable", svg)
+        self.assertIn("SYNTHETIC", svg)  # watermark: synthetic tracks contribute
+        self.assertIn("Zoom in", page)
+        self.assertIn('hx-push-url="/snp/locus/?r=25%3A', page)
+        self.assertIn("https://salmobase.org/jbrowse/?assembly=Ssal_v3.1&amp;loc=25:28980000..29010000", page)
+        self.assertIn("https://www.ensembl.org/Salmo_salar/Location/View?r=25:28980000-29010000", page)
+
+        wide = svg_of(self.get(f"{reverse('snpportal:locus')}?r=25:28.88-29.2Mb"))
+        self.assertIn("GERP constrained element", wide)
+        self.assertIn("molQTL lead (nf-RASQUAL, 12 fish): Brain ca 25:28963213-28965045", wide)  # the molQTL lane (R4)
+        self.assertIn("AQUA-FAANG blacklist", wide)
+        self.assertIn("LORe region", svg_of(self.get(f"{reverse('snpportal:locus')}?r=26:19.1-19.2Mb")))
+        self.assertIn("Chromosome 25: 28,980,000-29,010,000",
+                      self.get(f"{reverse('snpportal:locus')}?r=ssa25:28.98-29.01Mb"))  # alias and Mb units: the same view
+        self.assertIn("wider than 2 Mb", self.get(f"{reverse('snpportal:locus')}?r=25:20-29Mb"))
+        self.assertIn("Unknown chromosome", self.get(f"{reverse('snpportal:locus')}?r=ssa99:1-100"))
+
+    def test_fragment_download_and_moves(self):
+        url = f"{reverse('snpportal:locus_svg')}?{VGLL3}"
+        fragment = self.get(url, HTTP_HX_REQUEST="true", HTTP_HX_TARGET="locus-view")
+        self.assertIn('id="locus-view"', fragment)
+        self.assertNotIn("sp-nav", fragment)  # only the swapped part
+        moved = re.findall(r'hx-get="/snp/locus/svg/\?([^"]+)"', fragment)
+        self.assertEqual(len(moved), 5)  # zoom in, out x3, out x10, left, right
+        self.assertTrue(all(m.startswith("r=25%3A") for m in moved))
+        response = self.client.get(url + "&download=1")
+        self.assertIn("attachment", response["Content-Disposition"])
+        root = ET.fromstring(response.content.decode())  # standalone and valid XML
+        self.assertIn("manifest sha256", root.find("{http://www.w3.org/2000/svg}desc").text)
+        self.assertNotIn("<a href", response.content.decode())  # no links in a downloaded file
+
+    def test_tiles_cached_and_never_keyed_by_user_positions(self):
+        bbi.clear_caches()
+        self.server.requests.clear()
+        url = f"{reverse('snpportal:locus_svg')}?{VGLL3}"  # preset 'all': two fast synthetic tracks
+        first = self.get(url)
+        self.assertEqual(first.count(SIGNAL_PATH), 2)
+        self.assertTrue(self.server.requests)
+        n = len(self.server.requests)
+        self.assertEqual(self.get(url), first)
+        self.assertEqual(len(self.server.requests), n)  # the same view again: no range requests at all
+
+        positions = [28996360, 28998410, 28990123]
+        key = jobs.create_from_rows([("25", p, f"snp{i}", "C", "T") for i, p in enumerate(positions)], "Test rows")
+        page = self.get(f"{reverse('snpportal:locus')}?{VGLL3}&key={key}&trait=maturation")
+        self.assertIn(f"/snp/results/{key}/snp/0/", page)  # lollipops open the card
+        self.assertTrue(self.tiles)
+        for k in self.tiles:
+            self.assertFalse(any(str(p) in k or f"{p:,}" in k for p in positions), k)
+            self.assertNotIn(str(key), k)
+        self.assertEqual(self.client.get(f"{reverse('snpportal:locus')}?key=00000000-0000-0000-0000-000000000000").status_code, 404)
+        centred = self.get(f"{reverse('snpportal:locus')}?key={key}&row=1")  # opened from a card: no coordinates in the URL
+        self.assertIn("Chromosome 25: 28,993,410-29,003,409", centred)
+        bare = Path(self.tmp.name) / "bare.tsv"  # a list with no id, ref or alt column (e.g. a chip of chrom, pos)
+        bare.write_text("chrom\tpos\n25\t28996360\n")
+        key = jobs.create(bare, ".tsv", label="Positions only")
+        self.assertIn(f"/snp/results/{key}/snp/0/", self.get(f"{reverse('snpportal:locus')}?key={key}&row=0"))
+
+    def test_card_and_variant_page(self):
+        key = jobs.create_from_rows([("25", 28996360, "vgll3_Met54Thr", "C", "T"), ("26", 19138923, "bco1l", "A", "G"),
+                                     ("25", 28964518, "mq", None, None)], "Card rows")
+        card = self.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain", HTTP_HX_REQUEST="true")
+        self.assertNotIn("sp-nav", card)
+        why = svg_of(card[card.index("Why this tier"):])
+        score = int(re.search(r"score (\d+) for <em>brain</em>", card).group(1))
+        self.assertEqual(sum(int(w) for w in re.findall(r": \+(\d+)</title>", why)), score)  # the bar sums to tier_score
+        grid = svg_of(card[card.index("Chromatin state per condition"):])
+        self.assertEqual(grid.count('rx="3" fill="none"'), 4)  # the 4 Brain conditions of the preset are outlined
+        self.assertIn("Expression per tissue", card)
+        self.assertIn("Published association", card)
+        self.assertIn('href="https://doi.org/10.1038/nature16062"', card)
+        self.assertIn("Also within the catalogue window", card)  # vgll3_Asn323Lys, 2 kb away
+        self.assertIn("sp-ev-missense", card)
+        self.assertIn("Not a molQTL lead SNP", card)
+        self.assertIn("https://salmobase.org/genes/id/ENSSSAG00000053708?assembly=Ssal_v3.1", card)
+        mq = self.get(reverse("snpportal:card", args=[key, 2]))
+        self.assertIn("caQTL (chromatin accessibility)", mq)  # the molQTL section (R4): the peak shown 1-based
+        self.assertIn("25:28,963,214-28,965,045", mq)
+        self.assertIn("no direction is implied", mq)
+        overview = self.get(reverse("snpportal:results", args=[key]))
+        self.assertIn("molQTL lead SNPs", overview)  # KPI
+        table = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&molqtl=1")
+        self.assertIn("1&ndash;1 of 1 shown", table)
+        self.assertIn("VGLL3", card)
+        d = jobs.folder(key)
+        columns = [c[0] for c in jobs.connect([d]).execute(f"DESCRIBE SELECT * FROM read_parquet('{d / 'result.parquet'}')").fetchall()]
+        self.assertEqual("Assay design" in card, any(c.startswith("assay_") for c in columns))  # only with assay columns
+        bare = locus.evidence({"chrom": "25", "pos": 1, "tier": 4, "tier_score": 0, "tier_terms": []}, jobs.weights(), "all")
+        self.assertEqual((bare["assay"], bare.get("grid"), bare.get("gene")), ([], None, None))
+        mini = re.search(r'hx-get="([^"]+locus.svg[^"]*)"', card).group(1)
+        self.assertNotIn("28996360", mini)  # addressed by row: no coordinates in the URL
+        self.assertNotIn("r=", mini)
+        svg = self.get(mini.replace("&amp;", "&"))
+        ET.fromstring(svg)
+        self.assertIn("ATAC signal", svg)
+        self.assertIn(SIGNAL_PATH, svg)  # synthetic ATAC rows for the brain preset
+
+        variant = self.get(reverse("snpportal:variant", args=["25-28996360-C-T"]))
+        self.assertIn("vgll3_Met54Thr", variant)  # no upload: annotated on the fly
+        self.assertIn("Why this tier", variant)
+        self.assertIn("Chromatin state per condition", variant)
+        self.assertIn("compact=1", variant)
+        self.assertIn("25:28996360", self.get(reverse("snpportal:variant", args=["ssa25-28996360"])))
+        self.assertEqual(self.client.get(reverse("snpportal:variant", args=["ssa99-1"])).status_code, 404)
+        self.assertFalse([p for p in (Path(self.tmp.name) / "results").iterdir() if p.name.startswith(".")])
+
+
+@skipUnless(os.environ.get("SNPSCORE_LIVE") == "1", "reads salmobase.org (SNPSCORE_LIVE=1; set SNPSCORE_CA_FILE)")
+class LiveLocusTest(SimpleTestCase):
+    def test_live_atac_rows(self):
+        """P4.3b: the maturation preset at vgll3 renders 8 real Brain/Gonad ATAC rows; cold and warm timings printed."""
+        dev = SNPSCORE / "release" / "dev"
+        with override_settings(**({"SNPSCORE_RELEASE": str(dev)} if dev.exists() else {})), \
+                mock.patch.object(locus, "tile_cache", return_value=Tiles()):
+            bbi.clear_caches()
+            url = f"{reverse('snpportal:locus')}?region=25:28,990,000-29,000,000&trait=maturation"
+            t = time.time()
+            cold = self.client.get(url).content.decode()
+            t_cold, t = time.time() - t, time.time()
+            self.client.get(url)
+            t_warm = time.time() - t
+            self.assertEqual(cold.count(SIGNAL_PATH), 8)
+            self.assertNotIn("signal unavailable", cold)
+            print(f"\nlive locus: cold {t_cold:.2f} s ({bbi.STATS['requests']} requests), warm {t_warm:.2f} s")

@@ -1,0 +1,102 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% block main %}
+<p class="sp-lead">Everything the portal shows comes from this release: one folder of Parquet files built by
+  <code>snpscore build</code> from public sources, described by its manifest.json
+  {% if release.sha256 %}(sha256 <span class="sp-mono" title="{{ release.sha256 }}">{{ release.sha256|slice:":12" }}</span>){% endif %}.
+  See also <a href="{% url 'snpportal:methods' %}">Methods</a> and <a href="{% url 'snpportal:run_locally' %}">Run it locally</a>.</p>
+{% if release.synthetic %}<div class="sp-status sp-status-warn" role="note">&#9888; {% include 'snpportal/_badges.html' with kind='synthetic' %}
+  Synthetic layers in this release: {{ release.synthetic|join:", " }}. They are labelled wherever they appear and never count in tiers.</div>{% endif %}
+
+<section class="sp-card mb-3" aria-labelledby="layers-h">
+  <h2 id="layers-h">Annotation layers</h2>
+  <div class="table-responsive"><table class="table table-sm sp-small mb-0">
+    <thead><tr><th scope="col">Layer</th><th scope="col">Type</th><th scope="col">Description and citation</th>
+      <th scope="col" class="sp-num">Rows</th><th scope="col">Source</th><th scope="col">sha256</th></tr></thead>
+    <tbody>{% for layer in layers %}<tr id="layer-{{ layer.name }}">
+      <th scope="row" class="sp-mono fw-normal">{{ layer.name }}{% if layer.synthetic %} {% include 'snpportal/_badges.html' with kind='synthetic' %}{% endif %}</th>
+      <td>{{ layer.type }}</td>
+      <td>{{ layer.description }}{% if layer.citation %}<br><span class="sp-muted">{{ layer.citation }}</span>{% endif %}
+        {% if layer.population %}<br><span class="sp-muted">Population: {{ layer.population }}</span>{% endif %}
+        {% if layer.licence %}<br><span class="sp-muted">Licence: {{ layer.licence }}</span>{% endif %}
+        {% if layer.columns %}<br><span class="sp-muted">Columns: {{ layer.columns|join:", "|truncatechars:160 }}</span>{% endif %}</td>
+      <td class="sp-num">{{ layer.rows|thousands }}</td>
+      <td>{% if layer.url %}<a href="{{ layer.url }}" rel="noreferrer noopener" target="_blank">{{ layer.source_file|default:"link"|truncatechars:48 }}</a>{% else %}{{ layer.source_file|truncatechars:48 }}{% endif %}</td>
+      <td class="sp-mono" title="{{ layer.sha256 }}">{{ layer.sha256|default:""|slice:":12" }}</td>
+    </tr>{% empty %}<tr><td colspan="6">No release is configured.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+
+<div class="row g-3">
+  <div class="col-xl-6"><section class="sp-card" id="files" aria-labelledby="files-h">
+    <h2 id="files-h">Other release files</h2>
+    <table class="table table-sm sp-small mb-0">
+      <thead><tr><th scope="col">File</th><th scope="col">What it is</th><th scope="col" class="sp-num">Rows</th><th scope="col">sha256</th></tr></thead>
+      <tbody>{% for name, text, rows, sha, url, source in files %}<tr{% if name == "catalog/known_loci.tsv" %} id="catalog"{% endif %}>
+        <th scope="row" class="sp-mono fw-normal">{{ name }}</th>
+        <td>{{ text }}{% if url %} (<a href="{{ url }}" rel="noreferrer noopener" target="_blank">{{ source|default:"source" }}</a>){% endif %}</td>
+        <td class="sp-num">{{ rows|thousands|default_if_none:"" }}</td>
+        <td class="sp-mono" title="{{ sha }}">{{ sha|default:""|slice:":12" }}</td></tr>{% endfor %}
+        {% if genome %}<tr><th scope="row" class="sp-mono fw-normal">genome</th><td>Ssal_v3.1 sequence for the reference and assay checks
+          (<a href="{{ genome }}" rel="noreferrer noopener" target="_blank">Ensembl FASTA on salmobase</a>)</td><td class="sp-num">{{ chromosomes }} chr.</td><td></td></tr>{% endif %}
+      </tbody>
+    </table>
+    {% if provisional %}<p class="sp-small mt-2 mb-0">{% include 'snpportal/_badges.html' with kind='provisional' %} rules in this release:
+      {{ provisional|join:", " }} (see <a href="{% url 'snpportal:methods' %}">Methods</a>).</p>{% endif %}
+  </section></div>
+
+  <div class="col-xl-6"><section class="sp-card" id="tracks" aria-labelledby="tracks-h">
+    <h2 id="tracks-h">Signal tracks (AQUA-FAANG trackhub)</h2>
+    {% if tracks %}
+    <p class="sp-small sp-muted">{{ tracks.n|thousands }} bigWig files read live from {{ tracks.hosts|join:", " }}
+      ({% for rep, n in tracks.replicates %}{{ n }} {{ rep }}{% if not forloop.last %}, {% endif %}{% endfor %}),
+      plus {{ tracks.chromhmm }} genome-wide ChromHMM segmentations{% if tracks.generated %}; registry generated {{ tracks.generated }}{% endif %}.
+      Number of files per assay and tissue:</p>
+    <div class="table-responsive"><table class="table table-sm sp-small mb-2">
+      <thead><tr><th scope="col">Assay</th>{% for t in tracks.tissues %}<th scope="col" class="sp-num">{{ t }}</th>{% endfor %}<th scope="col" class="sp-num">All</th></tr></thead>
+      <tbody>{% for assay, counts, total in tracks.rows %}<tr><th scope="row" class="fw-normal">{{ assay }}</th>
+        {% for n in counts %}<td class="sp-num">{% if n %}{{ n }}{% else %}<span class="sp-muted">&middot;</span>{% endif %}</td>{% endfor %}<td class="sp-num">{{ total }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <p class="sp-small mb-0">Default rows in the locus browser: {{ tracks.defaults.assay }} {{ tracks.defaults.replicate }}, at most
+      {{ tracks.defaults.max_rows }} {% include 'snpportal/_badges.html' with kind='provisional' %}</p>
+    {% else %}<p class="sp-small sp-muted mb-0">This release has no track registry (tracks.yaml).</p>{% endif %}
+  </section></div>
+</div>
+
+<div class="row g-3 mt-0">
+  <div class="col-xl-6"><section class="sp-card" id="aquafaang" aria-labelledby="aqf-h">
+    <h2 id="aqf-h">AQUA-FAANG samples</h2>
+    <p class="sp-small">The chromatin states, ATAC peaks, signal and molQTL come from the AQUA-FAANG atlases. <strong>BodyMap</strong>:
+      12 AquaGen commercial (domesticated diploid) fish, born at the fish research centre of NMBU in &Aring;s and reared in
+      fresh water in a closed recirculating system; immature fish (J) born January 2020, mature fish (A) March 2019, all
+      sampled in September 2020 (BioSamples SAMEA9253105&ndash;116). Brain, gonad, liver and muscle (gill RNA only).
+      <strong>DevMap</strong>: embryo pools at five stages (Roslin Institute). Gill ATAC and CTCF ChIP were discarded;
+      histone ChIP has 2 of 3 replicates except in gonad. Description {% include 'snpportal/_badges.html' with kind='provisional' %}</p>
+    <div class="row g-2">
+      <div class="col-sm-6"><table class="table table-sm sp-small mb-0">
+        <thead><tr><th scope="col">Atlas</th><th scope="col">Assay</th><th scope="col">ENA project</th></tr></thead>
+        <tbody>{% for atlas, assay, acc, url in projects %}<tr><td>{{ atlas }}</td><td>{{ assay }}</td>
+          <td class="sp-mono"><a href="{{ url }}" rel="noreferrer noopener" target="_blank">{{ acc }}</a></td></tr>{% endfor %}</tbody>
+      </table></div>
+      <div class="col-sm-6"><table class="table table-sm sp-small mb-0">
+        <thead><tr><th scope="col">BodyMap group</th><th scope="col">Fish</th></tr></thead>
+        <tbody>{% for group, ids in fish %}<tr><td>{{ group }}</td><td class="sp-mono">{{ ids }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </div>
+    <p class="sp-small sp-muted mt-2 mb-0">Sample metadata with UBERON terms: <a href="https://data.faang.org/" rel="noreferrer noopener" target="_blank">FAANG data portal</a>.</p>
+  </section></div>
+
+  <div class="col-xl-6"><section class="sp-card" id="cite" aria-labelledby="cite-h">
+    <h2 id="cite-h">How to cite the data</h2>
+    <p class="sp-small">If you use results from this portal, please cite the sources of the layers you used, and give the release
+      and the weights sha256 from your download. Wording {% include 'snpportal/_badges.html' with kind='provisional' %}</p>
+    <dl class="sp-dl sp-small mb-0">{% for what, ref, url in citations %}<dt>{{ what }}</dt>
+      <dd>{{ ref }} <a href="{{ url }}" rel="noreferrer noopener" target="_blank">{{ url|cut:"https://" }}</a></dd>{% endfor %}</dl>
+    <p class="sp-small sp-muted mt-2 mb-0">The known-loci papers are on the <a href="{% url 'snpportal:known_loci' %}">Known loci</a> page.</p>
+  </section></div>
+</div>
+
+<div class="sp-status sp-status-not_checked mt-3" role="note">&#9432; Population scope: the AQUA-FAANG data and the molQTL come from 12
+  AquaGen commercial fish (and embryo pools).{% if population %} The public allele frequencies are from the
+  {{ population }}.{% endif %} Other populations, for example North American salmon, can differ in karyotype and allele frequencies.</div>
+{% endblock main %}

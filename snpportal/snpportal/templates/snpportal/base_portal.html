@@ -1,0 +1,41 @@
+{% extends 'salmobase/base.html' %}
+{% load static snpportal_tags %}
+{# Every portal page extends this: sub-nav, page header, footer, portal.css + palette, htmx and portal.js. #}
+
+{% block head %}{{ block.super }}
+<link rel="stylesheet" href="{% static 'snpportal/portal.css' %}">
+<style>{% palette_css %}</style>
+{% block portal_head %}{% endblock portal_head %}
+{% endblock head %}
+
+{% block content %}{% portal_release as rel %}
+<div class="sp">
+  <a class="sp-skip" href="#sp-main">Skip to content</a>
+  <nav class="sp-nav" aria-label="SNP portal">
+    <div class="sp-wrap">
+      <a class="sp-brand" href="{% url 'snpportal:landing' %}">Functional SNP portal</a>
+      <ul>
+        <li><a href="{% url 'snpportal:landing' %}"{% if nav == 'home' %} aria-current="page"{% endif %}>Home</a></li>
+        <li><a href="{% url 'snpportal:upload' %}"{% if nav == 'score' %} aria-current="page"{% endif %}>Score SNPs</a></li>
+        <li><a href="{% url 'snpportal:locus' %}"{% if nav == 'explore' %} aria-current="page"{% endif %}>Explore</a></li>
+        <li><a href="{% url 'snpportal:known_loci' %}"{% if nav == 'known' %} aria-current="page"{% endif %}>Known loci</a></li>
+        <li><a href="{% url 'snpportal:about_data' %}"{% if nav == 'about' %} aria-current="page"{% endif %}>Data &amp; methods</a></li>
+        <li><a href="{% url 'snpportal:help' %}"{% if nav == 'help' %} aria-current="page"{% endif %}>Help</a></li>
+      </ul>
+      <span class="sp-release" title="Annotation release and genome assembly">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</span>
+    </div>
+  </nav>
+  <main id="sp-main" class="sp-main">
+    <div class="sp-wrap">
+      {% block page_header %}{% include 'snpportal/_page_header.html' %}{% endblock page_header %}
+      {% block main %}{% endblock main %}
+    </div>
+  </main>
+  {% include 'snpportal/_footer.html' %}
+</div>
+{% endblock content %}
+
+{% block scripts %}{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+<script src="{% static 'snpportal/portal.js' %}"></script>
+{% endblock scripts %}

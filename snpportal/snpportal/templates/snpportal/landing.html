@@ -1,0 +1,90 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+
+{% block main %}
+{% if error %}<div class="sp-status sp-status-fail" role="alert">&#10007; {{ error }} <a href="#candidates">Edit the list</a></div>{% endif %}
+<div class="row g-3 mb-3 align-items-start">
+  <div class="{% if hero %}col-lg-7{% else %}col-12{% endif %}">
+    <p class="sp-lead">Find the Atlantic salmon SNPs with functional evidence: AQUA-FAANG chromatin states in 21 tissues and
+      stages, Ensembl gene models and orthologs, regulatory elements, constraint, molQTL and public allele frequencies, for SNP
+      lists, genes and loci.</p>
+    <form class="sp-card" method="get" action="{% url 'snpportal:search' %}" role="search">
+      <label class="form-label fw-semibold" for="q">Search a gene, known locus, rs ID, position or region</label>
+      <div class="d-flex gap-2">
+        <input class="form-control form-control-lg" id="q" name="q" type="search" autocomplete="off" aria-describedby="q-help" aria-controls="suggest"
+               placeholder="vgll3, ENSSSAG00000053708, rs863754587, 25:28996360, ssa25:28.99-29.0Mb"
+               hx-get="{% url 'snpportal:suggest' %}" hx-trigger="input changed delay:200ms, search" hx-target="#suggest" hx-swap="innerHTML">
+        <button class="btn btn-primary" type="submit">Search</button>
+      </div>
+      <p class="sp-small sp-muted mt-1 mb-0" id="q-help">Gene names and Ensembl ids, NCBI LOC symbols (where Ensembl cites the NCBI
+        gene), human or zebrafish ortholog names, known-locus names, rs IDs (EVA release 9, also ICSASG_v2 ones), a position
+        (25:28996360) or a region (25:28,990,000-29,000,000 or 25:28.99-29.0Mb). Chromosomes can also be written chr25, ssa25 or NC_059466.1.</p>
+      <div id="suggest" aria-live="polite"></div>
+      <div class="sp-chips mt-2"><span class="sp-small sp-muted">Try:</span>
+        {% for q in examples %}<a href="{% url 'snpportal:search' %}?q={{ q|urlencode }}">{{ q }}</a>{% endfor %}</div>
+    </form>
+  </div>
+  {% if hero %}<div class="col-lg-5">
+    <a class="sp-card sp-hero" href="{{ tour_url }}" aria-label="vgll3, the maturation locus: open the guided tour">
+      <div class="sp-figure">{{ hero }}</div>
+      <p class="sp-small mb-0 mt-1"><strong>vgll3 and maturation:</strong> genes, published associations and chromatin states
+        at the best-known salmon locus. Open the guided tour &rarr;</p>
+    </a>
+  </div>{% endif %}
+</div>
+
+<div class="sp-grid mb-3">
+  <a class="sp-card" href="{% url 'snpportal:upload' %}"><h2>Score SNPs</h2><p class="sp-small sp-muted mb-0">Upload a VCF, SNP table, PLINK file or chip manifest, or paste positions, and get a tier per SNP.</p></a>
+  <a class="sp-card" href="{% url 'snpportal:locus' %}"><h2>Explore a locus</h2><p class="sp-small sp-muted mb-0">Genes, chromatin states, ATAC signal and public variants in a region.</p></a>
+  <a class="sp-card" href="{% url 'snpportal:known_loci' %}"><h2>Known loci</h2><p class="sp-small sp-muted mb-0">Published SNPs for eight traits (maturation, disease resistance, flesh colour, ...), with evidence, effect alleles and DOIs.</p></a>
+  <a class="sp-card" href="{% url 'snpportal:about_data' %}"><h2>Data &amp; methods</h2><p class="sp-small sp-muted mb-0">Every layer of this release, its source and checksum, and the tier rules.</p></a>
+  <a class="sp-card" href="{% url 'snpportal:tour' %}"><h2>Guided tour</h2><p class="sp-small sp-muted mb-0">vgll3 and maturation: a walk through search, gene, locus, card and panel.</p></a>
+</div>
+
+<section class="mb-3" aria-labelledby="facts-h">
+  <h2 class="visually-hidden" id="facts-h">This release</h2>
+  <div class="sp-kpis">{% for value, label, anchor in facts %}
+    <a class="sp-kpi text-reset text-decoration-none" href="{% url 'snpportal:about_data' %}{% if anchor %}#{{ anchor }}{% endif %}"><b>{{ value|thousands }}</b><span>{{ label }}</span></a>{% endfor %}
+  </div>
+  <p class="sp-small sp-muted mt-1 mb-0">Release {{ release.version }} ({{ release.assembly }}){% if release.created %}, built {{ release.created }}{% endif %}.
+    {% if release.synthetic %}{% include 'snpportal/_badges.html' with kind='synthetic' %} layers: {{ release.synthetic|join:", " }}.{% endif %}</p>
+</section>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <section class="sp-card" id="known-loci" aria-labelledby="known-h">
+      <div class="sp-card-head"><h2 id="known-h">Known loci</h2><a class="ms-auto sp-small" href="{% url 'snpportal:known_loci' %}">Effect alleles, DOIs and caveats</a></div>
+      {% if traits %}
+      <p class="sp-small sp-muted">{{ catalogue|length }} published SNPs and loci across {{ traits|length }} traits, with effect alleles where the paper states them.</p>
+      <div class="table-responsive"><table class="table table-sm sp-small mb-0">
+        <thead><tr><th scope="col">Trait</th><th scope="col" class="sp-num">Entries</th><th scope="col">Loci</th></tr></thead>
+        <tbody>{% for trait, heading, n, names in traits %}<tr>
+          <th scope="row" class="fw-normal"><a href="{% url 'snpportal:known_loci' %}#trait-{{ trait }}">{{ heading }}</a></th>
+          <td class="sp-num">{{ n }}</td><td>{{ names|join:", "|truncatechars:90 }}</td>
+        </tr>{% endfor %}</tbody>
+      </table></div>
+      {% else %}<p class="sp-small sp-muted mb-0">This release has no known-loci catalogue (catalog/known_loci.tsv).</p>{% endif %}
+    </section>
+  </div>
+  <div class="col-lg-5">
+    <section class="sp-card" id="candidates" aria-labelledby="cand-h">
+      <h2 id="cand-h">Score the public variants of genes or intervals</h2>
+      <p class="sp-small sp-muted mt-1">The public variants ({{ public_source }}) inside the genes
+        &plusmn; flank, around positions, or inside intervals become one list to filter, design a panel from and export.</p>
+      {% if error %}<div class="sp-status sp-status-fail" role="alert">&#10007; {{ error }}</div>{% endif %}
+      <form method="post" action="{% url 'snpportal:candidates' %}">{% csrf_token %}
+        <label class="form-label sp-small mb-0" for="targets">Gene ids or names, positions or intervals (one per line)</label>
+        <textarea class="form-control sp-paste" id="targets" name="targets" rows="3" placeholder="ENSSSAG00000053708&#10;9:23,820,000-23,860,000&#10;26:14.5-15Mb">{{ targets }}</textarea>
+        <div class="d-flex flex-wrap align-items-end gap-3 mt-2">
+          <div class="mb-2"><label class="form-label sp-small mb-0" for="flank">Flank around genes and positions</label>
+            <select class="form-select form-select-sm w-auto" id="flank" name="flank">
+              {% for f in flanks %}<option value="{{ f }}"{% if f == flank %} selected{% endif %}>&plusmn; {{ f|thousands }} bp</option>{% endfor %}
+            </select></div>
+          {% include 'snpportal/_preset_select.html' with id='cand-trait' %}
+          <div class="mb-2"><button class="btn btn-sm btn-primary" type="submit">Score these variants</button></div>
+        </div>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock main %}

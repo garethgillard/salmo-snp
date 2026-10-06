@@ -1,0 +1,18 @@
+{% comment %}Breadcrumb, H1, meta line and actions. Context: title, crumbs [(label, url or None)], meta, title_badges,
+   actions [{label, url, post, style, confirm, download}].{% endcomment %}
+{% if crumbs %}<nav aria-label="Breadcrumb"><ol class="sp-crumbs">
+  {% for label, url in crumbs %}<li>{% if url %}<a href="{{ url }}">{{ label }}</a>{% else %}<span aria-current="page">{{ label }}</span>{% endif %}</li>{% endfor %}
+</ol></nav>{% endif %}
+<header class="sp-page-header">
+  <div>
+    <h1>{{ title }}{% for badge in title_badges %} {% include 'snpportal/_badges.html' with kind=badge %}{% endfor %}</h1>
+    {% if meta %}<p class="sp-meta">{{ meta }}</p>{% endif %}
+  </div>
+  {% if actions %}<div class="sp-actions" id="sp-actions">
+    {% for a in actions %}{% if a.post %}
+    <form method="post" action="{{ a.url }}"{% if a.confirm %} onsubmit="return confirm('{{ a.confirm|escapejs }}')"{% endif %}>{% csrf_token %}
+      <button class="btn btn-sm {{ a.style|default:'btn-outline-secondary' }}" type="submit">{{ a.label }}</button>
+    </form>
+    {% else %}<a class="btn btn-sm {{ a.style|default:'btn-outline-secondary' }}" href="{{ a.url }}"{% if a.download %} download{% endif %}>{{ a.label }}</a>{% endif %}{% endfor %}
+  </div>{% endif %}
+</header>

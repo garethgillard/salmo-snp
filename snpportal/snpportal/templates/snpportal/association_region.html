@@ -1,0 +1,36 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% comment %}Regional association plot (P7.3): the GWAS lane above the locus browser's lanes, one SVG on one x axis.{% endcomment %}
+{% block main %}
+{% if synthetic %}<div class="sp-status sp-status-warn" role="status">{% include 'snpportal/_badges.html' with kind='synthetic' %}
+  This view uses synthetic test data: not real results.</div>{% endif %}
+<div class="sp-status sp-status-not_checked" role="note">&#8505; No LD is used: points are coloured by tier, not by r&sup2; to the lead.
+  {{ assumptions }}</div>
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2 sp-small" role="toolbar" aria-label="Loci and window">
+  {% for x in loci %}<a class="btn btn-sm {% if current and x.locus == current.locus %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+     href="{{ x.region }}"{% if current and x.locus == current.locus %} aria-current="page"{% endif %}>Locus {{ x.locus }} · chr{{ x.chrom }}</a>{% endfor %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ wider }}">Out &times;3</a>
+  <span class="ms-auto"><a href="{{ browser }}">Open in the locus browser</a> · <a href="{{ back }}">Back to Association</a></span>
+</div>
+{% for note in notes %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ note }}</div>{% endfor %}
+
+<figure class="sp-card sp-figure" id="fig-region">
+  <div class="sp-card-head">
+    <h2>Regional association</h2>
+    <details class="sp-info"><summary aria-label="What does this figure show?">i</summary>
+      <p>Top lane: -log10 p of your summary statistics against position, coloured by tier for the preset; a diamond marks the
+        locus lead, triangles CDS or splice-region SNPs, and a dark ring the 95% credible set under the functional prior. Hover a
+        point for its p and PIPs; click it for its evidence card. Below, on the same axis: genes, chromatin states in 21
+        conditions, the Ensembl regulatory build, GERP constraint, public variants and live ATAC signal.</p></details>
+    {% include 'snpportal/_badges.html' with kind='provisional' %}
+    <div class="sp-downloads" aria-label="Download the regional plot" hx-boost="false">
+      <a href="{{ svg_url }}" download>SVG</a>
+      <button type="button" data-png="fig-region" data-name="{{ file_name }}">PNG</button>
+    </div>
+  </div>
+  {{ svg }}
+  <figcaption class="sp-caption">Release {{ job.release }} · preset {{ trait }} · thresholds, priors and track sets PROVISIONAL ·
+    job created {{ job.created_utc }}{% if synthetic %} · SYNTHETIC test data{% endif %}</figcaption>
+</figure>
+{% endblock main %}

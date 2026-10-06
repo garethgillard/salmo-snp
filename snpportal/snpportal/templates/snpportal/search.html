@@ -1,0 +1,19 @@
+{% extends 'snpportal/base_portal.html' %}
+{% block main %}
+<form class="d-flex gap-2 mb-3" method="get" role="search">
+  <label class="visually-hidden" for="q">Search</label>
+  <input class="form-control" id="q" name="q" type="search" value="{{ query }}" placeholder="vgll3, rs863754587, LOC106600468, 25:28996360, 25:28.95-29.05 Mb">
+  <button class="btn btn-primary" type="submit">Search</button>
+</form>
+{% if hits %}
+<table class="table table-sm sp-small"><thead><tr><th scope="col">Match</th><th scope="col">Kind</th><th scope="col">Details</th></tr></thead>
+  <tbody>{% for h in hits %}<tr><td><a href="{{ h.url }}">{{ h.label }}</a></td><td>{{ h.kind }}</td><td>{{ h.detail }}</td></tr>{% endfor %}</tbody></table>
+{% elif query %}
+<div class="sp-status sp-status-not_checked">Nothing matches &ldquo;{{ query }}&rdquo;.
+  {% if rsid %}This rs ID is not in the release&rsquo;s EVA release 9 table: it may be newer, unmapped on Ssal_v3.1, or on several
+  Ssal_v3.1 positions (those are left out).{% elif loc %}LOC symbols are found only for genes whose Ensembl description cites the
+  NCBI gene; try the gene&rsquo;s name, its human ortholog or a position.{% endif %}
+  Try a gene name or id, an rs ID, a position such as
+  {% for q in examples %}<a href="?q={{ q|urlencode }}">{{ q }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.</div>
+{% endif %}
+{% endblock main %}

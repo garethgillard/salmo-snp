@@ -1,103 +1,315 @@
-"""Upload a SNP list, annotate it with snpscore, show it as a sortable paged table, download it as TSV."""
-import json
+"""Score SNPs and see the results: the Score page (upload, paste or example -> a job), job status, the results
+page with tabs (Overview | Table | Panel), downloads with provenance, figures and 'Delete now' (the card is in locus.py).
+Views that show a user's SNPs are private: no caching, same-origin referrers, and error reports without POST
+values, uploaded file names, local variables or DuckDB message text."""
+from __future__ import annotations
+
+import os
 import tempfile
-import uuid
+from functools import wraps
 from pathlib import Path
 from urllib.parse import urlencode
 
 import duckdb
-from django.conf import settings
-from django.http import FileResponse, Http404
+from django.core.files.uploadedfile import UploadedFile
+from django.core.files.uploadhandler import FileUploadHandler
+from django.core.handlers.exception import response_for_exception
+from django.http import FileResponse, Http404, StreamingHttpResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils.datastructures import MultiValueDict
+from django.views.debug import SafeExceptionReporterFilter
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
+from django.views.decorators.debug import sensitive_post_parameters
+from django.views.decorators.http import require_POST
 
-import snpscore
+from . import jobs, results as result_views, tools
 
-SUFFIXES = (".vcf", ".vcf.gz", ".tsv", ".csv", ".txt")
-SHOWN = ["id", "chrom", "pos", "ref", "alt", "chromatin_summary", "gene_name", "gene_id", "gene_distance", "blacklist", "lore"]
-PAGE_SIZE = 50
-
-
-def results_dir():
-    d = Path(getattr(settings, "SNPPORTAL_RESULTS_DIR", Path(tempfile.gettempdir()) / "snpportal"))
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def result_file(key):
-    path = results_dir() / f"{key}.parquet"
-    if not path.exists():
-        raise Http404("Result not found or expired")
-    return path
-
-
-def release_version():
-    return json.loads((Path(settings.SNPSCORE_RELEASE) / "manifest.json").read_text())["version"]
+SUFFIXES = (".vcf.gz", ".vcf", ".tsv.gz", ".tsv", ".csv.gz", ".csv", ".txt.gz", ".txt", ".bim", ".map")
+PASTE_LINES = 10_000
+TABS = ("overview", "table", "panel", "export")
+EXAMPLES = {  # demo file name (without extension) -> button label ({n}: its rows); files come from the release's demo/ folder
+    "known_loci": "Known loci: {n} published SNPs and loci",
+    "public_50k": "50,000 public sites (AQUA-FAANG 12-fish VCF)",
+    "chip_demo_SYNTHETIC": "Demo chip",
+}
+FORMATS = [  # (format, extensions, what is read) for the accepted-formats table
+    ("VCF", ".vcf, .vcf.gz", "CHROM, POS, ID, REF and ALT only. Genotype columns are never read or stored."),
+    ("SNP table", ".tsv, .csv, .txt (or gzipped)", "A header row with chrom and pos (aliases such as CHR, BP, Position, "
+     "MapInfo); optional id, ref, alt. Other columns are kept."),
+    ("PLINK", ".bim, .map", "Chromosome, SNP id and base-pair position."),
+    ("Chip manifest", ".csv", "Illumina manifests ([Assay] section) and Axiom annotation files. Their positions are often "
+     "ICSASG_v2: watch for the assembly warning."),
+    ("rs IDs", ".txt, .tsv", "One rs ID per line, with or without an id header: placed on Ssal_v3.1 through EVA release 9. "
+     "A table whose id column holds rs IDs and whose positions are ICSASG_v2 is moved to Ssal_v3.1 the same way."),
+]
 
 
-def upload(request):
-    error = None
-    f = request.FILES.get("snps")
-    if request.method == "POST" and f:
-        suffix = next((s for s in SUFFIXES if f.name.lower().endswith(s)), None)
+class PrivateReports(SafeExceptionReporterFilter):
+    """Error reports from portal views never show POST values or local variables (they may hold SNPs).
+    score() also empties request.FILES before an error is reported, so reports never name an uploaded file."""
+
+    def get_post_parameters(self, request):
+        return {name: self.cleansed_substitute for name in request.POST} if request is not None else {}
+
+    def get_traceback_frame_variables(self, request, tb_frame):
+        return []
+
+
+def private(view):
+    """no-store caching, same-origin referrers and content-free error reports for a view that shows a user's SNPs."""
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        request.exception_reporter_filter = PrivateReports()
+        try:
+            response = view(request, *args, **kwargs)
+        except Http404 as e:  # the site's 404 page, but with the headers below
+            response = response_for_exception(request, e)
+        except duckdb.Error as e:  # its message can quote SNPs: error reports and logs get the type and traceback only
+            raise RuntimeError(f"{type(e).__name__} in a portal query (message withheld)").with_traceback(e.__traceback__) from None
+        response["Cache-Control"] = "no-store, private"
+        response["Referrer-Policy"] = "same-origin"
+        return response
+    return wrapped
+
+
+class UploadToResults(FileUploadHandler):
+    """Streams an uploaded file straight into a 0600 file in the results dir: never into memory or the system
+    temp dir. discard() removes whatever a job didn't take."""
+
+    def __init__(self, request=None):
+        super().__init__(request)
+        self.paths, self.out = [], None
+
+    def new_file(self, *args, **kwargs):
+        super().new_file(*args, **kwargs)
+        fd, path = tempfile.mkstemp(dir=jobs.results_dir(), prefix=".upload-")
+        self.paths.append(path)
+        self.out = os.fdopen(fd, "wb")
+
+    def receive_data_chunk(self, raw_data, start):
+        self.out.write(raw_data)
+
+    def file_complete(self, file_size):
+        self.out.close()
+        uploaded = UploadedFile(open(self.paths[-1], "rb"), name=self.file_name, content_type=self.content_type, size=file_size)
+        uploaded.path = self.paths[-1]
+        return uploaded
+
+    def upload_interrupted(self):
+        self.discard()
+
+    def discard(self):
+        if self.out:
+            self.out.close()
+        for path in self.paths:
+            Path(path).unlink(missing_ok=True)
+
+
+def accepted_suffix(name):
+    return next((s for s in SUFFIXES if name.lower().endswith(s)), None)
+
+
+def examples():
+    """{name: {label, path, suffix, synthetic}} for the release's example inputs (demo/ and catalog/known_loci.tsv)."""
+    release = jobs.release()
+    files = sorted((release / "demo").iterdir()) if (release / "demo").is_dir() else []
+    found = {}
+    for p in files + [release / "catalog" / "known_loci.tsv"]:
+        suffix = accepted_suffix(p.name)
+        if suffix and p.is_file():
+            name = p.name[:-len(suffix)]
+            label = EXAMPLES.get(name, name.replace("_", " "))
+            if "{n}" in label:
+                label = label.format(n=_rows(p))
+            found.setdefault(name, {"label": label, "path": p, "suffix": suffix, "synthetic": "SYNTHETIC" in p.name})
+    return found
+
+
+def _rows(path):
+    """Data rows of a small example file (lines that are not '#' comments, minus the header)."""
+    with open(path) as f:
+        return sum(1 for line in f if line.strip() and not line.startswith("#")) - 1
+
+
+def score_page(request, error=None, status=200):
+    max_mb = float(jobs.setting("SNPPORTAL_MAX_UPLOAD_MB", 300))
+    return render(request, "snpportal/score.html", {
+        "nav": "score", "title": "Score SNPs", "error": error, "presets": jobs.presets(), "examples": examples(),
+        "formats": FORMATS, "max_mb": f"{max_mb:g}", "max_snps": int(jobs.setting("SNPPORTAL_MAX_SNPS", 3_000_000)),
+        "paste_lines": PASTE_LINES, "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}",
+    }, status=status)
+
+
+@csrf_exempt  # so the upload handler can be set before the body is read; _score checks the CSRF token
+def score(request):
+    """The Score page. A POST (file, pasted positions or an example) becomes a job and redirects to its results."""
+    if request.method != "POST":
+        return score_page(request)
+    max_mb = float(jobs.setting("SNPPORTAL_MAX_UPLOAD_MB", 300))
+    try:
+        length = int(request.META.get("CONTENT_LENGTH") or 0)
+    except ValueError:
+        length = 0
+    if length > max_mb * 2 ** 20:  # rejected before Django reads (and spools) the body
+        return score_page(request, f"The upload is larger than {max_mb:g} MB. Compress it with gzip or split it, "
+                                   "or run snpscore on your own computer (see 'Run it locally').", 413)
+    request.exception_reporter_filter = PrivateReports()
+    handler = UploadToResults(request)
+    request.upload_handlers = [handler]
+    try:
+        return _score(request)
+    except Exception:
+        request._files = MultiValueDict()  # keep uploaded file names out of the error report
+        raise
+    finally:
+        handler.discard()
+
+
+@csrf_protect
+@sensitive_post_parameters()
+def _score(request):
+    try:
+        key, preset = start_job(request)
+    except jobs.InputError as e:
+        return score_page(request, str(e), 400)
+    except jobs.QueueFull:
+        response = score_page(request, "The portal is busy scoring other lists. Please try again in a minute.", 503)
+        response["Retry-After"] = "60"
+        return response
+    url = reverse("snpportal:results", args=[key])
+    return redirect(url if preset == "all" else f"{url}?{urlencode({'trait': preset})}")
+
+
+def start_job(request):
+    """Create the job for a POSTed example, file or paste. Returns (key, preset)."""
+    preset = request.POST.get("trait", "all")
+    preset = preset if preset in dict(jobs.presets()) else "all"
+    example, upload, paste = request.POST.get("example"), request.FILES.get("snps"), request.POST.get("paste", "").strip()
+    if example:
+        found = examples().get(example)
+        if found is None:
+            raise jobs.InputError("That example is not part of this release.")
+        return jobs.create(found["path"], found["suffix"], "snps", preset, f"Example: {found['label']}",
+                           synthetic=found["synthetic"], move=False), preset
+    if upload:
+        suffix = accepted_suffix(upload.name)
         if suffix is None:
-            error = "Upload a .vcf, .vcf.gz, .tsv, .csv or .txt file."
-        else:
-            key = uuid.uuid4()
-            src = results_dir() / f"{key}{suffix}"
-            with open(src, "wb") as out:
-                for chunk in f.chunks():
-                    out.write(chunk)
-            try:
-                snpscore.annotate(src, settings.SNPSCORE_RELEASE, results_dir() / f"{key}.parquet")
-                return redirect("snpportal:results", key=key)
-            except (ValueError, duckdb.Error) as e:
-                error = str(e)
-            finally:
-                src.unlink()
-    return render(request, "snpportal/upload.html", {"error": error, "release": release_version()})
+            raise jobs.InputError("This file type isn't accepted. Upload a VCF (.vcf or .vcf.gz), a table (.tsv, .csv or "
+                                  ".txt, optionally gzipped) or a PLINK .bim/.map file: see 'Accepted formats' below.")
+        if not upload.size:
+            raise jobs.InputError("The uploaded file is empty.")
+        return jobs.create(Path(upload.path), suffix, "snps", preset, "Uploaded list"), preset
+    if paste:
+        rows = jobs.parse_paste(paste, PASTE_LINES)
+        return jobs.create_from_rows(rows, f"Pasted list ({len(rows):,} lines)", preset, kind="snps", input_format="paste"), preset
+    raise jobs.InputError("Choose a file, paste some positions or pick an example.")
 
 
+def finished(key):
+    """job.json of a finished job, else 404."""
+    job = jobs.status(key)
+    if job is None or job["state"] != "done":
+        raise Http404("Result not found or expired")
+    return job
+
+
+@private
+def status(request, key):
+    """The progress panel, polled by htmx every second; once the job ends it tells htmx to reload the page."""
+    job = jobs.status(key)
+    response = render(request, "snpportal/_progress.html", {"job": job, "key": key})
+    if job is None or job["state"] in ("done", "failed"):
+        response["HX-Refresh"] = "true"
+    return response
+
+
+@private
 def results(request, key):
-    con = duckdb.connect()
-    con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{result_file(key)}')")
-    types = dict((r[0], r[1]) for r in con.execute("DESCRIBE r").fetchall())
-    shown = [c for c in SHOWN if c in types]
-    flags = [c for c, t in types.items() if t == "BOOLEAN"]
-    total = con.execute("SELECT count(*) FROM r").fetchone()[0]
-    counts = con.execute("SELECT " + ", ".join(f'count_if("{c}")' for c in flags) + " FROM r").fetchone() if flags else ()
+    """Progress while the job runs, the error if it failed, else the tabs. Expired or deleted: a 404 page."""
+    jobs.cleanup()
+    job = jobs.status(key)
+    if job is None:
+        return render(request, "snpportal/expired.html", {"nav": "score", "title": "Results expired or deleted"}, status=404)
+    tab = request.GET.get("tab", "overview")
+    tab = tab if tab in TABS else "overview"
+    context = {"nav": "score", "job": job, "key": key, "tab": tab, "title": "Results",
+               "crumbs": [("Score SNPs", reverse("snpportal:upload")), ("Results", None)],
+               "expires": jobs.utc(jobs.expires(key))}
+    if job["state"] == "done":
+        d = jobs.folder(key)
+        presets = jobs.presets(d)
+        trait = request.GET.get("trait", "all")
+        trait = trait if trait in dict(presets) else "all"
+        context.update(presets=presets, trait=trait, query=urlencode({"trait": trait}),
+                       validation=jobs.read_json(d / "validation.json"), rejects=(d / "rejects.tsv").exists(),
+                       release_changed=jobs.release_changed(job))
+        if tab == "table":
+            context.update(result_views.table(request, key))
+        elif tab == "overview":
+            context.update(result_views.overview(request, key, job))
+        elif tab == "panel":  # AGENT breeder (stage 3): Panel and Export tabs
+            context.update(tools.panel(request, key, job))
+        else:
+            context.update(tools.exports(request, key, job))
+        context["synthetic_chip"] = tools.chip_info(d).get("synthetic")
+        context["actions"] = [
+            {"label": "Download TSV", "url": f"{reverse('snpportal:download', args=[key])}?{context['query']}", "style": "btn-outline-primary"},
+            {"label": "Printable report", "url": f"{reverse('snpportal:report', args=[key])}?{context['query']}"},  # AGENT tour (stage 3)
+            {"label": "Score another list", "url": reverse("snpportal:upload")}]
+    context["meta"] = " · ".join(x for x in [
+        job.get("label"), f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None,
+        f"release {job.get('release')}", f"deleted after {context['expires']}"] if x)
+    context.setdefault("actions", []).append(
+        {"label": "Delete now", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",
+         "confirm": "Delete these results now? This can't be undone."})
+    return render(request, "snpportal/results.html", context)
 
-    sort = request.GET.get("sort", "")
-    sort = sort if sort in types else ""
-    desc = request.GET.get("desc") == "1"
-    pages = max(1, -(-total // PAGE_SIZE))
-    page = min(int(request.GET["page"]) if request.GET.get("page", "").isdigit() else 1, pages) or 1
 
-    order = f'ORDER BY "{sort}" {"DESC" if desc else "ASC"} NULLS LAST' if sort else ""
-    columns = ", ".join(f'"{c}"' for c in shown)
-    rows = con.execute(f"SELECT {columns} FROM r {order} LIMIT {PAGE_SIZE} OFFSET {(page - 1) * PAGE_SIZE}").fetchall()
-
-    def link(**changes):
-        params = {"sort": sort, "desc": "1" if desc else "", "page": page, **changes}
-        return "?" + urlencode({k: v for k, v in params.items() if v})
-
-    return render(request, "snpportal/results.html", {
-        "key": key,
-        "release": release_version(),
-        "total": total,
-        "flags": list(zip(flags, counts)),
-        "headers": [(c, link(sort=c, desc="1" if c == sort and not desc else "", page=1),
-                     ("▼" if desc else "▲") if c == sort else "") for c in shown],
-        "rows": rows,
-        "page": page,
-        "pages": pages,
-        "prev": link(page=page - 1) if page > 1 else None,
-        "next": link(page=page + 1) if page < pages else None,
-    })
-
-
+@private
 def download(request, key):
-    path = result_file(key)
-    tsv = path.with_suffix(".tsv")
-    if not tsv.exists():
-        duckdb.connect().execute(f"COPY (SELECT * FROM read_parquet('{path}')) TO '{tsv}' (HEADER, DELIMITER '\t')")
-    return FileResponse(open(tsv, "rb"), as_attachment=True, filename=f"snps_annotated_{release_version()}.tsv")
+    """The SNPs matching the current preset and filters as TSV, starting with '#' provenance lines (?plain=1 drops
+    them). ?format=rejects gives the rows snpscore dropped; other formats come from tools.export."""
+    job = finished(key)
+    d, fmt = jobs.folder(key), request.GET.get("format", "tsv")
+    if fmt == "rejects":
+        if not (d / "rejects.tsv").exists():
+            raise Http404("No rejected rows")
+        return FileResponse(open(d / "rejects.tsv", "rb"), as_attachment=True, filename="rejected_rows.tsv")
+    if fmt != "tsv" or request.GET.get("scope"):  # the Export tab's formats and scopes (all, filtered, a panel)
+        return tools.export(request, key, job, fmt)
+    con, _, where, chosen = result_views.open_result(request, key, write=True)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".export-", suffix=".tsv")
+    os.close(fd)
+    try:
+        con.execute(f"COPY (SELECT * EXCLUDE (file_row_number) FROM v {where} ORDER BY file_row_number) TO '{tmp}' (HEADER, DELIMITER '\t')")
+        f = open(tmp, "rb")
+    finally:
+        os.unlink(tmp)  # an open handle keeps the data until the response is closed; nothing is left behind
+    lines = [] if request.GET.get("plain") else jobs.provenance(job, chosen["trait"], {k: v for k, v in chosen.items() if k != "trait"})
+    if lines and tools.chip_info(d).get("synthetic"):  # the Panel tab's chip adds its columns (results._open)
+        lines.insert(-1, "# SYNTHETIC: on_chip, dist_to_chip, near_chip and novel_functional come from a synthetic chip")
+    response = StreamingHttpResponse(_stream("".join(f"{line}\n" for line in lines).encode(), f),
+                                     content_type="text/tab-separated-values; charset=utf-8")
+    name = f"snps_{job['release']}_{chosen['trait']}{'_filtered' if len(chosen) > 1 else ''}.tsv"
+    response["Content-Disposition"] = f'attachment; filename="{name}"'
+    return response
+
+
+def _stream(header, f):
+    with f:
+        yield header
+        yield from iter(lambda: f.read(1 << 20), b"")
+
+
+@require_POST
+@private
+def delete(request, key):
+    """'Delete now': remove the job folder; the results URL then shows the expired page."""
+    jobs.delete(key)
+    return redirect("snpportal:results", key=key)
+
+
+@private
+def figure(request, key, name):
+    return result_views.figure(request, key, name, finished(key))

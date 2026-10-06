@@ -1,0 +1,96 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+
+{% block main %}
+<p class="sp-lead">Score a list of Atlantic salmon SNPs on Ssal_v3.1: each SNP gets AQUA-FAANG chromatin states in 21 tissues
+  and stages, genic region, Ensembl regulatory features, GERP constraint, the nearest gene and assay flags, and a tier
+  for the trait preset you choose (you can switch presets on the results page).</p>
+
+{% if error %}<div class="sp-status sp-status-fail" role="alert"><strong>&#9888; Can't score this list.</strong> {{ error }}</div>{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-7 sp-stack">
+    {% if examples %}
+    <form class="sp-card" method="post">
+      {% csrf_token %}
+      <h2>Try an example</h2>
+      <p class="sp-small sp-muted mb-2">Public inputs that ship with this release: one click scores them, no file needed.</p>
+      {% include 'snpportal/_preset_select.html' with id='preset-example' %}
+      <div class="sp-examples">
+        {% for name, ex in examples.items %}{% if name|slice:":5" != "gwas_" %}
+        <button class="btn btn-outline-primary btn-sm" type="submit" name="example" value="{{ name }}">{{ ex.label }}{% if ex.synthetic %} {% include 'snpportal/_badges.html' with kind='synthetic' %}{% endif %}</button>
+        {% endif %}{% endfor %}
+        {% for name, ex in examples.items %}{% if name|slice:":5" == "gwas_" %}<a class="btn btn-link btn-sm" href="#gwas">GWAS example (below)</a>{% endif %}{% endfor %}
+      </div>
+    </form>
+    {% endif %}
+    <form class="sp-card" method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <h2>Or upload a file</h2>
+      <div class="sp-drop my-2" data-drop-for="snps-file">
+        <label for="snps-file" class="form-label">Drop a file here or choose one</label>
+        <input class="form-control" id="snps-file" type="file" name="snps" required
+               accept=".vcf,.gz,.tsv,.csv,.txt,.bim,.map" aria-describedby="file-help">
+        <div class="sp-small sp-muted mt-1" data-drop-label id="file-help">VCF, SNP table, PLINK .bim/.map or chip manifest, up to {{ max_mb }} MB and {{ max_snps|thousands }} SNPs.</div>
+      </div>
+      {% include 'snpportal/_preset_select.html' with id='preset-file' %}
+      <button class="btn btn-primary" type="submit">Score file</button>
+    </form>
+
+    <form class="sp-card" method="post">
+      {% csrf_token %}
+      <h2><label for="paste">Or paste positions</label></h2>
+      <p class="sp-small sp-muted mb-1">One SNP per line: chromosome, position and optionally ref and alt, separated by spaces, tabs, commas or ':'. Up to {{ paste_lines|thousands }} lines.</p>
+      <textarea class="form-control sp-paste mb-2" id="paste" name="paste" rows="6" required
+                placeholder="25 28996360 C T&#10;9 23837450&#10;26:19138923"></textarea>
+      <p class="sp-small sp-muted mb-2">A list of rs IDs works too: upload it as a file (one per line, optionally under an <code>id</code> header).</p>
+      {% include 'snpportal/_preset_select.html' with id='preset-paste' %}
+      <button class="btn btn-primary" type="submit">Score pasted list</button>
+    </form>
+
+
+    {# AGENT gwas: GWAS summary statistics -> the Association page (P7.1); the example is release demo/gwas_*SYNTHETIC* #}
+    <form class="sp-card" id="gwas" method="post" action="{% url 'snpportal:gwas_score' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <h2>Or analyse GWAS summary statistics</h2>
+      <p class="sp-small sp-muted mb-1">GCTA-fastGWA, PLINK2 .glm, regenie, BOLT-LMM or GEMMA output, or a table with chrom, pos and p
+        (optionally alleles, beta, se, af and n). You get a Manhattan plot, a QQ plot by tier, loci and fine-mapping that compares a
+        uniform with a functional prior {% include 'snpportal/_badges.html' with kind='provisional' %}.</p>
+      <div class="sp-drop my-2" data-drop-for="gwas-file">
+        <label for="gwas-file" class="form-label">Summary statistics file</label>
+        <input class="form-control" id="gwas-file" type="file" name="sumstats" required aria-describedby="gwas-help"
+               accept=".gz,.tsv,.txt,.csv,.tab,.fastGWA,.linear,.logistic,.hybrid,.regenie,.stats,.mlma,.assoc">
+        <div class="sp-small sp-muted mt-1" data-drop-label id="gwas-help">Up to {{ max_mb }} MB, positions on Ssal_v3.1; deleted after {{ keep_hours }} hours like every result.</div>
+      </div>
+      {% include 'snpportal/_preset_select.html' with id='preset-gwas' trait='maturation' %}
+      <div class="sp-examples">
+        <button class="btn btn-primary" type="submit">Analyse summary statistics</button>
+        {% for name, ex in examples.items %}{% if name|slice:":5" == "gwas_" %}
+        <button class="btn btn-outline-primary btn-sm" type="submit" name="example" value="{{ name }}" formnovalidate>Example: synthetic maturation GWAS {% include 'snpportal/_badges.html' with kind='synthetic' %}</button>
+        {% endif %}{% endfor %}
+      </div>
+    </form>
+  </div>
+
+  <div class="col-lg-5 sp-stack">
+    <section class="sp-card" aria-labelledby="formats">
+      <h2 id="formats">Accepted formats</h2>
+      <table class="table table-sm sp-small mb-1">
+        <thead><tr><th scope="col">Format</th><th scope="col">Files</th><th scope="col">What is read</th></tr></thead>
+        <tbody>{% for name, files, read in formats %}<tr><th scope="row" class="fw-normal">{{ name }}</th><td class="text-nowrap">{{ files }}</td><td>{{ read }}</td></tr>{% endfor %}</tbody>
+      </table>
+      <p class="sp-small sp-muted mb-0">Coordinates must be Ssal_v3.1. Chromosomes are named 1&ndash;29 (aliases such as chr25 or ssa25 are mapped where the release supports it).</p>
+    </section>
+    <section class="sp-card" id="privacy" aria-labelledby="privacy-h">
+      <h2 id="privacy-h">Your data</h2>
+      <ul class="sp-small mb-1 ps-3">
+        <li>Your file is deleted as soon as it has been scored. From a VCF only CHROM, POS, ID, REF and ALT are read, so
+          genotypes are never stored. Other columns of a SNP table are kept with the results: remove any you don't want stored.</li>
+        <li>Results are kept for {{ keep_hours }} hours, then deleted. You can delete them sooner with <em>Delete now</em>.</li>
+        <li>Only people with the results link can see them. We never log SNPs or file names.</li>
+      </ul>
+      <p class="sp-small mb-0">For confidential lists, <a href="{% url 'snpportal:run_locally' %}">run it locally</a> with the same release and commands.</p>
+    </section>
+  </div>
+</div>
+{% endblock main %}

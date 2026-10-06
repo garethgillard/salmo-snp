@@ -1,0 +1,57 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% block main %}
+<p class="sp-lead">Published SNPs (and a gene region) with an effect on a breeding trait, from the release catalogue. Effect
+  alleles are on the Ssal_v3.1 forward strand and given only where the paper states the allele unambiguously ({{ alleles }}
+  of {{ rows|length }}). Uploaded SNPs within {{ window|default:50000|thousands }} bp of one get a known-locus badge, with
+  the effect allele matched to their own ref and alt. The catalogue is {% include 'snpportal/_badges.html' with kind='provisional' %} until G has vetted the rows.</p>
+
+{% if caveats %}<div class="sp-status sp-status-not_checked" role="note" id="ohnologs">&#9432; Atlantic salmon kept two copies of
+  many genes from the salmonid genome duplication (Ss4R), so a gene name can point to either copy. The published SNPs are in
+  the genes linked in the table; their namesakes (same name or human ortholog) are:
+  <ul class="mb-0 mt-1">{% for c in caveats %}<li><strong>{{ c.gene.label }}</strong> ({{ c.gene.id }}, chromosome {{ c.gene.chrom }}{% if not c.gene.name %}, unnamed in Ensembl 116{% endif %}):
+    {% for o in c.others %}<a href="{% url 'snpportal:gene' o.id %}">{{ o.name|default:o.id }}</a> ({{ o.id }}, chromosome {{ o.chrom }}{% if o.human %}, human {{ o.human }}{% endif %}){% if not forloop.last %}; {% endif %}{% endfor %}</li>{% endfor %}</ul>
+</div>{% endif %}
+
+{% if groups %}
+<nav class="sp-trait-nav sp-chips" aria-label="Traits">{% for trait, heading, items in groups %}<a href="#trait-{{ trait }}">{{ heading }} ({{ items|length }})</a>{% endfor %}</nav>
+<p class="sp-small sp-muted">Evidence: {% include 'snpportal/_badges.html' with kind='evidence' value='missense' cls='missense' %}
+  {% include 'snpportal/_badges.html' with kind='evidence' value='GWAS lead' cls='gwas' %}
+  {% include 'snpportal/_badges.html' with kind='evidence' value='QTL marker' cls='marker' %}
+  {% include 'snpportal/_badges.html' with kind='evidence' value='gene region' cls='region' %} (the same colours mark them in the
+  locus browser&rsquo;s &lsquo;Published&rsquo; lane), {% include 'snpportal/_badges.html' with kind='evidence' value='effect allele' cls='allele' %}
+  when the paper states it, and caveats such as {% include 'snpportal/_badges.html' with kind='evidence' value='suggestive' cls='caveat' %}
+  or {% include 'snpportal/_badges.html' with kind='evidence' value='position inferred' cls='caveat' %}. Hover a badge for the paper&rsquo;s words.</p>
+
+{% for trait, heading, items in groups %}
+<section class="sp-card mb-3" id="trait-{{ trait }}" aria-labelledby="h-{{ trait }}">
+  <div class="sp-card-head"><h2 id="h-{{ trait }}">{{ heading }}</h2><span class="sp-small sp-muted">{{ items|length }} entr{{ items|length|pluralize:"y,ies" }}</span></div>
+  <div class="table-responsive"><table class="table table-sm sp-small mb-0 sp-loci">
+    <thead><tr><th scope="col">Locus</th><th scope="col">SNP</th><th scope="col">Position (Ssal_v3.1)</th><th scope="col">Ref/alt</th>
+      <th scope="col">Gene</th><th scope="col">Evidence</th><th scope="col">Effect</th><th scope="col">ICSASG_v2</th>
+      <th scope="col">Publication</th><th scope="col">Explore</th></tr></thead>
+    <tbody>{% for r in items %}<tr>
+      <th scope="row" class="fw-normal">{{ r.locus }}{% if r.interval %} {% include 'snpportal/_badges.html' with kind='provisional' %}{% endif %}</th>
+      <td>{{ r.id }}{% if r.rsid %}<br><a class="sp-mono" href="{% url 'snpportal:search' %}?q={{ r.rsid }}" title="EVA rs ID">{{ r.rsid }}</a>{% endif %}</td>
+      <td class="sp-mono">{% if r.variant_url %}<a href="{{ r.variant_url }}">{{ r.chrom }}:{{ r.pos }}</a>{% else %}{{ r.chrom }}:{{ r.start }}-{{ r.end }}{% endif %}</td>
+      <td class="sp-mono">{{ r.ref }}{% if r.alt %}/{{ r.alt }}{% endif %}</td>
+      <td>{% if r.gene %}<a href="{% url 'snpportal:gene' r.gene.id %}">{{ r.gene.label }}</a> <span class="sp-muted">{{ r.gene.id }}</span>
+        <br><a href="{{ r.salmobase }}" rel="noreferrer noopener" target="_blank">SalmoBase</a>{% else %}{{ r.ensembl_gene }}{% endif %}</td>
+      <td>{% for cls, text, tip in r.badges %}{% include 'snpportal/_badges.html' with kind='evidence' value=text cls=cls tip=tip %} {% endfor %}
+        <br><span class="sp-muted">{{ r.evidence|default:"" }}</span></td>
+      <td>{% if r.effect_direction %}<strong>{{ r.effect_direction }}</strong><br>{% endif %}{{ r.effect|default:"" }}
+        {% if r.caveat or r.note %}<details><summary>Notes</summary>{% if r.caveat %}<p class="mb-1"><em>Caveat:</em> {{ r.caveat }}</p>{% endif %}{% if r.note %}<p class="mb-0">{{ r.note }}</p>{% endif %}</details>{% endif %}</td>
+      <td class="sp-mono">{{ r.icsasg_v2|default:"" }}</td>
+      <td>{% for doi in r.dois %}<a href="https://doi.org/{{ doi }}" rel="noreferrer noopener" target="_blank">{{ doi }}</a>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+      <td class="text-nowrap">{% if r.locus_url %}<a href="{{ r.locus_url }}">Locus</a>{% endif %}
+        {% if r.gene %} · <a href="{% url 'snpportal:gene' r.gene.id %}#candidates">Candidates</a>{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endfor %}
+{% else %}<section class="sp-card"><p class="sp-small sp-muted mb-0">This release has no known-loci catalogue (catalog/known_loci.tsv).</p></section>{% endif %}
+<p class="sp-small sp-muted mt-2">ICSASG_v2: the position on the older assembly that many papers and chips use (EVA release 9&rsquo;s
+  where the row is natively Ssal_v3.1). Never compare ICSASG_v2 distances to genes with Ssal_v3.1 ones: some regions were
+  rearranged between the assemblies. QTL intervals are {% include 'snpportal/_badges.html' with kind='provisional' %} until
+  vetted. To score these SNPs, use the &lsquo;Known loci&rsquo; example on <a href="{% url 'snpportal:upload' %}">Score SNPs</a>.</p>
+{% endblock main %}

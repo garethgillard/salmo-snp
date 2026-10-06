@@ -1,0 +1,725 @@
+"""Explore without an upload: the landing page, gene pages with candidate public variants, the known-loci catalogue
+and candidate jobs from genes or intervals (P5.1-P5.3). Candidates come from the release's public pool
+(pool/pool.parquet) or, without one, from the public sites in public_af.parquet annotated on the fly; their tiers are
+computed for the chosen preset with snpscore.scored(). The locus browser and variant page live in locus.py; the
+guided tour (tour) is P5.11."""
+from __future__ import annotations
+
+import csv
+import io
+import re
+import tempfile
+from html import escape
+from pathlib import Path
+from urllib.parse import urlencode
+
+from django.http import Http404, HttpResponse
+from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils.safestring import mark_safe
+from django.views.decorators.http import require_POST
+
+import snpscore
+from snpscore.formats import lit, q
+
+from . import figures, jobs, palette, search
+
+FLANKS = (0, 10_000, 20_000, 50_000, 100_000, 250_000)  # gene page and candidate-list flank choices (bp)
+FLANK, LOCUS_FLANK = 50_000, 20_000  # default flank for candidates; flank of the embedded locus view
+SHOW_ROWS = 200  # candidate rows shown on a gene page; the TSV and 'Score these' take all of them
+MAX_CANDIDATES = 100_000  # public sites in one job made from genes or intervals
+MAX_TARGETS = 200  # genes, positions or intervals in one candidate list
+STAGES = ("LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomitogenesis", "LateSomitogenesis")
+SORTS = {"tier": ("tier", "tier, tier_score DESC, pos"), "pos": ("pos", "pos"),  # ?sort= -> (column it needs, ORDER BY)
+         "maf": ("public_af_maf", "public_af_maf DESC NULLS LAST, pos")}
+EXAMPLES = ["vgll3", "six6", "bco1l", "rs863754587", "LOC106600468", "25:28,990,000-29,000,000", "25:28996360"]
+ENSEMBL_GENE = "https://www.ensembl.org/Salmo_salar/Gene/Summary?g={}"
+SALMOBASE_GENE = "https://salmobase.org/genes/id/{}?assembly=Ssal_v3.1"
+TRAITS = {"age_at_maturity": "Age at maturity", "flesh_colour": "Flesh colour", "ipn_resistance": "IPN resistance",
+          "pd_resistance": "PD resistance", "cms_resistance": "CMS resistance", "sea_lice_resistance": "Sea lice resistance",
+          "smoltification": "Smoltification", "sex_determination": "Sex determination"}  # catalogue trait -> heading, in page order
+CAVEATS = [  # (word in the catalogue's evidence or caveat, badge): why a row needs care
+    ("suggestive", "suggestive"), ("not genome-wide", "suggestive"), ("strain", "strain-specific"),
+    ("disputed", "disputed"), ("position", "position inferred"), ("A/B alleles", "A/B alleles only"),
+    ("QTL only in", "one challenge group")]
+HERO = ("25", 28_978_000, 29_002_000)  # landing thumbnail: vgll3 with its tag SNP, Met54Thr and Asn323Lys (BED start, end)
+_hero = {}
+JBROWSE = ("https://salmobase.org/jbrowse/?assembly=Ssal_v3.1&loc={}:{}..{}"
+           "&tracks=Ssal_v3.1-Ensembl-FeatureTrack,Ssal_v3.1-NCBI-FeatureTrack")
+
+
+def catalogue():
+    """Rows of the release's known-loci catalogue (catalog/known_loci.tsv), or [] before it exists."""
+    path = jobs.release() / "catalog" / "known_loci.tsv"
+    if not path.exists():
+        return []
+    with open(path, newline="") as f:
+        rows = [r for r in csv.DictReader((line for line in f if not line.startswith("#")), delimiter="\t")]
+    for r in rows:
+        r["dois"] = [d.strip() for d in (r.get("source") or "").split(";") if d.strip().startswith("10.")]
+        r["trait_text"] = (r.get("trait") or "").replace("_", " ")
+        r["kind"] = evidence_kind(r)
+        r["badges"] = badges(r)
+    return rows
+
+
+def evidence_kind(row):
+    """'missense', 'gwas' (GWAS lead or top SNP), 'marker' (QTL marker or other candidate) or 'region' (not a SNP), from
+    the catalogue's evidence text; the published-associations lane and the badges use it."""
+    text = (row.get("evidence") or "").lower()
+    if "not a snp" in text or text.startswith("gene region"):
+        return "region"
+    return "missense" if text.startswith("missense") else "gwas" if text.startswith("gwas") else "marker"
+
+
+def badges(row):
+    """[(css class suffix, text, tooltip)] for a catalogue row: its evidence kind, whether the effect allele is stated,
+    and caveats (suggestive, strain-specific, inferred position, ...) from its evidence and caveat text."""
+    kind = row.get("kind") or evidence_kind(row)
+    text = {"missense": "missense", "gwas": "GWAS lead", "marker": "QTL marker", "region": "gene region"}[kind]
+    out = [(kind, text, row.get("evidence") or "")]
+    if row.get("effect_allele"):
+        out.append(("allele", f"effect allele {row['effect_allele']}", row.get("effect") or ""))
+    found = (row.get("caveat") or "") + " " + (row.get("evidence") or "")
+    for word, label in CAVEATS:
+        if word in found and label not in [b[1] for b in out]:
+            out.append(("caveat", label, row.get("caveat") or row.get("evidence") or ""))
+    return out
+
+
+def by_trait(rows):
+    """[(trait, heading, rows)] in TRAITS order (unknown traits last)."""
+    groups = {}
+    for r in rows:
+        groups.setdefault(r.get("trait") or "other", []).append(r)
+    order = list(TRAITS) + sorted(t for t in groups if t not in TRAITS)
+    return [(t, TRAITS.get(t, t.replace("_", " ").capitalize()), groups[t]) for t in order if t in groups]
+
+
+def nearby(chrom, pos, window=None):
+    """Catalogue rows within `window` (the release's catalog.window) of a position, nearest first, with distance."""
+    window = (jobs.manifest().get("catalog") or {}).get("window", 50_000) if window is None else window
+    found = [dict(r, dist=abs(int(r["pos"]) - int(pos))) for r in catalogue()
+             if r.get("chrom") == str(chrom) and (r.get("pos") or "").isdecimal() and abs(int(r["pos"]) - int(pos)) <= window]
+    return sorted(found, key=lambda r: (r["dist"], r.get("id") or ""))
+
+
+def public_source():
+    """Where candidate public variants come from: the release pool's VCF, else the 504-fish panel sites (public_af)."""
+    if (jobs.release() / "pool" / "pool.parquet").exists():
+        source = jobs.read_json(jobs.release() / "pool" / "background.json").get("source") or ""
+        return ("sites of the 12 AQUA-FAANG fish's VCF (release pool)" if source.startswith("12_samples")
+                else "sites of the 504-fish reference panel (release pool)" if source.startswith("ALL_chrome")
+                else "the release pool of public sites")
+    return "sites of the 504-fish reference panel"
+
+
+def display_name(name, alias=None, human=None, gene_id=None):
+    """The name a gene is shown under: its Ensembl name, else its known-loci catalogue name, else 'unnamed (human X)'
+    from its human ortholog(s), else its id."""
+    if name or alias:
+        return name or alias
+    if human:
+        first, *more = human.split(",")
+        return f"unnamed (human {first}{', ...' if more else ''})"
+    return gene_id or "unnamed"
+
+
+def layer(name):
+    """The manifest entry of a release layer, or {}."""
+    return next((x for x in jobs.manifest().get("layers", []) if x["name"] == name), {})
+
+
+def _file(name):
+    """Path of a release parquet when it exists, else None."""
+    path = jobs.release() / f"{name}.parquet"
+    return path if path.exists() else None
+
+
+def _aliases_sql():
+    """SQL table a(gene_id, alias) of the catalogue's gene names (e.g. vgll3 for the unnamed chr25 copy)."""
+    pairs = sorted({(r["ensembl_gene"], r["locus"]) for r in catalogue() if r.get("ensembl_gene") and r.get("locus")})
+    if not pairs:
+        return "(SELECT NULL::VARCHAR AS gene_id, NULL::VARCHAR AS alias WHERE false) a"
+    return "(VALUES " + ", ".join(f"({lit(g)}, {lit(a)})" for g, a in pairs) + ") a(gene_id, alias)"
+
+
+def tissues():
+    """Tissue columns of the release's expression layer."""
+    return list(layer("expression").get("columns", [])) if _file("expression") else []
+
+
+def gene_rows(ids):
+    """{gene id: row} for some gene ids: location, names, orthologs (human, zebrafish), expression_<tissue>, the
+    catalogue alias and the display label. Missing layers give no columns (orthologs give None)."""
+    path = _file("gene")
+    if not ids or path is None:
+        return {}
+    cols, joins = ["NULL::VARCHAR AS human", "NULL::VARCHAR AS zebrafish"], []
+    if _file("gene_ortholog"):
+        cols, joins = ["o.human", "o.zebrafish"], [f"LEFT JOIN read_parquet({lit(_file('gene_ortholog'))}) o ON o.gene_id = g.id"]
+    if tissues():
+        cols += [f"e.{q(t)} AS {q('expression_' + t)}" for t in tissues()]
+        joins.append(f"LEFT JOIN read_parquet({lit(_file('expression'))}) e ON e.gene_id = g.id")
+    cur = jobs.connect([jobs.release()]).execute(
+        f"SELECT g.*, {', '.join(cols)} FROM read_parquet({lit(path)}) g {' '.join(joins)} WHERE list_contains($ids, g.id)",
+        {"ids": list(ids)})
+    names = [d[0] for d in cur.description]
+    rows = {r[names.index("id")]: dict(zip(names, r)) for r in cur.fetchall()}
+    aliases = {r["ensembl_gene"]: r["locus"] for r in catalogue() if r.get("ensembl_gene")}
+    for g in rows.values():
+        g["alias"] = aliases.get(g["id"])
+        g["label"] = display_name(g["name"], g["alias"], g["human"], g["id"])
+    return rows
+
+
+def namesakes(g, limit=10):
+    """Other genes with the same name or catalogue name as gene row `g`, or sharing a human ortholog: often its Ss4R
+    ohnolog (a hint until P5.8 adds the curated ohnolog table)."""
+    path, ortho = _file("gene"), _file("gene_ortholog")
+    names = sorted({n.lower() for n in (g.get("name"), g.get("alias")) if n})
+    humans = [h for h in (g.get("human") or "").split(",") if h] if ortho else []
+    if path is None or not (names or humans):
+        return []
+    join = f"LEFT JOIN read_parquet({lit(ortho)}) o ON o.gene_id = g.id" if ortho else "LEFT JOIN (SELECT NULL AS human) o ON false"
+    same = " OR ".join(x for x in ["list_contains($names, lower(g.name))" if names else "",
+                                   "len(list_intersect(string_split(o.human, ','), $humans)) > 0" if humans else ""] if x)
+    rows = jobs.connect([jobs.release()]).execute(f"""
+        SELECT g.id, g.name, g.chrom, g.start, g."end", o.human FROM read_parquet({lit(path)}) g {join}
+        WHERE g.id <> $id AND ({same}) ORDER BY try_cast(g.chrom AS INTEGER), g.start LIMIT {int(limit)}""",
+                                                  {"id": g["id"], **({"names": names} if names else {}),
+                                                   **({"humans": humans} if humans else {})}).fetchall()
+    return [dict(zip(["id", "name", "chrom", "start", "end", "human"], r)) for r in rows]
+
+
+def release_facts():
+    """[(value, label, anchor on the data page)] from the manifest, for the landing page."""
+    m = jobs.manifest()
+    layers = {x["name"]: x for x in m.get("layers", [])}
+    conditions = [c for c in layers.get("chromatin", {}).get("columns", []) if c != "summary"]
+    facts = [(len(layers), "annotation layers", ""), (len(conditions), "chromatin conditions", "layer-chromatin")]
+    for name, label in [("chromatin", "AQUA-FAANG robust ATAC peaks"), ("gene", "Ensembl 116 genes"),
+                        ("public_af", "public variants with allele frequencies")]:
+        if name in layers:
+            facts.append((layers[name].get("rows"), label, f"layer-{name}"))
+    if m.get("catalog"):
+        facts.append((m["catalog"].get("rows"), "known-loci SNPs", "catalog"))
+    return facts + [(len(jobs.presets()), "trait presets", "")]
+
+
+def hero():
+    """A small locus figure of vgll3 (genes, published associations, molQTL leads, chromatin states, public variants;
+    no live signal) for the landing page, drawn once per release and state palette. None without a chromatin layer."""
+    from . import locus  # locus imports this module
+    info = jobs.release_info()
+    key = (info.get("sha256"), palette.states_name())
+    if key not in _hero:
+        if _file("chromatin") is None:
+            return None
+        chrom, start, end = HERO
+        data = locus.lanes(chrom, start, end)
+        svg = locus.locus_svg.locus(data, title="vgll3, chromosome 25", caption="Published associations (diamonds), Ensembl 116 "
+                                    "genes, AQUA-FAANG chromatin states in 21 conditions, 504-fish panel variants.",
+                                    compact=True, width=760, gutter=118, synthetic=bool(info.get("synthetic")), uid="hero", legend_on=False)
+        _hero.clear()
+        _hero[key] = svg
+    return _hero[key]
+
+
+def trait_summary(rows):
+    """[(trait, heading, n, loci names)] for the landing page's known-loci card."""
+    out = []
+    for trait, heading, items in by_trait(rows):
+        names = list(dict.fromkeys(r.get("locus", "").split(" (")[0] for r in items if r.get("locus")))
+        out.append((trait, heading, len(items), names))
+    return out
+
+
+def landing(request, error=None, targets="", status=200):
+    """/snp/: a vgll3 thumbnail, one search box, example searches, entry cards, release facts, the known loci per
+    trait and a form that scores the public variants of genes or intervals."""
+    info, rows = jobs.release_info(), catalogue()
+    figure = hero()
+    return render(request, "snpportal/landing.html", {
+        "nav": "home", "title": "Functional SNP portal", "release": info, "facts": release_facts(), "hero": mark_safe(figure) if figure else None,
+        "catalogue": rows, "traits": trait_summary(rows), "examples": EXAMPLES, "presets": jobs.presets(), "trait": "all",
+        "flanks": FLANKS, "flank": FLANK, "error": error, "targets": targets, "public_source": public_source(),
+        "tour_url": tour_url(3)}, status=status)
+
+
+def known_loci(request):
+    """/snp/known-loci/: the published SNPs (and PROVISIONAL QTL intervals) of the release catalogue, with effect
+    alleles, DOIs, gene, variant and locus links, and namesake genes (e.g. the vgll3 ohnolog on chr21)."""
+    rows = catalogue()
+    genes = gene_rows(sorted({r["ensembl_gene"] for r in rows if r.get("ensembl_gene")}))
+    for r in rows:
+        r["gene"] = genes.get(r.get("ensembl_gene"))
+        r["interval"] = r.get("type") == "qtl_interval" or not r.get("pos")
+        if r.get("chrom") and (r.get("pos") or "").isdecimal():
+            pos = int(r["pos"])
+            r["locus_url"] = search.locus_url(r["chrom"], max(1, pos - FLANK), pos + FLANK)
+            r["variant_url"] = search.variant_url(r["chrom"], pos)
+        elif r.get("chrom") and (r.get("start") or "").isdecimal() and (r.get("end") or "").isdecimal():
+            r["locus_url"] = search.locus_url(r["chrom"], int(r["start"]), int(r["end"]))
+        r["salmobase"] = SALMOBASE_GENE.format(r["ensembl_gene"]) if r.get("ensembl_gene") else None
+    caveats = []
+    for g in genes.values():
+        others = namesakes(g)
+        if others:
+            caveats.append({"gene": g, "others": others})
+    m = jobs.manifest()
+    groups = by_trait(rows)
+    snps = sum(1 for r in rows if r["kind"] != "region" and not r["interval"])
+    return render(request, "snpportal/known_loci.html", {
+        "nav": "known", "title": "Known loci", "rows": rows, "groups": groups, "caveats": caveats,
+        "alleles": sum(1 for r in rows if r.get("effect_allele")),
+        "window": (m.get("catalog") or {}).get("window"), "crumbs": [("Home", reverse("snpportal:landing")), ("Known loci", None)],
+        "meta": (f"{snps} published SNPs" + (f" and {len(rows) - snps} other entr{'y' if len(rows) - snps == 1 else 'ies'}"
+                                             if len(rows) > snps else "")
+                 + f" across {len(groups)} traits, from the release catalogue (catalog/known_loci.tsv)") if rows else None})
+
+
+# ---- candidate public variants ----
+
+def _where(windows, pos="pos"):
+    """SQL condition: inside one of the windows [(chrom, start, end)] (1-based, inclusive)."""
+    return " OR ".join(f"(chrom = {lit(c)} AND {pos} BETWEEN {int(a)} AND {int(b)})" for c, a, b in windows) or "false"
+
+
+def public_rows(windows, limit=MAX_CANDIDATES):
+    """[(chrom, pos, id, ref, alt)] of the public sites in the windows, from the pool or else public_af.parquet; at
+    most limit + 1 rows (so callers can tell when there are too many)."""
+    release, pool = jobs.release(), jobs.release() / "pool" / "pool.parquet"
+    con = jobs.connect([release])
+    if pool.exists():
+        cols = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet({lit(pool)}))").fetchall()]
+        pick = ", ".join(c if c in cols else f"NULL::VARCHAR AS {c}" for c in ("id", "ref", "alt"))
+        sql = f"SELECT DISTINCT chrom, pos, {pick} FROM read_parquet({lit(pool)}) WHERE {_where(windows)}"
+    elif _file("public_af"):
+        sql = (f"SELECT DISTINCT chrom, \"end\" AS pos, NULL::VARCHAR AS id, ref, alt FROM read_parquet({lit(_file('public_af'))}) "
+               f"WHERE {_where(windows, q('end'))}")
+    else:
+        return []
+    return con.execute(f"{sql} ORDER BY try_cast(chrom AS INTEGER), chrom, pos LIMIT {int(limit) + 1}").fetchall()
+
+
+def candidates(windows, trait="all", sort="pos"):
+    """Public sites in the windows, annotated and tiered for `trait`, ordered by ?sort (SORTS): (rows as dicts, column
+    names, source). Reads the pool's rows when the release has pool/pool.parquet, else annotates the sites of
+    public_af.parquet now (sequence checks off)."""
+    release, w = jobs.release(), jobs.weights()
+    pool = release / "pool" / "pool.parquet"
+    with tempfile.TemporaryDirectory(prefix="snpportal-explore-") as tmp:  # public sites only, never user data
+        tmp = Path(tmp).resolve()
+        if pool.exists():
+            con, source, path = jobs.connect([release]), "pool", pool
+        else:
+            rows = public_rows(windows)
+            if not rows:
+                return [], [], "public_af"
+            with open(tmp / "sites.tsv", "w") as f:
+                f.write("chrom\tpos\tid\tref\talt\n" + "".join("\t".join("" if v is None else str(v) for v in r) + "\n" for r in rows))
+            snpscore.annotate(tmp / "sites.tsv", release, tmp / "sites.parquet", sequence=False)
+            con, source, path = jobs.connect([release, tmp]), "annotated now", tmp / "sites.parquet"
+        cols = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet({lit(path)}))").fetchall()]
+        keep = [c for c in cols if not c.startswith("tier")]  # the pool's stored tiers; recomputed for `trait` below
+        con.execute(f"CREATE TEMP TABLE w AS SELECT {', '.join(map(q, keep))} FROM read_parquet({lit(path)}) WHERE {_where(windows)}")
+    sql = jobs.scored_sql("w", w, keep, trait if trait in w["presets"] else "all", release) if w else "SELECT * FROM w"
+    column, order = SORTS.get(sort, SORTS["pos"])
+    order = order if column in keep or w and column == "tier" else "pos"
+    cur = con.execute(f"SELECT * FROM ({sql}) ORDER BY {order}")
+    names = [d[0] for d in cur.description]
+    return [dict(zip(names, r)) for r in cur.fetchall()], names, source
+
+
+def _tsv(header_lines, names, rows):
+    out = io.StringIO()
+    out.write("".join(f"{line}\n" for line in header_lines))
+    writer = csv.writer(out, delimiter="\t", lineterminator="\n")
+    writer.writerow(names)
+    for r in rows:
+        writer.writerow(["" if r[n] is None else ";".join(f"{t['term']}={t['weight']}" for t in r[n]) if n == "tier_terms"
+                         else r[n] for n in names])
+    return out.getvalue()
+
+
+def provenance(what, trait=None):
+    """'#' lines for public downloads: what it is, the release and its hashes, the preset, PROVISIONAL and SYNTHETIC."""
+    info, weights = jobs.release_info(), jobs.release() / "weights.yaml"
+    lines = [f"salmobase functional SNP portal: {what}; exported {jobs.utc()}",
+             f"release {info['version']} ({info['assembly']}); manifest sha256 {info['sha256']}; "
+             f"weights sha256 {jobs.sha256(weights) if weights.exists() else None}"]
+    if trait:
+        lines.append(f"preset {trait}; tier rules PROVISIONAL (prototype weights, pending decision by G)")
+    if info["synthetic"]:
+        lines.append(f"SYNTHETIC layers in this release (never counted in tiers): {', '.join(info['synthetic'])}")
+    return ["# " + line for line in lines]
+
+
+def download(text, name, request, header):
+    """A text file download; ?plain=1 drops the '#' header lines."""
+    body = text if request.GET.get("plain") or not header else "\n".join(header) + "\n" + text
+    response = HttpResponse(body, content_type="image/svg+xml" if name.endswith(".svg") else "text/tab-separated-values; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{name}"'
+    return response
+
+
+# ---- gene page ----
+
+def expression_svg(g, synthetic=False, note=""):
+    """Bars of mean expression (CPM) per tissue for gene row `g`, one bar per tissue in its Okabe-Ito colour, with the
+    value printed (a missing value prints 'n/a'). `note` (provenance) is added to the <desc>."""
+    values = [(t, g.get(f"expression_{t}")) for t in tissues()]
+    top = max([v for _, v in values if v] or [1.0])
+    width, left, span, step = 560, 72, 400, 26
+    parts = [f'<line x1="{left}" y1="4" x2="{left}" y2="{8 + step * len(values)}" stroke="{palette.GREY[500]}"/>']
+    for i, (tissue, v) in enumerate(values):
+        y, w = 8 + i * step, (span * v / top if v else 0)
+        label = "n/a" if v is None else f"{v:,.1f}" if v < 1000 else f"{v:,.0f}"
+        parts.append(f'<text x="{left - 8}" y="{y + 13}" text-anchor="end">{escape(tissue)}</text>'
+                     f'<rect x="{left}" y="{y}" width="{w:.1f}" height="18" fill="{palette.TISSUES.get(tissue, palette.GREY[500])}">'
+                     f'<title>{escape(tissue)}: {label} CPM</title></rect>'
+                     f'<text x="{left + w + 6:.1f}" y="{y + 13}" fill="{palette.GREY[700]}">{label}</text>')
+    title = f"Expression of {g['label']} per tissue"
+    desc = f"Mean counts per million (CPM) per tissue for {g['id']}. {layer('expression').get('description', '')} {note}"
+    return figures.svg(width, 16 + step * len(values), title, desc, "".join(parts), synthetic)
+
+
+def elements(g, window):
+    """Robust ATAC peaks in the window with their state per condition (tissues, then embryo stages), the distance of
+    their midpoint to the TSS (in the gene's direction), GERP overlap, Ensembl regulatory types and public variants."""
+    chrom, a, b = window
+    if _file("chromatin") is None:
+        return [], []
+    conditions = [c for c in layer("chromatin").get("columns", []) if c != "summary"]
+    conditions = [c for c in conditions if c not in STAGES] + [c for c in STAGES if c in conditions]
+    tss, sign = (g["start"] + 1, 1) if g["strand"] != "-" else (g["end"], -1)
+    near = f"chrom = {lit(chrom)} AND \"end\" >= {int(a)} AND start < {int(b)}"
+    extra = []
+    for name, sql in [("gerp", "SELECT count(*) > 0 FROM x_gerp x WHERE x.start < c.\"end\" AND x.\"end\" > c.start"),
+                      ("regbuild", "SELECT string_agg(DISTINCT x.type, ', ') FROM x_regbuild x WHERE x.start < c.\"end\" AND x.\"end\" > c.start"),
+                      ("public_af", "SELECT count(*) FROM x_public_af x WHERE x.\"end\" > c.start AND x.\"end\" <= c.\"end\"")]:
+        if _file(name):
+            extra.append((name, f"x_{name} AS (SELECT * FROM read_parquet({lit(_file(name))}) WHERE {near})", f"({sql}) AS {name}"))
+    ctes = ", ".join(["c AS (SELECT * FROM read_parquet(" + lit(_file("chromatin")) + f") WHERE {near})"] + [x[1] for x in extra])
+    cur = jobs.connect([jobs.release()]).execute(
+        f"WITH {ctes} SELECT chrom, start, \"end\", {', '.join(map(q, conditions))}{''.join(', ' + x[2] for x in extra)} "
+        "FROM c ORDER BY start")
+    names = [d[0] for d in cur.description]
+    rows = []
+    for r in cur.fetchall():
+        r = dict(zip(names, r))
+        mid = (r["start"] + r["end"]) / 2
+        r["tss"] = "at TSS" if r["start"] < tss <= r["end"] else f"{sign * (mid - tss) / 1000:+.1f} kb"
+        r["states"] = [(c, r[c], palette.state(r[c])[2]) for c in conditions]
+        rows.append(r)
+    return rows, [(c, "Embryo" if c in STAGES else c.split("_")[0], _short(c)) for c in conditions]
+
+
+def _short(condition):
+    """Column label: 'Imm F' for Brain_Immature_Female, 'LB' for LateBlastulation."""
+    if condition in STAGES:
+        return "".join(re.findall("[A-Z]", condition))
+    _, maturity, sex = (condition.split("_") + ["", ""])[:3]
+    return f"{maturity[:3]} {sex[:1]}"
+
+
+def gene(request, gene_id):
+    """/snp/gene/<id>/: names and orthologs, links, the locus view (gene +/- 20 kb), expression per tissue,
+    regulatory elements and the public variants in the gene +/- ?flank (default 50 kb) tiered for ?trait, with TSV
+    downloads (?download=expression.svg|expression.tsv|candidates.tsv) and 'Score these'."""
+    g = gene_rows([gene_id]).get(gene_id)
+    if g is None:
+        raise Http404("No such gene in this release")
+    presets = jobs.presets()
+    trait = request.GET.get("trait", "all")
+    trait = trait if trait in dict(presets) else "all"
+    flank = request.GET.get("flank", "")
+    flank = int(flank) if flank.isdecimal() and int(flank) in FLANKS else FLANK
+    sort = request.GET.get("sort", "tier")
+    info = jobs.release_info()
+    synthetic = "expression" in info["synthetic"]
+    window = (g["chrom"], max(1, g["start"] + 1 - flank), g["end"] + flank)
+    what = request.GET.get("download")
+    if what == "expression.svg" and tissues():
+        note = " ".join(line[2:] for line in provenance(f"expression of {gene_id}"))
+        return download(expression_svg(g, synthetic, note), f"expression_{gene_id}.svg", request, [])
+    if what == "expression.tsv" and tissues():
+        text = "tissue\tmean_cpm\n" + "".join(f"{t}\t{'' if g.get('expression_' + t) is None else g['expression_' + t]}\n" for t in tissues())
+        return download(text, f"expression_{gene_id}.tsv", request, provenance(f"expression of {gene_id}"))
+    rows, names, source = candidates([window], trait, sort)
+    if what == "candidates.tsv":
+        return download(_tsv([], names, rows), f"candidates_{gene_id}_{flank // 1000}kb_{trait}.tsv", request,
+                        provenance(f"public variants in {gene_id} +/- {flank:,} bp ({window[0]}:{window[1]}-{window[2]})", trait))
+    tiers = {}
+    for r in rows:
+        tiers[r.get("tier")] = tiers.get(r.get("tier"), 0) + 1
+    for r in rows[:SHOW_ROWS]:
+        r["url"] = search.variant_url(r["chrom"], r["pos"])
+        r["gene_label"] = display_name(r.get("gene_name"), None, r.get("gene_ortholog_human"), r.get("gene_id"))
+    peaks, head = elements(g, window)
+    side = [(k, label) for k, label in [("gerp", "GERP"), ("regbuild", "Ensembl regulatory"), ("public_af", "Public variants")]
+            if peaks and k in peaks[0]]
+    query = {"trait": trait, "flank": flank, "sort": sort}
+    fig = None
+    if tissues():
+        base = reverse("snpportal:gene", args=[gene_id])
+        fig = {"name": "expression", "title": "Expression per tissue", "svg": mark_safe(expression_svg(g, synthetic)),
+               "info": layer("expression").get("description", "Mean counts per million per tissue."),
+               "svg_url": f"{base}?download=expression.svg", "tsv_url": f"{base}?download=expression.tsv",
+               "caption": f"Release {info['version']}, layer expression: {layer('expression').get('citation', '')}."}
+    locus = (g["chrom"], max(1, g["start"] + 1 - LOCUS_FLANK), g["end"] + LOCUS_FLANK)
+    return render(request, "snpportal/gene.html", {
+        "nav": "explore", "title": g["label"], "gene": g, "title_badges": ["synthetic"] if synthetic else [],
+        "meta": f"{g['id']} · chromosome {g['chrom']}:{g['start'] + 1:,}-{g['end']:,} ({g['strand']}) · {g['biotype']}",
+        "crumbs": [("Home", reverse("snpportal:landing")), ("Genes", None), (g["label"], None)],
+        "loci": [r for r in catalogue() if r.get("ensembl_gene") == gene_id], "namesakes": namesakes(g),
+        "ensembl": ENSEMBL_GENE.format(gene_id), "salmobase": SALMOBASE_GENE.format(gene_id), "jbrowse": JBROWSE.format(*locus),
+        "locus_url": search.locus_url(*locus),
+        "locus_svg": reverse("snpportal:locus_svg") + "?" + urlencode({"r": "{}:{}-{}".format(*locus), "trait": trait}),
+        "figure": fig, "peaks": peaks, "head": head, "groups": _groups(head), "side": side,
+        "rows": rows[:SHOW_ROWS], "n_rows": len(rows), "source": source, "public_source": public_source(),
+        "names": [n for n in names if n != "id" or any(r.get("id") for r in rows)], "tiers": sorted(tiers.items(), key=lambda kv: kv[0] or 9),
+        "window": window, "window_text": "{}:{}-{}".format(*window), "flank": flank, "flanks": FLANKS, "trait": trait,
+        "presets": presets, "sort": sort, "query": urlencode(query), "synthetic_layers": info["synthetic"],
+        "sorts": [(k, label) for k, label in [("tier", "tier"), ("pos", "position"), ("maf", "minor allele frequency")]
+                  if SORTS[k][0] in names],
+        "provisional": bool(jobs.weights())})
+
+
+def _groups(head):
+    """[(tissue or 'Embryo', number of columns)] for the element table's header."""
+    groups = []
+    for _, group, _ in head:
+        if groups and groups[-1][0] == group:
+            groups[-1] = (group, groups[-1][1] + 1)
+        else:
+            groups.append((group, 1))
+    return groups
+
+
+# ---- candidate jobs from genes or intervals ----
+
+def targets(text, flank):
+    """Windows [(chrom, start, end)] and labels from pasted gene ids, gene names (Ensembl or catalogue), positions
+    (+/- flank) and intervals (as given), one per line or separated by spaces or commas. Raises jobs.InputError."""
+    found, genes_wanted = [], []
+    for line in re.split(r"[\n;]+", text):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        tokens = [line] if search.region(line) else [t for t in re.split(r"[\s,]+", line) if t]
+        for token in tokens:
+            hit = search.region(token)
+            if hit:
+                chrom, a, b = hit
+                found.append(((chrom, max(1, a - flank), b + flank), token) if a == b else ((chrom, a, b), token))
+            else:
+                genes_wanted.append(token)
+    if len(found) + len(genes_wanted) > MAX_TARGETS:
+        raise jobs.InputError(f"Paste at most {MAX_TARGETS} genes, positions or intervals at once.")
+    if genes_wanted:
+        path = _file("gene")
+        if path is None:
+            raise jobs.InputError("This release has no gene layer, so only positions and intervals can be used.")
+        matches = jobs.connect([jobs.release()]).execute(f"""
+            SELECT DISTINCT t.token, g.id, g.chrom, g.start, g."end"
+            FROM (SELECT unnest($tokens) AS token) t, read_parquet({lit(path)}) g LEFT JOIN {_aliases_sql()} ON a.gene_id = g.id
+            WHERE upper(g.id) = upper(t.token) OR lower(g.name) = lower(t.token) OR lower(a.alias) = lower(t.token)""",
+                                                         {"tokens": genes_wanted}).fetchall()
+        for token in genes_wanted:
+            hits = [m for m in matches if m[0] == token]
+            if not hits:
+                raise jobs.InputError(f"'{token[:40]}' is not a gene id, gene name, position or interval in this release.")
+            if len(hits) > 1:
+                raise jobs.InputError(f"'{token[:40]}' matches {len(hits)} genes ({', '.join(h[1] for h in hits[:5])}): "
+                                      "paste the Ensembl id of the one you mean.")
+            _, gene_id, chrom, start, end = hits[0]
+            found.append(((chrom, max(1, start + 1 - flank), end + flank), f"{token} +/- {flank // 1000} kb" if flank else token))
+    if not found:
+        raise jobs.InputError("Paste at least one gene id or name, position or interval, e.g. ENSSSAG00000053708 or 26:14.5-15Mb.")
+    return [w for w, _ in found], [label for _, label in found]
+
+
+@require_POST
+def candidate_job(request):
+    """POST targets (genes, positions, intervals), flank and trait: the public variants there become a job (via
+    jobs.create_from_rows), then its results page. Errors re-show the landing page's form."""
+    text = request.POST.get("targets", "")[:20_000]
+    flank = request.POST.get("flank", "")
+    flank = int(flank) if flank.isdecimal() and int(flank) <= max(FLANKS) else FLANK
+    trait = request.POST.get("trait", "all")
+    trait = trait if trait in dict(jobs.presets()) else "all"
+    try:
+        windows, labels = targets(text, flank)
+        rows = public_rows(windows)
+        if not rows:
+            raise jobs.InputError("There are no public variants in these genes or intervals.")
+        if len(rows) > MAX_CANDIDATES:
+            raise jobs.InputError(f"These windows hold more than {MAX_CANDIDATES:,} public variants. Use fewer or shorter intervals.")
+        label = "Public variants in " + ", ".join(labels)
+        key = jobs.create_from_rows(rows, label if len(label) <= 120 else label[:117] + "...", trait)
+    except jobs.InputError as e:
+        return landing(request, str(e), text, 400)
+    except jobs.QueueFull:
+        response = landing(request, "The portal is busy scoring other lists. Please try again in a minute.", text, 503)
+        response["Retry-After"] = "60"
+        return response
+    url = reverse("snpportal:results", args=[key])
+    return redirect(url if trait == "all" else f"{url}?{urlencode({'trait': trait})}")
+
+
+# ---- the guided tour (P5.11) ----
+
+TOUR_GENE, TOUR_SNP, TOUR_TRAIT = "ENSSSAG00000053708", "vgll3_Met54Thr", "maturation"  # vgll3 on chr25, its SNP, preset
+TOUR_SPAN, TOUR_SPEC = ("25", 28_995_075, 28_999_268), "25-28996360-C-T"  # used when the release lacks the gene or catalogue
+TOUR = [  # (slug, label in the step bar, heading)
+    ("known", "Known locus", "vgll3: a known maturation locus, and its namesake"),
+    ("variant", "Variant page", "The vgll3 Met54Thr variant page"),
+    ("locus", "Locus browser", "The locus browser: brain and gonad ATAC from salmobase"),
+    ("score", "Score", "Score the known-loci example"),
+    ("overview", "Overview", "The overview dashboard"),
+    ("table", "Table filters", "Filter the table"),
+    ("panel", "Panel & exports", "Design a panel and export it"),
+    ("yours", "Your list", "Try your own list"),
+]
+TOUR_FILTERS = [  # (label, table filters, column they need, what they show)
+    ("Tier 1–2", {"tier": "1-2"}, "tier", "the strongest functional evidence for the preset"),
+    ("Known loci only", {"known": "1"}, "known_locus", "SNPs within the catalogue window of a published SNP"),
+    ("Active in brain, mature male", {"active": "Brain_Mature_Male"}, "chromatin_Brain_Mature_Male",
+     "an active ChromHMM state in one condition (click a heatmap cell for any other)"),
+    ("Coding", {"region": "coding"}, "region_class", "CDS and splice-region SNPs"),
+    ("Evidence: GERP constrained", {"term": "constrained"}, "tier_terms", "SNPs whose tier includes a constrained element"),
+    ("MAF ≥ 0.05", {"min_maf": "0.05"}, "maf", "common SNPs (your maf/af column, else the public allele frequency)"),
+    ("Assay pass, tier 1–3, no A/T or C/G", {"tier": "1-3", "assay": "pass", "hide_ambiguous": "1"}, "assay_status",
+     "filters combine: a quick genotyping shortlist"),
+]
+EXPORT_LABELS = {"tsv": "TSV", "parquet": "Parquet", "bed": "BED", "illumina": "Illumina-style", "axiom": "Axiom-style",
+                 "kasp": "KASP", "bundle": "zip bundle"}
+
+
+def tour_url(step, key=None, trait=None):
+    return reverse("snpportal:tour") + "?" + urlencode([(k, v) for k, v in (("step", step), ("key", key), ("trait", trait)) if v])
+
+
+def tour_window(g, flank):
+    """1-based (chrom, start, end) of vgll3 +/- flank."""
+    chrom, a, b = (g["chrom"], g["start"] + 1, g["end"]) if g else TOUR_SPAN
+    return chrom, max(1, a - flank), b + flank
+
+
+def tour_rows(g):
+    """(rows, label) of the tour's example job: the release's known-loci demo list (the Score page example) plus the
+    public variants within FLANK of vgll3, as (chrom, pos, id, ref, alt) rows for jobs.create_from_rows."""
+    from .views import examples
+    demo, rows = examples().get("known_loci"), []
+    if demo and demo["suffix"] == ".tsv":
+        with open(demo["path"], newline="") as f:
+            for r in csv.DictReader((line for line in f if not line.startswith("#")), delimiter="\t"):
+                if r.get("chrom") and (r.get("pos") or "").isdecimal():
+                    rows.append((r["chrom"], int(r["pos"]), r.get("id") or None, r.get("ref") or None, r.get("alt") or None))
+    known, seen = len(rows), {(r[0], r[1]) for r in rows}
+    rows += [r for r in public_rows([tour_window(g, FLANK)]) if (r[0], r[1]) not in seen]
+    return rows, f"Tour example: {known} known loci + {len(rows) - known} public variants within {FLANK // 1000} kb of vgll3"
+
+
+def _count(items):
+    """'4 Brain and 4 Gonad' from ['Brain', 'Brain', ...], in first-seen order."""
+    counts = {}
+    for x in items:
+        counts[x] = counts.get(x, 0) + 1
+    parts = [f"{n} {x}" for x, n in counts.items()]
+    return ", ".join(parts[:-1]) + (" and " if len(parts) > 1 else "") + parts[-1] if parts else ""
+
+
+def tour(request):
+    """/snp/tour/?step=1..8[&key=<example job>][&trait=]: the guided 'vgll3 and maturation' tour (P5.11). Each step has
+    a short explanation and a live figure (loaded by htmx, so the page never waits for salmobase) or deep links. A POST
+    (step 4) scores the known-loci demo plus the public variants near vgll3 as a job, then shows step 5 with its key."""
+    from .views import private  # the job key is a private link: no caching, same-origin referrers
+    return private(_tour)(request)
+
+
+def _tour(request):
+    import uuid
+    from . import locus, report, tools
+    presets = dict(jobs.presets())
+    trait = request.GET.get("trait")
+    trait = trait if trait in presets else TOUR_TRAIT if TOUR_TRAIT in presets else "all"
+    g = gene_rows([TOUR_GENE]).get(TOUR_GENE)
+    error, status = None, 200
+    if request.method == "POST":
+        try:
+            rows, label = tour_rows(g)
+            if not rows:
+                raise jobs.InputError("This release has no known loci or public variants near vgll3 to score.")
+            return redirect(tour_url(5, jobs.create_from_rows(rows, label, trait), trait))
+        except jobs.InputError as e:
+            error, status = str(e), 400
+        except jobs.QueueFull:
+            error, status = "The portal is busy scoring other lists. Please try again in a minute.", 503
+    step = request.GET.get("step", "")
+    n = 4 if error else int(step) if step.isdecimal() and 1 <= int(step) <= len(TOUR) else 1
+    try:
+        key = str(uuid.UUID(request.GET.get("key", "")))
+    except ValueError:
+        key = None
+    job = jobs.status(key) if key else None
+    expired, key = bool(key) and job is None, key if job else None
+    slug, _, heading = TOUR[n - 1]
+    ctx = {"nav": "home", "title": "vgll3 and maturation: a guided tour", "n": n, "count": len(TOUR), "slug": slug,
+           "heading": heading, "trait": trait, "preset": presets.get(trait, trait), "gene": g, "error": error,
+           "crumbs": [("Home", reverse("snpportal:landing")), ("Guided tour", None)],
+           "meta": "From a published locus to a genotyping panel in eight short steps, on public data only.",
+           "steps": [(i, label, tour_url(i, key, trait)) for i, (_, label, _) in enumerate(TOUR, 1)],
+           "prev": tour_url(n - 1, key, trait) if n > 1 else None, "next": tour_url(n + 1, key, trait) if n < len(TOUR) else None,
+           "key": key, "job": job, "expired": expired, "post_url": tour_url(4, None, trait),
+           "needs_job": slug in ("overview", "table", "panel") and not (job and job["state"] == "done")}
+    ctx["show_form"] = slug == "score" or ctx["needs_job"] and not (job and job["state"] in ("queued", "running"))
+    ctx["keep_hours"] = f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}"
+    if slug == "known":
+        ctx.update(loci=[r for r in catalogue() if r.get("ensembl_gene") == TOUR_GENE], namesakes=namesakes(g) if g else [],
+                   search_url=reverse("snpportal:search") + "?q=vgll3")
+    elif slug == "variant":
+        snp = next((r for r in catalogue() if r.get("id") == TOUR_SNP and (r.get("pos") or "").isdecimal()), None)
+        spec = (f"{snp['chrom']}-{snp['pos']}" + (f"-{snp['ref']}-{snp['alt']}" if snp.get("ref") and snp.get("alt") else "")
+                if snp else TOUR_SPEC)
+        url = reverse("snpportal:variant", args=[spec])
+        ctx.update(snp=snp, variant_url=url, card_url=f"{url}?{urlencode({'trait': trait})}")
+    elif slug == "locus":
+        chrom, a, b = tour_window(g, LOCUS_FLANK)
+        r = f"{chrom}:{a}-{b}"
+        cfg = locus.registry()
+        picked = locus.pick_tracks(cfg, trait, "ATAC") if cfg else []
+        ctx.update(region=f"{chrom}:{a:,}-{b:,}", jbrowse=JBROWSE.format(chrom, a, b),
+                   locus_svg=reverse("snpportal:locus_svg") + "?" + urlencode({"r": r, "trait": trait}),
+                   locus_url=reverse("snpportal:locus") + "?" + urlencode({"r": r, "trait": trait}),
+                   hmm_url=reverse("snpportal:locus") + "?" + urlencode({"r": r, "trait": trait, "hmm": "1"}),
+                   tracks=_count([t.get("tissue") or t["condition"].split("_")[0] for t in picked]))
+    elif slug == "score":
+        rows, label = tour_rows(g)
+        ctx.update(example=label if rows else None)
+    if job and job["state"] == "done":
+        base = reverse("snpportal:results", args=[key])
+
+        def link(**params):
+            return f"{base}?{urlencode({'trait': trait, **params})}"
+        ctx.update(results_url=link(), table_url=link(tab="table"), panel_url=link(tab="panel"),
+                   report_url=f"{reverse('snpportal:report', args=[key])}?{urlencode({'trait': trait})}")
+        if slug == "overview":
+            ov = report.overview(request, key, job)
+            ctx.update(kpis=ov["kpis"], figs=[ov["figs"][x] for x in ("tiers", "conditions") if x in ov["figs"]])
+        elif slug == "table":
+            d = jobs.folder(key)
+            have = {c for c, in jobs.connect([d]).execute(
+                f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet({lit(d / 'result.parquet')}))").fetchall()}
+            have |= {"maf"} if jobs.maf_sql(have)[0] else set()
+            chrom, a, b = tour_window(g, FLANK)
+            filters = TOUR_FILTERS + [(f"vgll3 ± {FLANK // 1000} kb", {"chrom": chrom, "start": a - 1, "end": b}, "pos",
+                                       "an interval: click an ideogram bin for any other")]
+            ctx["filters"] = [(label, link(tab="table", **params), note) for label, params, need, note in filters if need in have]
+        elif slug == "panel":
+            ctx["figs"] = [f for name, f in report.overview(request, key, job)["figs"].items() if name == "assay"]
+            download = reverse("snpportal:download", args=[key])
+            ctx["exports"] = [(EXPORT_LABELS.get(f, f), f"{download}?{urlencode({'format': f, 'trait': trait})}") for f in tools.EXPORTS]
+    return render(request, "snpportal/tour.html", ctx, status=status)

@@ -1,0 +1,74 @@
+{% extends layout %}
+{% load snpportal_tags %}
+{% comment %}Locus browser. htmx swaps #locus-view from locus/svg/ (rendered with a layout holding only the main block);
+   every link and the form also work without JavaScript.{% endcomment %}
+{% block main %}
+<form class="sp-card d-flex flex-wrap align-items-end gap-2 mb-3 sp-small" method="get" action="{% url 'snpportal:locus' %}" role="search">
+  <div class="flex-grow-1"><label class="form-label mb-0" for="r">Region</label>
+    <input class="form-control form-control-sm sp-mono" id="r" name="r" value="{{ region_text }}" autocomplete="off"
+           placeholder="25:28,980,000-29,010,000 or ssa25:28.98-29.01 Mb"></div>
+  <div><label class="form-label mb-0" for="trait">Trait preset</label>
+    <select class="form-select form-select-sm" id="trait" name="trait">
+      {% for value, label in presets %}<option value="{{ value }}"{% if value == s.trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select></div>
+  <div><label class="form-label mb-0" for="assay">Signal rows</label>
+    <select class="form-select form-select-sm" id="assay" name="assay">
+      {% for a in assays %}<option value="{{ a }}"{% if a == s.assay %} selected{% endif %}>{{ a }}</option>{% endfor %}
+    </select></div>
+  <div class="form-check"><input class="form-check-input" type="checkbox" id="hmm" name="hmm" value="1"{% if s.hmm %} checked{% endif %}>
+    <label class="form-check-label" for="hmm">ChromHMM genome-wide</label></div>
+  <div class="form-check"><input class="form-check-input" type="checkbox" id="scale" name="scale" value="track"{% if s.scale == 'track' %} checked{% endif %}>
+    <label class="form-check-label" for="scale">Scale each signal row</label></div>
+  {% if s.key %}<input type="hidden" name="key" value="{{ s.key }}">{% endif %}
+  <button class="btn btn-sm btn-primary" type="submit">Show</button>
+</form>
+
+<div id="locus-view">
+  {% if s.error %}<div class="sp-status sp-status-fail" role="alert">&#10007; {{ s.error }}</div>{% endif %}
+  {% if svg %}
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-2 sp-small" role="toolbar" aria-label="Zoom and move">
+    {% for label, q, tip in moves %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'snpportal:locus' %}?{{ q }}" title="{{ tip }}"
+       hx-get="{% url 'snpportal:locus_svg' %}?{{ q }}" hx-target="#locus-view" hx-select="#locus-view" hx-select-oob="#r" hx-swap="outerHTML"
+       hx-push-url="{% url 'snpportal:locus' %}?{{ q }}">{{ label }}</a>{% endfor %}
+    <span class="sp-mono">{{ region_text }}</span>
+    <span class="ms-auto">Open in <a href="{{ jbrowse }}" rel="noreferrer noopener" target="_blank" title="salmobase JBrowse (link format to verify)">salmobase JBrowse</a> ·
+      <a href="{{ ensembl }}" rel="noreferrer noopener" target="_blank">Ensembl</a></span>
+  </div>
+  {% for note in notes %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ note }}</div>{% endfor %}
+  {% if synthetic %}<div class="sp-status sp-status-warn" role="status">{% include 'snpportal/_badges.html' with kind='synthetic' %}
+    This view uses synthetic test data: not real results.</div>{% endif %}
+  <figure class="sp-card sp-figure" id="fig-locus">
+    <div class="sp-card-head">
+      <h2>Locus {{ region_text }}</h2>
+      <details class="sp-info"><summary aria-label="What does this figure show?">i</summary>
+        <p>Everything the release knows about this window on one axis: published associations from the known-loci catalogue
+          (diamonds; hollow = effect allele not stated), molQTL lead SNPs (nf-RASQUAL, 12 fish), Ensembl 116 gene models, the
+          state of each of the 21 AQUA-FAANG conditions inside robust ATAC peaks (marked rows: the preset's conditions), the
+          Ensembl regulatory build, GERP constrained elements, the 504-fish panel's variants (tick height = minor allele
+          frequency) and live signal from the salmobase bigWigs in RPM (reads per million mapped reads). Hatched bands:
+          blacklist and LORe regions. Hover any element for details.</p></details>
+      {% include 'snpportal/_badges.html' with kind='provisional' %}
+      <div class="sp-downloads" aria-label="Download the locus figure" hx-boost="false">
+        <a href="{% url 'snpportal:locus_svg' %}?{{ query }}&amp;download=1" download>SVG</a>
+        <button type="button" data-png="fig-locus" data-name="{{ file_name }}">PNG</button>
+      </div>
+    </div>
+    {{ svg }}
+    <figcaption class="sp-caption">Window 200 bp to 2 Mb; signal and ChromHMM up to 500 kb. Signal rows: at most 8, replicate R1,
+      chosen from tracks.yaml for the preset ({% include 'snpportal/_badges.html' with kind='provisional' %}).
+      {% if s.key %}Your SNPs are drawn from your results and are never cached or shared.{% endif %}</figcaption>
+  </figure>
+  {% elif s.too_wide %}
+  <div class="sp-status sp-status-warn" role="status">&#9888; This window is wider than 2 Mb: zoom in.
+    <a href="{% url 'snpportal:locus' %}?{{ centre }}">Show the central 2 Mb</a>, or browse whole chromosomes in
+    <a href="https://salmobase.org/jbrowse/" rel="noreferrer noopener" target="_blank">salmobase JBrowse</a>.</div>
+  {% elif not s.error %}
+  <div class="sp-card">
+    <p class="mb-2">Enter a region to see genes, chromatin states in 21 tissues and stages, regulatory elements, constraint,
+      public variants and live ATAC signal from salmobase.</p>
+    <div class="sp-chips"><span class="sp-small sp-muted">Try:</span>
+      {% for label, r in examples %}<a href="{% url 'snpportal:locus' %}?r={{ r|urlencode }}">{{ label }}</a>{% endfor %}</div>
+  </div>
+  {% endif %}
+</div>
+{% endblock main %}

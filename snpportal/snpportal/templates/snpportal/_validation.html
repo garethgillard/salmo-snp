@@ -1,0 +1,12 @@
+{% load snpportal_tags %}
+{# Upload QC from snpscore's validation.json (shown when the release's snpscore writes one). #}
+{% if qc_items %}
+<section class="sp-card" aria-labelledby="qc-h">
+  <h2 id="qc-h">Upload QC</h2>
+  {% if qc_warning %}<div class="sp-status sp-status-warn" role="alert">&#9888; {{ qc_warning }} <a href="{% url 'snpportal:help' %}#liftover">How to convert ICSASG_v2 positions</a>
+    <span class="sp-small">Warning threshold: {% include 'snpportal/_badges.html' with kind='provisional' %}</span></div>{% endif %}
+  {% for w in qc_alias %}<div class="sp-status sp-status-warn" role="alert">&#9888; Chromosome name {{ w.from }} (read as {{ w.to }}, {{ w.rows|thousands }} rows): {{ w.message }}</div>{% endfor %}
+  <dl class="sp-dl sp-small">{% for name, value in qc_items %}<dt>{{ name }}</dt><dd>{{ value|thousands }}</dd>{% endfor %}</dl>
+  {% if rejects %}<p class="sp-small mt-2 mb-0"><a href="{% url 'snpportal:download' key %}?format=rejects">Download the rejected rows with reasons (TSV)</a></p>{% endif %}
+</section>
+{% endif %}

@@ -1,35 +1,48 @@
-{% extends 'salmobase/base.html' %}
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
 
-{% block content %}
-<div class="container-fluid py-4">
-  <div class="d-flex flex-wrap align-items-baseline gap-3 mb-3">
-    <h1 class="h3 mb-0">Scored SNPs</h1>
-    <span>{{ total }} SNPs</span>
-    {% for name, n in flags %}<span class="badge bg-light text-dark border">{{ name }}: {{ n }}</span>{% endfor %}
-    <a class="btn btn-sm btn-outline-primary ms-auto" href="{% url 'snpportal:download' key %}">Download all columns (TSV)</a>
-    <a class="btn btn-sm btn-outline-secondary" href="{% url 'snpportal:upload' %}">New upload</a>
+{% block portal_head %}{% if job.state == 'queued' or job.state == 'running' %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock portal_head %}
+
+{% block main %}
+{% if job.state == 'queued' or job.state == 'running' %}
+  {% include 'snpportal/_progress.html' %}
+{% elif job.state == 'failed' %}
+  <div class="sp-status sp-status-fail" role="alert">
+    <p><strong>&#10007; This list could not be scored.</strong> {{ job.error }}</p>
+    <p><a href="{% url 'snpportal:upload' %}">Score another list</a> · <a href="{% url 'snpportal:help' %}">Help with formats</a></p>
   </div>
+{% else %}
+  {% if release_changed %}<div class="sp-status sp-status-warn" role="status">&#9888; The annotation release or its tier rules have changed since
+    these results were made. They still use release {{ job.release }} as it was then; <a href="{% url 'snpportal:upload' %}">score the list again</a> to use the current one.</div>{% endif %}
+  {% if job.synthetic_input or job.synthetic_layers or synthetic_chip %}<div class="sp-status sp-status-warn" role="status">{% include 'snpportal/_badges.html' with kind='synthetic' %}
+    These results use synthetic test data{% if job.synthetic_layers %} (layers: {{ job.synthetic_layers|join:", " }}){% endif %}{% if synthetic_chip %} (the demo chip on the Panel tab){% endif %}: not real results.</div>{% endif %}
 
-  {# hx-boost turns the sort and page links into in-place updates of this block; they still work without JavaScript #}
-  <div id="table" hx-boost="true" hx-target="#table" hx-select="#table" hx-swap="outerHTML">
-    <table class="table table-sm table-hover">
-      <thead>
-        <tr>{% for name, url, arrow in headers %}<th><a href="{{ url }}">{{ name }}</a> {{ arrow }}</th>{% endfor %}</tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}<tr>{% for v in row %}<td>{{ v|default_if_none:"" }}</td>{% endfor %}</tr>{% endfor %}
-      </tbody>
-    </table>
-    <nav class="d-flex gap-2 align-items-center">
-      {% if prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ prev }}">Previous</a>{% endif %}
-      <span class="small">Page {{ page }} of {{ pages }}</span>
-      {% if next %}<a class="btn btn-sm btn-outline-secondary" href="{{ next }}">Next</a>{% endif %}
-    </nav>
+  {% comment %}Links and forms that stay on this page (preset, tabs, table filters, sort, pages) are boosted: htmx swaps in
+     the new #results and the header actions (#sp-actions, so Download follows them). Only those: a boosted link to
+     another page or a file would swap in nothing. Everything also works without JavaScript.{% endcomment %}
+  <div id="results" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-select-oob="#sp-actions">
+    <form method="get" class="d-flex flex-wrap align-items-center gap-2 mb-3 sp-small" hx-boost="true">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <label for="trait">Trait preset</label>
+      <select class="form-select form-select-sm w-auto" id="trait" name="trait">
+        {% for value, label in presets %}<option value="{{ value }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-sm btn-outline-primary" type="submit">Apply</button>
+      <span class="sp-muted" hx-boost="false">Tiers are recomputed for the preset's tissues; rules are {% include 'snpportal/_badges.html' with kind='provisional' %}</span>
+    </form>
+
+    <ul class="nav nav-tabs" hx-boost="true">
+      <li class="nav-item"><a class="nav-link{% if tab == 'overview' %} active{% endif %}"{% if tab == 'overview' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=overview">Overview</a></li>
+      <li class="nav-item"><a class="nav-link{% if tab == 'table' %} active{% endif %}"{% if tab == 'table' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=table">Table</a></li>
+      <li class="nav-item"><a class="nav-link{% if tab == 'panel' %} active{% endif %}"{% if tab == 'panel' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=panel">Panel</a></li>
+      <li class="nav-item"><a class="nav-link{% if tab == 'export' %} active{% endif %}"{% if tab == 'export' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=export">Export</a></li>
+      {% if job.input_kind == 'gwas' %}<li class="nav-item"><a class="nav-link" hx-boost="false" href="{% url 'snpportal:association' key %}?{{ query }}">Association</a></li>{% endif %}
+    </ul>
+
+    {% if tab == 'table' %}{% include 'snpportal/_table.html' %}
+    {% elif tab == 'panel' %}{% include 'snpportal/_panel.html' %}
+    {% elif tab == 'export' %}{% include 'snpportal/_exports.html' %}
+    {% else %}{% include 'snpportal/_overview.html' %}{% endif %}
   </div>
-  <p class="small text-muted mt-3">Annotation release {{ release }}.</p>
-</div>
-{% endblock content %}
-
-{% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"></script>
-{% endblock scripts %}
+{% endif %}
+{% endblock main %}

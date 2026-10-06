@@ -1,0 +1,15 @@
+{% comment %}A figure card. Context: fig = {name, title, info, svg (safe SVG string), svg_url, tsv_url, caption}. PNG is made
+   from the inline SVG by portal.js.{% endcomment %}
+<figure class="sp-card sp-figure" id="fig-{{ fig.name }}">
+  <div class="sp-card-head">
+    <h2>{{ fig.title }}</h2>
+    <details class="sp-info"><summary aria-label="What does this figure show?">i</summary><p>{{ fig.info }}</p></details>
+    <div class="sp-downloads" aria-label="Download {{ fig.title }}" hx-boost="false">{# never boost file links: htmx would swap the file into the page #}
+      <a href="{{ fig.svg_url }}" download>SVG</a>
+      <button type="button" data-png="fig-{{ fig.name }}" data-name="{{ fig.name }}">PNG</button>
+      <a href="{{ fig.tsv_url }}" download>TSV</a>
+    </div>
+  </div>
+  {{ fig.svg }}
+  <figcaption class="sp-caption">{{ fig.caption }}</figcaption>
+</figure>

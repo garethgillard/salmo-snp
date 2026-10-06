@@ -1,0 +1,36 @@
+{% extends 'snpportal/base_portal.html' %}
+{% block main %}
+<p class="sp-lead">Confidential lists never need to leave your computer: snpscore with the same release and settings gives the
+  same tiers as the portal. The portal keeps uploads for {{ keep_hours }} hours at most, but some lists are better not uploaded at all.</p>
+
+<form method="get" class="d-flex flex-wrap align-items-end gap-3 mb-2 sp-small">
+  {% include 'snpportal/_preset_select.html' with id='local-trait' %}
+  <div class="mb-2"><button class="btn btn-sm btn-outline-primary" type="submit">Show the commands</button></div>
+</form>
+
+<div class="sp-card sp-narrow">
+  <ol class="sp-small mb-0">
+    <li class="mb-2">Install snpscore (Python 3.8 or newer; its only dependencies are duckdb and pyyaml):
+      <pre class="sp-mono mb-0">python3 -m venv snpscore-env
+. snpscore-env/bin/activate
+pip install git+&lt;salmo-snpscore repository URL&gt;</pre></li>
+    <li class="mb-2">Get release {{ release.version }}.
+      {% if zip %}Download release.zip from this portal's operator and check it:
+      <pre class="sp-mono mb-0">shasum -a 256 release.zip   # must print {{ zip_sha256|default:"the sha256 in release.zip.sha256" }}
+unzip release.zip -d {{ folder }}</pre>
+      {% else %}Build it from the public sources (several GB of downloads), with the salmo-snpscore repository's layers.yaml:
+      <pre class="sp-mono mb-0">snpscore fetch
+snpscore build --out {{ folder }}</pre>
+      A downloadable release.zip with its sha256 comes later.{% endif %}
+      {% if release.sha256 %}Check that it is the same release as the portal's:
+      <pre class="sp-mono mb-0">shasum -a 256 {{ folder }}/manifest.json   # {{ release.sha256 }}</pre>{% endif %}</li>
+    <li class="mb-2">Score your list (VCF, SNP table, PLINK .bim/.map or chip manifest) with the <code>{{ trait }}</code> preset:
+      <pre class="sp-mono mb-0">{{ command }}</pre>
+      Add <code>--threads 4 --memory 4GB</code> to change DuckDB's limits, or <code>-o my_snps.parquet</code> for Parquet.
+      Next to the output come <code>.validation.json</code> (the upload QC) and <code>.rejects.tsv</code> (rows not annotated).</li>
+    <li>For another preset, run it again with <code>--trait</code>: {% for value, label in presets %}<code>{{ value }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.</li>
+  </ol>
+  <p class="sp-small sp-muted mt-2 mb-0">Every portal download starts with &lsquo;#&rsquo; lines naming the release, the manifest and
+    weights sha256 and the equivalent snpscore command, so a result can be reproduced and checked.</p>
+</div>
+{% endblock main %}

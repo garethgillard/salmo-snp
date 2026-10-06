@@ -1,0 +1,65 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% block main %}
+<div class="sp-status sp-status-warn" role="note">&#9888; Provisional prototype rules, pending decision by G. They come from this
+  release's weights.yaml, are marked {% include 'snpportal/_badges.html' with kind='provisional' %} below and will change. Every
+  download records the weights.yaml sha256 it used.</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-6 sp-stack">
+    <section class="sp-card" id="weights" aria-labelledby="w-h">
+      <div class="sp-card-head"><h2 id="w-h">Evidence and weights</h2>{% if "weights" in provisional %}{% include 'snpportal/_badges.html' with kind='provisional' %}{% endif %}</div>
+      <p class="sp-small sp-muted">A SNP's tier_score is the sum of the weights of the evidence it has for the chosen trait preset.
+        Synthetic layers never count.</p>
+      <table class="table table-sm sp-small mb-0">
+        <thead><tr><th scope="col">Evidence</th><th scope="col" class="sp-num">Weight</th><th scope="col">Fires when</th></tr></thead>
+        <tbody>{% for name, value, text in weights %}<tr><th scope="row" class="fw-normal"><a href="{% url 'snpportal:help' %}#term-{{ name }}">{{ name }}</a></th>
+          <td class="sp-num">{{ value }}</td><td>{{ text }}</td></tr>{% endfor %}</tbody>
+      </table>
+    </section>
+    <section class="sp-card" id="tiers" aria-labelledby="t-h">
+      <div class="sp-card-head"><h2 id="t-h">Tiers</h2>{% if "tiers" in provisional %}{% include 'snpportal/_badges.html' with kind='provisional' %}{% endif %}</div>
+      <table class="table table-sm sp-small mb-0">
+        <thead><tr><th scope="col">Tier</th><th scope="col">tier_score</th></tr></thead>
+        <tbody>{% for tier, rule in tiers %}<tr><td>{% include 'snpportal/_badges.html' with kind='tier' value=tier %}</td><td>{{ rule }}</td></tr>{% endfor %}</tbody>
+      </table>
+    </section>
+    <section class="sp-card" id="states" aria-labelledby="s-h">
+      <div class="sp-card-head"><h2 id="s-h">Chromatin states</h2>{% if "active_states" in provisional or "weak_states" in provisional %}{% include 'snpportal/_badges.html' with kind='provisional' %}{% endif %}</div>
+      <p class="sp-small mb-1">Active: {% for s in active %}<a href="{% url 'snpportal:help' %}#state-{{ s }}">{{ s }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+      <p class="sp-small mb-1">Weak: {% for s in weak %}<a href="{% url 'snpportal:help' %}#state-{{ s }}">{{ s }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+      <p class="sp-small sp-muted mb-0">Any other state counts as no evidence. States are only known inside AQUA-FAANG robust ATAC peaks.</p>
+    </section>
+  </div>
+  <div class="col-lg-6 sp-stack">
+    <section class="sp-card" id="presets" aria-labelledby="p-h">
+      <div class="sp-card-head"><h2 id="p-h">Trait presets</h2>{% if "presets" in provisional %}{% include 'snpportal/_badges.html' with kind='provisional' %}{% endif %}</div>
+      <table class="table table-sm sp-small mb-0">
+        <thead><tr><th scope="col">Preset</th><th scope="col">Condition prefixes</th><th scope="col">Conditions</th></tr></thead>
+        <tbody>{% for name, prefixes, conditions in presets %}<tr><th scope="row" class="fw-normal">{{ name }}</th>
+          <td>{{ prefixes|join:", "|default:"all" }}</td><td title="{{ conditions|join:', ' }}">{{ conditions|length }}</td></tr>{% endfor %}</tbody>
+      </table>
+    </section>
+    {% for name, items in blocks %}<section class="sp-card" id="block-{{ name }}" aria-labelledby="b-{{ name }}">
+      <div class="sp-card-head"><h2 id="b-{{ name }}">{{ name|capfirst }} settings</h2>{% if name in provisional %}{% include 'snpportal/_badges.html' with kind='provisional' %}{% endif %}</div>
+      <table class="table table-sm sp-small mb-0"><tbody>{% for key, value in items %}<tr><th scope="row" class="fw-normal sp-mono">{{ key }}</th><td>{{ value }}</td></tr>{% endfor %}</tbody></table>
+    </section>{% endfor %}
+    <section class="sp-card" id="coordinates" aria-labelledby="c-h">
+      <h2 id="c-h">Coordinates</h2>
+      <p class="sp-small mb-0">Assembly Ssal_v3.1, chromosomes 1&ndash;29 named as in Ensembl and AQUA-FAANG. Layers use BED
+        coordinates (0-based start, end exclusive); SNPs use 1-based positions, and a SNP is inside an interval when
+        start &lt; pos &le; end. Known loci count within {{ window|default:50000|thousands }} bp.</p>
+    </section>
+  </div>
+</div>
+
+{% if figure %}<div class="mb-3">{% include 'snpportal/_figure.html' with fig=figure %}</div>{% endif %}
+
+<section class="sp-card" id="methods-text" aria-labelledby="m-h">
+  <div class="sp-card-head"><h2 id="m-h">Methods text for a paper</h2><button type="button" class="btn btn-link btn-sm p-0 ms-auto" data-copy="{{ text.0|join:' ' }}">Copy</button></div>
+  {% for p in text.0 %}<p class="sp-small">{{ p }}</p>{% endfor %}
+  <h3>References</h3>
+  <ul class="sp-small mb-0">{% for ref in text.1 %}<li>{{ ref }}</li>{% endfor %}
+    {% for citation, layers in citations %}<li>{{ citation }} <span class="sp-muted">({{ layers|join:", " }})</span></li>{% endfor %}</ul>
+</section>
+{% endblock main %}

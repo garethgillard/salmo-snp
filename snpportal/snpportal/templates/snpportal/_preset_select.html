@@ -1,0 +1,6 @@
+{% if presets %}<div class="mb-2">
+  <label class="form-label sp-small mb-0" for="{{ id }}">Trait preset</label>
+  <select class="form-select form-select-sm w-auto" id="{{ id }}" name="trait">
+    {% for value, label in presets %}<option value="{{ value }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+</div>{% endif %}

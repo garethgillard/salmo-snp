@@ -1,0 +1,38 @@
+{% load snpportal_tags %}
+{% comment %}Overview tab: KPI tiles and the figures whose data exist (all read from summary.json). Every bar, bin and
+   cell links to the Table tab with its filter; figure links are not boosted (they open the table as a new page).{% endcomment %}
+<div class="sp-stack">
+  <div class="sp-kpis" aria-label="Key numbers">
+    {% for k in kpis %}{% if k.href %}<a class="sp-kpi{% if k.warn %} sp-kpi-warn{% endif %}" href="{{ k.href }}">{% else %}<div class="sp-kpi">{% endif %}
+      <b>{{ k.value }}</b><span>{{ k.label }}{% if k.provisional %} <abbr class="sp-prov-mark" title="Rules are PROVISIONAL, pending decision by G">P</abbr>{% endif %}</span>
+      {% if k.note %}<small>{{ k.note }}</small>{% endif %}
+    {% if k.href %}</a>{% else %}</div>{% endif %}{% endfor %}
+  </div>
+  <p class="sp-small sp-muted mb-0">P = based on PROVISIONAL rules {% include 'snpportal/_badges.html' with kind='provisional' %}. Click a number, bar, bin or cell to list those SNPs in the table.</p>
+
+  {% if figs.tiers %}{% include 'snpportal/_figure.html' with fig=figs.tiers %}{% endif %}
+  <div class="row g-3">
+    {% if figs.ideogram %}<div class="col-xl-7">{% include 'snpportal/_figure.html' with fig=figs.ideogram %}</div>{% endif %}
+    <div class="col-xl-5 sp-stack">
+      {% if figs.conditions %}{% include 'snpportal/_figure.html' with fig=figs.conditions %}{% endif %}
+      {% if figs.regions %}{% include 'snpportal/_figure.html' with fig=figs.regions %}{% endif %}
+    </div>
+  </div>
+  <div class="row g-3">
+    {% if figs.terms %}<div class="col-lg-6">{% include 'snpportal/_figure.html' with fig=figs.terms %}</div>{% endif %}
+    {% if figs.maf %}<div class="col-lg-6">{% include 'snpportal/_figure.html' with fig=figs.maf %}</div>{% endif %}
+    {% if figs.assay %}<div class="col-lg-6">{% include 'snpportal/_figure.html' with fig=figs.assay %}</div>{% endif %}
+    {% if figs.reasons %}<div class="col-lg-6">{% include 'snpportal/_figure.html' with fig=figs.reasons %}</div>{% endif %}
+    {% if figs.gaps %}<div class="col-lg-6">{% include 'snpportal/_figure.html' with fig=figs.gaps %}</div>{% endif %}
+  </div>
+
+  {% if flags %}<section class="sp-card" aria-labelledby="flags-h">
+    <h2 id="flags-h">Assay flags</h2>
+    <table class="table table-sm sp-small mb-0 sp-flags">
+      <thead><tr><th scope="col">Flag</th><th scope="col" class="sp-num">SNPs</th><th scope="col" class="sp-num">Share</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead>
+      <tbody>{% for label, n, share, hide in flags %}<tr><td>&#9888; {{ label }}</td><td class="sp-num">{{ n|thousands }}</td><td class="sp-num">{{ share }}</td>
+        <td><a href="{{ hide }}">hide in the table</a></td></tr>{% endfor %}</tbody>
+    </table>
+  </section>{% endif %}
+  {% include 'snpportal/_validation.html' %}
+</div>
