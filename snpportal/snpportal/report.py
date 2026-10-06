@@ -90,7 +90,8 @@ def panel(request, key, d):
     params = ", ".join(f"{k.replace('_', ' ')} {show(v)}" for k, v in sorted((info.get("params") or {}).items()) if v not in (None, [], ""))
     q = urlencode({"tab": "panel", "trait": info.get("preset", "all")})
     return {"hash": tag, "preset": info.get("preset"), "kpis": tools._panel_kpis(s, s.get("assay_status")), "short": tools._short(s),
-            "params": params, "chip": info.get("chip"), "url": f"{reverse('snpportal:results', args=[key])}?{q}"}
+            "params": params, "chip": info.get("chip"), "warnings": s.get("warnings") or [],  # vendor checks (snpscore)
+            "url": f"{reverse('snpportal:results', args=[key])}?{q}"}
 
 
 @private

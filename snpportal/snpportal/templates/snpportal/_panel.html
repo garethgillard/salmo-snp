@@ -16,6 +16,8 @@
       <input type="hidden" name="tab" value="panel"><input type="hidden" name="trait" value="{{ trait }}"><input type="hidden" name="design" value="1">
       {% for f in designer.fields %}<label title="{{ f.help }}">{{ f.label }} <input class="form-control form-control-sm sp-pos" type="number"
         name="{{ f.name }}" value="{{ f.value }}" min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step }}"></label>{% endfor %}
+      {% if designer.cm_maps %}<label title="Genetic map for the cM spacing (Brekke et al. 2023). The male map misses crossovers on chromosomes 2, 8 and 17">cM map <select class="form-select form-select-sm d-inline-block w-auto" name="cm_map">
+        {% for value, label, selected in designer.cm_maps %}<option value="{{ value }}"{% if selected %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>{% endif %}
       {% if designer.assay %}<label class="text-nowrap" title="Off: only SNPs that fail the assay check are dropped"><input class="form-check-input" type="checkbox" name="assay_pass" value="1"{% if designer.assay_pass %} checked{% endif %}> assay pass only</label>{% endif %}
       {% for name, label, checked in designer.checks %}<label class="text-nowrap"><input class="form-check-input" type="checkbox" name="exclude" value="{{ name }}"{% if checked %} checked{% endif %}> exclude {{ label }}</label>{% endfor %}
       <label>Must include <input class="form-control form-control-sm sp-gene" type="text" name="must" value="{{ designer.must }}" placeholder="SNP ids" title="SNP ids from the id column, separated by spaces or commas (up to {{ designer.max_must }})"></label>
@@ -36,6 +38,9 @@
       {% for k in designer.kpis %}<div class="sp-kpi"><b>{{ k.value }}</b><span>{{ k.label }}{% if k.provisional %} <abbr class="sp-prov-mark" title="Rules are PROVISIONAL, pending decision by G">P</abbr>{% endif %}</span>{% if k.note %}<small>{{ k.note }}</small>{% endif %}</div>{% endfor %}
     </div>
     {% if designer.regions %}<p class="sp-small sp-muted mt-2 mb-0">Genic region: {% for name, n in designer.regions %}{{ name }} {{ n|thousands }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+    {% if designer.vendor %}<p class="sp-small sp-muted mt-1 mb-0" id="vendor-checks">Vendor checks: {{ designer.vendor.bins }}{% if not designer.vendor.warnings %}; no Illumina bin or spacing warnings{% endif %}
+      (<a href="{{ designer.export_link }}#locus-names" hx-boost="true">rules</a>).</p>
+    {% if designer.vendor.warnings %}{% include 'snpportal/_vendor_warnings.html' with warnings=designer.vendor.warnings open=1 %}{% endif %}{% endif %}
   </section>
 
   <div class="row g-3">

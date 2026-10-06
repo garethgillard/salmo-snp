@@ -28,6 +28,7 @@
     {% if panel.short %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ panel.short }}</div>{% endif %}
     <div class="sp-kpis">{% for k in panel.kpis %}<div class="sp-kpi"><b>{{ k.value }}</b><span>{{ k.label }}{% if k.provisional %} <abbr class="sp-prov-mark" title="Rules are PROVISIONAL, pending decision by G">P</abbr>{% endif %}</span>{% if k.note %}<small>{{ k.note }}</small>{% endif %}</div>{% endfor %}</div>
     <p class="sp-small sp-muted mt-2 mb-0">Design parameters {% include 'snpportal/_badges.html' with kind='provisional' %}: {{ panel.params }}{% if panel.chip %}; compared with {{ panel.chip|lower }}{% endif %}.</p>
+    {% if panel.warnings %}{% include 'snpportal/_vendor_warnings.html' with warnings=panel.warnings open=1 %}{% endif %}
   </section>{% endif %}
 
   {% if figs %}<div class="sp-report-figs">

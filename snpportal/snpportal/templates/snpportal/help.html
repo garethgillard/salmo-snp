@@ -39,7 +39,10 @@
         probably on ICSASG_v2 or the other strand.</p>
       <h3 id="rsid">rs IDs and LOC symbols</h3>
       <p class="sp-small">Search finds rs IDs from EVA release 9 (rs IDs on several Ssal_v3.1 positions are left out) and opens
-        their variant page; a file of rs IDs can be scored like any list. NCBI LOC symbols (LOC + the NCBI gene id) are found
+        their variant page, which also gives the rs ID&rsquo;s ICSASG_v2 position. Search also takes an ICSASG_v2 position, e.g.
+        <a href="{% url 'snpportal:search' %}?q=ICSASG_v2+25%3A28656101">ICSASG_v2 25:28656101</a> or CM003303.1:28656101, and opens
+        the Ssal_v3.1 variant of the rs ID there (Ssal_v3.1 positions in EVA are EVA&rsquo;s remaps). A file of rs IDs can be
+        scored like any list (<a href="#format-rsid">format</a>). NCBI LOC symbols (LOC + the NCBI gene id) are found
         only for genes whose Ensembl description cites the NCBI gene, so many LOC genes still need their name, ortholog or position.</p>
       <h3 id="chips">Chip manifests</h3>
       <p class="sp-small">Illumina manifests and Axiom annotation files are read as they are, but their positions are often on
@@ -55,7 +58,8 @@
       <p class="sp-small mb-0">Uploaded files are deleted as soon as they have been scored. From a VCF only CHROM, POS, ID, REF and
         ALT are read, so genotypes are never stored; other columns of a SNP table are kept with the results.
         Results are kept for {{ keep_hours }} hours and can be deleted sooner with <em>Delete now</em>; only people with the link can see them.
-        The server never logs SNPs or file names. For confidential lists, <a href="{% url 'snpportal:run_locally' %}">run it locally</a>.
+        The server never logs SNPs or file names. The only cookies are the form-protection (CSRF) cookie and, if you switch the
+        chromatin colours, your choice of palette. For confidential lists, <a href="{% url 'snpportal:run_locally' %}">run it locally</a>.
         {% include 'snpportal/_badges.html' with kind='provisional' %}</p></section>
 
     <section class="sp-card" id="glossary"><h2>Glossary</h2>
@@ -89,9 +93,11 @@
       <h3>Chromatin states</h3>
       <p class="sp-small">{% for name, abbr, text in states %}<a class="me-1 text-decoration-none" href="#state-{{ name }}" title="{{ name }}"><span class="sp-state st-{{ name }} mb-1">{{ abbr }}</span></a>{% endfor %}</p>
       <h3 id="palettes">State palettes</h3>
-      <p class="sp-small mb-1">Two palettes for the chromatin states; the server setting <code>SNPPORTAL_STATE_COLOURS</code> picks
-        one {% include 'snpportal/_badges.html' with kind='provisional' %}. AQUA-FAANG&rsquo;s own colours (the itemRgb of its BED
-        files) give flanking up- and downstream the same red and Quiescent white, so the abbreviation is always printed.</p>
+      <p class="sp-small mb-1">Two palettes for the chromatin states: the portal&rsquo;s, and AQUA-FAANG&rsquo;s own colours (the
+        itemRgb of its BED files), which give flanking up- and downstream the same red and Quiescent white, so the abbreviation
+        is always printed. The server setting <code>SNPPORTAL_STATE_PALETTE</code> picks the default
+        {% include 'snpportal/_badges.html' with kind='provisional' %}; the <em>Chromatin colours</em> links at the foot of
+        every page switch it for you (pages, figures and downloads), remembered in a cookie.</p>
       <table class="table table-sm sp-small">
         <thead><tr><th scope="col">State</th>{% for key, label, used in palettes %}<th scope="col">{{ label }}{% if used %} (in use){% endif %}</th>{% endfor %}</tr></thead>
         <tbody>{% for name, abbr, text in states %}<tr><td class="sp-mono">{{ name }}</td>

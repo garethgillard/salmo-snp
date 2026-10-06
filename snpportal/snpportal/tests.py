@@ -201,6 +201,8 @@ class PortalTest(SimpleTestCase):
         self.assertEqual(jobs.read(self.key(response))["n_rows"], 10)
         self.assertContains(self.paste("25 abc"), "Line 1", status_code=400)
         self.assertContains(self.paste("25 ²"), "Line 1", status_code=400)
+        rs = self.key(self.paste("rs863754587\n25 28998410"))  # rs IDs are placed through EVA release 9
+        self.assertEqual(jobs.read(rs)["n_rows"], 2)
 
         key = jobs.create_from_rows([("25", 28996360, "vgll3_Met54Thr", "C", "T"), ("26", 19138923, "bco1l", "A", None)], "Test rows")
         job = jobs.read(key)
@@ -327,6 +329,15 @@ class PortalTest(SimpleTestCase):
             report = ExceptionReporter(response.wsgi_request, *response.exc_info).get_traceback_text()
             self.assertNotIn("PRIVATE", report)
         self.assertEqual(self.leftovers(), [])
+
+    def test_alias_warning_in_upload_qc(self):  # R7: HG993277.1 is read as chromosome 18, with a warning
+        response = self.client.post(reverse("snpportal:upload"), {"snps": SimpleUploadedFile(
+            "SYNTHETIC_alias.tsv", b"chrom\tpos\nHG993277.1\t1000\nHG993285.2\t19138923\n25\t28996360\n")})
+        overview = self.client.get(response.url)
+        self.assertContains(overview, "Chromosome name HG993277.1 (read as 18")
+        self.assertContains(overview, "older chromosome 18 sequence")
+        self.assertContains(overview, "chromosome name warning")  # the upload-warnings KPI
+        self.assertContains(overview, "HG993285.2 → 26")  # .2 GenBank versions are accepted
 
     def test_qc_in_words(self):
         items = dict(results.qc({"format": "vcf", "rows_read": 3, "rejected": {"unknown_rsid": 1}, "columns_dropped": [],

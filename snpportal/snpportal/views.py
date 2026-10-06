@@ -241,9 +241,10 @@ def results(request, key):
         presets = jobs.presets(d)
         trait = request.GET.get("trait", "all")
         trait = trait if trait in dict(presets) else "all"
-        context.update(presets=presets, trait=trait, query=urlencode({"trait": trait}),
-                       validation=jobs.read_json(d / "validation.json"), rejects=(d / "rejects.tsv").exists(),
-                       release_changed=jobs.release_changed(job))
+        validation = jobs.read_json(d / "validation.json")
+        rejected = sum(v for v in (validation.get("rejected") or {}).values() if isinstance(v, int))
+        context.update(presets=presets, trait=trait, query=urlencode({"trait": trait}), validation=validation,
+                       rejects=(d / "rejects.tsv").exists() and (rejected or not validation), release_changed=jobs.release_changed(job))
         if tab == "table":
             context.update(result_views.table(request, key))
         elif tab == "overview":

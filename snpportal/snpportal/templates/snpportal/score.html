@@ -40,7 +40,7 @@
     <form class="sp-card" method="post">
       {% csrf_token %}
       <h2><label for="paste">Or paste positions</label></h2>
-      <p class="sp-small sp-muted mb-1">One SNP per line: chromosome, position and optionally ref and alt, separated by spaces, tabs, commas or ':'. Up to {{ paste_lines|thousands }} lines.</p>
+      <p class="sp-small sp-muted mb-1">One SNP per line: chromosome, position and optionally ref and alt, separated by spaces, tabs, commas or ':', or an rs ID. Up to {{ paste_lines|thousands }} lines.</p>
       <textarea class="form-control sp-paste mb-2" id="paste" name="paste" rows="6" required
                 placeholder="25 28996360 C T&#10;9 23837450&#10;26:19138923"></textarea>
       <p class="sp-small sp-muted mb-2">A list of rs IDs works too: upload it as a file (one per line, optionally under an <code>id</code> header).</p>

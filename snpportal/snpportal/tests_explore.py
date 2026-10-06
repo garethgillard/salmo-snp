@@ -16,7 +16,7 @@ from django.urls import reverse
 
 import snpscore
 
-from . import explore, jobs, search
+from . import explore, jobs, palette, search
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
@@ -86,6 +86,10 @@ class ExploreTest(SimpleTestCase):
         self.assertEqual(self.search("RS863231655").url, reverse("snpportal:variant", args=["26-15391479-C-G"]))
         self.assertContains(self.search("rs1"), "EVA release 9")
         self.assertContains(self.client.get(reverse("snpportal:suggest"), {"q": "rs863239503"}), "ICSASG_v2 9:25,753,517")
+        for q in ("ICSASG_v2 25:28656101", "v2 ssa25:28,656,101", "CM003303.1:28656101"):  # ICSASG_v2 via the rs table
+            self.assertEqual(self.search(q).url, reverse("snpportal:variant", args=["25-28996360-C-T"]), q)
+        self.assertContains(self.search("ICSASG_v2 25:1"), "No EVA release 9 rs ID sits at this")
+        self.assertIsNone(search.v2_position("25:28656101"))  # without the prefix a position is Ssal_v3.1
         self.assertEqual(self.search("LOC100195380").url, reverse("snpportal:gene", args=["ENSSSAG00000106352"]))
         self.assertContains(self.search("LOC999"), "LOC symbols are found only")
 
@@ -205,6 +209,8 @@ class ExploreTest(SimpleTestCase):
             self.assertIn(f'id="{anchor}"', help_page)
         self.assertIn("mapinfo", help_page)
         self.assertIn('class="sp-state stp-aquafaang-Active_TSS"', help_page)  # the two state palettes side by side
+        self.assertIn('id="format-rsid"', help_page)  # rs-only uploads (R6)
+        self.assertIn("unknown_rsid", help_page)
         self.assertIn("ssa25", help_page)
         methods = self.client.get(reverse("snpportal:methods")).content.decode()
         for anchor in re.findall(r'help/#([\w-]+)"', methods):  # every glossary link from the methods page resolves
@@ -231,6 +237,36 @@ class ExploreTest(SimpleTestCase):
         self.assertEqual(ET.fromstring(svg.content).get("role"), "img")
         self.assertContains(local, "--trait maturation")
         self.assertContains(local, jobs.release_info()["sha256"])
+
+
+    def test_viewer_palette_cookie(self):  # R8: the footer toggle picks the state palette per viewer
+        help_url = reverse("snpportal:help")
+        try:
+            page = self.client.get(help_url)
+            self.assertContains(page, ".st-Active_TSS{background:#B2182B")
+            self.assertContains(page, f'{reverse("snpportal:state_palette")}?name=aquafaang')
+            switch = self.client.get(reverse("snpportal:state_palette"), {"name": "aquafaang"}, HTTP_REFERER=f"http://testserver{help_url}")
+            self.assertEqual(switch.url, f"http://testserver{help_url}")
+            self.assertEqual(switch.cookies[palette.COOKIE].value, "aquafaang")
+            page = self.client.get(help_url)  # the client sends the cookie back
+            self.assertContains(page, ".st-Active_TSS{background:#BF2026")
+            self.assertContains(page, '<strong aria-current="true">AQUA-FAANG itemRgb</strong>')
+            only = set(palette.STATE_PALETTES["aquafaang"].values()) - set(palette.STATE_PALETTES["portal"].values()) - {"#FFFFFF"}
+            self.assertTrue(any(colour in explore.hero() for colour in only))  # figures too
+            away = self.client.get(reverse("snpportal:state_palette"), {"name": "nope"}, HTTP_REFERER="https://elsewhere.example/")
+            self.assertEqual(away.url, reverse("snpportal:landing"))  # other sites' referers are not followed
+            self.assertNotIn(palette.COOKIE + "=nope", str(away.cookies))
+            self.client.cookies.pop(palette.COOKIE)
+            self.assertContains(self.client.get(help_url), ".st-Active_TSS{background:#B2182B")
+        finally:
+            palette.choose(None)  # the test client runs requests in this thread
+
+    async def test_viewer_palette_cookie_asgi(self):  # the same cookie under ASGI (request_started carries the scope)
+        self.async_client.cookies[palette.COOKIE] = "aquafaang"
+        try:
+            self.assertContains(await self.async_client.get(reverse("snpportal:help")), ".st-Active_TSS{background:#BF2026")
+        finally:
+            palette.choose(None)
 
 
 @skipUnless(os.environ.get("SNPSCORE_DEV") and (SNPSCORE / "release" / "dev").exists(), "SNPSCORE_DEV=1 with release/dev")

@@ -139,6 +139,39 @@ class ToolsTest(SimpleTestCase):
         self.assertContains(self.client.get(url + "?tab=panel"), "Selected SNPs")
         self.assertEqual(self.client.get(reverse("snpportal:download", args=[url.split("/")[-2]]), {"scope": "all", "format": "kasp"}).status_code, 200)
 
+    def test_cm_spacing_and_vendor_checks(self):  # R5 and the Push 2 vendor checks
+        page = self.client.get(self.url, {"tab": "panel", "design": "1", "n": "20", "spacing_kb": "0", "spacing_cm": "0.5",
+                                          "cm_map": "female"})
+        self.assertContains(page, 'name="spacing_cm" value="0.5"')
+        self.assertContains(page, '<option value="female" selected>')
+        self.assertContains(page, "median spacing (cM)")
+        self.assertContains(page, "Vendor checks: Infinium I bin A (A/T)")
+        self.assertContains(page, "error 111")  # a 20-SNP panel is far below the Infinium bin minimums
+        h = re.search(r'scope=panel-([0-9a-f]{16})', page.content.decode()).group(1)
+        info = jobs.read_json(self.d / "panels" / f"{h}.json")
+        self.assertEqual((info["params"]["min_spacing_cm"], info["params"]["cm_map"]), (0.5, "female"))
+        by_chrom = {}
+        for r in rows(self.d / "panels" / f"{h}.parquet", "cm_female IS NOT NULL"):
+            by_chrom.setdefault(r["chrom"], []).append((r["pos"], r["cm_female"]))
+        self.assertTrue(by_chrom)
+        for picked in by_chrom.values():
+            cms = [cm for _, cm in sorted(picked)]
+            self.assertTrue(all(b - a >= 0.5 - 1e-9 for a, b in zip(cms, cms[1:])), cms)
+        plain = self.client.get(self.url, {"tab": "panel", "design": "1", "n": "20", "spacing_cm": ""})
+        h2 = re.search(r'scope=panel-([0-9a-f]{16})', plain.content.decode()).group(1)
+        self.assertNotIn("min_spacing_cm", jobs.read_json(self.d / "panels" / f"{h2}.json")["params"])  # bp only: hash as before
+        export = self.client.get(self.url, {"tab": "export", "scope": f"panel-{h}"})
+        self.assertContains(export, "min spacing 0 bp and 0.5 cM")
+        self.assertContains(export, "Vendor checks: Infinium I bin A (A/T)")
+        self.assertContains(export, "Ssa25p28996360")  # locus names and the lookup sidecar explained
+        self.assertContains(export, "lookup.tsv")
+        report = self.client.get(reverse("snpportal:report", args=[self.key]), {"panel": h})
+        self.assertContains(report, "error 111")
+        con = jobs.connect([self.d])  # lists without alleles: the assay flank's (public) alleles, as in vendor files
+        con.execute(f"CREATE VIEW x AS SELECT chrom, pos, assay_flank FROM read_parquet('{self.d / 'result.parquet'}') "
+                    "WHERE assay_flank LIKE '%[A/T]%' LIMIT 3")
+        self.assertEqual(tools.vendor_checks(con, "x")["infinium_bins"]["A"], 3)
+
     def test_panel_figure_downloads(self):
         html = self.client.get(self.url + "?tab=panel").content.decode()
         svg_url = re.search(r'href="([^"]*/tools/panel-coverage\.svg[^"]*)"', html).group(1).replace("&amp;", "&")

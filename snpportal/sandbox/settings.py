@@ -27,7 +27,7 @@ SNPPORTAL_WORKERS = int(os.environ.get("SNPPORTAL_WORKERS", 1))  # background jo
 SNPPORTAL_KEEP_HOURS = 24
 SNPPORTAL_MAX_UPLOAD_MB = 300  # checked on Content-Length before the body is read
 SNPPORTAL_MAX_SNPS = 3_000_000
-SNPPORTAL_STATE_COLOURS = os.environ.get("SNPPORTAL_STATE_COLOURS", "portal")  # or 'aquafaang' (AQUA-FAANG itemRgb); G to choose
+SNPPORTAL_STATE_PALETTE = os.environ.get("SNPPORTAL_STATE_PALETTE", "portal")  # or 'aquafaang' (AQUA-FAANG itemRgb); G to choose
 DATA_UPLOAD_MAX_MEMORY_SIZE = 2_621_440  # form fields such as the paste box (Django's default); files stream to disk
 CACHES = {  # 'snpportal_tiles': public signal tiles of the locus browser (keys never hold a user's position)
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},

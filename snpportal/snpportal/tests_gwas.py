@@ -125,7 +125,7 @@ class GwasTest(SimpleTestCase):
         loci = self.client.get(f"{reverse('snpportal:association_download', args=[self.key])}?trait=maturation&format=loci").content.decode()
         self.assertIn("# SYNTHETIC", loci)
         rows = [x.split("\t") for x in loci.splitlines() if not x.startswith("#")]
-        header, rows = rows[0], [dict(zip(rows[0], r)) for r in rows[1:]]
+        rows = [dict(zip(rows[0], r)) for r in rows[1:]]
         significant = sorted(r["chrom"] for r in rows if r["significant"] == "True")
         self.assertEqual(significant, sorted(t["chrom"] for t in self.truth.values()))  # four planted loci, separate
         qq = self.client.get(f"{reverse('snpportal:association_figure', args=[self.key, 'qq'])}?trait=maturation&format=tsv").content.decode()

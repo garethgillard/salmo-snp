@@ -11,9 +11,12 @@
     {% for name, value in exports.hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
     <fieldset class="mb-3">
       <legend class="h6 mb-1">What to export</legend>
-      {% for value, label, n, checked in exports.scopes %}<div class="form-check sp-small">
+      {% for value, label, n, checked, vendor in exports.scopes %}<div class="form-check sp-small">
         <input class="form-check-input" type="radio" name="scope" id="scope-{{ forloop.counter }}" value="{{ value }}"{% if checked %} checked{% endif %}>
         <label class="form-check-label" for="scope-{{ forloop.counter }}">{{ label }} <span class="sp-muted">({{ n|thousands }} SNPs)</span></label>
+        {% if vendor %}<div class="sp-muted">Vendor checks: {{ vendor.bins }}{% if not vendor.warnings %}; no warnings{% endif %}.</div>
+        {% if vendor.warnings %}{% include 'snpportal/_vendor_warnings.html' with warnings=vendor.warnings open=checked %}{% endif %}
+        {% elif n > exports.vendor_cap %}<div class="sp-muted">Vendor files hold at most {{ exports.vendor_cap|thousands }} SNPs: filter the table or design a panel.</div>{% endif %}
       </div>{% endfor %}
       <p class="sp-small sp-muted mb-0 mt-1">To export a subset, filter the Table tab and come back here, or <a href="{{ exports.panel_link }}" hx-boost="true">design a panel</a>.{% if exports.chip %} Exports of the list include the chip columns (on_chip, dist_to_chip, near_chip, novel_functional).{% endif %}</p>
     </fieldset>
@@ -35,4 +38,11 @@
     have no genome sequence are left out unless kept above (the bundle's README counts them). Assay thresholds are PROVISIONAL, to confirm with the genotyping lab.
     File names carry the release and preset; every file says which release, rules and data produced it (vendor files hold no
     comment lines, so theirs is in the <em>provenance</em> sidecar; the zip bundle has both sidecars).</p>
+  <p class="sp-small sp-muted mt-2 mb-0" id="locus-names">Locus names: vendor files name each SNP
+    <span class="sp-mono">Ssa&lt;chromosome&gt;p&lt;position&gt;</span>, e.g. <span class="sp-mono">{{ exports.locus_name }}</span>
+    (letters and digits only, unique, accepted by Illumina, Axiom and KASP; chromosome 0 = not on chromosomes 1&ndash;29),
+    because your ids may break their naming rules. The <em>lookup</em> sidecar (<span class="sp-mono">&lt;file&gt;.lookup.tsv</span>)
+    maps each locus name back to your id, position, alleles, TOP/BOT strand, Infinium bin alleles, assay status and export notes.
+    Vendor checks (Illumina): every Infinium I bin used (A/T or C/G SNPs) needs at least 100 SNPs and the Infinium II bin at least
+    1,000 (error 111; 200 recommended for polyploids such as salmon, warning 604), and markers within 60 bp interfere (warning 340).</p>
 </section>

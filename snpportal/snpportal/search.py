@@ -1,5 +1,6 @@
 """Search resolver for the one search box: positions and regions (chromosome aliases, kb/Mb units), rs IDs (EVA release
-9 through snpscore.rsid, which also knows ICSASG_v2 positions), genes by Ensembl id, name, catalogue name, NCBI LOC symbol
+9 through snpscore.rsid, which also knows ICSASG_v2 positions), ICSASG_v2 positions (moved to Ssal_v3.1 through the same
+rs table), genes by Ensembl id, name, catalogue name, NCBI LOC symbol
 (where Ensembl's description cites the NCBI gene), human or zebrafish ortholog symbol or description, and known-loci
 SNP names. One hit redirects; several show a list; suggest/ gives the top 10 for htmx autocomplete."""
 from __future__ import annotations
@@ -22,8 +23,11 @@ POSITION = re.compile(r"^(?:chromosome\s*)?([A-Za-z0-9_.]+?)\s*[:\s]\s*([\d.,]+)
                       r"(?:\s*[-–]\s*([\d.,]+)\s*(bp|kb|mb)?)?$", re.I)
 RSID = re.compile(r"^rs(\d{1,12})$", re.I)
 LOC = re.compile(r"^LOC(\d{3,12})$", re.I)  # NCBI gene symbol of an unnamed gene: LOC + NCBI gene id
+V2 = re.compile(r"^(?:icsasg_?v2|v2)\s*[:\s]\s*(.+)$", re.I)  # 'ICSASG_v2 25:28656101', 'v2:ssa25:28,656,101'
+V2_GENBANK = re.compile(r"^CM00(\d{4})(?:\.\d+)?$", re.I)  # ICSASG_v2 chromosomes 1-29 are CM003279.1-CM003307.1
 UNITS = {None: 1, "bp": 1, "kb": 1_000, "mb": 1_000_000}
-EXAMPLES = ["vgll3", "six6", "bco1l", "rs863754587", "LOC106600468", "25:28,990,000-29,000,000", "25:28.99-29.0Mb", "25:28996360"]
+EXAMPLES = ["vgll3", "six6", "bco1l", "rs863754587", "LOC106600468", "25:28,990,000-29,000,000", "25:28.99-29.0Mb", "25:28996360",
+            "ICSASG_v2 25:28656101"]
 MATCHED = ["Ensembl id", "name", "ortholog", "name starts with", "id starts with", "ortholog starts with", "description", "NCBI gene id"]
 
 
@@ -74,6 +78,37 @@ def region(query):
     return (chrom, a, b) if a >= 1 else None
 
 
+def v2_position(query):
+    """(ICSASG_v2 chromosome, position) for 'ICSASG_v2 25:28656101', 'v2 ssa25:28,656,101' or 'CM003303.1:28656101'
+    (a GenBank accession of an ICSASG_v2 chromosome needs no prefix); None for anything else."""
+    prefixed = V2.match(query)
+    m = POSITION.match(prefixed.group(1) if prefixed else query)
+    if not m or m.group(4):  # one position, not a region
+        return None
+    name, number, unit = m.group(1), m.group(2), m.group(3)
+    genbank = V2_GENBANK.match(name)
+    bare = re.sub(r"^(chr|ssa)", "", name.lower())
+    chrom = int(genbank.group(1)) - 3278 if genbank else int(bare) if prefixed and bare.isdecimal() else 0
+    try:
+        return (str(chrom), _number(number, unit)) if 1 <= chrom <= 29 else None
+    except ValueError:
+        return None
+
+
+def v2_hits(chrom, pos):
+    """The Ssal_v3.1 variant pages of the EVA release 9 rs IDs at an ICSASG_v2 position (rsid.parquet), at most 10."""
+    path = jobs.release() / "rsid.parquet"
+    if not path.exists():
+        return []
+    rows = jobs.connect([jobs.release()]).execute(
+        f"SELECT rs, chrom, pos, ref, alt, v2_ref, v2_alt FROM read_parquet({lit(path)}) WHERE v2_chrom = ? AND v2_pos = ? "
+        "ORDER BY rs LIMIT 10", [chrom, pos]).fetchall()
+    return [{"kind": "ICSASG_v2 position", "label": f"rs{rs}",
+             "url": reverse("snpportal:variant", args=[f"{c}-{p}" + (f"-{ref}-{alt}" if ref and alt else "")]),
+             "detail": f"ICSASG_v2 {chrom}:{pos:,} {v2_ref}>{v2_alt} = Ssal_v3.1 {c}:{p:,} {ref}>{alt} (EVA release 9 rs IDs; "
+                       "Ssal_v3.1 positions are EVA's remaps)"} for rs, c, p, ref, alt, v2_ref, v2_alt in rows]
+
+
 def genes(query, limit=10):
     """Genes matching a query, best first, from one DuckDB query: [{id, name, label, chrom, start, end, strand, biotype,
     human, zebrafish, alias, matched}]. Ranks: exact id, exact name (Ensembl or catalogue), exact ortholog symbol, name
@@ -118,6 +153,9 @@ def resolve(query, limit=10):
     query = " ".join(query.split())[:200]
     if not query:
         return []
+    v2 = v2_position(query)
+    if v2:
+        return v2_hits(*v2)
     found = region(query)
     if found:
         chrom, a, b = found
@@ -167,7 +205,7 @@ def search(request):
         return redirect(hits[0]["url"])
     return render(request, "snpportal/search.html", {"nav": "explore", "title": "Search", "query": query, "hits": hits,
                                                      "examples": EXAMPLES, "rsid": bool(RSID.match(query.strip())),
-                                                     "loc": bool(LOC.match(query.strip()))})
+                                                     "loc": bool(LOC.match(query.strip())), "v2": v2_position(" ".join(query.split()))})
 
 
 def suggest(request):

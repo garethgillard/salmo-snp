@@ -2,7 +2,7 @@
 {% block main %}
 <form class="d-flex gap-2 mb-3" method="get" role="search">
   <label class="visually-hidden" for="q">Search</label>
-  <input class="form-control" id="q" name="q" type="search" value="{{ query }}" placeholder="vgll3, rs863754587, LOC106600468, 25:28996360, 25:28.95-29.05 Mb">
+  <input class="form-control" id="q" name="q" type="search" value="{{ query }}" placeholder="vgll3, rs863754587, LOC106600468, 25:28996360, 25:28.95-29.05 Mb, ICSASG_v2 25:28656101">
   <button class="btn btn-primary" type="submit">Search</button>
 </form>
 {% if hits %}
@@ -12,7 +12,8 @@
 <div class="sp-status sp-status-not_checked">Nothing matches &ldquo;{{ query }}&rdquo;.
   {% if rsid %}This rs ID is not in the release&rsquo;s EVA release 9 table: it may be newer, unmapped on Ssal_v3.1, or on several
   Ssal_v3.1 positions (those are left out).{% elif loc %}LOC symbols are found only for genes whose Ensembl description cites the
-  NCBI gene; try the gene&rsquo;s name, its human ortholog or a position.{% endif %}
+  NCBI gene; try the gene&rsquo;s name, its human ortholog or a position.{% elif v2 %}No EVA release 9 rs ID sits at this
+  ICSASG_v2 position, so it can&rsquo;t be moved to Ssal_v3.1 here: <a href="{% url 'snpportal:help' %}#liftover">convert it offline</a>.{% endif %}
   Try a gene name or id, an rs ID, a position such as
   {% for q in examples %}<a href="?q={{ q|urlencode }}">{{ q }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.</div>
 {% endif %}

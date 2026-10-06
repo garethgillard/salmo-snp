@@ -43,7 +43,9 @@ EXCLUDE = {  # panel exclusion checkbox = a result column -> label
     "flank_variants": "public variants within 35 bp", "near_chip": "near a chip marker (within W)"}
 REASONS = {"must_include": "must include", "backbone": "backbone (best per genome bin)",
            "functional": "functional fill (tier 1–3)", "fill": "fill (tier 4)"}
-BINDING = {"min_spacing": "the minimum spacing", "max_per_gene": "the per-gene cap", "max_per_element": "the per-element cap"}
+BINDING = {"min_spacing": "the minimum spacing", "min_spacing_cm": "the minimum spacing in cM", "max_per_gene": "the per-gene cap",
+           "max_per_element": "the per-element cap"}
+CM_MAPS = {"mean": "sex-averaged", "female": "female", "male": "male"}  # snpscore.panel.CM_MAPS
 SPACING = [(0, "<20k"), (20_000, "20k"), (50_000, "50k"), (100_000, "100k"), (200_000, "200k"), (500_000, "500k"),
            (1_000_000, "1M"), (2_000_000, "2M"), (5_000_000, "5M"), (10_000_000, "10M+")]  # (lower edge bp, label)
 FORMATS = [  # (format, label, contents) for the Export tab
@@ -156,6 +158,10 @@ def _bp(x):
     if x is None:
         return "–"
     return f"{x:,.0f} bp" if x < 1000 else f"{x / 1000:,.1f} kb" if x < 1e6 else f"{x / 1e6:,.2f} Mb"
+
+
+def _cm(x):
+    return "–" if x is None else f"{x:.2f} cM"
 
 
 def _nice(x):
@@ -440,6 +446,10 @@ def _params(request, weights, types):
         "exclude_flags": sorted({f for f in (request.GET.getlist("exclude") if sent else default["exclude_flags"]) if f in allowed}),
         "must_include": sorted(set(ids))[:MAX_MUST],
     }
+    if {"cm_female", "cm_male"} <= set(types):  # R5: also keep markers this many cM apart (blank or 0: bp only)
+        cm = _number(get("spacing_cm"), float, 0, 1000, None if sent else default.get("min_spacing_cm"))
+        if cm:  # only then in the parameters, so bp-only panels keep their hash
+            p.update(min_spacing_cm=cm, cm_map=get("cm_map") if get("cm_map") in CM_MAPS else default.get("cm_map") or "mean")
     return p, {"too_many_ids": len(set(ids)) > MAX_MUST}
 
 
@@ -449,6 +459,9 @@ def _fields(p, types, gap_mb):
     fields = [
         ("n", "Markers", p["n_target"], 1, MAX_TARGET, 1, "Number of SNPs to choose"),
         ("spacing_kb", "Min spacing (kb)", f"{p['min_spacing'] / 1000:g}", 0, 100_000, "any", "No two markers closer than this"),
+        ("spacing_cm", "Min spacing (cM)", f"{p['min_spacing_cm']:g}" if p.get("min_spacing_cm") else "", 0, 1000, "any",
+         "Also no two markers closer than this on the Brekke et al. 2023 genetic map (blank: bp only); SNPs beyond a "
+         "chromosome's first or last map marker take that marker's cM") if {"cm_female", "cm_male"} <= set(types) else None,
         ("backbone", "Backbone share", f"{p['backbone_fraction']:g}", 0, 1, 0.05,
          "Share of the panel spread evenly over the genome (the best SNP per genome-length bin); the rest is chosen by design score"),
         ("maf", "Min MAF", f"{p['min_maf']:g}", 0, 0.5, 0.01, "Your maf/af column, else the public MAF; SNPs with no MAF pass") if maf else None,
@@ -479,7 +492,8 @@ def _design(con, view, d, trait, p, weights, chip):
     try:
         r = snp_panel.design(con, trait, p["n_target"], p["min_spacing"], p["min_maf"], p["backbone_fraction"], p["max_per_gene"],
                              p["max_per_element"], p["require_assay_pass"], p["exclude_flags"], p["must_include"], weights=weights,
-                             chrom_sizes=jobs.manifest(d).get("chrom_sizes"), table=view, out=tmp)
+                             chrom_sizes=jobs.manifest(d).get("chrom_sizes"), table=view, out=tmp,
+                             **{k: p[k] for k in ("min_spacing_cm", "cm_map") if k in p})
         info = {"hash": h, "selection_hash": r["hash"], "preset": trait, "params": p, "summary": r["summary"],
                 "chip": chip.get("label"), "chip_synthetic": bool(chip.get("synthetic")), "created_utc": jobs.utc()}
         jobs._write_json(folder / f"{h}.json", info)
@@ -497,6 +511,22 @@ def _panel_view(d, info, gap_bp=None):
     gap = gap_bp or _nice(3 * total / max(s["n_selected"], 1) / 1e6) * 1e6
     return {"hash": info["hash"], "rel": f"read_parquet({lit(d / 'panels' / (info['hash'] + '.parquet'))})", "summary": s,
             "params": info["params"], "gaps": s.get("largest_gaps") or [], "gap_bp": gap, "info": info}
+
+
+def vendor_checks(con, rel):
+    """snpscore's panel-level vendor checks of the SNPs in `rel`: {infinium_bins, close_pairs, warnings, bins (text)}.
+    Illumina Infinium bins (A/T, C/G and the rest) need at least 100 (I) or 1,000 (II) SNPs each, markers within 60 bp
+    interfere (snpscore.panel.vendor_checks; vendor rules, RESEARCH.md section 5)."""
+    cols, alleles = _columns(con, rel), []
+    for i, c in enumerate(("ref", "alt")):  # the list's alleles, else those of the assay flank (the public ones), as vendor files
+        found = ([f"nullif({c}::VARCHAR, '')"] if c in cols else []) + (
+            [f"nullif(regexp_extract(assay_flank, '\\[(\\w+)/(\\w+)\\]', {i + 1}), '')"] if "assay_flank" in cols else [])
+        alleles.append(f"coalesce({', '.join(found)}) AS {c}" if found else f"NULL AS {c}")
+    out = snp_panel.vendor_checks(con.execute(f"SELECT chrom, pos, {', '.join(alleles)} FROM {rel}").fetchall())
+    b = out["infinium_bins"]
+    out["bins"] = (f"Infinium I bin A (A/T) {b['A']:,}, bin B (C/G) {b['B']:,}; Infinium II bin C {b['C']:,}"
+                   + (f"; alleles unknown {b['unknown']:,}" if b["unknown"] else ""))
+    return out
 
 
 def _short(s):
@@ -517,6 +547,8 @@ def _panel_kpis(s, assay):
                int(tiers.get("1", 0)) + int(tiers.get("2", 0)), n) + " of the panel", "provisional": True},
            {"value": _bp((s.get("spacing") or {}).get("median")), "label": "median spacing",
             "note": f"min {_bp((s.get('spacing') or {}).get('min'))}"},
+           *([{"value": _cm(s["spacing_cm"].get("median")), "label": "median spacing (cM)",
+               "note": f"min {_cm(s['spacing_cm'].get('min'))}, genetic map"}] if s.get("spacing_cm") else []),
            {"value": _bp(gaps[0]["size"]) if gaps else "–", "label": "largest gap",
             "note": f"chr {gaps[0]['chrom']}, chromosome ends count" if gaps else ""},
            {"value": f"{s['n_candidates']:,}", "label": "candidates", "note": f"of {s['n_rows']:,} SNPs pass the filters"}]
@@ -572,10 +604,13 @@ def panel(request, key, job):
     c.update(panel=pv, synthetic=_synthetic(job, info.get("chip_synthetic")))
     s = info["summary"]
     q = {"trait": trait, "scope": f"panel-{pv['hash']}"}
+    cm = {"cm_female", "cm_male"} <= set(types)
     url = reverse("snpportal:download", args=[key])
     designer = {
         "fields": _fields(p, types, pv["gap_bp"] / 1e6), "must": " ".join(p["must_include"]), "too_many_ids": notes["too_many_ids"],
         "max_must": MAX_MUST, "assay": "assay_status" in types, "assay_pass": p["require_assay_pass"],
+        "cm_maps": [(k, label, k == p.get("cm_map", "mean")) for k, label in CM_MAPS.items()] if cm else [],
+        "vendor": vendor_checks(con, pv["rel"]),
         "checks": [(f, EXCLUDE[f], f in p["exclude_flags"]) for f in EXCLUDE if f in types],
         "window": _bp(snp_panel.settings(weights)["chip_window"]), "synthetic": c["synthetic"], "hash": pv["hash"],
         "short": _short(s), "missing": s.get("missing_must_include") or [], "kpis": _panel_kpis(s, s.get("assay_status")),
@@ -849,25 +884,30 @@ def exports(request, key, job):
     conds = results.filters(request, types, weights)
     chosen = {k: v for params, _, _ in conds for k, v in params.items()}
     total = con.execute("SELECT count(*) FROM r").fetchone()[0]
-    scopes = [("all", "All SNPs of the list", total)]
+    scopes = [("all", "All SNPs of the list", total, view)]  # (value, label, SNPs, relation)
     if conds:
-        where = " AND ".join(f"({sql})" for _, _, sql in conds)
+        rel = f"(SELECT * FROM {view} WHERE {' AND '.join(f'({sql})' for _, _, sql in conds)})"
         scopes.append(("filtered", "The filtered table: " + "; ".join(label for _, label, _ in conds),
-                       con.execute(f"SELECT count(*) FROM {view} WHERE {where}").fetchone()[0]))
+                       con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0], rel))
     for info in _panels(d):
         s, p = info["summary"], info["params"]
         label = [f"Panel {info['hash']}: {s['n_selected']:,} markers", f"{info['preset'].replace('_', ' ')} preset",
-                 f"min spacing {_bp(p['min_spacing'])}", "excluding " + ", ".join(EXCLUDE.get(f, f) for f in p["exclude_flags"])
+                 f"min spacing {_bp(p['min_spacing'])}" + (f" and {p['min_spacing_cm']:g} cM" if p.get("min_spacing_cm") else ""),
+                 "excluding " + ", ".join(EXCLUDE.get(f, f) for f in p["exclude_flags"])
                  if p["exclude_flags"] else None, f"with the {info['chip'][0].lower() + info['chip'][1:]}" if info.get("chip") else None]
-        scopes.append((f"panel-{info['hash']}", ", ".join(x for x in label if x), s["n_selected"]))
+        scopes.append((f"panel-{info['hash']}", ", ".join(x for x in label if x), s["n_selected"],
+                       f"read_parquet({lit(d / 'panels' / (info['hash'] + '.parquet'))})"))
     wanted = request.GET.get("scope") or ("filtered" if conds else "all")
     wanted = wanted if wanted in [s[0] for s in scopes] else "all"
     chip = chip_info(d)
     cap = int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000))
+    genome = bool(jobs.manifest(d).get("genome"))  # vendor files need the genome; checks only where they can be written
     return {"query": urlencode({"trait": trait, **chosen}), "exports": {
         "url": reverse("snpportal:download", args=[key]), "trait": trait, "hidden": sorted(chosen.items()),
-        "scopes": [(value, label, n, value == wanted) for value, label, n in scopes],
-        "formats": [f for f in FORMATS if f[0] not in VENDORS or jobs.manifest(d).get("genome")],  # vendor files need the genome
+        "scopes": [(value, label, n, value == wanted, vendor_checks(con, rel) if genome and 0 < n <= cap else None)
+                   for value, label, n, rel in scopes],
+        "formats": [f for f in FORMATS if f[0] not in VENDORS or genome],  # vendor files need the genome
+        "locus_name": snp_export.locus_name("25", 28996360, {"25"}),
         "vendor_cap": cap, "chip": chip.get("label"),
         "sidecars": VENDORS if "sidecars" in inspect.signature(snp_export.export).parameters else (),
         "synthetic": _synthetic(job, chip.get("synthetic")), "layout_note": snp_export.LAYOUT_NOTE,

@@ -42,6 +42,7 @@ STALE = 300  # seconds without a heartbeat before a queued or running job is giv
 MAX_QUEUED = 10
 SNAPSHOT = ("weights.yaml", "manifest.json")
 TIER_COLUMNS = ("tier", "tier_score", "tier_evidence", "tier_terms")
+PUBLIC_AF = "504-fish panel: mostly wild and farmed fish from Bertolotti et al. 2020 plus the 12 AQUA-FAANG fish"  # public_af (R1)
 FLAGS = {"blacklist": "blacklist", "lore": "lore", "strand_ambiguous": "strand_ambiguous",
          "flank_variants": "flank_variants > 0"}  # summary.json flag counts: column -> condition
 
@@ -560,18 +561,21 @@ def create_from_rows(rows, label, preset="all", kind="from_rows", input_format="
 
 
 def parse_paste(text, limit):
-    """Rows (chrom, pos, None, ref, alt) from pasted 'chrom pos [ref alt]' lines (spaces, tabs, commas or ':')."""
+    """Rows (chrom, pos, None, ref, alt) from pasted 'chrom pos [ref alt]' lines (spaces, tabs, commas or ':'), or
+    (None, None, rs ID, None, None) from a line starting with an rs ID (snpscore places it through EVA release 9)."""
     rows = []
     for number, line in enumerate(text.splitlines(), 1):
         fields = [f for f in re.split(r"[\s,;:]+", line.strip()) if f]
         if not fields or fields[0].startswith("#") or fields[0].lower() in ("chrom", "chr", "chromosome", "#chrom"):
             continue
-        if len(fields) < 2 or not fields[1].isdecimal():  # not isdigit(): it accepts '²', which int() refuses
-            raise InputError(f"Line {number}: expected a chromosome and a whole-number position, e.g. '25 28996360 C T'.")
+        rs = re.fullmatch(r"rs\d{1,12}", fields[0], re.I)
+        if not rs and (len(fields) < 2 or not fields[1].isdecimal()):  # not isdigit(): it accepts '²', which int() refuses
+            raise InputError(f"Line {number}: expected a chromosome and a whole-number position, e.g. '25 28996360 C T', "
+                             "or an rs ID.")
         if len(rows) == limit:
             raise InputError(f"Paste at most {limit:,} lines, or upload the list as a file.")
         ref, alt = (fields[2:4] + [None, None])[:2]
-        rows.append((fields[0], int(fields[1]), None, ref, alt))
+        rows.append((None, None, fields[0], None, None) if rs else (fields[0], int(fields[1]), None, ref, alt))
     if not rows:
         raise InputError("Paste at least one line with a chromosome and a position, e.g. '25 28996360 C T'.")
     return rows

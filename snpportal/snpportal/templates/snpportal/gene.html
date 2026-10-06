@@ -95,7 +95,7 @@
   {% if rows %}
   <div class="sp-scroll"><table class="table table-sm table-hover sp-table mb-0">
     <thead><tr><th scope="col">Position</th>{% if "id" in names %}<th scope="col">id</th>{% endif %}<th scope="col">Alleles</th>
-      {% if "public_af_maf" in names %}<th scope="col" class="sp-num">MAF</th>{% endif %}
+      {% if "public_af_maf" in names %}<th scope="col" class="sp-num" title="Minor allele frequency, {{ public_af }}">MAF</th>{% endif %}
       {% if "region_class" in names %}<th scope="col">Region</th>{% endif %}
       {% if "gene_id" in names %}<th scope="col">Nearest gene</th>{% endif %}
       {% if "chromatin_summary" in names %}<th scope="col">Chromatin</th>{% endif %}

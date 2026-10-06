@@ -221,7 +221,8 @@ def hero():
         svg = locus.locus_svg.locus(data, title="vgll3, chromosome 25", caption="Published associations (diamonds), Ensembl 116 "
                                     "genes, AQUA-FAANG chromatin states in 21 conditions, 504-fish panel variants.",
                                     compact=True, width=760, gutter=118, synthetic=bool(info.get("synthetic")), uid="hero", legend_on=False)
-        _hero.clear()
+        if len(_hero) >= 4:  # one per release and palette
+            _hero.clear()
         _hero[key] = svg
     return _hero[key]
 
@@ -484,7 +485,7 @@ def gene(request, gene_id):
         "presets": presets, "sort": sort, "query": urlencode(query), "synthetic_layers": info["synthetic"],
         "sorts": [(k, label) for k, label in [("tier", "tier"), ("pos", "position"), ("maf", "minor allele frequency")]
                   if SORTS[k][0] in names],
-        "provisional": bool(jobs.weights())})
+        "provisional": bool(jobs.weights()), "public_af": jobs.PUBLIC_AF})
 
 
 def _groups(head):

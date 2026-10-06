@@ -13,6 +13,12 @@ def palette_css():
 
 
 @register.simple_tag
+def state_palettes():
+    """[(name, label, in use)] of the chromatin-state palettes, for the footer's toggle."""
+    return [(name, label, name == palette.states_name()) for name, label in palette.STATE_PALETTE_NAMES.items()]
+
+
+@register.simple_tag
 def portal_release():
     """Version, assembly, build date and manifest sha256 of the current release (for the badge and footer)."""
     try:

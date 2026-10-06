@@ -9,7 +9,9 @@ import math
 from collections import Counter
 from html import escape
 
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import mark_safe
 
 from snpscore import formats
@@ -80,6 +82,11 @@ FORMATS = [  # (anchor, format, what is read, example built from the published v
      "[Assay]\nName,Chr,MapInfo,SNP\nvgll3_Met54Thr,25,28996360,[C/T]"),
     ("axiom", "Axiom annotation (.csv)", "'#%' header lines, then Probe Set ID, Chromosome, Physical Position and Allele A/B.",
      '#%chip_type=example\n"Probe Set ID","Chromosome","Physical Position","Allele A","Allele B"\n"vgll3_Met54Thr","25","28996360","C","T"'),
+    ("rsid", "rs IDs only (.txt, .tsv)", "One rs ID per line, optionally under an id header (or a table whose id column holds rs IDs "
+     "and that has no chromosome and position columns). Each is placed at its Ssal_v3.1 position from EVA release 9 (the "
+     "results' position_source column says rsid). rs IDs that are not in the release's table, or sit on several Ssal_v3.1 "
+     "positions, are rejected as unknown_rsid and listed in the upload QC. A table with rs IDs and ICSASG_v2 positions is "
+     "moved to Ssal_v3.1 the same way (see 'My positions are on ICSASG_v2' below).", "id\nrs863754587\nrs863785818"),
 ]
 STANDARD = ("provisional", "active_states", "weak_states", "weights", "tiers", "presets")  # weights.yaml blocks shown as tables
 ENA = "https://www.ebi.ac.uk/ena/browser/view/{}"
@@ -320,3 +327,16 @@ def run_locally(request):
         "zip": (release / "release.zip").exists(), "zip_sha256": checksum,
         "command": f"snpscore annotate my_snps.vcf.gz --release {folder} --trait {trait} -o my_snps_{trait}.tsv",
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}"})
+
+
+def state_palette(request):
+    """/snp/colours/?name=portal|aquafaang: remember the viewer's chromatin-state palette in a cookie (palette.COOKIE) and
+    go back to the page the link was on (its same-site Referer, so no URL travels in the query), else the landing page."""
+    back = request.META.get("HTTP_REFERER", "")
+    if not url_has_allowed_host_and_scheme(back, {request.get_host()}, request.is_secure()):
+        back = reverse("snpportal:landing")
+    response = redirect(back)
+    name = request.GET.get("name")
+    if name in palette.STATE_PALETTES:
+        response.set_cookie(palette.COOKIE, name, max_age=365 * 86400, samesite="Lax", httponly=True, secure=request.is_secure())
+    return response

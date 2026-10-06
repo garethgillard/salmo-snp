@@ -1,0 +1,4 @@
+{# Panel-level vendor checks that fail (snpscore.panel.vendor_checks via tools.vendor_checks), one per line; open=1 shows them unfolded. #}
+<details class="sp-status sp-status-warn sp-small mt-1 mb-1" role="status"{% if open %} open{% endif %}>
+  <summary>&#9888; {{ warnings|length }} vendor design rule{{ warnings|length|pluralize }} broken (Illumina Infinium bins or marker spacing)</summary>
+  <ul class="mb-0 mt-1 ps-3">{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul></details>

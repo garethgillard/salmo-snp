@@ -8,7 +8,6 @@ import re
 from urllib.parse import urlencode
 
 from django.http import Http404, HttpResponse
-from django.shortcuts import render
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 
@@ -47,8 +46,15 @@ REJECTS = {"unknown_chrom": "unknown chromosome", "missing_chrom": "no chromosom
            "duplicate": "duplicates of an earlier row", "unknown_rsid": "rs IDs not in EVA release 9"}
 REF_CHECKS = {"ok": "match the Ssal_v3.1 reference", "mismatch": "mismatch it", "strand_flip": "match on the other strand",
               "swapped": "have ref and alt swapped", "not_checked": "not checked (no alleles or sequence)"}
-REASONS = {"GC": "GC content out of range", "repeat": "repeat (soft-masked) share", "homopolymer": "long homopolymer",
-           "public variant(s) in flank": "public variants in the flanks", "flank variants on both sides": "public variants in both flanks"}  # assay_reasons without their numbers -> label
+REASONS = {  # snpscore.assay reasons without their numbers -> label (others are shown as they are)
+    "GC": "GC content out of range", "repeat": "repeat (soft-masked) flanks", "homopolymer": "long homopolymer",
+    "flank variants": "public variants in the flanks", "flank variants on both sides": "public variants in both flanks",
+    "N in flank": "N bases in the flanks", "ref mismatch": "ref allele not the genome's", "not a SNP": "not a SNP",
+    "alleles on the other strand": "alleles on the other strand", "alleles unknown": "alleles unknown",
+    "TOP/BOT cannot be determined (Illumina code 103)": "TOP/BOT undeterminable (Illumina 103)", "LORe region": "LORe region",
+    "blacklisted": "blacklisted region", "A/T or C/G (two probes)": "A/T or C/G (two probes)",
+    "chromosome not in the genome": "chromosome not in the genome",
+    **{f"{b} run": f"long {b} run" for b in "ACGT"}}
 FORMAT_NAMES = {"vcf": "VCF", "text": "text table", "tsv": "tab-separated table", "csv": "comma-separated table", "bim": "PLINK .bim", "map": "PLINK .map", "illumina": "Illumina manifest",
                 "axiom": "Axiom annotation", "paste": "pasted positions", "rows": "public variants (genes or intervals)"}
 STAGES = ["LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomitogenesis", "LateSomitogenesis"]
@@ -82,7 +88,7 @@ COLUMNS = {
                "(PROVISIONAL); display only, never counted in tiers", ("molqtl",), [("molqtl_best_bf", True)]),
     "cm": ("Location", "cM (F/M)", "Genetic map position, female / male cM (Brekke et al. 2023 linkage map, interpolated)",
            ("cm_female",), [("cm_female", True)]),
-    "maf": ("Assay", "MAF", "Minor allele frequency: your maf/af column, else the 504-fish panel's", ("maf", "af", "public_af_maf"),
+    "maf": ("Assay", "MAF", f"Minor allele frequency: your maf/af column, else the public one ({jobs.PUBLIC_AF})", ("maf", "af", "public_af_maf"),
             [("{maf}", True)]),
     "assay": ("Assay", "Assay", "Assay design status (PROVISIONAL thresholds)", ("assay_status",), [("assay_status", True)]),
     "flags": ("Assay", "Flags", "Blacklisted region, LORe (near-identical ohnolog), A/T or C/G, public variants within 35 bp",
@@ -337,7 +343,7 @@ def table(request, key):
     for k in shown:
         group, label, tip, _, sorts = COLUMNS[k]
         if k == "maf" and maf_source:
-            tip = f"Minor allele frequency ({'your column' if maf_source == 'yours' else 'public, 504-fish panel'})"
+            tip = f"Minor allele frequency ({'your column' if maf_source == 'yours' else jobs.PUBLIC_AF})"
         here = k == sort
         href = link(sort=k, desc="1" if here and not desc else "", page=None) if sorts else None
         headers.append((k, label, tip, href, ("descending" if desc else "ascending") if here else ""))
@@ -632,9 +638,9 @@ FIGURES = {  # name -> (card title, (i) definition, builder(context, link or Non
     "terms": ("Evidence behind the tiers", "For each evidence term of weights.yaml (PROVISIONAL weights in brackets), "
               "the SNPs it applies to, split by the tier they end in. A SNP can have several terms.", _fig_terms),
     "maf": ("Minor allele frequency", "MAF from your maf or af column when the list has one, else the public allele "
-            "frequency of the 504-fish reference panel (mostly wild and farmed fish of European and North American descent; "
-            "pooled, so population structure is hidden). Light bars: below 0.05. Black ticks: the count expected from "
-            "the public background (public AF only). Click a bar to list those SNPs.", _fig_maf),
+            f"frequency ({jobs.PUBLIC_AF}; European and North American descent, pooled, so population structure is hidden). "
+            "Light bars: below 0.05. Black ticks: the count expected from the public background (public AF only). Click a "
+            "bar to list those SNPs.", _fig_maf),
     "assay": ("Assay design status", "snpscore's assay QC of the probe flanks (thresholds PROVISIONAL, to confirm with the "
               "genotyping lab). not checked = no local genome sequence for the SNP; left out of the % pass.", _fig_assay),
     "reasons": ("Why SNPs warn or fail", "Each warn or fail SNP counted once per reason it got (a SNP can have several): GC "
@@ -744,7 +750,7 @@ def kpis(s, trait, validation, link):
         known = n - m["missing"]
         common = sum(k for i, k in enumerate(m["bins"]) if i * m["width"] >= 0.05 - 1e-9)
         out.append({"value": pct(common, known), "label": "MAF ≥ 0.05",
-                    "note": f"of {known:,} with {'your' if m['source'] == 'yours' else 'public'} AF", "href": link(min_maf="0.05")})
+                    "note": f"of {known:,} with {'your' if m['source'] == 'yours' else '504-fish panel'} AF", "href": link(min_maf="0.05")})
     if "known" in s.get("counts", {}):
         out.append({"value": f"{s['counts']['known']:,}", "label": "near a known locus", "note": "catalogue window", "href": link(known="1")})
     if "molqtl" in s.get("counts", {}):

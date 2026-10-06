@@ -3,6 +3,8 @@ SVG figures embed the literal hex values from these dicts, so downloaded SVG/PNG
 Every pairing used for text passes WCAG AA (4.5:1); tests check it with contrast()."""
 from __future__ import annotations
 
+from collections.abc import Mapping
+from contextvars import ContextVar
 from functools import lru_cache
 
 ACCENT = "#0072BC"  # salmobase blue
@@ -15,7 +17,9 @@ TIERS = {1: ("#08519C", WHITE), 2: ("#2171B5", WHITE), 3: ("#C6DBEF", BLACK), 4:
 
 # ChromHMM state -> (colour, abbreviation shown in every cell and legend). Two palettes (G to choose, PROVISIONAL): the
 # portal's own, and AQUA-FAANG's itemRgb colours (chromatin-state-annotations/annotation_reports/state_annotations.tsv,
-# RESEARCH.md section 6). settings.SNPPORTAL_STATE_COLOURS picks one (apps.py calls use_states()); STATES is the active one.
+# RESEARCH.md section 6). settings.SNPPORTAL_STATE_PALETTE sets the server's (apps.py calls use_states()); a viewer's
+# cookie (the footer's 'Chromatin colours' links, about.state_palette) picks one per request (choose()). STATES is the
+# active one.
 ABBR = {"Active_TSS": "TSS", "Flanking_upstream": "Fl", "Flanking_downstream": "Fl", "Active_enhancer": "Enh",
         "Primed_enhancer": "Pri", "Poised_enhancer_1": "Poi", "Poised_enhancer_2": "Poi", "Accessible_chromatin": "Acc",
         "Bivalent": "Biv", "Repressed_polycomb": "Pc", "ZNF_genes_and_repeats": "ZNF", "Quiescent": "Q", "Unknown_1": "?"}
@@ -30,21 +34,40 @@ STATE_PALETTES = {
                   "Repressed_polycomb": "#006367", "ZNF_genes_and_repeats": "#50BE96", "Quiescent": "#FFFFFF", "Unknown_1": "#C0C0C0"},
 }
 STATE_PALETTE_NAMES = {"portal": "portal palette", "aquafaang": "AQUA-FAANG itemRgb"}
-STATES = {name: (colour, ABBR[name]) for name, colour in STATE_PALETTES["portal"].items()}
-_active = ["portal"]
+COOKIE = "snpportal_palette"  # a viewer's choice of state palette
+_server = ["portal"]
+_viewer = ContextVar("snpportal_state_palette", default=None)  # set per request from the cookie (apps.py)
+
+
+class _States(Mapping):
+    """{state: (colour, abbreviation)} in the active palette: the viewer's choice, else the server's."""
+
+    def __getitem__(self, name):
+        return STATE_PALETTES[states_name()][name], ABBR[name]
+
+    def __iter__(self):
+        return iter(ABBR)
+
+    def __len__(self):
+        return len(ABBR)
+
+
+STATES = _States()
 
 
 def use_states(name):
-    """Make STATES the named palette ('portal' or 'aquafaang'); unknown names keep the portal's. In place, so every
-    module that reads palette.STATES sees it."""
-    name = name if name in STATE_PALETTES else "portal"
-    STATES.update({state: (colour, ABBR[state]) for state, colour in STATE_PALETTES[name].items()})
-    _active[0] = name
-    return name
+    """Set the server's state palette ('portal' or 'aquafaang'; unknown names give the portal's). Returns its name."""
+    _server[0] = name if name in STATE_PALETTES else "portal"
+    return _server[0]
+
+
+def choose(name):
+    """This request's state palette (the viewer's cookie); None or an unknown name: the server's."""
+    _viewer.set(name if name in STATE_PALETTES else None)
 
 
 def states_name():
-    return _active[0]
+    return _viewer.get() or _server[0]
 
 
 def edge(fill):
@@ -98,7 +121,7 @@ def state(name):
 def css():
     """CSS custom properties and the classes the templates use (.sp-tier-N, .st-<state> in the active state palette,
     .stp-<palette>-<state> for comparing the palettes, .sp-tissue-<tissue>)."""
-    return _css(_active[0])
+    return _css(states_name())
 
 
 @lru_cache(maxsize=4)
