@@ -1,0 +1,6 @@
+chrom	pos	id
+21	33005000	in_vgll3
+21	32141081	peak_first_base
+21	32141080	before_peak
+21	32050000	blacklisted
+1	110500000	lore

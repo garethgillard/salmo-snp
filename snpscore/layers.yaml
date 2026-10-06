@@ -1,0 +1,39 @@
+# Layer registry: every data layer that goes into a release.
+# `snpscore fetch` downloads each `url` into the data folder, `snpscore build` reads each `file` from it.
+# Types:  interval = SNP gets the values of the interval it falls in (intervals must not overlap)
+#         nearest  = SNP gets the nearest feature within max_distance, plus the distance
+# Formats: see the READERS table in src/snpscore/build.py
+
+assembly: Ssal_v3.1
+chromosomes: "1-29 (Ensembl/AQUA-FAANG naming)"
+
+layers:
+  - name: chromatin
+    type: interval
+    format: aquafaang_peaks
+    file: AtlanticSalmon_unified_peaks.bed
+    url: https://salmobase.org/datafiles/datasets/Aqua-Faang/robust_ATAC_peaks/unified_annotated_peaks/AtlanticSalmon_unified_peaks.bed
+    description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 21 conditions (empty = no peak there)
+
+  - name: blacklist
+    type: interval
+    format: bed
+    file: AtlanticSalmon_blacklist.bed
+    url: https://salmobase.org/datafiles/datasets/Aqua-Faang/blacklist/AtlanticSalmon_blacklist.bed
+    description: AQUA-FAANG blacklist; no peak here means "can't tell", not "no function"
+
+  - name: lore
+    type: interval
+    format: tsv
+    file: Ssal_late_rediploidized_regions.tsv
+    url: https://salmobase.org/datafiles/datasets/Aqua-Faang/tables/Ssal_late_rediploidized_regions.tsv
+    columns: [label]
+    description: Late-rediploidized (LORe) regions, where the two Ss4R copies are near-identical
+
+  - name: gene
+    type: nearest
+    format: gff3_genes
+    file: Salmo_salar.Ssal_v3.1.116.chr.gff3.gz
+    url: https://ftp.ensembl.org/pub/release-116/gff3/salmo_salar/Salmo_salar.Ssal_v3.1.116.chr.gff3.gz
+    max_distance: 1000000
+    description: Nearest Ensembl 116 gene (distance 0 = inside the gene)

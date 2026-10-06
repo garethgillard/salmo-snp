@@ -1,0 +1,16 @@
+[project]
+name = "snpscore"
+version = "0.1.0"
+description = "Annotate and score Atlantic salmon SNPs with AQUA-FAANG functional maps"
+requires-python = ">=3.8"
+dependencies = ["duckdb>=1.2", "pyyaml"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+snpscore = "snpscore.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
