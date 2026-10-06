@@ -2,10 +2,67 @@
 # `snpscore fetch` downloads each `url` into the data folder, `snpscore build` reads each `file` from it.
 # Types:  interval = SNP gets the values of the interval it falls in (intervals must not overlap)
 #         nearest  = SNP gets the nearest feature within max_distance, plus the distance
-# Formats: see the READERS table in src/snpscore/build.py
+#         count    = SNP gets the number of point features (1 bp, e.g. variant sites) within `window` bp either side,
+#                    not counting its own position
+#         gene     = a table keyed by gene_id (no coordinates), joined to the SNP's nearest gene
+#         point    = SNP gets the values of the feature at its exact position (allele-aware when it has ref/alt)
+#         features = overlapping features for the viewers (e.g. transcript models); built, never annotated
+# Formats: see the READERS table in src/snpscore/build.py. A layer with several inputs lists them under `files`.
+# Optional per layer: id: true (interval: adds <layer>_id = chrom:start-end of the interval, BED coordinates),
+# interpolate: true (interval with <column> at start and <column>_next at end, e.g. a genetic map: <layer>_<column> is
+# interpolated linearly at the SNP's position),
+# synthetic: true (test or stand-in data: labelled, and never counted in tiers), citation (shown on the methods page),
+# licence, population (who the frequencies describe).
+# Optional per source: sites_only: [INFO keys] (fetch streams the VCF and writes only its first 8 columns with these INFO
+# keys: genotypes never reach the disk).
 
 assembly: Ssal_v3.1
 chromosomes: "1-29 (Ensembl/AQUA-FAANG naming)"
+
+# Soft-masked genome, bgzipped with .fai and .gzi (fetch downloads all three; annotate falls back to reading the URL
+# by byte ranges if the local copy is missing). Used for the reference-allele check, flank GC and repeat content.
+genome:
+  file: Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz
+  url: https://salmobase.org/datafiles/genomes/AtlanticSalmon/Ssal_v3.1/sequence_Ensembl/Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz
+
+# Chromosome names in other naming schemes (RefSeq NC_, GenBank, ssaNN); build writes alias.parquet, annotate maps
+# input chromosomes through it. alias_filtered.txt has the current GenBank versions, e.g. HG993268.2, HG993270.2,
+# HG993277.2 and HG993285.2 for chromosomes 9, 11, 18 and 26. `extra` adds names that annotate accepts with a warning
+# in the validation report (alias.parquet `warning`).
+aliases:
+  file: alias_filtered.txt
+  url: https://salmobase.org/datafiles/genomes/AtlanticSalmon/Ssal_v3.1/alias_filtered.txt
+  extra:
+    - alias: HG993277.1
+      chrom: "18"
+      warning: >-
+        HG993277.1 is an older chromosome 18 sequence (84,482,589 bp; Ssal_v3.1 has HG993277.2, 84,084,598 bp), read
+        as chromosome 18: positions may differ from Ssal_v3.1, check the reference-allele results
+
+# rs IDs from EVA release 9 (positions only, no frequencies). build joins the Ssal_v3.1 and ICSASG_v2 files on the rs
+# number into rsid.parquet; annotate places rows that have only an rs ID, and moves a row to Ssal_v3.1 when its position
+# is its rs ID's ICSASG_v2 position. EVA's Ssal_v3.1 positions are EVA's own remaps of the older submissions.
+rsid:
+  files:
+    - file: 8030_GCA_905237065.2_current_ids.vcf.gz
+      url: https://ftp.ebi.ac.uk/pub/databases/eva/rs_releases/release_9/by_species/salmo_salar/GCA_905237065.2/8030_GCA_905237065.2_current_ids.vcf.gz
+    - file: 8030_GCA_000233375.4_current_ids.vcf.gz
+      url: https://ftp.ebi.ac.uk/pub/databases/eva/rs_releases/release_9/by_species/salmo_salar/GCA_000233375.4/8030_GCA_000233375.4_current_ids.vcf.gz
+  citation: European Variation Archive (EVA) release 9, Salmo salar rs IDs on Ssal_v3.1 (GCA_905237065.2) and ICSASG_v2 (GCA_000233375.4) (ebi.ac.uk/eva)
+
+# Published SNPs at known loci; build copies the file to catalog/, annotate adds the nearest one within `window` bp.
+catalog:
+  file: benchmark/known_loci.tsv
+  window: 50000
+
+# Example inputs for the portal's buttons: build copies those that exist into release/<v>/demo/, with the catalogue.
+# Paths are relative to the --data folder (data/raw for release/dev, tests/fixture for the test release).
+# The SYNTHETIC demo chip and GWAS come from `python prep/make_synthetic.py chip|gwas [--scale fixture]`.
+demo: [../demo/public_50k.vcf, ../synthetic/chip_demo_SYNTHETIC.tsv, synthetic/chip_demo_SYNTHETIC.tsv,
+       ../synthetic/gwas_maturation_SYNTHETIC.tsv]
+
+# Choices in this file that G still has to confirm; listed in the release manifest with those from weights.yaml.
+provisional: [catalog.window, molqtl.max_bf]
 
 layers:
   - name: chromatin
@@ -13,7 +70,40 @@ layers:
     format: aquafaang_peaks
     file: AtlanticSalmon_unified_peaks.bed
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/robust_ATAC_peaks/unified_annotated_peaks/AtlanticSalmon_unified_peaks.bed
+    id: true
     description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 21 conditions (empty = no peak there)
+    citation: AQUA-FAANG consortium, Atlantic salmon unified ATAC peaks and ChromHMM states (salmobase.org)
+
+  - name: region
+    type: interval
+    format: gff3_regions
+    file: Salmo_salar.Ssal_v3.1.116.chr.gff3.gz
+    url: https://ftp.ensembl.org/pub/release-116/gff3/salmo_salar/Salmo_salar.Ssal_v3.1.116.chr.gff3.gz
+    # Where transcripts overlap, the first class in this list wins. splice_region = 3 exonic + 8 intronic bases at internal exon ends.
+    classes: [CDS, splice_region, five_prime_UTR, three_prime_UTR, exon, intron]
+    description: Genic region class from Ensembl 116 transcripts (CDS, splice region, UTR, non-coding exon, intron; empty = intergenic)
+    citation: Ensembl release 116 gene annotation, Ssal_v3.1 (ensembl.org)
+
+  - name: regbuild
+    type: interval
+    format: gff3
+    file: Salmo_salar.Ssal_v3.1.regulatory_features.v116.gff3.gz
+    url: https://ftp.ensembl.org/pub/release-116/regulation/salmo_salar/Ssal_v3.1/annotation/Salmo_salar.Ssal_v3.1.regulatory_features.v116.gff3.gz
+    feature_types: [promoter, enhancer, open_chromatin_region]
+    fields: [type]
+    attributes: {id: ID, gene_id: gene_id}
+    description: Ensembl 116 regulatory build (promoter, enhancer, open chromatin; promoters name their gene)
+    citation: Ensembl release 116 regulatory build (ensembl.org)
+
+  - name: gerp
+    type: interval
+    format: bed
+    file: gerp_constrained_elements.salmo_salar.bed
+    url: https://ftp.ensembl.org/pub/release-116/bed/ensembl-compara/65_fish.gerp_constrained_element/gerp_constrained_elements.salmo_salar.bb
+    columns: [name, score, pvalue]
+    keep: [score]
+    description: GERP constrained elements from the Ensembl 116 65-fish alignment (fetch converts the bigBed to BED)
+    citation: Ensembl Compara release 116, 65 fish GERP constrained elements (ensembl.org)
 
   - name: blacklist
     type: interval
@@ -21,6 +111,7 @@ layers:
     file: AtlanticSalmon_blacklist.bed
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/blacklist/AtlanticSalmon_blacklist.bed
     description: AQUA-FAANG blacklist; no peak here means "can't tell", not "no function"
+    citation: AQUA-FAANG consortium, Atlantic salmon blacklist (salmobase.org)
 
   - name: lore
     type: interval
@@ -29,11 +120,123 @@ layers:
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/tables/Ssal_late_rediploidized_regions.tsv
     columns: [label]
     description: Late-rediploidized (LORe) regions, where the two Ss4R copies are near-identical
+    citation: AQUA-FAANG tables, Ssal_late_rediploidized_regions.tsv (salmobase.org)
 
   - name: gene
     type: nearest
-    format: gff3_genes
+    format: gff3
     file: Salmo_salar.Ssal_v3.1.116.chr.gff3.gz
     url: https://ftp.ensembl.org/pub/release-116/gff3/salmo_salar/Salmo_salar.Ssal_v3.1.116.chr.gff3.gz
+    feature_types: [gene, ncRNA_gene, pseudogene]
+    attributes: {id: gene_id, name: Name, biotype: biotype, description: description}
+    fields: [strand]
     max_distance: 1000000
-    description: Nearest Ensembl 116 gene (distance 0 = inside the gene)
+    description: Nearest Ensembl 116 gene (distance 0 = inside the gene); description is empty for many genes
+    citation: Ensembl release 116 gene annotation, Ssal_v3.1 (ensembl.org)
+
+  - name: transcripts
+    type: features
+    format: gff3_transcripts
+    file: Salmo_salar.Ssal_v3.1.116.chr.gff3.gz
+    url: https://ftp.ensembl.org/pub/release-116/gff3/salmo_salar/Salmo_salar.Ssal_v3.1.116.chr.gff3.gz
+    description: Ensembl 116 transcript models (exon, CDS and UTR parts, canonical tag) for drawing genes; not annotated
+    citation: Ensembl release 116 gene annotation, Ssal_v3.1 (ensembl.org)
+
+  - name: gene_ortholog
+    type: gene
+    format: gene_tsv
+    file: gene_orthologs.tsv
+    # Ensembl BioMart for release 116 (www.ensembl.org redirects there): one row per salmon gene x ortholog pair.
+    url: https://jun2026.archive.ensembl.org/biomart/martservice
+    query: >-
+      <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE Query><Query virtualSchemaName="default" formatter="TSV"
+      header="1" uniqueRows="1"><Dataset name="ssalar_gene_ensembl" interface="default"><Attribute name="ensembl_gene_id"/>
+      <Attribute name="hsapiens_homolog_associated_gene_name"/><Attribute name="drerio_homolog_associated_gene_name"/>
+      </Dataset></Query>
+    key: Gene stable ID
+    columns: {human: Human gene name, zebrafish: Zebrafish gene name}
+    description: Human and zebrafish ortholog gene names of the nearest gene (comma-separated when several)
+    citation: Ensembl Compara release 116 orthologues, via BioMart (ensembl.org)
+
+  - name: flank_variants
+    type: count
+    format: vcf
+    file: ALL_chrome_phased_filtered_HWE_1e6_biSNPs_MAF_0.01.sites.vcf.gz
+    window: 35
+    description: Known variants within 35 bp either side (Axiom probe flank), from the public 504-fish panel (about 7.9M SNPs with MAF > 0.01)
+    citation: nf-rasqual 504-fish reference panel, sites only (salmobase.org)
+
+  - name: public_af
+    type: point
+    format: vcf_info
+    files:
+      - file: ALL_chrome_phased_filtered_HWE_1e6_biSNPs_MAF_0.01.sites.vcf.gz
+        url: https://salmobase.org/datafiles/datasets/nf-rasqual-data/ALL_chrome_phased_filtered_HWE_1e6_biSNPs_MAF_0.01.vcf.gz
+        sites_only: [AF, MAF, AC, AN, NS]
+        info: {af: AF, maf: MAF, ac: AC, an: AN, ns: NS}
+      - file: 12_samples_genotype_filtered_on_504.vcf.gz
+        url: https://salmobase.org/datafiles/datasets/nf-rasqual-data/12_samples_genotype_filtered_on_504.vcf.gz
+        info: {aquafaang12_af: AF, aquafaang12_dr2: DR2}
+    description: >-
+      Public site at this exact position in the 504-fish panel: ALT allele frequency (af), minor allele frequency (maf),
+      ALT allele count (ac), alleles (an) and fish (ns) with data; aquafaang12_af and aquafaang12_dr2 are the ALT
+      frequency and imputation quality in the 12 AQUA-FAANG fish only (NULL where the site is not in their VCF)
+    population: >-
+      504 fish phased with Beagle (HWE p < 1e-6 sites removed, MAF > 0.01): 479 wild and farmed fish of European and
+      North American descent from Bertolotti et al. 2020 (ENA PRJEB38061), the 12 AQUA-FAANG BodyMap fish (AquaGen
+      commercial strain) and 13 others; pooled frequencies hide population structure
+    citation: >-
+      nf-rasqual 504-fish reference panel (salmobase.org); Nguyen DT, Sandve SR, Lien S, Grønvold L. BMC Genomics
+      2025;26:1070, doi:10.1186/s12864-025-12302-5; sample collection: Bertolotti et al. 2020 (ENA PRJEB38061)
+    licence: to confirm (frequencies derived from the salmobase panel; genotypes are never kept)
+
+  - name: molqtl
+    type: point
+    format: nfrasqual
+    max_bf: 0.1  # PROVISIONAL (the paper's rule): a lead SNP counts when its eigenMT-adjusted p (BF) is below this
+    files:
+      - {file: nfrasqual_Brain_ATAC.txt, url: 'https://raw.githubusercontent.com/datngu/nf-RASQUAL_paper/main/data/output_nf_rasqual/Brain/EXTERNAL_LD_ATAC_eigenMT_results_merged/ALL_eigenMT_results.txt'}
+      - {file: nfrasqual_Gonad_ATAC.txt, url: 'https://raw.githubusercontent.com/datngu/nf-RASQUAL_paper/main/data/output_nf_rasqual/Gonad/EXTERNAL_LD_ATAC_eigenMT_results_merged/ALL_eigenMT_results.txt'}
+      - {file: nfrasqual_Liver_ATAC.txt, url: 'https://raw.githubusercontent.com/datngu/nf-RASQUAL_paper/main/data/output_nf_rasqual/Liver/EXTERNAL_LD_ATAC_eigenMT_results_merged/ALL_eigenMT_results.txt'}
+      - {file: nfrasqual_Muscle_ATAC.txt, url: 'https://raw.githubusercontent.com/datngu/nf-RASQUAL_paper/main/data/output_nf_rasqual/Muscle/EXTERNAL_LD_ATAC_eigenMT_results_merged/ALL_eigenMT_results.txt'}
+      - {file: nfrasqual_Brain_RNA.txt, url: 'https://raw.githubusercontent.com/datngu/nf-RASQUAL_paper/main/data/output_nf_rasqual/Brain/EXTERNAL_LD_RNA_eigenMT_results_merged/ALL_eigenMT_results.txt'}
+      - {file: nfrasqual_Gill_RNA.txt, url: 'https://raw.githubusercontent.com/datngu/nf-RASQUAL_paper/main/data/output_nf_rasqual/Gill/EXTERNAL_LD_RNA_eigenMT_results_merged/ALL_eigenMT_results.txt'}
+      - {file: nfrasqual_Gonad_RNA.txt, url: 'https://raw.githubusercontent.com/datngu/nf-RASQUAL_paper/main/data/output_nf_rasqual/Gonad/EXTERNAL_LD_RNA_eigenMT_results_merged/ALL_eigenMT_results.txt'}
+      - {file: nfrasqual_Liver_RNA.txt, url: 'https://raw.githubusercontent.com/datngu/nf-RASQUAL_paper/main/data/output_nf_rasqual/Liver/EXTERNAL_LD_RNA_eigenMT_results_merged/ALL_eigenMT_results.txt'}
+      - {file: nfrasqual_Muscle_RNA.txt, url: 'https://raw.githubusercontent.com/datngu/nf-RASQUAL_paper/main/data/output_nf_rasqual/Muscle/EXTERNAL_LD_RNA_eigenMT_results_merged/ALL_eigenMT_results.txt'}
+    description: >-
+      Lead SNP of a caQTL (ATAC peak; Brain, Gonad, Liver, Muscle) or eQTL (gene; Brain, Gill, Gonad, Liver, Muscle)
+      in the nf-RASQUAL analysis of the 12 AQUA-FAANG fish, with eigenMT-adjusted p (BF) below max_bf: n features,
+      tissues, kinds (ca, e), best_bf and features ('<tissue> <kind> <gene or peak> (BF, pi)'; genes are Ensembl 106
+      IDs, peaks chrom:start-end in BED coordinates). Lead SNPs only (one per feature, 12 fish: low power, winner's
+      curse); pi is RASQUAL's effect size, its allele direction is not confirmed. Gill ATAC is left out (the assay was
+      discarded)
+    citation: Nguyen DT, Sandve SR, Lien S, Grønvold L. BMC Genomics 2025;26:1070, doi:10.1186/s12864-025-12302-5 (tables from github.com/datngu/nf-RASQUAL_paper)
+    licence: to confirm with the authors (the repository has no licence file; the article is CC BY-NC-ND 4.0)
+
+  - name: cm
+    type: interval
+    interpolate: true
+    format: genetic_map
+    file: brekke2023_linkage_map.txt
+    url: https://www.biorxiv.org/content/biorxiv/early/2023/08/21/2023.06.07.543993/DC1/embed/media-1.txt?download=true
+    pos: Mb  # this column holds base pairs
+    columns: {male: male_cM, female: female_cM}
+    description: >-
+      Genetic map position in cM (male, female), interpolated between the flanking markers of the Brekke et al. 2023
+      linkage map (AquaGen breeding population, 34,842 markers on Ssal_v3.1, Haldane); cm is false and the values NULL
+      beyond a chromosome's first and last marker. The male map misses crossovers on chromosomes 2, 8 and 17 (19.5, 2.0
+      and 3.8 cM in total), and unmarked chromosome ends (up to 12 Mb) have no value
+    citation: Brekke et al. 2023, Sci Rep, doi:10.1038/s41598-023-47208-3 (map from bioRxiv 2023.06.07.543993 v2, supplementary media-1.txt)
+    licence: CC BY 4.0
+
+  - name: expression
+    type: gene
+    format: rna_counts
+    files:
+      - {file: rna_counts_Brain.txt, url: https://salmobase.org/datafiles/datasets/nf-rasqual-data/Brain/rna_gene_level_count_salmon.txt}
+      - {file: rna_counts_Gill.txt, url: https://salmobase.org/datafiles/datasets/nf-rasqual-data/Gill/rna_gene_level_count_salmon.txt}
+      - {file: rna_counts_Liver.txt, url: https://salmobase.org/datafiles/datasets/nf-rasqual-data/Liver/rna_gene_level_count_salmon.txt}
+      - {file: rna_counts_Muscle.txt, url: https://salmobase.org/datafiles/datasets/nf-rasqual-data/Muscle/rna_gene_level_count_salmon.txt}
+    description: Expression of the nearest gene, mean counts per million per tissue (nf-rasqual RNA-seq, 12 fish per tissue)
+    citation: nf-rasqual RNA-seq gene counts (salmobase.org)

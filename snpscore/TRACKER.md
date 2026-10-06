@@ -9,44 +9,47 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - [x] Assembly Ssal_v3.1, chromosomes named 1-29 (same as AQUA-FAANG and Ensembl)
 - [x] Coordinates: BED for layers, 1-based `pos` for SNPs
 - [x] Release format and layer registry (README, layers.yaml)
-- [x] Test fixture: chr21 32-34 Mb (vgll3), chr26 14-16 Mb (nae1, IPN QTL), chr1 110-111 Mb (LORe)
+- [x] Test fixture: chr21 32-34 Mb (Ensembl "vgll3", the ohnolog), chr25 28.5-29.5 Mb (maturation vgll3, unnamed in Ensembl), chr26 14-16 Mb (nae1, IPN QTL), chr1 110-111 Mb (LORe)
 
 ## Step 1: first layers and annotate
 - [x] Layers: chromatin (21 conditions), blacklist, LORe, nearest gene
 - [x] `snpscore build` and `snpscore annotate`
 - [x] Genome-wide check: 45,802 active-TSS and 78,424 active-enhancer peaks, as in the paper
-- [x] Speed: 54K SNPs in 3 s, 1.6M SNPs in about 1 min
+- [x] Speed: 54K SNPs in 3 s, 1.6M SNPs in about 1 min (with all step 3 layers so far: 50K in 4 s, 1.6M in 94 s)
 
 ## Step 2: benchmark harness
-- [ ] Positive sets: nf-rasqual caQTL/eQTL lead SNPs (result tables needed from G), known loci list
-- [ ] `benchmark/` script: share of positives vs matched controls per layer and tier; run on every release
+- [x] Known loci positive set: `benchmark/known_loci.tsv` (vgll3 missense x2, six6 lead x2, bco1l lead x2; published ICSASG_v2 SNPs lifted to Ssal_v3.1)
+- [ ] Positive set: nf-rasqual caQTL/eQTL lead SNPs (result tables needed from G)
+- [x] `snpscore benchmark`: share of positives vs controls matched on gene-distance bins, per layer, region class and tier; output goes in the release folder
 
 ## Step 3: remaining layers (one change each)
-- [ ] Ensembl 116 regulatory build
-- [ ] VEP consequences, then SIFT4G
-- [ ] GERP / constrained elements (Ensembl fish alignment)
+- [x] Ensembl 116 regulatory build (counts towards tiers only where AQUA-FAANG has no peak)
+- [x] Stand-in: genic region class from Ensembl 116 GFF3 (CDS, splice region, UTR, non-coding exon, intron)
+- [ ] VEP consequences (missense/synonymous; Ensembl has a Ssal_v3.1 VEP cache), then SIFT4G
+- [x] GERP constrained elements (Ensembl 116 65-fish alignment; `fetch` decodes the bigBed)
 - [ ] Enhancer-CNEs
 - [ ] Ohnolog pairs and element duplication class (shared / alignable-only / exclusive)
 - [ ] molQTL (nf-rasqual) and ImmunoMap response regions
 - [ ] TF motif disruption
 - [ ] DeepFARM scores (agree redistribution first)
-- [ ] Assay axis: probe-flank uniqueness, flanking variants, GC, A/T-C/G
+- [x] Assay axis, part 1: variants within 35 bp (public 12-fish VCF), A/T-C/G flag
+- [ ] Assay axis, part 2: probe-flank uniqueness, GC (need the genome sequence)
 
 ## Step 4: tiers and release v0.1
-- [ ] G decides: which states count as active; trait presets (trait -> conditions)
-- [ ] Tier rules and weights in `weights.yaml`, applied by `snpscore annotate`
+- [ ] G decides: which states count as active; trait presets (trait -> conditions). Provisional choices in CLAUDE.md
+- [x] Tier rules and weights in `weights.yaml`, applied by `snpscore annotate --trait` (values provisional)
 - [ ] Genome-wide release v0.1; benchmark passes thresholds set in advance
 
 ## Step 5: portal MVP (salmo-snpportal)
 - [x] Upload -> sortable, paged table -> TSV download
-- [ ] Trait/tissue selector and tier column
-- [ ] Delete old results automatically (cron or on upload)
+- [x] Trait/tissue selector and tier column (re-tiered per request, no re-annotation)
+- [x] Delete old results automatically (on upload and download, after 24 h)
 
 ## Step 6: evidence card, genome view, filters, vendor export
-- [ ] Evidence card per SNP (21-condition state strip, gene, flags)
-- [ ] Genome view using salmobase's jbrowse_react bundle
-- [ ] Filters (tier, tissue, element class, flags)
-- [ ] Axiom/Illumina flank export
+- [x] Evidence card per SNP (21-condition state strip, gene, flags)
+- [ ] Genome view using salmobase's jbrowse_react bundle (for now the card links to Ensembl)
+- [x] Filters (tier, trait preset, region class, flags)
+- [ ] Axiom/Illumina flank export (needs the genome sequence)
 
 ## Step 7: going online (later, once the prototype works)
 - [ ] Decide where the repos live: GitLab elixir-nmbu (like salmobase) or GitHub
@@ -56,3 +59,113 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 ## Step 8: merge into salmobase (later)
 - [ ] Copy `snpportal/` into the salmobase repo (steps in salmo-snpportal/README.md)
 - [ ] Plan the move of salmobase's Docker image off Python 3.8 (end of life; caps DuckDB at 1.2.2, Django at 4.2)
+
+## Portal roadmap v2 (full specs in [ROADMAP.md](ROADMAP.md))
+
+First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked when built and tested.
+
+### M1 Foundations: safe, traceable, testable, consistent
+- [x] P1.1 Sanitise user columns and sandbox DuckDB (confirmed SQL-injection path) (S, must, **now**)
+- [x] P1.2 Remote bigWig/BGZF reader core: one read per tree node, keep-alive, deadline (M, must, **now**)
+- [x] P1.3 Job folders, background annotation, precomputed tiers with tier_terms, jobs from rows (M, must, **now**)
+- [x] P1.4 Release pinning, weights snapshot, provenance headers and methods text (M, must, **now**)
+- [x] P1.5 Design system (minimal): palette, partials, stylesheet, accessibility (S, must, **now**)
+- [x] P1.6a Offline test kit: synthetic bigWig writer, range server, golden hash, test markers (S, must, **now**)
+- [x] P1.6b Synthetic GWAS generator (make_synthetic.py gwas): Wave D (S, must)
+- [x] P1.7 Extend the fixture to all known loci (S, should)
+
+### M2 Trustworthy upload
+- [x] P2.1 Chromosome aliases, validation report and assembly/strand check (M, must, **now**)
+- [x] P2.2 Upload page redesign with examples, paste box and safe limits (S, must, **now**)
+- [x] P2.3 Privacy and data-lifecycle hardening (S, must, **now**)
+- [ ] P2.4 Optional in-browser genotype stripping before upload (S, should)
+- [ ] P2.5 ICSASG_v2 -> Ssal_v3.1 offline position table (L, should)
+- [x] P2.6 Chip manifests, PLINK files and header aliases (S, should, **now**)
+
+### M3 Results overview and table
+- [x] P3.1 Public background pool and background summary (S, must, **now**) (1.6M public sites in 30 s)
+- [x] P3.2 Overview dashboard (server-rendered SVG, linked to the table) (M, must, **now**)
+- [x] P3.3 Results table that scans quickly (M, must, **now**)
+- [ ] P3.4 Custom condition presets and preset comparison matrix (S, should)
+- [x] P3.5 One-page report (print to PDF) (S, should)
+- [ ] P3.6 Tissue-pattern UpSet plot (M, could)
+
+### M4 Locus browser and evidence card with salmobase tracks
+- [x] P4.1 Track registry (tracks.yaml) from the AQUA-FAANG trackhubs (S, must, **now**)
+- [x] P4.2 Gene-model features layer and gene descriptions (S, must, **now**)
+- [x] P4.3a Server-rendered SVG locus browser: local annotation lanes (no network) (M, must, **now**)
+- [x] P4.3b Live AQUA-FAANG ATAC signal lanes from salmobase (M, must, **now**) (live salmobase ATAC: 1.4 s cold, 0.1 s warm)
+- [ ] P4.3c Per-condition ChromHMM lanes (genome-wide segmentation) and ChIP/RNA rows (M, should)
+- [x] P4.4a Evidence card core and permanent variant page (M, must, **now**)
+- [ ] P4.5 Coding consequence (VEP-lite) from the canonical CDS and the genome (M, should)
+- [ ] P4.6 molQTL evidence contract (minimal, synthetic until nf-rasqual tables arrive) (S, could)
+- [ ] P4.7 Condition x assay signal matrix at the SNP (M, should)
+- [ ] P4.8 Genome-wide ChromHMM state layer (not only inside robust peaks) (M, should)
+- [ ] P4.9 Build-time per-peak signal layer (M, should)
+- [ ] P4.10 Per-base GERP RS lane and value (S, could)
+- [ ] P4.11 Allele-specific accessibility in AQUA-FAANG fish (L, could)
+- [ ] P4.12 Rainbow trout functional conservation (L, could)
+- [ ] P4.13 Gill ATAC peak display layer (sea lice, AGD) (S, should)
+
+### M5 Explore without an upload
+- [x] P5.1 Landing page with one search box and resolver (S, must, **now**)
+- [x] P5.2 Gene page, and gene or interval lists to candidate jobs (M, must, **now**)
+- [x] P5.3 Known-loci catalogue with effect alleles (S, should, **now**)
+- [x] P5.4 Data, methods, glossary, help and 'Run it locally' pages generated from the release (S, must, **now**)
+- [ ] P5.5 Element pages and element tissue specificity (M, should)
+- [ ] P5.6 Candidate target genes beyond the nearest gene (M, should)
+- [ ] P5.7 Gene expression per tissue x condition with tau (M, should)
+- [ ] P5.8 Ss4R ohnolog context (S, should)
+- [ ] P5.9 TF motif disruption (ref vs alt) (M, should)
+- [x] P5.10 Ortholog names for unnamed salmon genes (S, should, **now**)
+- [x] P5.11 Guided 'vgll3 and maturation' tour (S, should, **now**)
+- [ ] P5.12 rsID support (S, could)
+
+### M6 Breeding toolkit: assayable markers, panels, chip comparison and exports
+- [x] P6.1 Public allele frequency 'point' layer and peak ids (Wave A) (S, must, **now**)
+- [x] P6.2 Assay designability QC from the Ssal_v3.1 genome (M, must, **now**) (thresholds provisional; revisited in push 2)
+- [x] P6.3 Panel designer (backbone + functional fill under constraints) (M, must, **now**)
+- [x] P6.4 Vendor submission exports (Illumina-style, Axiom-style, KASP) and the zip bundle (M, must, **now**)
+- [ ] P6.5 Genomic-prediction priors bundle (BayesRC, GFBLUP/MultiBLUP, LDAK, annot) (S, must)
+- [x] P6.6 Compare with an existing chip (overlap, gaps, new functional coverage) (S, should, **now**)
+- [ ] P6.7 Saved, versioned panels with diff (opt-in retention) (M, could)
+- [ ] P6.8 Ohnolog cross-hybridisation risk for probes (L, could)
+- [ ] P6.9 Genetic map (cM) layer and cM-based spacing (M, should)
+- [ ] P6.10 Multi-population allele frequencies (M, could)
+
+### M7 GWAS summary statistics and functional fine-mapping (next push, Wave D)
+- [x] P7.1 Sumstats upload mode with format detection and harmonisation (M, must)
+- [x] P7.2 Manhattan plot, tier-stratified QQ plot and loci table (M, must)
+- [x] P7.3 LocusZoom-style regional association plot on the locus browser (S, must)
+- [x] P7.4 Wakefield ABF fine-mapping with uniform vs functional priors (M, must) (synthetic GWAS; planted vgll3 Met54Thr rises under the functional prior)
+- [ ] P7.5 Enrichment vs matched background and 21-condition relevance heatmap (M, should)
+- [ ] P7.6 Public LD reference from the 504-fish phased panel (L, should)
+- [ ] P7.7 Functional proxy finder for array lead SNPs (M, should)
+- [ ] P7.8 Colocalisation with caQTL/eQTL and between two traits (L, should)
+- [ ] P7.9 Heritability enrichment helper (S, could)
+
+### M8 Scale, API and going-online readiness
+- [x] P8.1 Speed up annotate (nearest gene by ASOF joins, narrow table) (M, should) (nearest gene 79.5 s -> 2.1 s on 1.6M SNPs)
+- [ ] P8.2 Versioned JSON API v1 (M, should)
+- [ ] P8.3 Offline CLI parity for confidential data (M, should)
+- [ ] P8.4 Observability without content and a health endpoint (S, should)
+- [ ] P8.5 Release integrity: verify, diff and Django system checks (S, should)
+- [ ] P8.6 Fair-use limits and queue fairness (S, could)
+- [ ] P8.7 Genome-wide annotated public catalogue and per-category downloads (M, could)
+- [ ] P8.8 Remote reader extras deferred from P1.2 (S, should)
+
+### Push 2: research-driven (specs in RESEARCH.md)
+- [ ] R1 Public AF from the 504-fish panel (not the 12-fish INFO AF); relabel the population; keep frequencies only (S, must)
+- [ ] R2 Vendor export corrections: sidecar provenance, numeric build, uppercase IUPAC, TOP/BOT 'cannot determine', locus names, chr 0, flank lengths, panel bin/spacing warnings; TOP/BOT oracle test (S, must)
+- [ ] R3 Known-loci catalogue 6 -> 36 verified rows across 8 traits; published-associations lane and card callout; bco1l A (+) = red (S, must)
+- [ ] R4 Real molQTL lead-SNP layer from the public nf-RASQUAL tables (brain, gonad, liver, muscle ATAC + 5 RNA; weight 0; licence to confirm) (M, should)
+- [ ] R5 Genetic map layer (Brekke 2023, native Ssal_v3.1, male/female cM) and cM spacing in the panel designer (S, should)
+- [ ] R6 rsID search and ICSASG_v2 -> Ssal_v3.1 for known variants via the EVA release 9 rs bridge (S, should)
+- [ ] R7 Alias table: accept .2 GenBank versions (chr 9, 11, 18, 26); warn on HG993277.1 (S, should)
+- [ ] R8 AQUA-FAANG itemRgb palette option, citation block, ENA/FAANG metadata on the Data page; SalmoBase gene deep links; NCBI LOC search (S, should)
+- [ ] R9 P4.5 note: vgll3 Met54Thr is T46M on ENSSSAT00000230965 (offset 8 to the published numbering) (S, could)
+
+### Manual QA (not automatable)
+- [ ] Evidence card prints on one A4 page; report on two
+- [ ] Locus browser readable at 1280 px and on a tablet
+- [ ] Colour-blind check of tier and ChromHMM palettes (e.g. with a simulator)

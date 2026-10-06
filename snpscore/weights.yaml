@@ -1,0 +1,77 @@
+# Tier rules. PROVISIONAL: chosen by Claude so the prototype works; G decides the real ones (see CLAUDE.md).
+# `snpscore build` copies this file into the release; `snpscore annotate --trait <preset>` applies it.
+# Each SNP gets tier_score = sum of the weights of the evidence it has, then a tier from the cut-offs.
+# Layers marked synthetic: true in the release manifest never count.
+
+# The blocks below that G still has to confirm; build lists them in the release manifest.
+provisional: [active_states, weak_states, weights, tiers, presets, assay, design, finemap]
+
+active_states: [Active_TSS, Active_enhancer]
+# Counted as weak evidence. Not counted at all: Repressed_polycomb, Quiescent, ZNF_genes_and_repeats, Unknown_1.
+weak_states: [Primed_enhancer, Poised_enhancer_1, Poised_enhancer_2, Bivalent, Flanking_upstream, Flanking_downstream,
+              Accessible_chromatin]
+
+weights:  # whole numbers (tier_score is an integer)
+  active: 3            # active state in at least one condition of the preset
+  active_elsewhere: 1  # active only in conditions outside the preset
+  weak: 1              # weak state in a preset condition, and not active there
+  coding: 3            # CDS; amino-acid effect unknown until VEP is added
+  splice: 3            # splice region
+  utr: 1               # 5' or 3' UTR
+  constrained: 2       # GERP constrained element (65 fish)
+  regbuild: 1          # Ensembl regulatory feature with no AQUA-FAANG peak (68-86% of them overlap a peak)
+  molqtl: 0            # nf-RASQUAL caQTL/eQTL lead SNP (12 fish, lead SNPs only): shown in tier_terms, not scored
+
+# Minimum tier_score for tiers 1, 2 and 3; anything lower is tier 4.
+# e.g. tier 1 = active + constrained, or CDS + constrained; tier 2 = active, or CDS; tier 3 = any weaker evidence.
+tiers: [5, 3, 1]
+
+# Trait presets -> chromatin conditions. Each entry is a prefix of condition names; [] = all 21 conditions.
+presets:
+  all: []
+  maturation: [Brain, Gonad]
+  growth_and_fillet: [Muscle, Liver]
+  disease_resistance: [Liver]
+  development: [LateBlastulation, MidGastrulation, EarlySomitogenesis, MidSomitogenesis, LateSomitogenesis]
+  brain: [Brain]
+  gonad: [Gonad]
+  liver: [Liver]
+  muscle: [Muscle]
+
+# Assay designability QC (annotate, with the genome): pass / warn / fail per SNP. PROVISIONAL: chosen by Claude so the
+# prototype works; to confirm with the genotyping lab or vendor. fail = a ref_check below or any N in the 71-mer.
+assay:
+  flank: 35                 # bases either side of the SNP (Axiom probe length): assay_flank is 35 + [REF/ALT] + 35
+  gc: [0.30, 0.70]          # warn when the flanks' GC share is outside this range
+  max_repeat: 0.5           # warn above this soft-masked (repeat) share of the flanks
+  max_homopolymer: 6        # warn when a flank has a longer single-base run
+  max_flank_variants: 0     # warn when more public variants lie in the flanks (shown as IUPAC codes)
+  warn_flags: [lore, blacklist, strand_ambiguous]  # warn when these annotate columns are true
+  fail_ref_check: [mismatch, not_snp]              # fail on these ref_check values
+
+# Panel designer defaults (snpscore panel, the portal's Panel tab) and chip comparison. PROVISIONAL: chosen by Claude
+# so the prototype works; G to confirm.
+design:
+  n_target: 384
+  backbone_fraction: 0.5    # share of the panel spread over the genome: the best SNP per genome-length bin
+  min_spacing: 20000        # bp between any two selected SNPs
+  min_maf: 0.05             # your maf/af column, else the public MAF; SNPs with unknown MAF pass
+  max_per_gene: 2           # nearest gene (gene_id)
+  max_per_element: 1        # AQUA-FAANG peak (chromatin_id)
+  require_assay_pass: false # true: assay 'pass' only; false: drop assay 'fail' only
+  exclude_flags: [blacklist]  # drop SNPs where these columns are true (e.g. lore, strand_ambiguous, near_chip)
+  score: {tier: 1.0, assay: 0.3, maf: 0.3}  # design_score: tier_score / max + assay (pass 1, warn 0.5) + MAF / 0.5
+  chip_window: 10000        # novel_functional = tier 1-2 with no chip SNP within this many bp
+  chip_gap: 1000000         # chip gaps listed when longer than this (bp)
+
+# GWAS loci and fine-mapping (snpscore.gwas, the portal's Association page). PROVISIONAL: chosen by Claude so the
+# prototype works; G to confirm. Users can change them per view; the ROADMAP's 'Open questions for G' lists them.
+finemap:
+  prior_sd: 0.2             # W = prior_sd^2 = 0.04: prior variance of the effect on the standardised scale (Wakefield ABF)
+  functional_lambda: 0.5    # functional prior pi_i ~ exp(lambda * tier_score_i) (up to about 90x between SNPs)
+  coverage: 0.95            # credible set: SNPs in descending PIP until their PIPs sum to this
+  significant: 5.0e-8       # genome-wide significance (a convention from human GWAS)
+  suggestive: 1.0e-5        # loci down to this p are listed as suggestive
+  window: 1000000           # bp either side of a lead SNP (greedy distance clumping; farmed lines have long-range LD)
+  near_lead: 2              # 'near the lead': within this many log10 units of the lead's p
+  trait_sd: 1.0             # betas are divided by this (1 = summary statistics of a standardised trait)

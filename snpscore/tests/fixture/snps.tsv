@@ -1,6 +1,10 @@
-chrom	pos	id
+chrom	pos	id	ref	alt
 21	33005000	in_vgll3
 21	32141081	peak_first_base
 21	32141080	before_peak
 21	32050000	blacklisted
 1	110500000	lore
+25	28996360	vgll3_Met54Thr	C	T
+25	28884300	gerp_element	A	T
+25	28923906	three_flank_variants
+25	28923804	flank_variant_at_35bp

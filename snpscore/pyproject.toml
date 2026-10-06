@@ -14,3 +14,9 @@ snpscore = "snpscore.cli:main"
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+markers = [
+    "live: needs salmobase.org (run with SNPSCORE_LIVE=1)",
+    "dev: needs the genome-wide release/dev (run with SNPSCORE_DEV=1)",
+]
