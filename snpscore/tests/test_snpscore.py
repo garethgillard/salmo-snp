@@ -2,6 +2,7 @@ import gzip
 import hashlib
 import json
 import shutil
+import sys
 from pathlib import Path
 
 import duckdb
@@ -415,7 +416,18 @@ def test_read_snps_keeps_input_order(tmp_path):
 # run `.venv/bin/pytest tests/test_snpscore.py -k golden`, copy the new hash from the failure message into GOLDEN,
 # and say in the commit message why the output changed. Hashed: the TSV header plus the sorted rows for snps.vcf and
 # snps.tsv (number formatting is DuckDB's, so a DuckDB upgrade may also change it).
-GOLDEN = "a42d81762110b7e53ffc8cbb06b86821da255dfeae64d76074b5bb12213f4a84"  # Push 2: 504-fish AF, molqtl, cm
+# Push 2: 504-fish AF, molqtl, cm gave a42d8176...; then only assay columns changed (checked by reverting each change):
+# - R2 assay rules: neighbours as upper-case IUPAC in assay_flank, flank variants per side ('flank variants on both
+#   sides'; 2 fixture SNPs warn -> pass), the code-103 reason (no fixture SNP gets it): 1ef4cfca...
+# - weights.yaml max_repeat 0.5 -> 0.9: 9 SNPs lose a 'repeat' reason, 3 of them warn -> pass
+GOLDEN = "2aabe7b833c6e74b0cfb67299da9f55337ffa9733f042ebc23ec4d76429bcf72"
+
+
+def test_long_lists_are_written_in_sorted_parts(release, tmp_path, monkeypatch):
+    whole = annotate(FIXTURE / "snps.vcf", release, tmp_path / "whole.tsv").read_text()
+    monkeypatch.setattr(sys.modules["snpscore.annotate"], "WRITE_PART", 100)  # ~25 parts instead of one ORDER BY
+    assert annotate(FIXTURE / "snps.vcf", release, tmp_path / "parts.tsv").read_text() == whole
+    assert sorted(p.name for p in tmp_path.iterdir() if "part" in p.name) == ["parts.rejects.tsv", "parts.tsv", "parts.validation.json"]
 
 
 def test_golden_annotate_hash(release, tmp_path):

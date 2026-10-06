@@ -43,9 +43,13 @@ presets:
 assay:
   flank: 35                 # bases either side of the SNP (Axiom probe length): assay_flank is 35 + [REF/ALT] + 35
   gc: [0.30, 0.70]          # warn when the flanks' GC share is outside this range
-  max_repeat: 0.5           # warn above this soft-masked (repeat) share of the flanks
+  max_repeat: 0.9           # warn above this soft-masked (repeat) share of the flanks. About 60% of the salmon genome
+                            # is soft-masked and flank shares are mostly 0 or 1 (public_50k: 53% fully masked), so
+                            # any cut-off warns on about half of all SNPs; 0.9 keeps the warning for flanks that are
+                            # nearly all repeat (paralogue risk: RESEARCH.md section 5)
   max_homopolymer: 6        # warn when a flank has a longer single-base run
-  max_flank_variants: 0     # warn when more public variants lie in the flanks (shown as IUPAC codes)
+  max_flank_variants: 0     # warn when both flanks have more public variants (shown as IUPAC codes): Axiom needs
+                            # one clean 35-nt side (flank_variants_per_side: false counts both sides together)
   warn_flags: [lore, blacklist, strand_ambiguous]  # warn when these annotate columns are true
   fail_ref_check: [mismatch, not_snp]              # fail on these ref_check values
 

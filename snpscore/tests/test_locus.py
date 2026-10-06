@@ -50,8 +50,9 @@ def test_lanes(release):
     assert any(p["part"] == "CDS" and p["start"] < 28996360 <= p["end"] for p in t[0]["parts"])
     assert len(d["conditions"]) == 21 and (d["conditions"][0], d["conditions"][-1]) == ("Brain_Immature_Female", "LateSomitogenesis")
     assert d["peaks"] and all(p["states"] and set(p["states"]) <= set(d["conditions"]) for p in d["peaks"])
-    assert any(v["pos"] == 28996360 and v["maf"] == 0.33 for v in d["variants"])
-    assert [k["id"] for k in d["known"]] == ["vgll3_Met54Thr", "vgll3_Asn323Lys"] and d["regbuild"]
+    assert any(v["pos"] == 28996360 and v["maf"] == 0.480159 for v in d["variants"])  # 504-fish panel (12 fish: 0.33)
+    # catalogue order; vgll3_tag_SW2020 (25:28980165) came with the 36-row catalogue (Push 2, R3)
+    assert [k["id"] for k in d["known"]] == ["vgll3_Met54Thr", "vgll3_Asn323Lys", "vgll3_tag_SW2020"] and d["regbuild"]
     every = sl.locus(release, "25", 28_994_000, 28_999_000, all_transcripts=True)["genes"]
     assert [x["canonical"] for g in every for x in g["transcripts"]][:2] == [True, False]  # canonical first
     wide = sl.locus(release, "25", 28_880_000, 29_200_000)

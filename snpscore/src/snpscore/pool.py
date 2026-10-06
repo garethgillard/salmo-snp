@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 
 from .annotate import annotate, connect
+from .assay import breakdown
 from .formats import lit, q
 from .score import load_weights, scored
 
@@ -63,8 +64,8 @@ def shares(rows):
 
 def background_summary(con, table, weights):
     """Counts and shares of the pool for the dashboard. Each of tiers[preset], region_class, maf_histogram and
-    assay_status is one category whose shares sum to 1; active_by_condition and flags are independent shares
-    (the share of sites with that property)."""
+    assay_status is one category whose shares sum to 1; active_by_condition, flags and assay_reasons (warn and fail
+    reasons by name, a site counted once per reason) are independent shares (the share of sites with that property)."""
     columns = [r[0] for r in con.execute(f"DESCRIBE SELECT * FROM {table}").fetchall()]
     n = con.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
 
@@ -92,4 +93,6 @@ def background_summary(con, table, weights):
         summary["flags"] = {c: round(v, 6) for c, v in zip(flags, values)}
     if "assay_status" in columns:
         summary["assay_status"] = shares(grouped("assay_status"))
+        reasons = breakdown(con, f"(SELECT assay_reasons FROM {table} WHERE assay_status IN ('warn', 'fail'))")
+        summary["assay_reasons"] = {k: {"n": v, "share": round(v / n, 6)} for k, v in reasons.items()}  # of all sites
     return summary

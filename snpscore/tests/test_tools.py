@@ -17,7 +17,7 @@ import yaml
 from range_server import RangeServer
 from snpscore import annotate, assay, bbi, build, export, panel
 from snpscore.fasta import Fasta
-from snpscore.pool import build_pool
+from snpscore.pool import background_summary, build_pool
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "tests" / "fixture"
@@ -155,6 +155,7 @@ def test_assay_on_the_fixture_genome(release, annotated):
     assert all(x["assay_status"] == "not_checked" for x in every if x["chrom"] in ("1", "21"))
     report = json.loads((annotated["snps.vcf"].parent / "snps.vcf.validation.json").read_text())
     assert sum(report["assay"].values()) == len(every)
+    assert report["assay_reasons"]["N in flank"] == report["assay"]["fail"]  # reasons by name (no ref mismatch here)
 
 
 def test_remote_genome_over_the_cap_is_not_checked(release, tmp_path, monkeypatch):
@@ -175,7 +176,7 @@ def test_remote_genome_over_the_cap_is_not_checked(release, tmp_path, monkeypatc
 
 # P3.1 public background pool
 
-def test_pool(release):
+def test_pool(release, annotated):
     pool = rows(release / "pool" / "pool.parquet", "chrom = '25' AND pos = 28996360")
     weights = yaml.safe_load((release / "weights.yaml").read_text())
     assert pool[0]["public_af_af"] == 0.480159 and pool[0]["public_af_aquafaang12_af"] == 0.67  # 504 fish; 12 fish
@@ -186,6 +187,9 @@ def test_pool(release):
         assert sum(v["share"] for v in category.values()) == pytest.approx(1, abs=1e-5)
         assert sum(v["n"] for v in category.values()) == b["n_sites"]
     assert set(b["active_by_condition"]) == {c[len("chromatin_"):] for c in pool[0] if c.startswith("chromatin_")} - {"id", "summary"}
+    # With assay columns (pool --assay), background.json also has the warn and fail reasons as shares of all sites
+    s = background_summary(duckdb.connect(), f"read_parquet('{annotated['snps.vcf']}')", {**weights, "presets": {}})
+    assert s["assay_reasons"]["N in flank"] == s["assay_status"]["fail"] and "assay_reasons" not in b
 
 
 # P6.3 panel designer

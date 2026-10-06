@@ -165,6 +165,17 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [ ] R8 AQUA-FAANG itemRgb palette option, citation block, ENA/FAANG metadata on the Data page; SalmoBase gene deep links; NCBI LOC search (S, should)
 - [ ] R9 P4.5 note: vgll3 Met54Thr is T46M on ENSSSAT00000230965 (offset 8 to the published numbering) (S, could)
 
+### Simplification pass (plan in [SIMPLIFY.md](SIMPLIFY.md); cuts are reversible from git)
+- [ ] S1 One caveat line per page (synthetic prefix), qualifiers next to numbers, no per-figure provenance captions, slim footer
+- [ ] S2 Overview: top-10 SNPs first, 4 tiles, 3 open figures; the rest behind one click
+- [ ] S3 Table: one row of filters + 'More filters', default columns, drawer
+- [ ] S4 Panel and Export: panel first, 1 figure, 25 rows; whole-list downloads only on Export
+- [ ] S5 Association and regional plot: Manhattan and loci first, settings under 'Advanced settings', QC as one line
+- [ ] S6 Evidence card and variant page: tier and why first, word budget
+- [ ] S7 Score, GWAS page and landing: one trait select, one primary action, short search help
+- [ ] S8 Gene and known loci pages: word budgets, 10/25-row lists
+- [ ] S9 Help, Methods, Data, Tour (5 steps) and Report: definitions in one place
+
 ### Manual QA (not automatable)
 - [ ] Evidence card prints on one A4 page; report on two
 - [ ] Locus browser readable at 1280 px and on a tablet

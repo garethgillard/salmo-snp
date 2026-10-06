@@ -167,15 +167,18 @@ then:
   (`ok`, `swapped`, `strand_flip`, `mismatch`, `not_snp`, `not_checked`: chromosome not in the genome, an N base, no
   alleles, or not in the sample of 200 SNPs checked when the genome is read remotely)
 - with a genome, the assay designability QC (`snpscore.assay`, rules in the weights.yaml `assay` block, PROVISIONAL):
-  `assay_flank` (35 bp + `[REF/ALT]` + 35 bp on the forward strand: genome bases upper case, neighbouring public
-  variants as lower-case IUPAC codes, N past a chromosome end; alleles complemented for `strand_flip`, the public
-  alleles when the input has none), `assay_gc`, `assay_repeat` (soft-masked share), `assay_homopolymer` (longest
-  single-base run in either flank), `assay_n` (N bases in the 71-mer), `assay_status` (`pass`, `warn`, `fail`,
-  `not_checked`) and `assay_reasons` ('; '-separated, NULL for pass). fail = a `fail_ref_check` value (mismatch,
-  not_snp) or any N; warn = alleles on the other strand or unknown, GC outside `gc`, repeat share above `max_repeat`,
-  a run longer than `max_homopolymer`, more than `max_flank_variants` public variants in the flanks, or a true
-  `warn_flags` column (lore, blacklist, strand_ambiguous). not_checked = chromosome not in the genome, or a remote
-  genome and more than 2,000 SNPs (`assay.REMOTE_MAX`; the reference check then uses the 200-SNP sample)
+  `assay_flank` (35 bp + `[REF/ALT]` + 35 bp on the forward strand, all upper case: genome bases, neighbouring public
+  variants as IUPAC codes (N for indels; KASP reads lower case as 'uncertain'), N past a chromosome end; alleles
+  complemented for `strand_flip`, the public alleles when the input has none), `assay_gc`, `assay_repeat`
+  (soft-masked share), `assay_homopolymer` (longest single-base run in either flank), `assay_n` (N bases in the
+  71-mer), `assay_status` (`pass`, `warn`, `fail`, `not_checked`) and `assay_reasons` ('; '-separated, each a name
+  then any numbers, NULL for pass). fail = a `fail_ref_check` value (mismatch, not_snp) or any N; warn = alleles on
+  the other strand or unknown, GC outside `gc`, repeat share above `max_repeat` (0.9), a run longer than
+  `max_homopolymer`, more than `max_flank_variants` public variants on both sides (one clean side is enough for Axiom;
+  `flank_variants_per_side: false` counts both sides together), an A/T or C/G SNP whose flanks give no TOP/BOT strand
+  (Illumina code 103), or a true `warn_flags` column (lore, blacklist, strand_ambiguous). not_checked = chromosome
+  not in the genome, or a remote genome and more than 2,000 SNPs (`assay.REMOTE_MAX`; the reference check then uses
+  the 200-SNP sample)
 - `strand_ambiguous` (A/T or C/G; if the input has `ref` and `alt`)
 - `tier` (1 best to 4), `tier_score`, `tier_evidence`, and `tier_terms`
   (`LIST(STRUCT(term VARCHAR, weight INTEGER))`: the weights.yaml terms that fired) for the `--trait` preset (default
@@ -188,7 +191,9 @@ Next to the output, `<stem>.validation.json` and `<stem>.rejects.tsv`:
   release has rsid.parquet), `duplicates_merged`, `indels`, `multiallelic`, `columns_renamed`,
   `columns_dropped`, `ref_check` ({value: rows}), `ref_check_sampled`, `assembly` (`verdict` ok / warning / not_checked,
   `checked`, `mismatch_or_flip_share`, and a `message` when (mismatch + strand_flip) / checked > 10%: probably
-  ICSASG_v2 coordinates or the other strand), `assay` ({assay_status: rows}).
+  ICSASG_v2 coordinates or the other strand), `assay` ({assay_status: rows}), `assay_reasons` ({reason: SNPs} over
+  the warn and fail SNPs, by name without the numbers (`assay.breakdown`), most frequent first; a SNP counts once per
+  reason).
 - rejects.tsv: `row` (1 = first SNP row of the input), `chrom`, `pos`, (`id`, `ref`, `alt`), `reason`
   (`missing_chrom`, `unknown_rsid`, `bad_pos`, `unknown_chrom`, `duplicate`: same chrom, pos, ref, alt as an earlier
   row, after rs placement).
@@ -196,7 +201,8 @@ Next to the output, `<stem>.validation.json` and `<stem>.rejects.tsv`:
 Problems with the input raise `snpscore.InputError` (a ValueError) with a message that is safe to show: no SQL, file
 paths or input lines. DuckDB runs in a sandbox (`snpscore.connect(read_dirs, write_dir, threads=2,
 memory_limit='2GB')`): it can read only the input's folder, the release and the output folder, write only the output
-folder, and has no network or extension loading.
+folder, and has no network or extension loading. Lists over 250,000 SNPs are written in input order through sorted
+Parquet parts in the output folder (hidden, removed afterwards), so the 1.6M public sites annotate within the 2 GB.
 
 A SNP at 1-based `pos` is inside an interval when `start < pos <= end`.
 
@@ -213,15 +219,17 @@ see "Biology decisions" in CLAUDE.md and `provisional` in the manifest.
 ## Public background pool
 
 `snpscore pool --release R [--background VCF] [--assay]` (`snpscore.pool.build_pool`) annotates every public 12-fish
-site (the 1.6M sites of the 12 AQUA-FAANG fish, all of them 504-panel sites) (sequence and assay checks only with `--assay`, which needs `--memory 8GB` for the 1.6M sites; the default run
-takes about 40 s with 4 threads and 4 GB) and writes, under `R/pool/`:
+site (the 1.6M sites of the 12 AQUA-FAANG fish, all of them 504-panel sites) (sequence and assay checks only with
+`--assay`, which needs `--memory 8GB` for the 1.6M sites and takes about 100 s; the default run takes about 40 s with
+4 threads and 4 GB) and writes, under `R/pool/`:
 - `pool.parquet`: the annotate columns (tiers for the `all` preset), then `tier__<preset>` and `tier_score__<preset>`
   for every preset in weights.yaml (wide, one row per site, in genome order).
 - `background.json`: `n_sites`, `rows_read`, `rejected`, `release`, `created`, `source`, `assay_checked`, `seconds`;
   categories as {key: {`n`, `share`}} whose shares sum to 1: `tiers` {preset: {tier}}, `region_class` (NULL =
   `intergenic`), `maf_histogram` (public MAF in bins of 0.05, `0.00-0.05` ... `0.45-0.50`), `assay_status` (with
   `--assay`); independent shares (share of sites): `active_by_condition` {condition: share with an active state},
-  `flags` {chromatin, regbuild, gerp, blacklist, lore, public_af, strand_ambiguous}.
+  `flags` {chromatin, regbuild, gerp, blacklist, lore, public_af, strand_ambiguous}; `assay_reasons` (with `--assay`)
+  {reason: {`n`, `share`}}: warn and fail reasons by name as in validation.json, share = of all sites.
 
 ## Breeder tools: assay QC, panel designer, chip comparison, exports
 

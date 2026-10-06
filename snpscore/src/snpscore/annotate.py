@@ -17,6 +17,7 @@ from .score import load_weights, scored
 FLANK = 35  # probe flank either side of the SNP (Axiom); also used for GC and repeat content
 REMOTE_SAMPLE = 200  # with a remote genome (HTTP ranges) only this many SNPs get the sequence checks
 ASSEMBLY_WARNING = 0.10  # (mismatch + strand_flip) / checked above this: probably ICSASG_v2 coordinates or other strand
+WRITE_PART = 250_000  # SNPs per sorted part when writing a long list (write_in_order)
 ERRORS = (  # shown instead of DuckDB's own text, which can quote SQL, file paths or input lines
     (duckdb.ConversionException, "A value in the file has the wrong type, e.g. text where a number is expected."),
     (duckdb.OutOfMemoryException, "The file is too large to annotate here. Split it, or run snpscore locally."),
@@ -418,6 +419,7 @@ def _annotate(con, path, release, out, manifest, weights, trait, sequence, step,
                 report["ref_check"] = dict(con.execute("SELECT ref_check, count(*) FROM snps GROUP BY 1 ORDER BY 1").fetchall())
                 report["assembly"] = assembly_verdict(report["ref_check"])
                 report["assay"] = dict(con.execute("SELECT assay_status, count(*) FROM snps GROUP BY 1 ORDER BY 1").fetchall())
+                report["assay_reasons"] = assay.breakdown(con, "(SELECT assay_reasons FROM snps WHERE assay_status IN ('warn', 'fail'))")
             except OSError:  # remote genome unreachable: annotate without the sequence columns
                 report["assembly"] = {"verdict": "not_checked", "checked": 0, "message": "The genome could not be read."}
         if alleles:
@@ -431,12 +433,31 @@ def _annotate(con, path, release, out, manifest, weights, trait, sequence, step,
             con.execute(f"CREATE OR REPLACE TABLE snps AS {scored('snps', weights, columns, trait, synthetic)}")
 
         step("writing")
-        fmt = ("FORMAT parquet" if out.suffix == ".parquet" else "HEADER, DELIMITER ','" if out.suffix == ".csv"
-               else "HEADER, DELIMITER '\t'")
-        con.execute(f"COPY (SELECT * EXCLUDE (idx) FROM snps ORDER BY idx) TO {lit(out)} ({fmt})")
+        write_in_order(con, out)
     con.execute(f"COPY (SELECT * FROM rejects ORDER BY row) TO {lit(str(stem) + '.rejects.tsv')} (HEADER, DELIMITER '\t')")
     Path(str(stem) + ".validation.json").write_text(json.dumps(report, indent=2))
     return report
+
+
+def write_in_order(con, out):
+    """COPY snps (without idx) to out in input (idx) order: Parquet, CSV or TSV by its suffix. A long list is sorted in
+    idx ranges of WRITE_PART into Parquet parts next to out, which are then copied in turn (DuckDB keeps the order of a
+    file list): one ORDER BY over ~1.6M annotated SNPs runs out of memory at 2 GB (DuckDB 1.2.2)."""
+    fmt = ("FORMAT parquet" if out.suffix == ".parquet" else "HEADER, DELIMITER ','" if out.suffix == ".csv"
+           else "HEADER, DELIMITER '\t'")
+    n, top = con.execute("SELECT count(*), max(idx) FROM snps").fetchone()
+    if n <= WRITE_PART:
+        con.execute(f"COPY (SELECT * EXCLUDE (idx) FROM snps ORDER BY idx) TO {lit(out)} ({fmt})")
+        return
+    parts = [out.parent / f".{out.name}.{uuid.uuid4().hex}.part{i}.parquet" for i in range(top // WRITE_PART + 1)]
+    try:
+        for i, part in enumerate(parts):
+            con.execute(f"COPY (SELECT * EXCLUDE (idx) FROM snps WHERE idx >= {i * WRITE_PART} AND idx < {(i + 1) * WRITE_PART} "
+                        f"ORDER BY idx) TO {lit(part)} (FORMAT parquet)")
+        con.execute(f"COPY (SELECT * FROM read_parquet([{', '.join(lit(p) for p in parts)}])) TO {lit(out)} ({fmt})")
+    finally:
+        for part in parts:
+            part.unlink(missing_ok=True)
 
 
 def assembly_verdict(counts):
