@@ -250,13 +250,28 @@ def landing(request):
         "examples": EXAMPLES})
 
 
+def ss4r(ids):
+    """{gene id: {"copies": [gene rows of its Ss4R duplicates], "class": AORe or LORe}} from the release's ss4r layer
+    (AQUA-FAANG salmon-trout clades); {} without that layer."""
+    path = _file("ss4r")
+    if not ids or path is None:
+        return {}
+    rows = jobs.connect([jobs.release()]).execute(
+        f"SELECT gene_id, ohnolog, class FROM read_parquet({lit(path)}) WHERE list_contains($ids, gene_id)",
+        {"ids": list(ids)}).fetchall()
+    copies = gene_rows(sorted({c for _, o, _ in rows for c in (o or "").split(",") if c}))
+    return {g: {"copies": [copies[c] for c in (o or "").split(",") if c in copies], "class": cls} for g, o, cls in rows}
+
+
 def known_loci(request):
-    """/snp/known-loci/: the published SNPs (and QTL intervals, under review) of the release catalogue per trait, with
-    evidence, effect and caveat, DOIs, gene, variant and locus links, and namesake genes (e.g. the vgll3 ohnolog on chr21)."""
+    """/snp/known-loci/?tab=<trait>: the published SNPs (and QTL intervals, under review) of the release catalogue, one
+    tab per trait, with evidence, effect and caveat, DOIs, gene and its Ss4R duplicate, variant and locus links."""
     rows = catalogue()
     genes = gene_rows(sorted({r["ensembl_gene"] for r in rows if r.get("ensembl_gene")}))
+    duplicates = ss4r(genes)
     for r in rows:
         r["gene"] = genes.get(r.get("ensembl_gene"))
+        r["ss4r"] = duplicates.get(r.get("ensembl_gene"))
         r["interval"] = r.get("type") == "qtl_interval" or not r.get("pos")
         if r.get("chrom") and (r.get("pos") or "").isdecimal():
             pos = int(r["pos"])
@@ -266,9 +281,11 @@ def known_loci(request):
             r["locus_url"] = search.locus_url(r["chrom"], int(r["start"]), int(r["end"]))
         r["salmobase"] = SALMOBASE_GENE.format(r["ensembl_gene"]) if r.get("ensembl_gene") else None
         r["flags"] = [b for b in r["badges"] if b[0] == "caveat"]  # the evidence badge leads its cell; caveats get their own
-    caveats = [{"gene": g, "others": namesakes(g)} for g in genes.values()]
+    groups = by_trait(rows)
+    tab = request.GET.get("tab")
     return render(request, "snpportal/known_loci.html", {
-        "nav": "known", "title": "Known loci", "groups": by_trait(rows), "caveats": [c for c in caveats if c["others"]],
+        "nav": "known", "title": "Known loci", "groups": groups, "has_ss4r": bool(_file("ss4r")),
+        "tab": tab if tab in [t for t, _, _ in groups] else groups[0][0] if groups else None,
         "counts": catalogue_counts(rows)})
 
 
@@ -587,18 +604,18 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
      "callouts": [("Pick the trait", "#trait"), ("Click a number to list those SNPs", ".sp-kpis"),
                   ("Tier: 1 strongest, 4 no evidence found", "#fig-tiers"),
                   ("The evidence behind it", ["#top-h + div th:nth-child(4)", "#top-h + div tr:nth-child(4) td:nth-child(4)"])],
-     "try": ("Try it: score {label}", {"example": "known_loci"}),
+     "try": ("Try it: score the known loci", {"example": "known_loci"}),
      "shot": {"path": "results/{snps}/?trait=maturation", "width": 1100,
               "crop": [".nav-tabs", "#top-h + div tr:nth-child(4)"]}},
     {"slug": "score", "title": "Score your list",
-     "text": "Upload a VCF, SNP table, PLINK or chip file, paste positions, or name genes or regions. Without a list, "
-             "the example scores published salmon loci in a few seconds.",
-     "alt": "The Score page: example buttons and the Upload file, Paste positions and Genes or regions tabs.",
-     "callouts": [("Upload, paste, or genes and regions", ".sp-card .nav-tabs"),
-                  ("Drop your file, then Score", ["#pane-file .sp-drop", "#pane-file button"]),
-                  ("No list? Score an example", "button[value=known_loci]")],
+     "text": "Upload a VCF, SNP table, PLINK or chip file, paste positions, name genes or regions, or upload GWAS "
+             "results. Without a list, try one of the examples.",
+     "alt": "The Score page: the Try it examples and the Upload SNPs, Paste positions, Genes or regions and GWAS tabs.",
+     "callouts": [("No list? Try an example", ".sp-try"),
+                  ("Upload, paste, genes or regions, or GWAS", "section[aria-label='Your data'] .nav-tabs"),
+                  ("Drop your file, then Score", ["#pane-file .sp-drop", "#pane-file button"])],
      "try": ("Try it: open Score", "score/"),
-     "shot": {"path": "score/", "width": 1000, "crop": ["button[value=known_loci]", "section[aria-label='Your SNPs']"]}},
+     "shot": {"path": "score/", "width": 1000, "crop": ["#try-it", "section[aria-label='Your data']"]}},
     {"slug": "table", "title": "Filter, then open a SNP",
      "text": "Filters combine and stay in the link, so a view can be bookmarked or shared. Click any row to see that SNP's "
              "evidence beside the table.",
@@ -676,7 +693,7 @@ def tour(request):
             try_it = {"label": label.format(label=found[target["example"]]["label"]), "fields": {"trait": "maturation", **target},
                       "post": reverse("snpportal:gwas_score" if gwas else "snpportal:upload")}
         else:  # this release lacks the example
-            try_it = {"label": "Try it: open Score", "url": reverse("snpportal:upload") + ("#gwas" if gwas else "")}
+            try_it = {"label": "Try it: open Score", "url": reverse("snpportal:upload") + ("?input=gwas" if gwas else "")}
         slides.append({**s, "try_it": try_it, "image": f"snpportal/tour/{s['slug']}.webp"})
     slide = request.GET.get("slide", "")
     n = int(slide) if slide.isdecimal() and 1 <= int(slide) <= len(TOUR) else 1

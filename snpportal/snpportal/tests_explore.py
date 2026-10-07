@@ -116,11 +116,15 @@ class ExploreTest(SimpleTestCase):
         self.assertContains(page, "T (Met54) = early maturation (1SW)")  # evidence and effect in one cell
         self.assertContains(page, f"{counts['entries']} published entries for {counts['traits']} traits")  # the same count
         self.assertNotContains(page, "known_loci.tsv")
-        self.assertContains(page, reverse("snpportal:gene", args=[VGLL3_CHR21]))  # the ohnolog caveat, closed
-        self.assertContains(page, '<details class="sp-more" id="ohnologs">', html=False)
-        self.assertContains(page, "unnamed in Ensembl 116")
-        for trait in ("age_at_maturity", "pd_resistance", "flesh_colour", "sex_determination"):  # R3: grouped by trait
-            self.assertContains(page, f'id="trait-{trait}"')
+        self.assertContains(page, "Ss4R duplicate</abbr>", html=False)  # a column, from the AQUA-FAANG salmon-trout clades
+        self.assertContains(page, f'href="{reverse("snpportal:gene", args=[VGLL3_CHR21])}" title="{VGLL3_CHR21}">vgll3</a> (chr21)', html=False)
+        self.assertNotContains(page, 'id="ohnologs"')
+        for trait in ("age_at_maturity", "pd_resistance", "flesh_colour", "sex_determination"):  # one tab per trait
+            self.assertContains(page, f'id="tab-{trait}" href="?tab={trait}"', html=False)
+        self.assertContains(page, 'class="tab-pane active" id="pane-age_at_maturity"', html=False)  # the first trait
+        flesh = self.client.get(reverse("snpportal:known_loci"), {"tab": "flesh_colour"})  # ?tab= without JavaScript
+        self.assertContains(flesh, 'class="tab-pane active" id="pane-flesh_colour"', html=False)
+        self.assertNotContains(flesh, 'class="tab-pane active" id="pane-age_at_maturity"', html=False)
         self.assertContains(page, 'sp-ev sp-ev-missense" title="missense (candidate causal)"')
         self.assertContains(page, ">suggestive</span>")  # sea lice rows
         self.assertContains(page, "a cdh1 knockout had no major effect")  # each row's caveat stays visible

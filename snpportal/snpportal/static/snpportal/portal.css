@@ -316,7 +316,10 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp .sp-ev-region { border-color: var(--sp-grey-500); border-left-width: 4px; }
 .sp .sp-ev-allele { color: var(--sp-ok-text); background: var(--sp-ok-bg); border-color: var(--sp-ok-border); }
 .sp .sp-ev-caveat { color: var(--sp-warn-text); background: var(--sp-warn-bg); border-color: var(--sp-warn-border); }
-.sp-trait-nav { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+@media print {  /* every trait's table on paper, under its heading */
+  .sp-loci-tabs .tab-pane { display: block !important; }
+  .sp-loci-tabs h2.visually-hidden { position: static !important; width: auto !important; height: auto !important;
+    clip: auto !important; overflow: visible !important; margin: 1rem 0 .4rem !important; } }
 .sp-loci td, .sp-loci th { vertical-align: top; }
 .sp-loci details summary { cursor: pointer; color: var(--sp-link); }
 /* end known loci */

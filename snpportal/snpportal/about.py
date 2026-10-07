@@ -88,6 +88,7 @@ LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall
     "gene": ("Nearest gene", "Ensembl"),
     "transcripts": ("Transcript models, for drawing genes", "Ensembl"),
     "gene_ortholog": ("Human and zebrafish orthologs", "Ensembl Compara"),
+    "ss4r": ("Ss4R duplicate of the nearest gene (salmonid genome duplication)", "AQUA-FAANG"),
     "flank_variants": ("Public variants within 35 bp (probe flanks)", "504-fish panel"),
     "public_af": ("Allele frequencies in 504 public fish, pooled", "504-fish panel"),
     "molqtl": ("molQTL lead SNPs in 12 fish (display only)", "nf-RASQUAL"),
