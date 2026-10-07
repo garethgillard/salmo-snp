@@ -179,7 +179,7 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 ### Review pass (2026-10-07)
 - [x] Six-lens review (correctness, security/privacy, Python 3.8 + performance, UI/UX, science, tests/docs): 49 findings, 48 confirmed by two skeptics, fixed (commits e246d89 / 59c27b0)
 - [x] Final check: snpscore 100 + portal 57 tests, dev and live suites, 953-URL smoke test on release/dev
-- [ ] Cross-package leftovers (chip cap, trait SD check, spill dirs, allele note, MAF bins, demo script, GWAS methods text, export panel list)
+- [x] Cross-package leftovers (chip cap, trait SD check, spill dirs, allele note, MAF bins, demo script, GWAS methods text, export panel list) (commits 5abd2a2 / b5ed092)
 
 ### Manual QA (not automatable)
 - [ ] Evidence card prints on one A4 page; report on two
