@@ -121,7 +121,7 @@ parquets are zstd-compressed.
 
 Layers today: `chromatin` (interval with `chromatin_id`), `region`, `regbuild`, `gerp`, `blacklist`, `lore` (interval),
 `gene` (nearest: strand, id, name, biotype, description), `transcripts` (features), `gene_ortholog` (gene: human,
-zebrafish), `flank_variants` (count, 504-fish panel sites), `public_af` (point: af, maf, ac, an, ns, aquafaang12_af,
+zebrafish), `ss4r` (gene: ohnolog, ohnolog_chrom, class; AQUA-FAANG Ss4R duplicates), `flank_variants` (count, 504-fish panel sites), `public_af` (point: af, maf, ac, an, ns, aquafaang12_af,
 aquafaang12_dr2), `molqtl` (point: n, tissues, kinds, best_bf, features), `cm` (interval, interpolate: male, female),
 `expression` (gene: one column per tissue).
 

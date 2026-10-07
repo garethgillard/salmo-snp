@@ -287,6 +287,8 @@ def test_transcripts_and_gene_columns(release, tmp_path):
     rows = {r["id"]: r for r in read(annotate(FIXTURE / "snps.tsv", release, tmp_path / "out.parquet"))}
     assert rows["vgll3_Met54Thr"]["gene_ortholog_human"] == "VGLL3" and "gene_description" in rows["vgll3_Met54Thr"]
     assert "transcripts" not in rows["vgll3_Met54Thr"]
+    vgll3 = rows["vgll3_Met54Thr"]  # its Ss4R duplicate is the chr21 'vgll3'
+    assert (vgll3["ss4r_ohnolog"], vgll3["ss4r_ohnolog_chrom"], vgll3["ss4r_class"]) == ("ENSSSAG00000099564", "21", "AORe")
 
 
 def test_known_loci(release, tmp_path):
@@ -457,7 +459,7 @@ def test_read_snps_keeps_input_order(tmp_path):
 #   consequence for the 5 fixture SNPs it was computed for, 4 missense ('missense p.Thr46Met' instead of 'CDS') and 1
 #   synonymous, which fires the 'synonymous' term instead of 'coding' (same weight). tier and tier_score are unchanged
 #   for every preset (checked against the old scoring path without the coding columns, as in test_coding.py).
-GOLDEN = "eceb7d778ebe738d34d56f9b8ea073a68d61af90b5630f9defdf037af6357a21"
+GOLDEN = "3ba3a7139ffff6c4ea3344daf6635e966482801fd1eb66f9870c728dc11e57b6"
 
 
 def test_long_lists_are_written_in_sorted_parts(release, tmp_path, monkeypatch):

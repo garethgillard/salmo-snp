@@ -159,6 +159,15 @@ layers:
     description: Human and zebrafish ortholog gene names of the nearest gene (comma-separated when several)
     citation: Ensembl Compara release 116 orthologues, via BioMart (ensembl.org)
 
+  - name: ss4r
+    type: gene
+    format: ss4r
+    file: SalmonTroutOrthologs.tsv
+    # Salmon-trout clades from Ensembl 106 gene trees with syntenic quartets and AORe/LORe; Ssal_v3.1 gene ids are stable to 116.
+    url: https://salmobase.org/datafiles/datasets/Aqua-Faang/salmon-trout-orthologs/SalmonTroutOrthologs.tsv
+    description: Ss4R duplicate (ohnolog) of the nearest gene, its chromosome and rediploidisation class (AORe or LORe)
+    citation: AQUA-FAANG salmon-trout orthologs (Ss4R quartets from Ensembl 106 gene trees), salmobase.org
+
   - name: flank_variants
     type: count
     format: vcf

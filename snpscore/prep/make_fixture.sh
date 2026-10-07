@@ -52,7 +52,10 @@ gzip -dc "$OUT/Salmo_salar.Ssal_v3.1.116.chr.gff3.gz" | grep -o 'gene_id=[^;]*' 
 for f in rna_counts_Brain.txt rna_counts_Gill.txt rna_counts_Liver.txt rna_counts_Muscle.txt gene_orthologs.tsv; do
   awk -F'\t' 'NR == FNR { keep[$1]; next } FNR == 1 || ($1 in keep)' "$OUT/genes.tmp" "$RAW/$f" > "$OUT/$f"
 done
-rm "$OUT/genes.tmp"
+# Ss4R table: whole salmon-trout clades of the fixture genes, so their duplicates on other chromosomes stay in.
+awk -F'\t' 'NR == FNR { keep[$1]; next } $4 in keep { print $1 }' "$OUT/genes.tmp" "$RAW/SalmonTroutOrthologs.tsv" | sort -u > "$OUT/ogs.tmp"
+awk -F'\t' 'NR == FNR { keep[$1]; next } FNR == 1 || ($1 in keep)' "$OUT/ogs.tmp" "$RAW/SalmonTroutOrthologs.tsv" > "$OUT/SalmonTroutOrthologs.tsv"
+rm "$OUT/genes.tmp" "$OUT/ogs.tmp"
 awk -F'\t' '$1 == "1" || $1 == "9" || $1 == "21" || $1 == "25" || $1 == "26"' "$RAW/alias_filtered.txt" > "$OUT/alias_filtered.txt"
 .venv/bin/python prep/make_fixture_genome.py
 wc -l "$OUT"/*

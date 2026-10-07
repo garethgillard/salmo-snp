@@ -119,7 +119,7 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [ ] P5.5 Element pages and element tissue specificity (M, should)
 - [ ] P5.6 Candidate target genes beyond the nearest gene (M, should)
 - [ ] P5.7 Gene expression per tissue x condition with tau (M, should)
-- [ ] P5.8 Ss4R ohnolog context (S, should)
+- [ ] P5.8 Ss4R ohnolog context (S, should) (ss4r layer from the AQUA-FAANG salmon-trout table done; portal pages to do)
 - [ ] P5.9 TF motif disruption (ref vs alt) (M, should)
 - [x] P5.10 Ortholog names for unnamed salmon genes (S, should, **now**)
 - [x] P5.11 Guided 'vgll3 and maturation' tour (S, should, **now**)

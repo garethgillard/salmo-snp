@@ -195,10 +195,29 @@ def read_gene_tsv(path, layer):
                WHERE {key} LIKE 'ENS%' GROUP BY 1"""
 
 
+def read_ss4r(path, layer):
+    # AQUA-FAANG salmon-trout clades (SalmonTroutOrthologs.tsv): a salmon gene's Ss4R duplicates are the other salmon genes
+    # of its clade on the paired chromosome of its syntenic quartet ('((Omy03,Ssa25),(Omy22,Ssa21))': 25 <-> 21), or on
+    # any other chromosome when the quartet is unknown. class: AORe or LORe (rediploidisation), from the clade or its neighbours.
+    return f"""
+        WITH t AS (SELECT subOG AS og, geneID AS gene_id, ltrim(replace(chr, 'Ssa', ''), '0') AS chrom,
+                          regexp_extract_all(coalesce(nullif(synteny, 'NA'), nullif(proxiSynteny, 'NA'), ''), 'Ssa0*([0-9]+)', 1) AS quartet,
+                          CASE WHEN phylogeny IN ('AORe', 'LORe') THEN phylogeny
+                               WHEN proxiPhylogeny IN ('AORe', 'LORe') THEN proxiPhylogeny END AS class
+                   FROM read_csv({lit(path)}, delim='\t', header=true, all_varchar=true, quote='') WHERE spc = 'Ssal')
+        SELECT a.gene_id,
+               nullif(array_to_string(list(b.gene_id ORDER BY b.chrom, b.gene_id) FILTER (WHERE b.gene_id IS NOT NULL), ','), '') AS ohnolog,
+               nullif(array_to_string(list(b.chrom ORDER BY b.chrom, b.gene_id) FILTER (WHERE b.gene_id IS NOT NULL), ','), '') AS ohnolog_chrom,
+               any_value(a.class) AS class
+        FROM t a LEFT JOIN t b ON b.og = a.og AND b.chrom <> a.chrom
+             AND (NOT list_contains(a.quartet, a.chrom) OR len(a.quartet) <> 2 OR list_contains(a.quartet, b.chrom))
+        GROUP BY a.gene_id"""
+
+
 READERS = {"bed": read_bed, "tsv": read_tsv, "aquafaang_peaks": read_aquafaang_peaks, "gff3": read_gff3,
            "gff3_regions": read_gff3_regions, "vcf": read_vcf, "rna_counts": read_rna_counts,
            "gff3_transcripts": read_gff3_transcripts, "vcf_info": read_vcf_info, "gene_tsv": read_gene_tsv,
-           "nfrasqual": read_nfrasqual, "genetic_map": read_genetic_map}
+           "nfrasqual": read_nfrasqual, "genetic_map": read_genetic_map, "ss4r": read_ss4r}
 POSITIONAL = ("interval", "nearest", "count", "point", "features")  # layer types with chrom, start, end
 UNIQUE = {"point": ["chrom", "end", "ref", "alt"], "count": ["chrom", "end"], "gene": ["gene_id"]}  # annotate's join keys
 
