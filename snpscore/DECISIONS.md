@@ -50,6 +50,7 @@ caQTL leads (n = 1,057) give 3-4x, but they are called on the same ATAC data, so
 | 19 | LD reference: may we derive packed haplotypes or r2 from the 504-fish phased VCF? | none | Yes if permitted; it fixes the biggest fine-mapping caveat |
 | 20 | Portal name, how to cite, contact, privacy statement, footer credit for AQUA-FAANG and salmobase | placeholders marked 'under review' | Write once with the AQUA-FAANG consortium |
 | 21 | Gene labels for genes unnamed in Ensembl | '~VGLL3' (human ortholog) | As is, or NCBI RefSeq names as a second source |
+| 21a | Ss4R duplicate of a gene (Known loci column, `ss4r_*` columns) | other salmon gene(s) of its AQUA-FAANG salmon-trout clade on the paired chromosome of the syntenic quartet; none when the clade has one salmon copy (six6a: its chr1 namesake is in another clade) | Keep; ask the table's authors whether 1:1 clades next to a split clade (six6a) should be joined |
 
 ## Later (going online)
 

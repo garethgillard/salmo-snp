@@ -58,6 +58,9 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
 - Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
   counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
   priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).
+- Ss4R duplicates (2026-10-07): `ss4r` layer from the AQUA-FAANG SalmonTroutOrthologs.tsv on salmobase: the other
+  salmon genes of a gene's clade on the paired chromosome of its syntenic quartet (any other chromosome when the quartet
+  is unknown); class AORe/LORe from the clade or its neighbours; Ens106 gene ids used as Ens116 ids.
 
 Open (ask G; all collected with options and recommendations in DECISIONS.md):
 - Everything under Provisional.
