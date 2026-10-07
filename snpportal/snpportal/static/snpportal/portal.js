@@ -121,3 +121,53 @@
   });
 })();
 /* end results */
+
+/* tour: Previous, Next, the dots and the arrow keys switch slides without reloading (they are ?slide=N links, which
+   work without JavaScript). The counter is a live region; focus inside a slide that goes moves to the new slide's title. */
+(function () {
+  "use strict";
+  var tour = document.querySelector("[data-tour]");
+  if (!tour) return;
+  var slides = Array.prototype.slice.call(tour.querySelectorAll(".sp-slide"));
+  var dots = Array.prototype.slice.call(tour.querySelectorAll(".sp-tour-dots a"));
+  var prev = tour.querySelector("[data-tour-prev]"), next = tour.querySelector("[data-tour-next]");
+  var count = tour.querySelector("[data-tour-count]");
+  var at = Math.max(0, slides.findIndex(function (s) { return !s.hidden; }));
+
+  function show(i) {
+    if (i < 0 || i >= slides.length || i === at) return;
+    var focusIn = slides[at].contains(document.activeElement), first = i === 0, last = i === slides.length - 1;
+    slides[at].hidden = true;
+    dots[at].removeAttribute("aria-current");
+    slides[i].hidden = false;
+    dots[i].setAttribute("aria-current", "step");
+    at = i;
+    if (first) {
+      if (document.activeElement === prev) next.focus();
+      prev.removeAttribute("href");
+      prev.setAttribute("aria-disabled", "true");
+    } else {
+      prev.href = "?slide=" + i;
+      prev.removeAttribute("aria-disabled");
+    }
+    prev.classList.toggle("disabled", first);
+    next.href = last ? next.getAttribute("data-end-href") : "?slide=" + (i + 2);
+    next.textContent = next.getAttribute(last ? "data-end" : "data-next");
+    count.textContent = "Slide " + (i + 1) + " of " + slides.length;
+    history.replaceState(null, "", "?slide=" + (i + 1));
+    if (focusIn) slides[i].querySelector("h2").focus();
+  }
+
+  tour.addEventListener("click", function (e) {
+    var a = e.target.closest("[data-tour-prev], [data-tour-next], .sp-tour-dots a");
+    if (!a || (a.getAttribute("href") || "").charAt(0) !== "?" || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    show(a === prev ? at - 1 : a === next ? at + 1 : dots.indexOf(a));
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest("input, select, textarea, [contenteditable]")) return;
+    if (e.key === "ArrowLeft") show(at - 1);
+    if (e.key === "ArrowRight") show(at + 1);
+  });
+})();
+/* end tour */

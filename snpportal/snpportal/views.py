@@ -174,8 +174,11 @@ def _score(request):
         response = score_page(request, "The portal is busy scoring other lists. Please try again in a minute.", 503, tab)
         response["Retry-After"] = "60"
         return response
+    params = {"trait": preset} if preset != "all" else {}
+    if request.POST.get("tab") in TABS:  # the tour's 'Try it' buttons open the tab their slide shows
+        params["tab"] = request.POST["tab"]
     url = reverse("snpportal:results", args=[key])
-    return redirect(url if preset == "all" else f"{url}?{urlencode({'trait': preset})}")
+    return redirect(f"{url}?{urlencode(params)}" if params else url)
 
 
 def start_job(request):

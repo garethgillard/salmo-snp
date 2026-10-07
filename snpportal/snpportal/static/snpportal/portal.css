@@ -241,20 +241,46 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 @media print { .sp-bc i, .sp-as { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .sp-results thead { position: static; } }
 /* end results */
 
-/* tour (P5.11): sticky 'Step n of N' bar, one step per page, live figures loaded by htmx */
-.sp-tour-bar { position: sticky; top: 0; z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .75rem;
-  padding: .45rem .75rem; margin-bottom: 1rem; background: var(--sp-grey-50); border: 1px solid var(--sp-grey-200); border-radius: .375rem; }
-.sp-tour-bar ol { display: flex; flex-wrap: wrap; gap: .25rem; list-style: none; margin: 0; padding: 0; font-size: .8125rem; }
-.sp-tour-bar ol a { display: block; padding: .05rem .55rem; border: 1px solid var(--sp-grey-300); border-radius: 1rem;
-  background: var(--sp-white); color: var(--sp-grey-900); text-decoration: none; }
-.sp-tour-bar ol a:hover { border-color: var(--sp-accent); }
-.sp-tour-bar ol a[aria-current="step"] { background: var(--sp-accent); border-color: var(--sp-accent); color: var(--sp-accent-text); font-weight: 600; }
-.sp-tour-move { margin-left: auto; display: flex; gap: .4rem; }
-.sp-tour > p { max-width: 56rem; }
-.sp-tour-embed { min-height: 4rem; }
-.sp-tour-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .35rem; }
-@media (max-width: 576px) { .sp-tour-bar { position: static; } }
-.sp-tour kbd { color: var(--sp-grey-900); background: var(--sp-grey-100); border: 1px solid var(--sp-grey-300); font-size: .75rem; padding: 0 .3rem; }
+/* tour: an illustrated slide show. Previous · dots · Next stay put above the slide. From 1200 px the text and the
+   numbered steps sit beside the screenshot; from 768 px side by side above it, so it starts high on a tablet. The
+   numbered boxes over each screenshot are placed by tour/tour.css (manage.py tour_images). */
+.sp-tour-nav { display: flex; align-items: center; gap: .5rem 1rem; margin-bottom: 1rem; }
+.sp-tour-where { flex: 1; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .25rem .75rem; }
+.sp-tour-dots { display: flex; list-style: none; margin: 0; padding: 0; }
+.sp-tour-dots a { position: relative; display: block; width: 1.6rem; height: 1.6rem; }
+.sp-tour-dots a::before { content: ""; position: absolute; inset: .45rem; border: 2px solid var(--sp-accent); border-radius: 50%; }
+.sp-tour-dots a:hover::before { background: var(--sp-grey-300); }
+.sp-tour-dots a[aria-current="step"]::before { background: var(--sp-accent); }
+.sp-slide { display: grid; gap: 0 1.75rem; align-items: start; grid-template-areas: "text" "steps" "shot"; }
+.sp-slide-text { grid-area: text; }
+.sp-slide-steps { grid-area: steps; }
+.sp-shot { grid-area: shot; }
+@media (min-width: 768px) and (max-width: 1199.98px) { .sp-slide { grid-template-columns: 3fr 2fr; grid-template-areas: "text steps" "shot shot"; } }
+@media (min-width: 1200px) { .sp-slide { grid-template-columns: minmax(17rem, 1fr) 2.6fr; grid-template-rows: auto 1fr;
+  grid-template-areas: "text shot" "steps shot"; } }
+.sp-slide-text h2 { font-size: 1.4rem; font-weight: 600; margin-bottom: .5rem; }
+.sp-slide-text h2:focus { outline: none; }
+.sp-slide-text > p { font-size: 1.05rem; max-width: 40rem; }
+.sp-callouts { list-style: none; counter-reset: callout; display: grid; gap: .45rem; padding: 0; margin: 0 0 1rem; }
+.sp-callouts li { counter-increment: callout; display: flex; align-items: baseline; gap: .5rem; }
+.sp-callouts li::before { content: counter(callout); }
+.sp-callouts li::before, .sp-callout b { flex: none; width: 1.4rem; height: 1.4rem; line-height: 1.4rem; border-radius: 50%; text-align: center;
+  font-size: .8rem; font-weight: 700; background: var(--sp-accent); color: var(--sp-accent-text); }
+.sp-shot { position: relative; margin: 0; }
+.sp-shot img { display: block; width: 100%; height: auto; border: 1px solid var(--sp-grey-300); border-radius: .375rem;
+  box-shadow: 0 2px 10px var(--sp-grey-300); }
+.sp-callout { position: absolute; border: 2px solid var(--sp-accent); border-radius: .3rem; box-shadow: 0 0 0 2px var(--sp-white); pointer-events: none; }
+.sp-callout b { position: absolute; left: -.85rem; top: -.85rem; box-shadow: 0 0 0 2px var(--sp-white); }
+@keyframes sp-fade-in { from { opacity: 0; } }
+@media screen and (prefers-reduced-motion: no-preference) { .sp-slide { animation: sp-fade-in .25s ease-out; } }
+@media print {  /* one slide per page */
+  .sp-tour-nav { display: none !important; }
+  .sp .sp-slide[hidden] { display: block !important; }
+  .sp-slide { display: block; break-after: page; break-inside: avoid; }
+  .sp-slide:last-child { break-after: auto; }
+  .sp-slide-steps .btn { display: none; }
+  .sp-callout, .sp-callout b, .sp-callouts li::before { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
 /* end tour */
 
 /* report (P3.5): printable report of a job; two A4 pages (key numbers, top SNPs and the tier bar, then the genome map,

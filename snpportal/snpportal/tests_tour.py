@@ -1,40 +1,43 @@
-"""Guided tour (P5.11) and printable report (P3.5) on a release built from salmo-snpscore's fixture, offline: the
-tour's signal rows point at a closed local port (so they come back hatched) and its example job runs inline."""
+"""Guided tour (an illustrated slide show) and the printable report (P3.5), on a release built from salmo-snpscore's
+fixture; example jobs run inline."""
 import logging
 import os
 import re
 import shutil
-import socket
-import sys
 import tempfile
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from pathlib import Path
-from unittest import mock, skipUnless
+from unittest import skipUnless
 
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 
 import snpscore
-from snpscore import bbi
 
-from . import explore, jobs
+from . import explore, jobs, views
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
+TOUR_DIR = Path(__file__).resolve().parent / "static" / "snpportal" / "tour"
 
 
-class Links(HTMLParser):
-    """Link targets of a page, in order: hrefs of <a> and hx-get of any element."""
+class Page(HTMLParser):
+    """Links (<a href>) of a page, and its POST forms as (action, {hidden fields})."""
 
     def __init__(self, html):
         super().__init__()
-        self.links = []
+        self.links, self.forms = [], []
         self.feed(html)
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
-        self.links += [a[k] for k in ("href", "hx-get") if a.get(k) and (k == "hx-get" or tag == "a")]
+        if tag == "a" and a.get("href"):
+            self.links.append(a["href"])
+        if tag == "form" and a.get("method") == "post":
+            self.forms.append((a["action"], {}))
+        if tag == "input" and a.get("type") == "hidden" and self.forms and a["name"] != "csrfmiddlewaretoken":
+            self.forms[-1][1][a["name"]] = a["value"]
 
 
 def kpis(html):
@@ -45,13 +48,19 @@ def card_rows(html, key):
     return list(dict.fromkeys(re.findall(rf"/snp/results/{key}/snp/(\d+)/", html)))
 
 
+def shown(html):
+    """Title of the one slide shown (the others are hidden)."""
+    visible = [m for m in re.findall(r'<article class="sp-slide"[^>]*>', html) if " hidden" not in m]
+    assert len(visible) == 1, visible
+    n = re.search(r'aria-labelledby="slide-(\d+)"', visible[0]).group(1)
+    return re.search(rf'<h2 id="slide-{n}"[^>]*>([^<]*)</h2>', html).group(1)
+
+
 @skipUnless(FIXTURE.exists(), "needs the salmo-snpscore repo next to this one")
 class TourTest(SimpleTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        sys.path.insert(0, str(SNPSCORE / "tests"))
-        from bbi_writer import synthetic_registry
         cls.tmp = tempfile.TemporaryDirectory()
         root = Path(cls.tmp.name).resolve()
         cls.release = root / "release"
@@ -59,86 +68,77 @@ class TourTest(SimpleTestCase):
             shutil.copytree(os.environ["SNPPORTAL_TEST_RELEASE"], cls.release)
         else:
             snpscore.build(SNPSCORE / "layers.yaml", FIXTURE, cls.release)
-        with socket.socket() as s:  # a local port nobody listens on: salmobase 'does not answer'
-            s.bind(("127.0.0.1", 0))
-            port = s.getsockname()[1]
-        (root / "tracks").mkdir()
-        registry = synthetic_registry(root / "tracks", f"http://127.0.0.1:{port}/", ["Brain_Mature_Male", "Gonad_Mature_Male"])
-        cls.patches = [mock.patch.object(bbi, "ALLOWED_HOSTS", {"127.0.0.1"}), mock.patch.object(bbi, "ALLOWED_SCHEMES", ("http",))]
-        [p.start() for p in cls.patches]
         cls.override = override_settings(SNPSCORE_RELEASE=str(cls.release), SNPPORTAL_RESULTS_DIR=str(root / "results"),
-                                          SNPPORTAL_WORKERS=0, SNPPORTAL_TRACKS=str(registry), SNPPORTAL_SIGNAL_DEADLINE=1.0)
+                                          SNPPORTAL_WORKERS=0)
         cls.override.enable()
-        logging.disable(logging.WARNING)  # job log lines and 'no data from <track>'
+        logging.disable(logging.WARNING)  # job log lines
 
     @classmethod
     def tearDownClass(cls):
         logging.disable(logging.NOTSET)
         cls.override.disable()
-        [p.stop() for p in cls.patches]
         cls.tmp.cleanup()
         super().tearDownClass()
 
-    def steps(self, response):
-        tour = reverse("snpportal:tour") + "?step="
-        return list(dict.fromkeys(u for u in Links(response.content.decode()).links if u.startswith(tour)))
-
-    def example(self):
-        """Score the tour's example (step 3); returns (key, redirect URL: step 3 with the job)."""
-        response = self.client.post(reverse("snpportal:tour") + "?step=3&trait=maturation")
+    def example(self, **fields):
+        """Score the known-loci example as the Score page and the tour's 'Try it' do; returns (key, redirect URL)."""
+        response = self.client.post(reverse("snpportal:upload"), {"example": "known_loci", "trait": "maturation", **fields})
         self.assertEqual(response.status_code, 302)
-        self.assertIn("step=3", response.url)
-        return re.search(r"key=([0-9a-f-]{36})", response.url).group(1), response.url
+        return re.search(r"[0-9a-f-]{36}", response.url).group(0), response.url
 
-    def test_tour_steps_example_job_and_links(self):
-        first = self.client.get(reverse("snpportal:tour"))
-        self.assertContains(first, "Step 1 of 5")
-        self.assertContains(first, "ENSSSAG00000099564")  # the chr21 namesake of vgll3 (the caveat)
-        self.assertEqual(first["Cache-Control"], "no-store, private")
-        steps = self.steps(first)
-        self.assertEqual(len(steps), 5)
-        for i, url in enumerate(steps, 1):
-            page = self.client.get(url)
-            self.assertContains(page, f"Step {i} of 5")
-            if i in (3, 4):  # no example job yet: these offer to score it
-                self.assertContains(page, "Score the example")
-            self.assertNotContains(page, "sp-badge-prov")
-        self.assertContains(page, "anyone with the link can see them")  # step 5: Score's privacy line
+    def test_slides_images_and_navigation(self):
+        tour, n = reverse("snpportal:tour"), len(explore.TOUR)
+        first = self.client.get(tour)
+        html = first.content.decode()
+        self.assertEqual(html.count('aria-roledescription="slide"'), n)  # every slide is in the page, one shown
+        self.assertEqual(shown(html), explore.TOUR[0]["title"])
+        self.assertContains(first, f"Slide 1 of {n}")
+        self.assertContains(first, 'aria-disabled="true" data-tour-prev')
+        self.assertContains(first, 'href="?slide=2" data-tour-next')
+        css = (TOUR_DIR / "tour.css").read_text()
+        for s in explore.TOUR:  # short text, and a screenshot with a placed box per callout
+            self.assertLessEqual(len(s["title"].split()), 6, s["title"])
+            self.assertLessEqual(len(s["text"].split()), 40, s["slug"])
+            self.assertLessEqual(len(re.findall(r"[.?!](\s|$)", s["text"])), 2, s["slug"])
+            self.assertContains(first, s["title"])
+            self.assertContains(first, f'/static/snpportal/tour/{s["slug"]}.webp')
+            self.assertTrue((TOUR_DIR / f'{s["slug"]}.webp').exists(), s["slug"])
+            for i in range(1, len(s["callouts"]) + 1):
+                self.assertIn(f'#tour-{s["slug"]}-{i} {{', css)
+        self.assertLess(sum(p.stat().st_size for p in TOUR_DIR.glob("*.webp")), 1.5 * 2 ** 20)
 
-        key, url = self.example()
-        job = jobs.read(key)
-        self.assertEqual((job["state"], job["preset"]), ("done", "maturation"))
-        n = len([r for r in explore.catalogue() if (r.get("pos") or "").isdecimal()])  # the demo is the catalogue
-        self.assertTrue(job["label"].startswith(f"Tour example: {n} known loci + "), job["label"])
-        overview = self.client.get(url)
-        self.assertContains(overview, "SNPs scored")
-        self.assertContains(overview, 'id="fig-tiers"')
-        self.assertContains(overview, f'href="/snp/results/{key}/?tab=table')  # figure and KPI links point at the results
-        steps = self.steps(overview)
-        self.assertEqual(len(steps), 5)
-        self.assertTrue(all(f"key={key}" in u for u in steps))
+        third = self.client.get(tour, {"slide": 3}).content.decode()  # ?slide=N without JavaScript
+        self.assertEqual(shown(third), explore.TOUR[2]["title"])
+        self.assertIn('href="?slide=2" data-tour-prev', third)
+        self.assertIn('href="?slide=4" data-tour-next', third)
+        last = self.client.get(tour, {"slide": n}).content.decode()
+        self.assertEqual(shown(last), explore.TOUR[-1]["title"])
+        self.assertIn(f'href="{reverse("snpportal:upload")}" data-tour-next', last)  # 'Start scoring'
+        self.assertIn("Start scoring</a>", last)
+        for bad in ("0", "99", "x"):
+            self.assertEqual(shown(self.client.get(tour, {"slide": bad}).content.decode()), explore.TOUR[0]["title"])
 
-        followed = set()
-        for url in steps:  # every step, and every portal page or live figure it links (downloads aside)
-            page = self.client.get(url)
-            self.assertEqual(page.status_code, 200, url)
-            for link in Links(page.content.decode()).links:
-                if link.startswith("/snp/") and "/download/" not in link and not link.startswith(reverse("snpportal:tour")) \
-                        and link not in followed:
-                    followed.add(link)
-                    self.assertIn(self.client.get(link).status_code, (200, 302), link)
-        self.assertTrue(any("tab=panel" in x for x in followed) and any("&known=1" in x for x in followed))
+        menu = re.search(r'<details class="sp-menu">.*?</details>', self.client.get(reverse("snpportal:landing")).content.decode(), re.S)
+        self.assertIn(f'href="{tour}">Guided tour</a>', menu.group(0))  # in the Help menu
+        self.assertContains(self.client.get(reverse("snpportal:landing")), f'href="{tour}"')  # 'Take the tour'
 
-        locus_svg = next(x for x in followed if x.startswith(reverse("snpportal:locus_svg")))
-        self.assertIn("trait=maturation", locus_svg)
-        svg = self.client.get(locus_svg).content.decode()
-        ET.fromstring(svg)
-        self.assertIn("signal unavailable", svg)  # offline: hatched rows, never synthesised signal
-        variant = next(x for x in followed if x.startswith(reverse("snpportal:variant", args=["25-28996360-C-T"])))
-        self.assertContains(self.client.get(variant, HTTP_HX_REQUEST="true"), 'id="card-body"')
+        page = Page(html)  # 'Try it': real pages, or the Score page's example buttons
+        for link in page.links:  # (the locus browser asks salmobase for live signal: tests_locus covers it offline)
+            if link.startswith("/snp/") and not link.startswith((tour, reverse("snpportal:locus"))):
+                self.assertEqual(self.client.get(link).status_code, 200, link)
+        examples = views.examples()
+        for action, fields in page.forms:
+            self.assertIn(action, (reverse("snpportal:upload"), reverse("snpportal:gwas_score")))
+            self.assertIn(fields["example"], examples)
+        table = next(f for _, f in page.forms if f.get("tab") == "table")
+        key, url = self.example(**table)
+        self.assertIn("tab=table", url)
+        self.assertIn("trait=maturation", url)
+        self.assertEqual(jobs.read(key)["state"], "done")
 
     def test_report_matches_overview_and_table(self):
-        key, _ = self.example()
+        rows = explore.public_rows([("25", 28_945_075, 29_049_268)])  # public variants within 50 kb of vgll3: over 20
+        key = jobs.create_from_rows(rows, "Public variants near vgll3", "maturation")
         results, report = reverse("snpportal:results", args=[key]), reverse("snpportal:report", args=[key])
         overview = self.client.get(results, {"trait": "maturation"})
         self.assertContains(overview, f"{report}?trait=maturation")  # the results header links the report

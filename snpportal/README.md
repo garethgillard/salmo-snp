@@ -7,7 +7,7 @@ print a one-page report.
 GWAS summary statistics get an Association page (Manhattan, tier-stratified QQ, loci, regional plot and fine-mapping
 with a functional prior). Without a list: search (genes, NCBI LOC symbols, rs IDs, positions), gene pages, a locus
 browser with live salmobase signal, published associations and molQTL leads, the known-loci catalogue (36 published SNPs
-and a gene region across 8 traits, with evidence badges) and a guided vgll3 tour. All annotation logic lives in the sibling repo
+and a gene region across 8 traits, with evidence badges) and a guided tour (an illustrated slide show). All annotation logic lives in the sibling repo
 [salmo-snpscore](../salmo-snpscore); this app handles upload, jobs, display and export.
 
 ## Run locally
@@ -29,6 +29,8 @@ example buttons at the top of the Score page (the release's `demo/` inputs: know
 SYNTHETIC maturation GWAS is in the Score page's closed GWAS section), paste a few positions or rs IDs, upload
 `../salmo-snpscore/tests/fixture/snps.vcf`, or follow the guided tour (`/snp/tour/`). On a results page, the Panel tab's
 'Use the demo chip' button compares the list with the SYNTHETIC demo chip.
+`python manage.py tour_images [--base http://localhost:8000/snp/]` retakes the tour's screenshots (`static/snpportal/tour/`)
+from a running portal with headless Chrome (`--chrome` or `CHROME` if it is not in the usual place).
 
 The trait preset, tab and filters live in the URL, so a view can be bookmarked or shared; the download follows them.
 `SNPPORTAL_TEST_RELEASE=<folder>` makes the tests reuse (a copy of) a release already built from the fixture.
@@ -61,8 +63,7 @@ The folder holds:
 | `loci/<hash>.json`, `.parquet` | GWAS jobs: the loci (the `association.MAX_LOCI` = 200 strongest, and how many there are) and the fine-mapping table of one trait and settings; hash = `params_hash` of the trait and settings, so each page reads them instead of clumping again |
 
 A job whose heartbeat is older than 5 minutes (server restarted) is marked failed; more than 10 queued jobs give 503.
-`jobs.create_from_rows(rows, label)` makes a job from `(chrom, pos, id, ref, alt)` tuples (gene and interval lists, the
-tour example). `job.json` `input_kind` is `snps`, `gwas` or `from_rows`.
+`jobs.create_from_rows(rows, label)` makes a job from `(chrom, pos, id, ref, alt)` tuples (gene and interval lists). `job.json` `input_kind` is `snps`, `gwas` or `from_rows`.
 
 Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every view can be bookmarked):
 

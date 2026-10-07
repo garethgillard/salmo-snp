@@ -573,117 +573,113 @@ def candidate_job(request):
     return redirect(url if trait == "all" else f"{url}?{urlencode({'trait': trait})}")
 
 
-# ---- the guided tour (P5.11) ----
+# ---- the guided tour: an illustrated slide show ----
 
-TOUR_GENE, TOUR_SNP, TOUR_TRAIT = "ENSSSAG00000053708", "vgll3_Met54Thr", "maturation"  # vgll3 on chr25, its SNP, preset
-TOUR_SPAN, TOUR_SPEC = ("25", 28_995_075, 28_999_268), "25-28996360-C-T"  # used when the release lacks the gene or catalogue
-TOUR = [  # (slug, label in the step bar, heading)
-    ("known", "Known locus", "vgll3: a known maturation locus"),
-    ("variant", "Variant and locus", "One variant, and the locus around it"),
-    ("score", "Score and overview", "Score the example and read the overview"),
-    ("panel", "Filter and panel", "Filter the table and design a panel"),
-    ("yours", "Your list", "Score your own list"),
+TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 words), the screenshot's alt text, numbered
+    # callouts (label, element) and 'Try it' (label, portal path or the Score example to post; {label}: its name).
+    # 'shot' is for `manage.py tour_images`: the page ({snps}, {panel}, {gwas}: the example jobs it scores), the browser
+    # width, an element to click first and the crop. Elements are CSS selectors or 'text=<exact text>'; a list is their
+    # union, and a leading 'row' stretches it across the crop.
+    {"slug": "overview", "title": "Find SNPs with functional evidence",
+     "text": "Each SNP gets a tier for the trait you pick, from 1 (strongest) to 4 (no evidence found, not evidence of no "
+             "effect). Results open with the key numbers and your top SNPs.",
+     "alt": "Results of the known-loci example for maturation: trait menu, key numbers, SNPs per tier and the top SNPs.",
+     "callouts": [("Pick the trait", "#trait"), ("Click a number to list those SNPs", ".sp-kpis"),
+                  ("Tier: 1 strongest, 4 no evidence found", "#fig-tiers"),
+                  ("The evidence behind it", ["#top-h + div th:nth-child(4)", "#top-h + div tr:nth-child(4) td:nth-child(4)"])],
+     "try": ("Try it: score {label}", {"example": "known_loci"}),
+     "shot": {"path": "results/{snps}/?trait=maturation", "width": 1100,
+              "crop": [".nav-tabs", "#top-h + div tr:nth-child(4)"]}},
+    {"slug": "score", "title": "Score your list",
+     "text": "Upload a VCF, SNP table, PLINK or chip file, paste positions, or name genes or regions. Without a list, "
+             "the example scores published salmon loci in a few seconds.",
+     "alt": "The Score page: example buttons and the Upload file, Paste positions and Genes or regions tabs.",
+     "callouts": [("Upload, paste, or genes and regions", ".sp-card .nav-tabs"),
+                  ("Drop your file, then Score", ["#pane-file .sp-drop", "#pane-file button"]),
+                  ("No list? Score an example", "button[value=known_loci]")],
+     "try": ("Try it: open Score", "score/"),
+     "shot": {"path": "score/", "width": 1000, "crop": ["button[value=known_loci]", "section[aria-label='Your SNPs']"]}},
+    {"slug": "table", "title": "Filter, then open a SNP",
+     "text": "Filters combine and stay in the link, so a view can be bookmarked or shared. Click any row to see that SNP's "
+             "evidence beside the table.",
+     "alt": "The Table tab with its filters, the top-tier SNP selected and its evidence card open on the right.",
+     "callouts": [("Filter by tier, gene, position, MAF or assay", "#results .sp-filters"), ("Click a row", "tr.sp-selected"),
+                  ("Its evidence; open the full card", ["#drawer-h", "#drawer .btn"])],
+     "try": ("Try it: the example's table", {"example": "known_loci", "tab": "table"}),
+     "shot": {"path": "results/{snps}/?trait=maturation&tab=table", "width": 1200, "click": "tr[data-card] a[hx-get]",
+              "wait": "#drawer", "crop": [".nav-tabs", "tr[data-card]:nth-child(12)", "#drawer-h"]}},
+    {"slug": "card", "title": "See why it got its tier",
+     "text": "The evidence card adds up what earned the tier: chromatin state in 21 AQUA-FAANG conditions, the coding "
+             "consequence and any published locus nearby.",
+     "alt": "Evidence card of akap11 Val214Met for maturation: tier 1 for brain activity and a missense change, its "
+            "published locus and the chromatin state in each condition.",
+     "callouts": [("Tier, and what earned it", ["#card-body p:has(> .sp-badge)", "#card-body .sp-figure svg"]),
+                  ("Published locus and effect allele", "#card-body .sp-status-ok"),
+                  ("Chromatin per condition; outlined: the trait's", "#card-body .sp-status-ok + .sp-figure svg")],
+     "try": ("Try it: akap11 Val214Met", "variant/25-29064238-A-G/?trait=maturation"),
+     "shot": {"path": "variant/25-29064238-A-G/?trait=maturation", "width": 1000,
+              "crop": ["#card-body p:has(> .sp-badge)", "#card-body .sp-status-ok + .sp-figure svg"]}},
+    {"slug": "locus", "title": "Explore a locus",
+     "text": "The locus browser lines up genes, published loci, chromatin states and live ATAC signal from salmobase. "
+             "Zoom, move, or type any region, gene or SNP.",
+     "alt": "Locus browser at vgll3 on chromosome 25: published SNPs, genes, chromatin states per tissue and ATAC signal.",
+     "callouts": [("Zoom and move", ["[aria-label='Zoom and move'] a:first-child", "[aria-label='Zoom and move'] a:nth-child(5)"]),
+                  ("Published loci and genes", ["row", "text=Published", "text=vgll3 →"]),
+                  ("Chromatin states in 21 conditions", ["row", "text=Chromatin states", "text=L somit."]),
+                  ("Live ATAC signal from salmobase", ["row", "text=ATAC signal", "text=Gonad Imm F R1"])],
+     "try": ("Try it: vgll3 in the locus browser", "locus/?r=25:28985000-29010000&trait=maturation"),
+     "shot": {"path": "locus/?r=25:28985000-29010000&trait=maturation", "width": 1280,
+              "crop": ["[aria-label='Zoom and move']", "text=Gonad Imm F R1"]}},
+    {"slug": "panel", "title": "Design a genotyping panel",
+     "text": "The Panel tab picks the best-scoring SNPs that pass the assay checks, spread over every chromosome. Export "
+             "writes the KASP, Illumina and Axiom files.",
+     "alt": "The Panel tab for 50,000 public sites: designer settings, a 384-marker panel and its markers along the genome.",
+     "callouts": [("How many markers, how far apart", ["#designer label:nth-child(1)", "#designer label:nth-child(2)"]),
+                  ("Assay checks to pass", "#designer select[name=assay]"), ("Design panel", "#designer button"),
+                  ("Export vendor files", "#panel-h + a")],
+     "try": ("Try it: a panel from {label}", {"example": "public_50k", "tab": "panel"}),
+     "shot": {"path": "results/{panel}/?trait=maturation&tab=panel", "width": 1100, "crop": [".nav-tabs", "#fig-panel-coverage"]}},
+    {"slug": "gwas", "title": "Analyse GWAS summary statistics",
+     "text": "Upload GWAS results for a Manhattan plot, the loci and fine-mapping that weights SNPs by their functional "
+             "evidence (one causal variant per locus, no LD). The example is synthetic.",
+     "alt": "Association page of the synthetic maturation GWAS, labelled SYNTHETIC: Manhattan plot and the loci table.",
+     "callouts": [("Click a lead SNP for its regional plot", "#fig-manhattan svg a[href*='locus=1']"),
+                  ("Loci, strongest first", ["#loci-h ~ * thead th:nth-child(1)", "#loci-h ~ * tbody tr:nth-child(3) td:nth-child(3)"]),
+                  ("Top SNP after fine-mapping", ["text=Top SNP by PIP", "#loci-h ~ * tbody tr:nth-child(3) td:nth-child(6)"])],
+     "try": ("Try it: the synthetic maturation GWAS", {"example": "gwas_maturation_SYNTHETIC"}),
+     "shot": {"path": "results/{gwas}/association/?trait=maturation", "width": 1280,
+              "crop": [".sp-caveat", "#loci-h ~ * tbody tr:nth-child(3)"]}},
+    {"slug": "more", "title": "Search, browse and get help",
+     "text": "Quick search finds one gene, SNP or region, and Known loci lists the published SNPs. For a confidential "
+             "list, Help → Run locally scores it on your own computer.",
+     "alt": "The front page with Quick search and the open Help menu: Guided tour, Help, Data, Methods and Run locally.",
+     "callouts": [("Quick search", "form[role=search]"), ("Known loci", ".sp-nav a[href$='known-loci/']"),
+                  ("Help, this tour and Run locally", ".sp-menu ul")],
+     "try": ("Try it: search vgll3", "search/?q=vgll3"),
+     "shot": {"path": "", "width": 1100, "click": ".sp-menu > summary", "wait": ".sp-menu[open] ul",
+              "crop": [".sp-brand", ".sp-release", "form[role=search]"]}},
 ]
-SCORE_STEP = 3  # the step whose form scores the example job
-TOUR_FILTERS = [  # (label, table filters, column they need)
-    ("Tier 1–2", {"tier": "1-2"}, "tier"),
-    ("Known loci only", {"known": "1"}, "known_locus"),
-    ("Active in brain, mature male", {"active": "Brain_Mature_Male"}, "chromatin_Brain_Mature_Male"),
-    ("Assay pass, tier 1–3", {"tier": "1-3", "assay": "pass"}, "assay_status"),
-]
-
-
-def tour_url(step, key=None, trait=None):
-    return reverse("snpportal:tour") + "?" + urlencode([(k, v) for k, v in (("step", step), ("key", key), ("trait", trait)) if v])
-
-
-def tour_window(g, flank):
-    """1-based (chrom, start, end) of vgll3 +/- flank."""
-    chrom, a, b = (g["chrom"], g["start"] + 1, g["end"]) if g else TOUR_SPAN
-    return chrom, max(1, a - flank), b + flank
-
-
-def tour_rows(g):
-    """(rows, label) of the tour's example job: the release's known-loci demo list (the Score page example) plus the
-    public variants within FLANK of vgll3, as (chrom, pos, id, ref, alt) rows for jobs.create_from_rows."""
-    from .views import examples
-    demo, rows = examples().get("known_loci"), []
-    if demo and demo["suffix"] == ".tsv":
-        with open(demo["path"], newline="") as f:
-            for r in csv.DictReader((line for line in f if not line.startswith("#")), delimiter="\t"):
-                if r.get("chrom") and (r.get("pos") or "").isdecimal():
-                    rows.append((r["chrom"], int(r["pos"]), r.get("id") or None, r.get("ref") or None, r.get("alt") or None))
-    known, seen = len(rows), {(r[0], r[1]) for r in rows}
-    rows += [r for r in public_rows([tour_window(g, FLANK)]) if (r[0], r[1]) not in seen]
-    return rows, f"Tour example: {known} known loci + {len(rows) - known} public variants within {FLANK // 1000} kb of vgll3"
 
 
 def tour(request):
-    """/snp/tour/?step=1..5[&key=<example job>][&trait=]: the guided 'vgll3 and maturation' tour (P5.11). Each step has
-    a short explanation and a live figure (loaded by htmx, so the page never waits for salmobase) or links. A POST
-    (step 3) scores the known-loci demo plus the public variants near vgll3 as a job, then shows step 3 with its key."""
-    from .views import private  # the job key is a private link: no caching, same-origin referrers
-    return private(_tour)(request)
-
-
-def _tour(request):
-    import uuid
-    from . import report
-    presets = dict(jobs.presets())
-    trait = request.GET.get("trait")
-    trait = trait if trait in presets else TOUR_TRAIT if TOUR_TRAIT in presets else "all"
-    g = gene_rows([TOUR_GENE]).get(TOUR_GENE)
-    error, status = None, 200
-    if request.method == "POST":
-        try:
-            rows, label = tour_rows(g)
-            if not rows:
-                raise jobs.InputError("This release has no known loci or public variants near vgll3 to score.")
-            return redirect(tour_url(SCORE_STEP, jobs.create_from_rows(rows, label, trait), trait))
-        except jobs.InputError as e:
-            error, status = str(e), 400
-        except jobs.QueueFull:
-            error, status = "The portal is busy scoring other lists. Please try again in a minute.", 503
-    step = request.GET.get("step", "")
-    n = SCORE_STEP if error else int(step) if step.isdecimal() and 1 <= int(step) <= len(TOUR) else 1
-    try:
-        key = str(uuid.UUID(request.GET.get("key", "")))
-    except ValueError:
-        key = None
-    job = jobs.status(key) if key else None
-    expired, key = bool(key) and job is None, key if job else None
-    slug, _, heading = TOUR[n - 1]
-    done = bool(job and job["state"] == "done")
-    ctx = {"nav": "home", "title": "Guided tour: vgll3 and maturation", "n": n, "count": len(TOUR), "slug": slug,
-           "heading": heading, "trait": trait, "preset": presets.get(trait, trait), "gene": g, "error": error,
-           "steps": [(i, label, tour_url(i, key, trait)) for i, (_, label, _) in enumerate(TOUR, 1)],
-           "prev": tour_url(n - 1, key, trait) if n > 1 else None, "next": tour_url(n + 1, key, trait) if n < len(TOUR) else None,
-           "key": key, "job": job, "expired": expired, "post_url": tour_url(SCORE_STEP, None, trait), "score_step": SCORE_STEP,
-           "needs_job": slug in ("score", "panel") and not done}
-    ctx["show_form"] = ctx["needs_job"] and not (job and job["state"] in ("queued", "running"))
-    if slug == "known":
-        ctx.update(loci=[r for r in catalogue() if r.get("ensembl_gene") == TOUR_GENE], namesakes=namesakes(g) if g else [])
-    elif slug == "variant":
-        snp = next((r for r in catalogue() if r.get("id") == TOUR_SNP and (r.get("pos") or "").isdecimal()), None)
-        spec = (f"{snp['chrom']}-{snp['pos']}" + (f"-{snp['ref']}-{snp['alt']}" if snp.get("ref") and snp.get("alt") else "")
-                if snp else TOUR_SPEC)
-        chrom, a, b = tour_window(g, LOCUS_FLANK)
-        r = f"{chrom}:{a}-{b}"
-        ctx.update(variant_url=f"{reverse('snpportal:variant', args=[spec])}?{urlencode({'trait': trait})}", region=f"{chrom}:{a:,}-{b:,}",
-                   locus_svg=reverse("snpportal:locus_svg") + "?" + urlencode({"r": r, "trait": trait}),
-                   locus_url=reverse("snpportal:locus") + "?" + urlencode({"r": r, "trait": trait}))
-    if done:
-        base = reverse("snpportal:results", args=[key])
-
-        def link(**params):
-            return f"{base}?{urlencode({'trait': trait, **params})}"
-        ctx.update(results_url=link(), panel_url=link(tab="panel"), export_url=link(tab="export"))
-        if slug == "score":
-            ov = report.overview(request, key, job)
-            ctx.update(kpis=ov["kpis"], figs=[ov["figs"][x] for x in ("tiers", "conditions") if x in ov["figs"]])
-        elif slug == "panel":
-            d = jobs.folder(key)
-            have = {c for c, in jobs.connect([d]).execute(
-                f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet({lit(d / 'result.parquet')}))").fetchall()}
-            ctx["filters"] = [(label, link(tab="table", **params)) for label, params, need in TOUR_FILTERS if need in have]
-    return render(request, "snpportal/tour.html", ctx, status=status)
+    """/snp/tour/?slide=N: the guided tour, an illustrated slide show (TOUR, screenshots in static/snpportal/tour/).
+    Every slide is in the page and ?slide=N picks the one shown, so Previous, Next and the dots are plain links;
+    portal.js /* tour */ switches slides without reloading. 'Try it' opens the real page or posts a Score example."""
+    found, home = views.examples(), reverse("snpportal:landing")
+    slides = []
+    for s in TOUR:
+        label, target = s["try"]
+        gwas = isinstance(target, dict) and target["example"].startswith("gwas_")
+        if isinstance(target, str):
+            try_it = {"label": label, "url": home + target}
+        elif target["example"] in found:
+            try_it = {"label": label.format(label=found[target["example"]]["label"]), "fields": {"trait": "maturation", **target},
+                      "post": reverse("snpportal:gwas_score" if gwas else "snpportal:upload")}
+        else:  # this release lacks the example
+            try_it = {"label": "Try it: open Score", "url": reverse("snpportal:upload") + ("#gwas" if gwas else "")}
+        slides.append({**s, "try_it": try_it, "image": f"snpportal/tour/{s['slug']}.webp"})
+    slide = request.GET.get("slide", "")
+    n = int(slide) if slide.isdecimal() and 1 <= int(slide) <= len(TOUR) else 1
+    return render(request, "snpportal/tour.html", {
+        "nav": "help", "title": "Guided tour", "slides": slides, "n": n, "count": len(TOUR),
+        "prev": n - 1 if n > 1 else None, "next": n + 1 if n < len(TOUR) else None})

@@ -1,77 +1,40 @@
 {% extends 'snpportal/base_portal.html' %}
-{% load snpportal_tags %}
-{% comment %}Guided 'vgll3 and maturation' tour (explore.tour): five steps of a few lines each (?step=), with the example
-   job in ?key=. The live figure loads with htmx after the page, so it never waits for salmobase.{% endcomment %}
+{% load static %}
+{% comment %}Guided tour (explore.tour): an illustrated slide show. Every slide is rendered and ?slide=N shows one, so
+   Previous, Next and the dots are plain links; portal.js /* tour */ switches slides without reloading. The numbered
+   boxes over each screenshot are placed by tour/tour.css, which `manage.py tour_images` writes with the images.{% endcomment %}
+{% block portal_head %}<link rel="stylesheet" href="{% static 'snpportal/tour/tour.css' %}">{% endblock portal_head %}
+
 {% block main %}
-<nav class="sp-tour-bar" aria-label="Tour steps">
-  <strong class="sp-small">Step {{ n }} of {{ count }}</strong>
-  <ol>{% for i, label, url in steps %}<li><a href="{{ url }}"{% if i == n %} aria-current="step"{% endif %}>{{ i }}. {{ label }}</a></li>{% endfor %}</ol>
-  <span class="sp-tour-move">{% if prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ prev }}">&lsaquo; Back</a>{% endif %}
-    {% if next %}<a class="btn btn-sm btn-primary" href="{{ next }}">Next &rsaquo;</a>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'snpportal:upload' %}">Score your SNPs</a>{% endif %}</span>
-</nav>
-{% if error %}<div class="sp-status sp-status-fail" role="alert">&#10007; {{ error }}</div>{% endif %}
-{% if expired %}<div class="sp-status sp-status-warn" role="status">&#9888; The example job has expired or was deleted. Score it again in step {{ score_step }}.</div>{% endif %}
+<section class="sp-tour" aria-roledescription="carousel" aria-label="Guided tour" data-tour>
+  <nav class="sp-tour-nav" aria-label="Slides">
+    <a class="btn btn-outline-secondary{% if not prev %} disabled{% endif %}"{% if prev %} href="?slide={{ prev }}"{% else %} aria-disabled="true"{% endif %} data-tour-prev>&lsaquo; Previous</a>
+    <div class="sp-tour-where">
+      <ol class="sp-tour-dots">{% for s in slides %}<li><a href="?slide={{ forloop.counter }}" aria-label="Slide {{ forloop.counter }}: {{ s.title }}"{% if forloop.counter == n %} aria-current="step"{% endif %}></a></li>{% endfor %}</ol>
+      <span class="sp-small sp-muted" aria-live="polite" data-tour-count>Slide {{ n }} of {{ count }}</span>
+    </div>
+    <a class="btn btn-primary" href="{% if next %}?slide={{ next }}{% else %}{% url 'snpportal:upload' %}{% endif %}" data-tour-next
+       data-next="Next &rsaquo;" data-end="Start scoring" data-end-href="{% url 'snpportal:upload' %}">{% if next %}Next &rsaquo;{% else %}Start scoring{% endif %}</a>
+  </nav>
 
-<section class="sp-card sp-stack sp-tour" aria-labelledby="step-h">
-  <h2 id="step-h">{{ heading }}</h2>
-
-  {% if slug == 'known' %}
-  <p>Sea age at maturity in Atlantic salmon has a large-effect locus at <em>vgll3</em> on chromosome {{ gene.chrom|default:"25" }}.
-    The known-loci catalogue holds its published SNPs, with the effect allele on the Ssal_v3.1 forward strand.</p>
-  {% if loci %}<ul class="sp-tour-list sp-small">{% for r in loci %}<li>{% if r.pos %}<a href="{% url 'snpportal:variant' r.chrom|add:'-'|add:r.pos %}?trait={{ trait }}">{{ r.id }}</a>{% else %}{{ r.id }}{% endif %}: {% if r.effect_allele and r.effect_direction %}{{ r.effect_allele }} = {{ r.effect_direction }}{% else %}{{ r.effect|default:"effect not stated" }}{% endif %}</li>{% endfor %}</ul>{% endif %}
-  {% if namesakes %}<p class="sp-small mb-0">&#9432; Two genes answer to &lsquo;vgll3&rsquo; (salmonid genome duplication): the published
-    SNPs are in the chromosome {{ gene.chrom }} copy, not in {% for o in namesakes %}<a href="{% url 'snpportal:gene' o.id %}">{{ o.name|default:o.id }}</a> (chromosome {{ o.chrom }}){% if not forloop.last %} or {% endif %}{% endfor %}.</p>{% endif %}
-  <p class="mb-0">{% if gene %}<a href="{% url 'snpportal:gene' gene.id %}?trait={{ trait }}">Gene page</a> · {% endif %}<a href="{% url 'snpportal:known_loci' %}">All known loci</a></p>
-
-  {% elif slug == 'variant' %}
-  <p>Every position has a page, annotated on the fly: its tier for the trait, the evidence behind it and the chromatin state
-    in 21 conditions. The locus browser shows that evidence along the genome, with live ATAC signal from salmobase.</p>
-  <div id="tour-locus" class="sp-figure sp-tour-embed" hx-get="{{ locus_svg }}" hx-trigger="load" hx-select="svg" hx-swap="innerHTML">
-    <p class="sp-muted mb-0">Loading {{ region }}&hellip;</p>
-    <noscript><img class="img-fluid" src="{{ locus_svg }}" alt="Genes, chromatin states and ATAC signal at vgll3"></noscript>
-  </div>
-  <p class="mb-0"><a href="{{ variant_url }}">The vgll3 Met54Thr page</a> · <a href="{{ locus_url }}">Open the locus browser</a></p>
-
-  {% elif slug == 'score' %}
-  <p>The tour scores the published SNPs and the public variants within 50 kb of <em>vgll3</em> as one job, like an upload.
-    Every number and bar opens the matching rows.</p>
-  {% if results_url %}
-  {% include 'snpportal/_caveat.html' %}
-  <div class="sp-kpis" aria-label="Key numbers">
-    {% for k in kpis %}{% if k.href %}<a class="sp-kpi" href="{{ k.href }}">{% else %}<div class="sp-kpi">{% endif %}
-      <b>{{ k.value }}</b><span>{{ k.label }}</span>{% if k.href %}</a>{% else %}</div>{% endif %}{% endfor %}
-  </div>
-  {% for fig in figs %}<div>{% include 'snpportal/_figure.html' with fig=fig %}</div>{% endfor %}
-  <p class="mb-0"><a href="{{ results_url }}">Open the results</a></p>
-  {% endif %}
-
-  {% elif slug == 'panel' %}
-  <p>Filters live in the URL and combine, so a view can be bookmarked or shared. The Panel tab picks the best-scoring SNPs
-    that pass the assay filter, spread over every chromosome; Export writes the vendor files.</p>
-  {% if results_url %}
-  <p class="sp-chips mb-0">{% for label, url in filters %}<a href="{{ url }}">{{ label }}</a>{% endfor %}</p>
-  <p class="d-flex flex-wrap gap-2 mb-0"><a class="btn btn-sm btn-outline-primary" href="{{ panel_url }}">Design a panel</a>
-    <a class="btn btn-sm btn-outline-primary" href="{{ export_url }}">Export</a></p>
-  {% endif %}
-
-  {% elif slug == 'yours' %}
-  <p>Upload a VCF, SNP table, PLINK .bim/.map file or chip manifest, paste positions, or score the public variants of genes
-    or regions.</p>
-  <p class="sp-small">From a VCF only CHROM, POS, ID, REF and ALT are read. Other table columns are kept with the results for
-    24 h; anyone with the link can see them. Confidential? <a href="{% url 'snpportal:run_locally' %}">Run it locally</a>.</p>
-  <p class="d-flex flex-wrap gap-2 mb-0"><a class="btn btn-primary" href="{% url 'snpportal:upload' %}">Score your SNPs</a>
-    <a class="btn btn-outline-secondary" href="{% url 'snpportal:help' %}">Help</a></p>
-  {% endif %}
-
-  {% if needs_job %}
-  {% if job and job.state == 'failed' %}<div class="sp-status sp-status-fail" role="alert">&#10007; The example could not be scored. {{ job.error }}</div>
-  {% elif job %}{% include 'snpportal/_progress.html' %}
-  {% elif slug != 'score' %}<p class="mb-0">This step uses the example job of step {{ score_step }}.</p>{% endif %}
-  {% endif %}
-  {% if show_form %}
-  <form method="post" action="{{ post_url }}" class="d-flex flex-wrap align-items-center gap-2">{% csrf_token %}
-    <button class="btn btn-primary" type="submit">{% if job %}Score the example again{% else %}Score the example{% endif %}</button>
-    <span class="sp-small sp-muted">a few seconds; public data only</span>
-  </form>{% endif %}
+  {% for s in slides %}
+  <article class="sp-slide" role="group" aria-roledescription="slide" aria-labelledby="slide-{{ forloop.counter }}"{% if forloop.counter != n %} hidden{% endif %}>
+    <div class="sp-slide-text">
+      <h2 id="slide-{{ forloop.counter }}" tabindex="-1">{{ s.title }}</h2>
+      <p>{{ s.text }}</p>
+    </div>
+    <div class="sp-slide-steps">
+      <ol class="sp-callouts">{% for label, target in s.callouts %}<li>{{ label }}</li>{% endfor %}</ol>
+      {% if s.try_it.post %}<form method="post" action="{{ s.try_it.post }}">{% csrf_token %}
+        {% for name, value in s.try_it.fields.items %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+        <button class="btn btn-outline-primary" type="submit">{{ s.try_it.label }}</button>
+      </form>{% else %}<a class="btn btn-outline-primary" href="{{ s.try_it.url }}">{{ s.try_it.label }}</a>{% endif %}
+    </div>
+    <figure class="sp-shot" id="tour-{{ s.slug }}">
+      <img src="{% static s.image %}" alt="{{ s.alt }}">
+      {% for label, target in s.callouts %}<span class="sp-callout" id="tour-{{ s.slug }}-{{ forloop.counter }}" aria-hidden="true"><b>{{ forloop.counter }}</b></span>{% endfor %}
+    </figure>
+  </article>
+  {% endfor %}
 </section>
 {% endblock main %}
