@@ -1,9 +1,9 @@
 /* Written by `python manage.py tour_images` with the images: each slide's numbered callout boxes, in % of its image. */
-#tour-overview img { aspect-ratio: 1200 / 664; }
-#tour-overview-1 { left: 83.33%; top: 2.03%; width: 15.93%; height: 6.45%; }
-#tour-overview-2 { left: 0.73%; top: 15.22%; width: 98.53%; height: 17.35%; }
-#tour-overview-3 { left: 0.73%; top: 39.77%; width: 98.53%; height: 21.04%; }
-#tour-overview-4 { left: 42.17%; top: 71.67%; width: 22.92%; height: 27.01%; }
+#tour-overview img { aspect-ratio: 1200 / 693; }
+#tour-overview-1 { left: 83.03%; top: 1.94%; width: 15.88%; height: 6.17%; }
+#tour-overview-2 { left: 0.73%; top: 14.55%; width: 98.18%; height: 16.58%; }
+#tour-overview-3 { left: 0.73%; top: 38.01%; width: 98.18%; height: 24.53%; }
+#tour-overview-4 { left: 42.01%; top: 72.93%; width: 32.85%; height: 25.81%; }
 #tour-score img { aspect-ratio: 1200 / 816; }
 #tour-score-1 { left: 3.43%; top: 7.11%; width: 93.13%; height: 13.53%; }
 #tour-score-2 { left: 3.43%; top: 28.32%; width: 93.13%; height: 9.80%; }
@@ -16,11 +16,11 @@
 #tour-card-1 { left: 1.15%; top: 1.81%; width: 97.69%; height: 26.92%; }
 #tour-card-2 { left: 1.15%; top: 28.73%; width: 97.69%; height: 20.14%; }
 #tour-card-3 { left: 1.15%; top: 48.87%; width: 47.55%; height: 49.32%; }
-#tour-locus img { aspect-ratio: 1200 / 743; }
-#tour-locus-1 { left: 0.63%; top: 1.02%; width: 28.82%; height: 4.95%; }
-#tour-locus-2 { left: 0.31%; top: 24.54%; width: 99.37%; height: 8.89%; }
-#tour-locus-3 { left: 0.31%; top: 35.85%; width: 99.37%; height: 33.03%; }
-#tour-locus-4 { left: 0.31%; top: 77.26%; width: 99.37%; height: 21.72%; }
+#tour-locus img { aspect-ratio: 1200 / 704; }
+#tour-locus-1 { left: 0.63%; top: 1.07%; width: 28.82%; height: 5.23%; }
+#tour-locus-2 { left: 0.31%; top: 18.52%; width: 99.37%; height: 11.26%; }
+#tour-locus-3 { left: 0.31%; top: 32.32%; width: 99.37%; height: 34.84%; }
+#tour-locus-4 { left: 0.31%; top: 76.01%; width: 99.37%; height: 22.92%; }
 #tour-panel img { aspect-ratio: 1200 / 816; }
 #tour-panel-1 { left: 2.29%; top: 14.41%; width: 37.17%; height: 5.25%; }
 #tour-panel-2 { left: 43.75%; top: 14.41%; width: 17.86%; height: 5.25%; }

@@ -613,10 +613,10 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
             "published locus and the chromatin state in each condition.",
      "callouts": [("Tier, and what earned it", ["#card-body p:has(> .sp-badge)", "#card-body .sp-figure svg"]),
                   ("Published locus and effect allele", "#card-body .sp-status-ok"),
-                  ("Chromatin per condition; outlined: the trait's", "#card-body .sp-status-ok + .sp-figure svg")],
+                  ("Chromatin per condition; outlined: the trait's", "#card-body .sp-card-side > .sp-figure:first-child svg")],
      "try": ("Try it: akap11 Val214Met", "variant/25-29064238-A-G/?trait=maturation"),
      "shot": {"path": "variant/25-29064238-A-G/?trait=maturation", "width": 1000,
-              "crop": ["#card-body p:has(> .sp-badge)", "#card-body .sp-status-ok + .sp-figure svg"]}},
+              "crop": ["#card-body p:has(> .sp-badge)", "#card-body .sp-card-side > .sp-figure:first-child svg"]}},
     {"slug": "locus", "title": "Explore a locus",
      "text": "The locus browser lines up genes, published loci, chromatin states and live ATAC signal from salmobase. "
              "Zoom, move, or type any region, gene or SNP.",
