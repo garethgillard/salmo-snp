@@ -2,6 +2,17 @@
 (function () {
   "use strict";
 
+  // A link to a closed <details> (e.g. Help > How to cite -> data page #cite) opens it.
+  function openTarget() {
+    var el = location.hash && document.getElementById(location.hash.slice(1));
+    if (el && el.tagName === "DETAILS") {
+      el.open = true;
+      el.scrollIntoView({block: "start"});
+    }
+  }
+  window.addEventListener("hashchange", openTarget);
+  document.addEventListener("DOMContentLoaded", openTarget);
+
   // Download the SVG inside an element as a PNG at 2x: <button data-png="element id" data-name="file name">
   function savePng(svg, name) {
     var box = svg.viewBox && svg.viewBox.baseVal, w = (box && box.width) || svg.clientWidth, h = (box && box.height) || svg.clientHeight;

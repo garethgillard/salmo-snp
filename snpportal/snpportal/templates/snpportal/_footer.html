@@ -1,9 +1,0 @@
-{% load snpportal_tags %}{% portal_release as rel %}
-<footer class="sp-footer">
-  <div class="sp-wrap">
-    <p>Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }} ·
-      <a href="{% url 'snpportal:about_data' %}">Data: AQUA-FAANG, Ensembl 116, EVA, published studies</a> ·
-      <a href="{% url 'snpportal:methods' %}">Methods</a> · <a href="{% url 'snpportal:help' %}#privacy">Privacy</a> ·
-      <a href="{% url 'snpportal:about_data' %}#cite">How to cite</a> · <a href="{% url 'snpportal:run_locally' %}">Run locally</a></p>
-  </div>
-</footer>

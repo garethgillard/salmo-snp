@@ -24,6 +24,8 @@
             <li><a href="{% url 'snpportal:about_data' %}">Data</a></li>
             <li><a href="{% url 'snpportal:methods' %}">Methods</a></li>
             <li><a href="{% url 'snpportal:run_locally' %}">Run locally</a></li>
+            <li><a href="{% url 'snpportal:help' %}#privacy">Privacy</a></li>
+            <li><a href="{% url 'snpportal:about_data' %}#cite">How to cite</a></li>
           </ul></details></li>
       </ul>
       <span class="sp-release" title="Annotation release and genome assembly">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</span>
@@ -35,7 +37,6 @@
       {% block main %}{% endblock main %}
     </div>
   </main>
-  {% include 'snpportal/_footer.html' %}
 </div>
 {% endblock content %}
 
