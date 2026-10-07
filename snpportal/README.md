@@ -13,21 +13,24 @@ and a gene region across 8 traits, with evidence badges) and a guided vgll3 tour
 
 ```bash
 pip install -r requirements.txt                       # also installs ../salmo-snpscore (editable)
-(cd ../salmo-snpscore && snpscore fetch && snpscore build --out release/dev)
+cd ../salmo-snpscore
+snpscore fetch                                        # the public inputs, into data/raw
+mkdir -p data/demo                                    # the examples (layers.yaml 'demo'): 50K public sites of the 12-fish VCF,
+gzip -dc data/raw/12_samples_genotype_filtered_on_504.vcf.gz | awk -F'\t' -v OFS='\t' \
+  '/^#CHROM/ || (!/^#/ && NR % 32 == 0) {print $1,$2,$3,$4,$5,$6,$7,$8}' > data/demo/public_50k.vcf
+python prep/make_synthetic.py chip                    # the SYNTHETIC demo chip
+python prep/make_synthetic.py gwas                    # and the SYNTHETIC maturation GWAS
+snpscore build --out release/dev                      # copies the examples that exist into release/dev/demo/
+cd ../salmo-snpportal
 python manage.py runserver                            # http://127.0.0.1:8000/snp/
 python manage.py test snpportal                       # builds a release from salmo-snpscore's fixture
 ```
 
-To try it, use the example buttons at the top of the Score page (the release's `demo/` inputs: known loci and 50K public
-sites from the AQUA-FAANG 12-fish VCF; the SYNTHETIC maturation GWAS is in the Score page's closed GWAS section), paste
-a few positions or rs IDs, upload
+`snpscore build` copies only the examples that exist, so run it again after making them. To try the portal, use the
+example buttons at the top of the Score page (the release's `demo/` inputs: known loci and the 50K public sites; the
+SYNTHETIC maturation GWAS is in the Score page's closed GWAS section), paste a few positions or rs IDs, upload
 `../salmo-snpscore/tests/fixture/snps.vcf`, or follow the guided tour (`/snp/tour/`). On a results page, the Panel tab's
-'Use the demo chip' button compares the list with the SYNTHETIC demo chip. For a chip-sized list, cut 50K public SNPs from the
-12-fish VCF that `snpscore fetch` downloads:
-
-```bash
-gzip -dc ../salmo-snpscore/data/raw/12_samples_genotype_filtered_on_504.vcf.gz | awk -F'\t' -v OFS='\t' '/^#CHROM/ || (!/^#/ && NR % 32 == 0) {print $1,$2,$3,$4,$5,$6,$7,$8}' > /tmp/public_50k.vcf
-```
+'Use the demo chip' button compares the list with the SYNTHETIC demo chip.
 
 The trait preset, tab and filters live in the URL, so a view can be bookmarked or shared; the download follows them.
 `SNPPORTAL_TEST_RELEASE=<folder>` makes the tests reuse (a copy of) a release already built from the fixture.
@@ -55,7 +58,9 @@ The folder holds:
 | `weights.yaml`, `manifest.json` | snapshot of the release: editing the release never changes an existing job, and a banner says when it changed |
 | `panels/<hash>.parquet`, `.json` | each panel designed on the Panel tab (folder 0700): the result columns plus `source_row`, `selection_reason`, `panel_rank`, `design_score` (and the chip columns); the .json holds hash, preset, params, summary, chip label. hash = `snpscore.panel.params_hash` of the preset, parameters, weights sha256 and chip sha256, so the same URL gives the same file |
 | `chip.parquet`, `chip.json` | the reference chip of the Panel tab (chrom, pos, id), and its label, SYNTHETIC flag, kept/rejected rows, sha256, density per Mb and the comparison per preset |
+| `chip_rows_<sha>.parquet` | `file_row_number`, `on_chip`, `dist_to_chip`, `near_chip` of every SNP for that chip (`results.chip_view`, made once from chrom and pos); pages that use the chip columns join it by row number (`novel_functional` = tier 1-2 and not near the chip) |
 | `sumstats.parquet`, `gwas.parquet`, `gwas.json` | GWAS jobs (`input_kind` gwas): the summary statistics as read, harmonised to Ssal_v3.1, and the upload QC report (see snpscore README "GWAS") |
+| `loci/<hash>.json`, `.parquet` | GWAS jobs: the loci (the `association.MAX_LOCI` = 200 strongest, and how many there are) and the fine-mapping table of one trait and settings; hash = `params_hash` of the trait and settings, so each page reads them instead of clumping again |
 
 A job whose heartbeat is older than 5 minutes (server restarted) is marked failed; more than 10 queued jobs give 503.
 `jobs.create_from_rows(rows, label)` makes a job from `(chrom, pos, id, ref, alt)` tuples (gene and interval lists, the
@@ -65,8 +70,9 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 
 | URL | What |
 | --- | --- |
-| `results/<key>/?tab=overview\|table\|panel\|export&trait=` | the results tabs; Table filters (`tier`, `region`, `chrom/start/end`, `gene`, `min_maf`, `assay`, `known`, `active`, `term`, `hide_*`) carry over to the Export tab, and `&snp=<row>` opens the Table's evidence drawer; GWAS jobs have Association, Overview, Table and Export (no Panel) |
-| `results/<key>/?tab=panel&design=1&n=&spacing_kb=&spacing_cm=&cm_map=&backbone=&maf=&per_gene=&per_element=&assay_pass=1&exclude=&must=&gap_mb=` | panel designer (blank or invalid values fall back to weights.yaml `design`; `spacing_cm` and `cm_map` (mean, female, male) only with the `cm` columns) |
+| `results/<key>/?tab=overview\|table\|panel\|export&trait=` | the results tabs; Table filters (`tier`, `region`, `chrom/start/end`, `gene`, `min_maf`, `assay`, `known`, `active`, `term`, `hide_*`) carry over to the Export tab, and `&snp=<row>` opens the Table's evidence drawer; changing Trait keeps the filters, the panel and the Export scope (each tab's `keep` list); GWAS jobs have Association, Overview, Table and Export (no Panel), and every link of theirs keeps the fine-mapping settings (`sig`, `sugg`, `window`, `prior_sd`, `lam`, `trait_sd`) |
+| `results/<key>/?tab=panel&design=1&n=&spacing_kb=&spacing_cm=&cm_map=&backbone=&maf=&per_gene=&per_element=&assay=&exclude=&gap_mb=` | panel designer as a link (blank or invalid values fall back to weights.yaml `design`; `spacing_cm` and `cm_map` (mean, female, male) only with the `cm` columns) |
+| `results/<key>/panel/` (POST) | the designer's form, the same fields plus `must` (must-include ids, which never go in a URL): designs the panel and redirects to `?tab=panel&panel=<hash>`, which shows a saved panel with its parameters (for another trait: the same parameters) |
 | `results/<key>/chip/` (POST) | `chip` file, `demo=1` or `remove=1` |
 | `results/<key>/download/?format=tsv\|parquet\|bed\|illumina\|axiom\|kasp\|bundle&scope=all\|filtered\|panel-<hash>` | exports with provenance (`&plain=1` drops it, `&include_failed=1` keeps assay failures in vendor files); vendor files hold no comment lines, so `format=<vendor>.provenance` and `.lookup` give snpscore's sidecars; `format=rejects` gives the dropped rows |
 | `results/<key>/report/?trait=[&filters][&panel=<hash>]` | one-page printable report (two A4 pages) |
@@ -126,8 +132,12 @@ downloads. Every SVG has `role="img"`,
 `<title>` and `<desc>`; text colours pass WCAG AA (a test checks); focus is always visible.
 
 **Privacy.** Results pages (also their 404s) send `Cache-Control: no-store, private` and `Referrer-Policy: same-origin`;
-error reports from them and from the Score page carry no POST values, uploaded file names, local variables or DuckDB
-message text; outbound links use `rel="noreferrer"`. Failed jobs are locked down (0600) like finished ones. Log lines carry an event
+error reports from them and from the Score page (also its 'Genes or regions' list) carry no POST values, uploaded file
+names, local variables or DuckDB message text; outbound links use `rel="noreferrer"`. Must-include ids are POSTed, never
+put in a URL. The locus browser opened from a job (`key=`) only reads the tile cache, so the cache (kept for days) never
+records where a job's SNPs are. 'Delete now' on a running job removes its job.json at once and the folder when the
+worker's DuckDB connection has closed (the folder is its spill directory); request-time connections spill into
+`results/.spill-<uuid>`, removed when they close. Failed jobs are locked down (0600) like finished ones. Log lines carry an event
 name, `job_ref` (a hash of the key), counts and timings: never SNPs or file names. Exports are written to a temp file
 in the job folder that is removed as soon as it is opened. Every export carries provenance (release, manifest and
 weights sha256, preset, filters, panel hash, PROVISIONAL rules, SYNTHETIC inputs or chip, the equivalent `snpscore`

@@ -238,6 +238,11 @@ class ResultsTest(SimpleTestCase):
 
     def test_helpers(self):
         self.assertEqual(results.gene_label(None, "ENSSSAG1", "VGLL3,VGLL3B"), "~VGLL3")
+        self.assertEqual(results.gene_label(None, "ENSSSAG00000053708", "VGLL3"), "vgll3")  # the catalogue's name, as on gene pages
+        self.assertEqual(figures.share_label(161, 50_000), "<1%")  # a few hundred tier-1 SNPs never read as 0%
+        self.assertEqual(results.evidence_text("active: Brain,EarlySomitogenesis; molQTL lead: Brain",
+                                               [{"term": "active", "weight": 3}, {"term": "molqtl", "weight": 0}]), "active: Brain, E somit.")
+        self.assertEqual(results.reasons_text("repeat 1.0; GC 0.72"), "repeat (soft-masked) flanks (100%); GC content out of range (72%)")
         self.assertEqual(results.gene_label("vgll3a", "ENSSSAG1", "VGLL3"), "vgll3a")
         self.assertEqual(results.gene_label(None, "ENSSSAG1", None), "ENSSSAG1")
         self.assertEqual(results.pct(1, 20000), "<0.1%")

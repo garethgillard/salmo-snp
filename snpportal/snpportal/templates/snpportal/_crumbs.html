@@ -1,0 +1,4 @@
+{# Breadcrumb [(label, url or None)]; oob: also swapped by htmx into the page's breadcrumb (e.g. after a card's trait change). #}
+<nav id="sp-crumbs" aria-label="Breadcrumb"{% if oob %} hx-swap-oob="true"{% endif %}><ol class="sp-crumbs">
+  {% for label, url in crumbs %}<li>{% if url %}<a href="{{ url }}">{{ label }}</a>{% else %}<span aria-current="page">{{ label }}</span>{% endif %}</li>{% endfor %}
+</ol></nav>

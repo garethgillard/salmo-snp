@@ -93,8 +93,8 @@ class LocusTest(SimpleTestCase):
         root = ET.fromstring(svg)
         self.assertEqual(root.get("role"), "img")
         self.assertIn("ENSSSAG00000053708", svg)  # the vgll3 gene model
-        self.assertIn("~VGLL3", svg)
-        self.assertEqual(len(re.findall(r">((?:Imm|Mat) [FM]|Blastula|Gastrula|[EML] somito)</text>", svg)), 21)  # condition rows
+        self.assertRegex(svg, r">(← )?vgll3( →)?</text>")  # Ensembl leaves it unnamed: the catalogue's name, as on every page
+        self.assertEqual(len(re.findall(r">((?:Imm|Mat) [FM]|Blastula|Gastrula|[EML] somit\.)</text>", svg)), 21)  # condition rows
         self.assertIn("promoter", svg)  # regbuild
         self.assertIn("504-fish panel: MAF 0.48, alt AF 0.48", svg)  # public variant at vgll3 Met54Thr (R1)
         self.assertIn("AQUA-FAANG 12 fish: alt AF 0.67, DR2 1.00", svg)

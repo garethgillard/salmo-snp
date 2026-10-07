@@ -17,17 +17,30 @@ from . import palette
 
 FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif"
 TIER_NAMES = {1: "tier 1", 2: "tier 2", 3: "tier 3", 4: "tier 4 (no evidence)"}
+STAGE_LABELS = {"LateBlastulation": "Blastula", "MidGastrulation": "Gastrula", "EarlySomitogenesis": "E somit.",  # the one
+                "MidSomitogenesis": "M somit.", "LateSomitogenesis": "L somit."}  # short name of each embryo stage
 IDEOGRAM_TIER4 = palette.GREY[300]  # #F0F0F0 would vanish on the white chromosome
 
 
 def svg(width, height, title, desc, body, synthetic=False):
-    """A complete standalone SVG document."""
-    mark = (f'<text x="{width / 2:.0f}" y="{height / 2:.0f}" text-anchor="middle" dominant-baseline="middle" '
-            f'font-size="{min(48, height // 2)}" font-weight="700" fill="{palette.SYNTHETIC[0]}" opacity="0.18" '
-            f'transform="rotate(-12 {width / 2:.0f} {height / 2:.0f})" pointer-events="none">SYNTHETIC</text>') if synthetic else ""
+    """A complete standalone SVG document. A synthetic figure gets a faint SYNTHETIC watermark under its marks (so it
+    never hides a label) and, below the figure, a line saying so that nothing covers."""
+    mark = ""
+    if synthetic:
+        mark = (f'<text x="{width / 2:.0f}" y="{height / 2:.0f}" text-anchor="middle" dominant-baseline="middle" '
+                f'font-size="{min(48, height // 2)}" font-weight="700" fill="{palette.SYNTHETIC[0]}" opacity="0.18" '
+                f'transform="rotate(-12 {width / 2:.0f} {height / 2:.0f})" pointer-events="none">SYNTHETIC</text>')
+        body += _text(4, height + 11, "SYNTHETIC test data: not real results", font_size=10, font_weight=600, fill=palette.SYNTHETIC[0])
+        height += 16
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" '
             f'role="img" font-family="{escape(FONT)}" font-size="12" fill="{palette.GREY[900]}">'
-            f'<title>{escape(title)}</title><desc>{escape(desc)}</desc>{body}{mark}</svg>')
+            f'<title>{escape(title)}</title><desc>{escape(desc)}</desc>{mark}{body}</svg>')
+
+
+def share_label(n, total):
+    """n of total as a percentage for labels: '<1%' rather than '0%' for a few, so a small count never reads as none."""
+    x = 100 * n / total if total else 0
+    return "0%" if not n else "<1%" if x < 1 else f"{x:.0f}%"
 
 
 def _a(href, inner):
@@ -75,7 +88,7 @@ def bar(parts, title, desc="", synthetic=False, marks=None):
     width, x, body = 640, 0.0, []
     for i, (name, n, fill, href) in enumerate(parts):
         w = width * n / total
-        label = f"{name}: {n:,} ({100 * n / total:.0f}%)"
+        label = f"{name}: {n:,} ({share_label(n, total)})"
         body.append(_rect(x, 0, w, 28, fill, label, href, f' stroke="{palette.WHITE}"'))
         if marks and w > 24:
             body.append(_text(x + w / 2, 18.5, marks[i], "middle", fill=palette.text_on(fill), font_weight=600, pointer_events="none"))
@@ -148,7 +161,7 @@ def ideogram(chroms, bins, chrom_tiers, title, desc="", synthetic=False, link=No
 def heatmap(rows, title, desc="", synthetic=False, link=None, scale_max=None):
     """Share of SNPs active per condition, one row per tissue (plus the embryo stages), with the fold over the
     background printed when known. rows: [(group, colour, [(label, condition, share, fold or None, in preset)])];
-    link(condition) -> href. Darker = higher share; outlined = in the preset."""
+    link(condition) -> href. Darker = higher share; outlined = one of the trait's conditions."""
     left, cw, ch, pad, top = 76, 66, 40, 5, 6
     ncol = max([len(cells) for _, _, cells in rows] + [1])
     width = left + ncol * (cw + pad)
@@ -162,7 +175,7 @@ def heatmap(rows, title, desc="", synthetic=False, link=None, scale_max=None):
             fill = mix(palette.GREY[50], palette.TIERS[1][0], share / top_share)
             ink = palette.text_on(fill)
             tip = f"{group} {label}: {100 * share:.1f}% of SNPs active" + (f", {fold:.1f}× the public background" if fold else "") \
-                + (" (in the preset)" if chosen else "")
+                + (" (a condition of the trait)" if chosen else "")
             stroke = (f' stroke="{palette.GREY[900]}" stroke-width="2.5"' if chosen else f' stroke="{palette.GREY[200]}"')
             cell = _rect(x, y, cw, ch, fill, tip, extra=stroke) + "".join([
                 _text(x + cw / 2, y + 11, label, "middle", fill=ink, font_size=9.5, pointer_events="none"),
@@ -174,7 +187,7 @@ def heatmap(rows, title, desc="", synthetic=False, link=None, scale_max=None):
     for k, t in enumerate(steps):
         parts.append(f'<rect x="{left + k * 22}" y="{y}" width="22" height="10" fill="{mix(palette.GREY[50], palette.TIERS[1][0], t)}"/>')
     parts.append(_text(left - 4, y + 9, "0%", "end", font_size=10) + _text(left + 5 * 22 + 4, y + 9, f"{100 * top_share:.1f}%", font_size=10)
-                 + _text(left, y + 26, "Outlined: in the preset. ×: fold over the public background.", font_size=10, fill=palette.GREY[700]))
+                 + _text(left, y + 26, "Outlined: the trait's conditions. ×: fold over the public background.", font_size=10, fill=palette.GREY[700]))
     return svg(width, y + 32, title, desc, "".join(parts), synthetic)
 
 

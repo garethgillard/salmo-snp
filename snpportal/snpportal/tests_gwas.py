@@ -129,6 +129,9 @@ class GwasTest(SimpleTestCase):
         self.assertIn('<details class="sp-more"><summary>Fine-mapping settings</summary>', html)  # closed at the defaults
         changed = self.client.get(self.page + "&sig=1e-10").content.decode()
         self.assertIn('<details class="sp-more" open><summary>Fine-mapping settings (1 changed)</summary>', changed)
+        self.assertIn("sig=1e-10&amp;locus=1", changed)  # links keep the settings, so a regional plot opens the same locus
+        self.assertIn("sig=1e-10&amp;tab=table", changed)  # and so do the tabs
+        self.assertTrue(list((jobs.folder(self.key) / "loci").glob("*.json")))  # loci and fine-mapping cached per settings
         self.assertIn(f'{reverse("snpportal:results", args=[self.key])}?trait=maturation&amp;tab=export', html)  # one Export link
         self.assertNotIn("format=loci", html)
         results = self.client.get(reverse("snpportal:results", args=[self.key]))  # GWAS jobs open on Association

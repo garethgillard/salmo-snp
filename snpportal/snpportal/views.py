@@ -230,7 +230,7 @@ def results(request, key):
         return render(request, "snpportal/expired.html", {"nav": "score", "title": "Results expired or deleted"}, status=404)
     gwas = job.get("input_kind") == "gwas"  # GWAS jobs: Association first (its own page), no Panel tab
     if gwas and job["state"] == "done" and "tab" not in request.GET:
-        return redirect(f"{reverse('snpportal:association', args=[key])}?{urlencode({'trait': request.GET.get('trait', 'all')})}")
+        return redirect(f"{reverse('snpportal:association', args=[key])}?{urlencode({'trait': request.GET.get('trait', 'all'), **result_views.gwas_settings(request)})}")
     tab = request.GET.get("tab", "overview")
     tab = tab if tab in TABS and not (gwas and tab == "panel") else "overview"
     context = {"nav": "score", "job": job, "key": key, "tab": tab, "gwas": gwas,
@@ -245,7 +245,8 @@ def results(request, key):
         trait = request.GET.get("trait", "all")
         trait = trait if trait in dict(presets) else "all"
         weights = jobs.weights(d)
-        context.update(trait=trait, query=urlencode({"trait": trait}), release_changed=jobs.release_changed(job),
+        settings = result_views.gwas_settings(request) if gwas else {}
+        context.update(trait=trait, query=urlencode({"trait": trait, **settings}), release_changed=jobs.release_changed(job),
                        presets=[(value, label, result_views.trait_tip(weights, value)) for value, label in presets],
                        trait_tip=result_views.trait_tip(weights, trait))
         if tab == "table":
@@ -255,7 +256,7 @@ def results(request, key):
         elif tab == "panel":
             context.update(tools.panel(request, key, job))
         else:
-            context.update(tools.exports(request, key, job))
+            context.update(tools.exports(request, key, job))  # each tab's 'keep': what a trait change keeps of its view
         context["actions"] = [{"label": "Report", "url": f"{reverse('snpportal:report', args=[key])}?{context['query']}"},
                               {"label": "Score another list", "url": reverse("snpportal:upload")}]
     context.setdefault("actions", []).append(

@@ -118,15 +118,24 @@ class ToolsTest(SimpleTestCase):
         report = self.client.get(reverse("snpportal:report", args=[self.key]), {"trait": "maturation", "panel": h}).content.decode()
         self.assertIn(f"Panel: {tools.panel_name(info)}", report)  # the printable report's panel summary
         self.assertIn(tools.panel_line(info["summary"]), report)
-        self.assertNotIn(h, html.split("scope=panel-")[0])  # named by its markers, never by a hash
+        heading = html[html.index('id="panel-h"'):html.index("</h2>", html.index('id="panel-h"'))]
+        self.assertNotIn(h, heading)  # named by its markers, never by a hash
+        self.assertIn(f'name="panel" value="{h}"', html.split('<label for="trait">')[0])  # a trait change keeps the design
 
     def test_panel_parameters(self):
         con = jobs.connect([self.d])
         must = con.execute(f"SELECT id FROM read_parquet('{self.d / 'result.parquet'}') WHERE id IS NOT NULL AND id <> '.' "
                            "ORDER BY pos DESC LIMIT 1").fetchone()[0]
-        page = self.client.get(self.url, {"tab": "panel", "design": "1", "n": "5", "spacing_kb": "50", "must": f"{must}, nope_1"})
+        posted = self.client.post(reverse("snpportal:panel_design", args=[self.key]),
+                                  {"design": "1", "n": "5", "spacing_kb": "50", "must": f"{must}, nope_1"})
+        self.assertNotIn(must, posted.url)  # must-include ids are the user's SNP names: never in a URL
+        page = self.client.get(posted.url)
         self.assertContains(page, "Must-include ids not in this list: nope_1")
+        self.assertContains(page, f'name="must" value="{must}')  # the form shows them again, from the saved panel
         h = re.search(r'scope=panel-([0-9a-f]{16})', page.content.decode()).group(1)
+        self.assertIn(f"panel={h}", posted.url)
+        other = self.client.get(posted.url.replace("trait=all", "trait=maturation"))  # another trait: the same parameters
+        self.assertContains(other, f'name="must" value="{must}')
         picked = rows(self.d / "panels" / f"{h}.parquet")
         self.assertIn((must, "must_include"), {(r["id"], r["selection_reason"]) for r in picked})
         self.assertLessEqual(len(picked), 5)
@@ -272,6 +281,9 @@ class ToolsTest(SimpleTestCase):
         # The Table tab's 'not near the chip' filter keeps fewer SNPs
         table = self.client.get(url, {"tab": "table", "hide_near_chip": "1"}).content.decode()
         self.assertIn("filtered from", table)
+        by_gene = self.client.get(url, {"tab": "table", "hide_near_chip": "1", "sort": "gene"})  # sorted on the raw result:
+        self.assertContains(by_gene, "filtered from")  # the chip column still counts
+        self.assertEqual(len(list(d.glob("chip_rows_*.parquet"))), 1)  # the chip columns, made once per chip
         self.assertIn('name="hide_near_chip"', self.client.get(url, {"tab": "table"}).content.decode())
         # The 'not near the chip' exclusion leaves fewer candidates
         base = self.client.get(url, {"tab": "panel", "design": "1"}).content.decode()
@@ -284,7 +296,7 @@ class ToolsTest(SimpleTestCase):
         self.assertIn("SYNTHETIC", "\n".join(line for line in text.splitlines() if line.startswith("#")))
         self.assertIn("novel_functional", next(line for line in text.splitlines() if not line.startswith("#")))
         self.client.post(chip, {"remove": "1"})
-        self.assertFalse((d / "chip.parquet").exists())
+        self.assertFalse((d / "chip.parquet").exists() or list(d.glob("chip_rows_*")))
         self.assertNotContains(self.client.get(url), "demo chip markers")
         # An uploaded chip (a SYNTHETIC PLINK .bim from fixture positions), a wrong type and an unreadable file
         positions = duckdb.sql(f"SELECT chrom, pos FROM read_parquet('{d / 'result.parquet'}') ORDER BY chrom, pos LIMIT 40").fetchall()

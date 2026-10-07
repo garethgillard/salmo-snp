@@ -9,6 +9,7 @@ import csv
 import io
 import re
 import tempfile
+from functools import lru_cache
 from html import escape
 from pathlib import Path
 from urllib.parse import urlencode
@@ -17,12 +18,13 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.safestring import mark_safe
+from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_POST
 
 import snpscore
 from snpscore.formats import lit, q
 
-from . import figures, jobs, palette, search
+from . import figures, jobs, palette, results, search, views
 
 FLANKS = (0, 10_000, 20_000, 50_000, 100_000, 250_000)  # gene page and candidate-list flank choices (bp)
 FLANK, LOCUS_FLANK = 50_000, 20_000  # default flank for candidates; flank of the embedded locus view
@@ -61,6 +63,21 @@ def catalogue():
         r["kind"] = evidence_kind(r)
         r["badges"] = badges(r)
     return rows
+
+
+def aliases():
+    """{Ensembl gene id: known-loci catalogue name}, e.g. vgll3 for the chr25 gene Ensembl leaves unnamed (the first
+    name when a gene has several): the gene label everywhere, through display_name."""
+    path = jobs.release() / "catalog" / "known_loci.tsv"
+    return _aliases(str(path), path.stat().st_mtime if path.exists() else 0)
+
+
+@lru_cache(maxsize=4)
+def _aliases(path, mtime):
+    out = {}
+    for gene, name in sorted({(r["ensembl_gene"], r["locus"]) for r in catalogue() if r.get("ensembl_gene") and r.get("locus")}):
+        out.setdefault(gene, name)
+    return out
 
 
 def evidence_kind(row):
@@ -178,9 +195,8 @@ def gene_rows(ids):
         {"ids": list(ids)})
     names = [d[0] for d in cur.description]
     rows = {r[names.index("id")]: dict(zip(names, r)) for r in cur.fetchall()}
-    aliases = {r["ensembl_gene"]: r["locus"] for r in catalogue() if r.get("ensembl_gene")}
     for g in rows.values():
-        g["alias"] = aliases.get(g["id"])
+        g["alias"] = aliases().get(g["id"])
         g["label"] = display_name(g["name"], g["alias"], g["human"], g["id"])
     return rows
 
@@ -215,9 +231,10 @@ def hero():
             return None
         chrom, start, end = HERO
         data = locus.lanes(chrom, start, end)
-        svg = locus.locus_svg.locus(data, title="vgll3, chromosome 25", caption="Published associations (diamonds), Ensembl 116 "
+        svg = locus.locus_svg.locus(data, title="vgll3, chromosome 25", desc="Published associations (diamonds), Ensembl 116 "
                                     "genes, AQUA-FAANG chromatin states in 21 conditions, 504-fish panel variants.",
-                                    compact=True, width=760, gutter=118, synthetic=bool(info.get("synthetic")), uid="hero", legend_on=False)
+                                    compact=True, width=locus.COMPACT_WIDTH, gutter=118, synthetic=bool(info.get("synthetic")),
+                                    uid="hero", legend_on=False)  # drawn at about its column's width, so its text is not shrunk
         if len(_hero) >= 4:  # one per release and palette
             _hero.clear()
         _hero[key] = svg
@@ -393,9 +410,9 @@ def elements(g, window):
 
 
 def _short(condition):
-    """Column label: 'Imm F' for Brain_Immature_Female, 'LB' for LateBlastulation."""
+    """Column label: 'Imm F' for Brain_Immature_Female, 'Blastula' for LateBlastulation (figures.STAGE_LABELS)."""
     if condition in STAGES:
-        return "".join(re.findall("[A-Z]", condition))
+        return figures.STAGE_LABELS.get(condition, condition)
     _, maturity, sex = (condition.split("_") + ["", ""])[:3]
     return f"{maturity[:3]} {sex[:1]}"
 
@@ -433,7 +450,8 @@ def gene(request, gene_id):
     shown = rows[:SHOW_ROWS] if request.GET.get("all") == "1" else rows[:SHOW_FIRST]
     for r in shown:
         r["url"] = search.variant_url(r["chrom"], r["pos"])
-        r["gene_label"] = display_name(r.get("gene_name"), None, r.get("gene_ortholog_human"), r.get("gene_id"))
+        r["gene_label"] = display_name(r.get("gene_name"), aliases().get(r.get("gene_id")), r.get("gene_ortholog_human"), r.get("gene_id"))
+        r["tier_evidence"] = results.evidence_text(r.get("tier_evidence"), r.get("tier_terms"))
     known = {r.get("known_locus") for r in rows}  # one known locus for every row: said once, above the table
     known = known.pop() if len(known) == 1 and None not in known and "known_locus" in names else None
     plain_ids = all((r.get("id") or "").startswith(f"{r['chrom']}_{r['pos']}_") or not r.get("id") for r in rows)  # no id column
@@ -502,29 +520,34 @@ def targets(text, flank):
         if path is None:
             raise jobs.InputError("This release has no gene layer, so only positions and intervals can be used.")
         matches = jobs.connect([jobs.release()]).execute(f"""
-            SELECT DISTINCT t.token, g.id, g.chrom, g.start, g."end"
+            SELECT t.token, g.id, g.chrom, g.start, g."end", bool_or(lower(a.alias) = lower(t.token)) AS known
             FROM (SELECT unnest($tokens) AS token) t, read_parquet({lit(path)}) g LEFT JOIN {_aliases_sql()} ON a.gene_id = g.id
-            WHERE upper(g.id) = upper(t.token) OR lower(g.name) = lower(t.token) OR lower(a.alias) = lower(t.token)""",
-                                                         {"tokens": genes_wanted}).fetchall()
+            WHERE upper(g.id) = upper(t.token) OR lower(g.name) = lower(t.token) OR lower(a.alias) = lower(t.token)
+            GROUP BY t.token, g.id, g.chrom, g.start, g."end" ORDER BY try_cast(g.chrom AS INTEGER), g.start""",
+            {"tokens": genes_wanted}).fetchall()
         for token in genes_wanted:
             hits = [m for m in matches if m[0] == token]
             if not hits:
                 raise jobs.InputError(f"'{token[:40]}' is not a gene id, gene name, position or interval in this release.")
-            if len(hits) > 1:
-                raise jobs.InputError(f"'{token[:40]}' matches {len(hits)} genes ({', '.join(h[1] for h in hits[:5])}): "
-                                      "paste the Ensembl id of the one you mean.")
-            _, gene_id, chrom, start, end = hits[0]
-            found.append(((chrom, max(1, start + 1 - flank), end + flank), f"{token} +/- {flank // 1000} kb" if flank else token))
+            known = [h for h in hits if h[5]]  # a name shared by Ss4R copies means the known-loci catalogue's gene
+            if len(hits) > 1 and len(known) != 1:
+                raise jobs.InputError(f"'{token[:40]}' matches {len(hits)} genes (" + ", ".join(
+                    f"{h[1]} on chr{h[2]}" for h in hits[:5]) + "): paste the Ensembl id of the one you mean.")
+            _, gene_id, chrom, start, end, _ = known[0] if len(hits) > 1 else hits[0]
+            label = f"{token} (chr{chrom}, the known-loci gene)" if len(hits) > 1 else token
+            found.append(((chrom, max(1, start + 1 - flank), end + flank), f"{label} +/- {flank // 1000} kb" if flank else label))
     if not found:
         raise jobs.InputError("Paste at least one gene id or name, position or interval, e.g. ENSSSAG00000053708 or 26:14.5-15Mb.")
     return [w for w, _ in found], [label for _, label in found]
 
 
 @require_POST
+@views.private  # the pasted targets may be confidential candidates: no-store, and error reports without POST values
+@sensitive_post_parameters()
 def candidate_job(request):
     """POST targets (genes, positions, intervals), flank and trait: the public variants there become a job (via
     jobs.create_from_rows), then its results page. Errors re-show the Score page's 'Genes or regions' tab."""
-    from .views import score_page  # imported here, as tour() does
+    score_page = views.score_page
     text = request.POST.get("targets", "")[:20_000]
     flank = request.POST.get("flank", "")
     flank = int(flank) if flank.isdecimal() and int(flank) <= max(FLANKS) else FLANK

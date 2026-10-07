@@ -28,6 +28,7 @@ urlpatterns = [
     path("results/<uuid:key>/figure/<slug:name>.svg", views.figure, name="figure"),
     path("results/<uuid:key>/download/", views.download, name="download"),
     path("results/<uuid:key>/chip/", tools.chip, name="chip"),
+    path("results/<uuid:key>/panel/", tools.design, name="panel_design"),
     path("results/<uuid:key>/delete/", views.delete, name="delete"),
     # AGENT explore (stage 2): known-loci catalogue page; POST genes/intervals -> candidate job
     path("known-loci/", explore.known_loci, name="known_loci"),

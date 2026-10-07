@@ -1,13 +1,13 @@
 {% load snpportal_tags %}
 {% comment %}Panel tab: a compact designer (the rest under 'Advanced settings', open when any is changed), the panel with
    its key numbers, figure and first markers, the Assay readiness card and a closed chip comparison. The designer is a
-   GET form that stays on this page; each parameter set is saved once in the job folder, so the same URL gives the same
-   panel. Card, file and figure links leave the page and are not boosted.{% endcomment %}
+   POST form (must-include ids are the user's SNP names: never in a URL), redirected to this tab with the panel's hash;
+   each parameter set is saved once in the job folder. Card, file and figure links leave the page and are not boosted.{% endcomment %}
 <div class="sp-stack">
   <section class="sp-card" id="designer" aria-labelledby="designer-h">
     <h2 id="designer-h" class="visually-hidden">Panel designer</h2>
-    <form method="get" class="sp-small" hx-boost="true" aria-label="Panel parameters">
-      <input type="hidden" name="tab" value="panel"><input type="hidden" name="trait" value="{{ trait }}"><input type="hidden" name="design" value="1">
+    <form method="post" action="{{ designer.url }}" class="sp-small" aria-label="Panel parameters">{% csrf_token %}
+      <input type="hidden" name="trait" value="{{ trait }}"><input type="hidden" name="design" value="1">
       <div class="sp-filters">
         {% for f in designer.fields %}<label title="{{ f.help }}">{{ f.label }} <input class="form-control form-control-sm sp-pos" type="number"
           name="{{ f.name }}" value="{{ f.value }}" min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step }}"></label>{% endfor %}

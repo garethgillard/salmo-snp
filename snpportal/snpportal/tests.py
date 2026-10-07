@@ -144,6 +144,9 @@ class PortalTest(SimpleTestCase):
         self.assertContains(page, "Tier 1:")
         filtered = self.client.get(url + "?tab=table&trait=maturation&max_tier=2&hide_lore=1")
         self.assertContains(filtered, "shown")
+        trait_form = filtered.content.decode().split('<label for="trait">')[0].rsplit("<form", 1)[1]  # changing Trait keeps them
+        self.assertIn('name="tier" value="1-2"', trait_form)
+        self.assertIn('name="hide_lore" value="1"', trait_form)
         self.assertContains(filtered, '<option value="maturation" title="maturation: Brain, Gonad" selected>')  # the Trait tooltip
 
         card = self.client.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain", HTTP_HX_REQUEST="true")
@@ -273,6 +276,12 @@ class PortalTest(SimpleTestCase):
         gone = self.client.get(url)
         self.assertContains(gone, "expired or were deleted", status_code=404)
         self.assertContains(gone, reverse("snpportal:upload"), status_code=404)
+        running = self.key(self.paste("25 28996360"))  # 'Delete now' while a worker runs: its DuckDB spills into the folder,
+        jobs._running.add(running)  # so only job.json goes at once (the page says deleted) ...
+        jobs.delete(running)
+        self.assertEqual(((self.results / running).exists(), jobs.read(running)), (True, None))
+        jobs.run(running)  # ... and the worker removes the folder when it ends
+        self.assertFalse((self.results / running).exists())
 
         old = self.key(self.paste("25 28996360"))
         os.utime(self.results / old / "job.json", (0, 0))

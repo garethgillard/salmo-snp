@@ -46,7 +46,8 @@
   <section class="sp-card mt-3" aria-labelledby="loci-h">
     <h2 id="loci-h">Loci</h2>
     <p class="sp-small sp-muted">Loci: SNPs within &plusmn;{{ values.window }} kb of each lead with p &lt; {{ values.sugg }},
-      strongest first, by distance only (no LD). Long-range LD in farmed lines can split or merge loci.</p>
+      strongest first, by distance only (no LD). Long-range LD in farmed lines can split or merge loci.{% if total > max_loci %}
+      <strong>{{ total|thousands }} loci at these settings: the {{ max_loci }} strongest are listed, fine-mapped and downloaded.</strong>{% endif %}</p>
     {% if loci %}<div class="sp-scroll"><table class="table table-sm sp-small sp-table">
       <thead><tr><th scope="col">Locus</th><th scope="col">Lead SNP</th><th scope="col" class="sp-num">p</th><th scope="col" class="sp-num">beta (se)</th>
         <th scope="col" class="sp-num" title="SNPs in the locus window (below the significance threshold)">SNPs (sig.)</th>

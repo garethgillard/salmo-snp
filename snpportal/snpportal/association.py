@@ -5,13 +5,17 @@ uniform vs functional priors (P7.4) and the GWAS line of a SNP's evidence card.
 
 A GWAS job is an ordinary job with input_kind 'gwas': jobs.run reads the statistics (snpscore.gwas.prepare:
 sumstats.parquet, gwas.json), annotates their positions, and snpscore.gwas.attach writes gwas.parquet (alleles turned
-to Ssal_v3.1, keyed by the result's file_row_number). Loci and fine-mapping are computed per request from gwas.parquet
-and the tiers of the chosen preset; every setting is a whitelisted URL parameter (defaults: weights.yaml 'finemap',
-PROVISIONAL). The figure functions below are pure (plain data -> SVG with literal palette hex)."""
+to Ssal_v3.1, keyed by the result's file_row_number). Loci and fine-mapping come from gwas.parquet and the tiers of
+the chosen preset, once per trait and settings (loci/<hash>.json and .parquet in the job folder); every setting is a
+whitelisted URL parameter (defaults: weights.yaml 'finemap', PROVISIONAL) that every link of these pages keeps. The
+figure functions below are pure (plain data -> SVG with literal palette hex)."""
 from __future__ import annotations
 
 import math
+import os
 import re
+import uuid
+from decimal import Decimal
 from html import escape
 from pathlib import Path
 from urllib.parse import urlencode
@@ -26,6 +30,8 @@ from django.views.decorators.debug import sensitive_post_parameters
 
 from snpscore import gwas as sg
 from snpscore import locus as sl
+from snpscore import panel as snp_panel
+from snpscore.formats import lit
 
 from . import explore, figures, jobs, locus, locus_svg, palette, results, views
 from .jobs import ident
@@ -34,8 +40,8 @@ G = palette.GREY
 SUFFIXES = (".fastgwa", ".linear", ".logistic", ".hybrid", ".regenie", ".mlma", ".assoc", ".stats", ".tsv", ".txt",
             ".csv", ".tab")  # accepted upload endings, optionally + .gz; the layout is read from the content
 EXAMPLE = "gwas_maturation_SYNTHETIC"  # release demo/ file offered as the GWAS example
-FIELDS = {  # URL parameter -> (finemap setting, lowest, highest); the window is given in kb
-    "sig": ("significant", 1e-300, 0.05), "sugg": ("suggestive", 1e-300, 0.1), "window": ("window", 10, 5000),
+FIELDS = {  # URL parameter -> (finemap setting, lowest, highest); the window is given in kb. sugg <= 0.01 keeps clumping fast
+    "sig": ("significant", 1e-300, 0.05), "sugg": ("suggestive", 1e-300, 0.01), "window": ("window", 10, 5000),
     "prior_sd": ("prior_sd", 0.01, 5), "lam": ("functional_lambda", 0, 3), "trait_sd": ("trait_sd", 1e-9, 1e9)}
 LABELS = {"sig": ("Significant p", ""), "sugg": ("Suggestive p", ""), "window": ("Window ± kb", ""),  # the closed settings form
           "prior_sd": ("Prior effect SD", "W = SD squared, on the standardised scale"),
@@ -53,6 +59,7 @@ OK_ALLELES = {"ok", "swapped", "strand_flip", "strand_flip_swapped"}  # harmonis
 ASSUMPTIONS = ("Fine-mapping assumes one causal variant per locus and uses no LD (no public LD reference yet); "
                "results are sensitive to the prior effect SD (W) and to lambda.")
 SHOW_CS = 10  # credible-set rows shown under the regional plot before 'Show all'
+MAX_LOCI = 200  # loci fine-mapped and listed, strongest first (the page says when there are more)
 
 
 def chrom_key(c):
@@ -149,6 +156,16 @@ def form_values(cfg):
             "prior_sd": f"{cfg['prior_sd']:g}", "lam": f"{cfg['functional_lambda']:g}", "trait_sd": f"{cfg['trait_sd']:g}"}
 
 
+def query_of(request):
+    """The request's fine-mapping settings as given (FIELDS only), for every link that must open the same loci."""
+    return {k: request.GET[k][:40] for k in FIELDS if request.GET.get(k)} if request else {}
+
+
+def url(name, key, a, **params):
+    """A link to page `name` of job `key` that keeps the analysis' trait and settings."""
+    return f"{reverse(name, args=[key])}?{urlencode({'trait': a['trait'], **a['query'], **params})}"
+
+
 def gwas_job(key):
     """job.json of a finished GWAS job, else 404."""
     job = views.finished(key)
@@ -158,31 +175,52 @@ def gwas_job(key):
 
 
 def analyse(request, key):
-    """{con (view g: gwas.parquet with the trait's tiers, genes, region and LORe), cfg, defaults (cfg without the
-    request's settings), loci, fm (locus -> summary), trait, d, n, query (the request's settings)} for the request.
-    Loci and fine-mapping are recomputed per request (they take well under a second for 200K SNPs)."""
-    con, types, _, chosen = results.open_result(request, key)
+    """{con (view g: gwas.parquet with the trait's tiers, genes (the catalogue's names for genes Ensembl leaves
+    unnamed), region and LORe; view fm: the fine-mapping), cfg, defaults (cfg without the request's settings), loci
+    (the MAX_LOCI strongest), total (all loci), fm (locus -> summary), trait, d, n, query (the request's settings)}.
+    Clumping and fine-mapping run once per trait and settings; later requests read loci/<hash>.json and .parquet."""
+    con, types, _, chosen = results.open_result(request, key, write=True)
     trait, d = chosen["trait"], jobs.folder(key)
     w = jobs.weights(d)
     cfg = settings(request, w)
     keep = [c for c in ("tier", "tier_score", "tier_evidence", "region_class", "gene_name", "gene_ortholog_human",
                         "gene_id", "lore", "known_locus") if c in types]
-    con.execute(f"CREATE VIEW g AS SELECT s.*{''.join(f', v.{ident(c)}' for c in keep)} "
-                f"FROM read_parquet('{d / 'gwas.parquet'}') s JOIN v USING (file_row_number)")
-    loci = sg.clump(con, "g", cfg)
-    fm = sg.finemap(con, "g", loci, cfg)
-    n = con.execute("SELECT count(*) FROM g").fetchone()[0]
-    return {"con": con, "cfg": cfg, "defaults": settings(None, w), "loci": loci, "fm": fm, "trait": trait, "d": d, "n": n,
-            "types": types, "query": {k: request.GET[k] for k in FIELDS if request.GET.get(k)}}
+    names = explore.aliases() if {"gene_name", "gene_id"} <= set(keep) else {}
+    alias = ("LEFT JOIN (VALUES " + ", ".join(f"({lit(g)}, {lit(n)})" for g, n in names.items()) + ") a(gene_id, alias) "
+             "ON a.gene_id = v.gene_id") if names else ""
+    cols = "".join(", coalesce(v.gene_name, a.alias) AS gene_name" if c == "gene_name" and alias else f", v.{ident(c)}" for c in keep)
+    con.execute(f"CREATE VIEW g AS SELECT s.*{cols} FROM read_parquet({lit(d / 'gwas.parquet')}) s JOIN v USING (file_row_number) {alias}")
+    folder, h = d / "loci", snp_panel.params_hash({"v": 1, "trait": trait, "max_loci": MAX_LOCI, **cfg})
+    saved = jobs.read_json(folder / f"{h}.json")
+    if not saved:  # table fm stays from finemap; later requests read it back from the parquet
+        loci = [{k: float(v) if isinstance(v, Decimal) else v for k, v in x.items()} for x in sg.clump(con, "g", cfg)]
+        total, loci = len(loci), loci[:MAX_LOCI]
+        fm = sg.finemap(con, "g", loci, cfg)
+        saved = {"loci": loci, "total": total, "n": con.execute("SELECT count(*) FROM g").fetchone()[0], "fm": fm}
+        folder.mkdir(mode=0o700, exist_ok=True)
+        if loci:
+            tmp = folder / f".tmp-{uuid.uuid4().hex}.parquet"
+            con.execute(f"COPY fm TO {lit(tmp)} (FORMAT parquet)")
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, folder / f"{h}.parquet")
+        jobs._write_json(folder / f"{h}.json", saved)  # last, so a .json means its parquet is complete
+        saved = jobs.read_json(folder / f"{h}.json") or saved  # as later requests read it (JSON keys are strings)
+    elif saved["loci"]:
+        con.execute(f"CREATE VIEW fm AS SELECT * FROM read_parquet({lit(folder / f'{h}.parquet')})")
+    loci, total, n, fm = saved["loci"], saved["total"], saved["n"], {int(k): v for k, v in saved["fm"].items()}
+    return {"con": con, "cfg": cfg, "defaults": settings(None, w), "loci": loci, "total": total, "fm": fm, "trait": trait, "d": d,
+            "n": n, "types": types, "query": query_of(request)}
 
 
 def lines_of(cfg, n):
-    """Threshold lines: [(-log10 p, label, dash)], labelled as conventions."""
-    out = [(-math.log10(cfg["significant"]), f"p {cfg['significant']:.0e} (convention)", "")]
+    """Threshold lines: [(-log10 p, label, dash, tooltip)], labelled as conventions."""
+    out = [(-math.log10(cfg["significant"]), f"p {cfg['significant']:.0e} convention", "",
+            f"p {cfg['significant']:.0e}: genome-wide significance (a convention, not a rule for salmon)")]
     if n:
         bonf = 0.05 / n
-        out.append((-math.log10(bonf), f"Bonferroni 0.05/{n:,} = {bonf:.1e}", "6 3"))
-    out.append((-math.log10(cfg["suggestive"]), f"p {cfg['suggestive']:.0e} (suggestive)", "2 3"))
+        out.append((-math.log10(bonf), f"Bonferroni {bonf:.1e}", "6 3", f"Bonferroni 0.05/{n:,} = {bonf:.1e}"))
+    out.append((-math.log10(cfg["suggestive"]), f"p {cfg['suggestive']:.0e} suggestive", "2 3",
+                f"p {cfg['suggestive']:.0e}: suggestive threshold (loci start below it)"))
     return out
 
 
@@ -228,10 +266,11 @@ def _step(top):
 
 
 def manhattan_svg(points, sizes, lines, leads, title, desc, synthetic=False):
-    """points: [(chrom, pos, -log10 p, tier)]; sizes: {chrom: length}; lines: [(-log10 p, label, dash)]; leads:
+    """points: [(chrom, pos, -log10 p, tier)]; sizes: {chrom: length}; lines: [(-log10 p, label, dash, tooltip)]; leads:
     [{chrom, pos, neglog10p, label, url}]. Chromosomes in alternating greys, tier 1-2 SNPs on top in tier colours,
-    points above CAP as triangles at the top; points are de-duplicated per half pixel."""
-    width, height, left, right, top_px, bottom = 1100, 350, 58, 18, 28, 42
+    points above CAP as triangles at the top; points are de-duplicated per half pixel. The threshold labels sit in the
+    right-hand margin, outside the data, pushed apart when their lines are close."""
+    width, height, left, right, top_px, bottom = 1100, 350, 58, 126, 28, 42
     chroms = sorted({p[0] for p in points} | {x["chrom"] for x in leads}, key=chrom_key)
     span = {c: sizes.get(c) or max([p[1] for p in points if p[0] == c] + [1]) for c in chroms}
     gap = 4 if len(chroms) > 1 else 0
@@ -240,7 +279,7 @@ def manhattan_svg(points, sizes, lines, leads, title, desc, synthetic=False):
     x0, x = {}, left
     for c in chroms:
         x0[c], x = x, x + avail * span[c] / total + gap
-    ymax = min(CAP, max([p[2] for p in points] + [y for y, _, _ in lines] + [1]) * 1.05)
+    ymax = min(CAP, max([p[2] for p in points] + [x[0] for x in lines] + [1]) * 1.05)
     step = _step(ymax)
     ymax = math.ceil(ymax / step) * step
     h = height - top_px - bottom
@@ -269,11 +308,12 @@ def manhattan_svg(points, sizes, lines, leads, title, desc, synthetic=False):
     for px, c, pos, nlp in capped:
         body.append(f'<path d="M{px:.1f} {top_px - 1} l4 7 l-8 0z" fill="{G[900]}"><title>{escape(c)}:{pos:,} '
                     f'p {sg.p_text(nlp)} (above the axis)</title></path>')
-    for i, (y, label, dash) in enumerate(lines):  # labels staggered from the right, so close lines stay readable
-        if y <= ymax:
-            dashed = f' stroke-dasharray="{dash}"' if dash else ""
-            body.append(f'<line x1="{left}" x2="{width - right}" y1="{sy(y):.1f}" y2="{sy(y):.1f}" stroke="{palette.STATUS["fail"][0]}"{dashed}/>'
-                        + figures._text(width - right - 2 - 230 * i, sy(y) - 3, label, "end", font_size=9.5, fill=palette.STATUS["fail"][0]))
+    red, labels, last = palette.STATUS["fail"][0], [], -99
+    for y, label, dash, tip in sorted((x for x in lines if x[0] <= ymax), key=lambda x: -x[0]):  # top line first
+        dashed = f' stroke-dasharray="{dash}"' if dash else ""
+        body.append(f'<line x1="{left}" x2="{width - right}" y1="{sy(y):.1f}" y2="{sy(y):.1f}" stroke="{red}"{dashed}><title>{escape(tip)}</title></line>')
+        last = max(sy(y) + 3.5, last + 12)  # labels at least 12 px apart
+        labels.append(f'<g><title>{escape(tip)}</title>' + figures._text(width - right + 6, last, label, font_size=10, fill=red) + "</g>")
     for x in leads:
         px, py = sx(x["chrom"], x["pos"]), sy(x["neglog10p"])
         mark = (f'<path d="M{px:.1f} {py - 7:.1f} l6 7 l-6 7 l-6 -7z" fill="{palette.WHITE}" stroke="{G[900]}" stroke-width="1.6">'
@@ -285,6 +325,7 @@ def manhattan_svg(points, sizes, lines, leads, title, desc, synthetic=False):
         if mid - last > 14:
             body.append(figures._text(mid, height - bottom + 16, c, "middle", font_size=10, fill=G[700]))
             last = mid
+    body += labels
     body.append(figures._text((left + width - right) / 2, height - 8, "chromosome (Ssal_v3.1)", "middle", font_size=11, fill=G[700]))
     body.append(figures._legend([(palette.TIERS[1][0], "tier 1"), (palette.TIERS[2][0], "tier 2 (p <= 0.01, drawn on top)"),
                                  (palette.WHITE, "diamond: locus lead, opens its regional plot")], left + 4, 6))
@@ -388,14 +429,14 @@ FIGURES = {  # name -> (title, definition)
 def figure_data(a, name, job, key, link=True):
     """(svg, header, rows) of a figure for the analysis `a`. Provenance goes in the SVG's <desc> only."""
     con, cfg, trait, synthetic = a["con"], a["cfg"], a["trait"], bool(job.get("synthetic_input") or job.get("synthetic_layers"))
-    caption = f"Release {job.get('release')} · preset {trait} · job created {job.get('created_utc')} · thresholds and priors PROVISIONAL"
+    caption = f"Release {job.get('release')} · trait {trait} · job created {job.get('created_utc')} · thresholds and priors PROVISIONAL"
     desc = FIGURES[name][1] + " " + caption + (" · SYNTHETIC test data" if synthetic else "")
     if name == "manhattan":
         points = sg.manhattan(con, "g")
         sizes = {c: int(s) for c, s in (jobs.manifest(a["d"]).get("chrom_sizes") or {}).items()}
         leads = [{"chrom": x["chrom"], "pos": x["lead"], "neglog10p": x["neglog10p"],
                   "label": f"Locus {x['locus']}: {x['id']} p {sg.p_text(x['neglog10p'])}",
-                  "url": f"{reverse('snpportal:association_region', args=[key])}?{urlencode({'trait': trait, 'locus': x['locus']})}" if link else None}
+                  "url": url("snpportal:association_region", key, a, locus=x["locus"]) if link else None}
                  for x in a["loci"]]
         svg = manhattan_svg(points, sizes, lines_of(cfg, a["n"]), leads, FIGURES[name][0], desc, synthetic)
         return svg, ["chrom", "pos", "neglog10p", "tier"], sorted(points, key=lambda p: (chrom_key(p[0]), p[1]))
@@ -406,18 +447,18 @@ def figure_data(a, name, job, key, link=True):
         svg = qq_svg(strata, {t: palette.TIERS[t][0] for t in palette.TIERS}, labels, band, FIGURES[name][0], desc, synthetic)
         rows = [(labels.get(k, k), round(e, 4), round(o, 4)) for k, s in strata.items() for e, o in s["points"]]
         return svg, ["stratum", "expected_neglog10p", "observed_neglog10p"], rows
-    panels, rows = [], []
-    for x in a["loci"]:
-        s = a["fm"].get(x["locus"], {})
-        if not s.get("n"):
-            continue
-        hits = con.execute("""SELECT coalesce(id, chrom || ':' || pos), tier, pip_uniform, pip_functional, pos, cs_uniform, cs_functional
-                              FROM fm WHERE locus = ? AND (cs_uniform OR cs_functional)
-                              ORDER BY greatest(pip_uniform, pip_functional) DESC LIMIT 15""", [x["locus"]]).fetchall()
+    mapped = [x for x in a["loci"] if a["fm"].get(x["locus"], {}).get("n")]
+    tier = "tier" if "tier" in a["types"] else "NULL"
+    rows = con.execute(f"""SELECT locus, coalesce(id, chrom || ':' || pos), {tier}, pip_uniform, pip_functional, pos, cs_uniform, cs_functional
+                           FROM fm WHERE cs_uniform OR cs_functional
+                           QUALIFY row_number() OVER (PARTITION BY locus ORDER BY greatest(pip_uniform, pip_functional) DESC, pos) <= 15
+                           ORDER BY locus, greatest(pip_uniform, pip_functional) DESC, pos""").fetchall() if mapped else []
+    panels = []
+    for x in mapped[:10]:  # the drawn loci
+        s = a["fm"][x["locus"]]
         panels.append({"title": f"Locus {x['locus']} · chr{x['chrom']}", "sub": f"credible set {s['size_uniform']} → {s['size_functional']} SNPs",
-                       "rows": [(h[0], h[1], h[2], h[3]) for h in hits]})
-        rows += [(x["locus"], *h) for h in hits]
-    svg = pip_svg(panels[:10], FIGURES[name][0], desc, synthetic)
+                       "rows": [r[1:5] for r in rows if r[0] == x["locus"]]})
+    svg = pip_svg(panels, FIGURES[name][0], desc, synthetic)
     return svg, ["locus", "snp", "tier", "pip_uniform", "pip_functional", "pos", "cs_uniform", "cs_functional"], rows
 
 
@@ -430,8 +471,8 @@ def figure_card(a, name, svg, key):
 
 # ---- pages ----
 
-def card_url(key, row, trait):
-    return f"{reverse('snpportal:card', args=[key, row])}?{urlencode({'trait': trait})}"
+def card_url(key, row, a):
+    return f"{reverse('snpportal:card', args=[key, row])}?{urlencode({'trait': a['trait'], **a['query']})}"
 
 
 def loci_rows(a, key):
@@ -446,13 +487,12 @@ def loci_rows(a, key):
             FROM fm GROUP BY locus""").fetchall()}
     out = []
     for x in a["loci"]:
-        q = urlencode({"trait": a["trait"], "locus": x["locus"]})
         top = tops.get(x["locus"])
-        u = {"id": top[2], "tier": top[1], "card": card_url(key, top[0], a["trait"])} if top else None
-        f = {"id": top[5], "tier": top[4], "card": card_url(key, top[3], a["trait"])} if top and top[3] != top[0] else None
+        u = {"id": top[2], "tier": top[1], "card": card_url(key, top[0], a)} if top else None
+        f = {"id": top[5], "tier": top[4], "card": card_url(key, top[3], a)} if top and top[3] != top[0] else None
         out.append({**x, "p": sg.p_text(x["neglog10p"]), "fm": a["fm"].get(x["locus"], {}), "top": u, "top_f": f,
-                    "card": card_url(key, x["row"], a["trait"]) if x.get("row") is not None else None,
-                    "region": f"{reverse('snpportal:association_region', args=[key])}?{q}",
+                    "card": card_url(key, x["row"], a) if x.get("row") is not None else None,
+                    "region": url("snpportal:association_region", key, a, locus=x["locus"]),
                     "gene_tip": explore.UNNAMED_TIP if (x.get("gene") or "").startswith("~") else ""})
     return out
 
@@ -499,7 +539,7 @@ def association(request, key):
     if job["state"] == "done":
         gwas_job(key)
         a = analyse(request, key)
-        d, query = a["d"], urlencode({"trait": a["trait"]})
+        d, query = a["d"], urlencode({"trait": a["trait"], **a["query"]})
         values, defaults = form_values(a["cfg"]), form_values(a["defaults"])
         weights, report = jobs.weights(d), jobs.read_json(d / "gwas.json")
         ctx.update(trait=a["trait"], query=query, loci=loci_rows(a, key), release_changed=jobs.release_changed(job),
@@ -507,7 +547,8 @@ def association(request, key):
                    figs={name: figure_card(a, name, figure_data(a, name, job, key)[0], key) for name in FIGURES},
                    fields=[(k, LABELS[k][0], values[k], LABELS[k][1]) for k in FIELDS], values=values,
                    changed=sum(values[k] != defaults[k] for k in FIELDS), settings=a["query"].items(),
-                   qc=qc_items(report), qc_line=qc_line(report), finemapped=any(s.get("n") for s in a["fm"].values()))
+                   qc=qc_items(report), qc_line=qc_line(report), finemapped=any(s.get("n") for s in a["fm"].values()),
+                   total=a["total"], max_loci=MAX_LOCI)
         ctx["actions"] = [{"label": "Export", "url": f"{reverse('snpportal:results', args=[key])}?{query}&tab=export"},
                           {"label": "Report", "url": f"{reverse('snpportal:report', args=[key])}?{query}"},
                           {"label": "Score another list", "url": reverse("snpportal:upload")}]
@@ -532,7 +573,7 @@ def snp_line(request, key, row, job):
     if fm:
         sets = [name for name, inside in (("uniform", fm[3]), ("functional", fm[4])) if inside]
         out.update(locus=fm[0], pip_u=fm[1], pip_f=fm[2],
-                   region=f"{reverse('snpportal:association_region', args=[key])}?{urlencode({'trait': a['trait'], 'locus': fm[0]})}",
+                   region=url("snpportal:association_region", key, a, locus=fm[0]),
                    cs="in both 95% credible sets" if len(sets) == 2 else f"in the {sets[0]} prior's 95% credible set" if sets
                    else "outside the 95% credible sets")
     return out
@@ -598,7 +639,7 @@ def download(request, key):
 def lane(a, chrom, start, end, key, locus_id=None, link=True):
     """locus_svg.gwas_lane data for a window: the job's SNPs with -log10 p, tier, shape and credible-set outline
     (functional prior) of locus `locus_id`."""
-    con, trait = a["con"], a["trait"]
+    con = a["con"]
     lead = next((x for x in a["loci"] if x["locus"] == locus_id), None)
     has_fm = bool(a["loci"]) and any(s.get("n") for s in a["fm"].values())
     fm = (f"LEFT JOIN (SELECT file_row_number, pip_uniform, pip_functional, cs_functional FROM fm WHERE locus = {int(locus_id or 0)}) f "
@@ -615,7 +656,7 @@ def lane(a, chrom, start, end, key, locus_id=None, link=True):
         title = (f"{sid or '(no id)'} · {chrom}:{pos:,}" + (f" {ref}>{alt}" if ref and alt else "") + f" · p {sg.p_text(nlp)} · tier {tier}"
                  + (f" · {region_class.replace('_', ' ')}" if region_class else "") + pips + (" · in the 95% credible set" if cs else ""))
         points.append({"pos": pos, "neglog10p": nlp, "tier": tier, "kind": kind, "cs": bool(cs), "title": title,
-                       "url": card_url(key, row, trait) if link else None})
+                       "url": card_url(key, row, a) if link else None})
     return {"points": points, "significant": -math.log10(a["cfg"]["significant"]), "note": "No LD used: colours are tiers, not r²"}
 
 
@@ -649,7 +690,7 @@ def credible(a, x, key):
                                 FROM fm WHERE locus = ? AND (cs_uniform OR cs_functional)
                                 ORDER BY greatest(pip_uniform, pip_functional) DESC, pos""", [x["locus"]]).fetchall()
     return [{"id": sid, "alleles": f"{ref}>{alt}" if ref and alt else "", "p": sg.p_text(nlp), "tier": t, "pip_u": pu, "pip_f": pf,
-             "set": "both" if cu and cf else "uniform" if cu else "functional", "card": card_url(key, row, a["trait"])}
+             "set": "both" if cu and cf else "uniform" if cu else "functional", "card": card_url(key, row, a)}
             for row, sid, ref, alt, nlp, t, pu, pf, cu, cf in rows]
 
 
@@ -685,7 +726,7 @@ def region(request, key):
             else f"Region {chrom}:{start + 1:,}-{end:,}")
     body, h = locus_svg.gwas_figure(data, chrom, start, end, head if download else "", height=250)
     inner_h = float(re.search(r'height="([\d.]+)"', inner).group(1))
-    desc = (f"{head}. -log10 p of the job's SNPs coloured by tier for preset {a['trait']}; diamond: lead; triangles: CDS or "
+    desc = (f"{head}. -log10 p of the job's SNPs coloured by tier for trait {a['trait']}; diamond: lead; triangles: CDS or "
             "splice; dark ring: 95% credible set under the functional prior. No LD is used. Below: genes, published loci, "
             f"the trait's chromatin rows and GERP. Release {job.get('release')}, job created {job.get('created_utc')}; "
             "thresholds, priors and track sets PROVISIONAL" + ("; SYNTHETIC test data." if synthetic else "."))
@@ -694,7 +735,7 @@ def region(request, key):
         response = HttpResponse(svg, content_type="image/svg+xml")
         response["Content-Disposition"] = f'attachment; filename="gwas_region_{chrom}_{start + 1}_{end}.svg"'
         return response
-    q = urlencode({"trait": a["trait"], **({"r": request.GET["r"][:200]} if request.GET.get("r") else {"locus": x["locus"]} if x else {})})
+    q = urlencode({"trait": a["trait"], **a["query"], **({"r": request.GET["r"][:200]} if request.GET.get("r") else {"locus": x["locus"]} if x else {})})
     wider = "{}:{}-{}".format(chrom, max(1, start + 1 - (end - start)), end + (end - start))
     shown = "{}:{}-{}".format(chrom, start + 1, end)
     here = reverse("snpportal:association_region", args=[key])
@@ -702,9 +743,9 @@ def region(request, key):
     return render(request, "snpportal/association_region.html", {
         "nav": "score", "job": job, "key": key, "title": head, "svg": mark_safe(svg), "notes": notes, "synthetic": synthetic,
         "loci": loci_rows(a, key), "current": x, "trait": a["trait"], "file_name": f"gwas_region_{chrom}_{start + 1}_{end}",
-        "svg_url": f"{here}?{q}&download=1", "wider": f"{here}?{urlencode({'trait': a['trait'], 'r': wider})}",
-        "browser": f"{reverse('snpportal:locus')}?{urlencode({'r': shown, 'key': key, 'trait': a['trait']})}",
+        "svg_url": f"{here}?{q}&download=1", "wider": url("snpportal:association_region", key, a, r=wider),
+        "browser": f"{reverse('snpportal:locus')}?{urlencode({'r': shown, 'key': key, 'trait': a['trait'], **a['query']})}",
         "credible": rows if request.GET.get("all") == "1" else rows[:SHOW_CS], "n_credible": len(rows), "all_url": f"{here}?{q}&all=1#credible",
-        "finemap_url": f"{reverse('snpportal:association_download', args=[key])}?{urlencode({'trait': a['trait'], **a['query']})}&format=finemap",
-        "crumbs": [("Results", f"{reverse('snpportal:results', args=[key])}?{urlencode({'trait': a['trait'], 'tab': 'overview'})}"),
-                   ("Association", f"{reverse('snpportal:association', args=[key])}?{urlencode({'trait': a['trait']})}"), ("Locus", None)]})
+        "finemap_url": url("snpportal:association_download", key, a, format="finemap"),
+        "crumbs": [("Results", url("snpportal:results", key, a, tab="overview")),
+                   ("Association", url("snpportal:association", key, a)), ("Locus", None)]})

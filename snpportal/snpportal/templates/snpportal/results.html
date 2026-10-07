@@ -28,6 +28,7 @@
       <li class="ms-auto align-self-center" hx-boost="false">
         <form method="get" class="d-flex align-items-center gap-2 sp-small" hx-get="{% url 'snpportal:results' key %}" hx-trigger="change" hx-push-url="true">
           <input type="hidden" name="tab" value="{{ tab }}">
+          {% for name, value in keep %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}{# the tab's view: filters, sort, panel, scope #}
           <label for="trait">Trait</label>
           <select class="form-select form-select-sm w-auto" id="trait" name="trait" title="{{ trait_tip }}">
             {% for value, label, tip in presets %}<option value="{{ value }}" title="{{ tip }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}

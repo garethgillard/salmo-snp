@@ -13,6 +13,7 @@ A job folder (0700, files 0600) holds:
 Log lines carry an event name, job_ref (a hash of the key), counts and timings: never SNPs or file names."""
 from __future__ import annotations
 
+import gc
 import gzip
 import hashlib
 import inspect
@@ -45,7 +46,7 @@ TIER_COLUMNS = ("tier", "tier_score", "tier_evidence", "tier_terms")
 PUBLIC_AF = "504-fish panel: mostly wild and farmed fish from Bertolotti et al. 2020 plus the 12 AQUA-FAANG fish"  # public_af (R1)
 
 _lock = threading.RLock()
-_queued, _running = set(), set()
+_queued, _running, _deleted = set(), set(), set()  # job keys; _deleted: 'Delete now' while running, removed when run() ends
 _executor = None
 
 
@@ -98,9 +99,11 @@ def limits():
 def connect(read=(), write=None):
     """DuckDB connection for portal queries that may read files only under `read` (and write under `write`), with
     SNPPORTAL_DUCKDB_THREADS (2) and SNPPORTAL_DUCKDB_MEMORY (2GB). Uses snpscore.connect() (the sandbox) when this
-    snpscore has it."""
+    snpscore has it. A connection that writes spills into results/.spill-<uuid>, which DuckDB makes when needed and
+    removes on close: never into the job folder, which 'Delete now' or cleanup() may remove while a request runs."""
     if hasattr(snpscore, "connect"):
-        return snpscore.connect(read_dirs=list(read), write_dir=write, **limits())
+        spill = results_dir() / f".spill-{uuid.uuid4().hex}" if write else None
+        return snpscore.connect(read_dirs=[*read, *([write] if write else [])], write_dir=spill, **limits())
     return duckdb.connect(config=limits())
 
 
@@ -152,7 +155,12 @@ def release_changed(job):
 def presets(where=None):
     """[(value, label)] of the trait presets in weights.yaml."""
     w = weights(where)
-    return [(p, p.replace("_", " ")) for p in w["presets"]] if w else []
+    return [(p, trait_label(p)) for p in w["presets"]] if w else []
+
+
+def trait_label(trait):
+    """A trait preset as people read it: 'growth and fillet', 'all conditions'."""
+    return "all conditions" if trait == "all" else trait.replace("_", " ")
 
 
 # ---- job.json ----
@@ -271,8 +279,9 @@ def run(key):
     """Annotate a job's input, precompute tiers for every preset and write summary.json. Runs on the pool (or
     inline); never raises: failures end in state 'failed' with an error_code and a message for the user."""
     key = str(key)
-    _queued.discard(key)
-    _running.add(key)
+    with _lock:
+        _queued.discard(key)
+        _running.add(key)
     d, t0 = folder(key), time.time()
     current, timings = {"stage": "reading", "t": t0}, {}
 
@@ -316,13 +325,20 @@ def run(key):
                error="Something went wrong while scoring this list. Please try again, or contact us if it keeps happening.")
         log.error("job_failed job_ref=%s error_code=internal exception=%s", job_ref(key), type(e).__name__)
     finally:
-        _running.discard(key)
-        for p in d.glob("input*"):
-            p.unlink(missing_ok=True)
-        try:
-            lock_down(d)  # also after a failure: validation.json and rejects.tsv hold the user's rows
-        except FileNotFoundError:  # deleted meanwhile
-            pass
+        with _lock:
+            _running.discard(key)
+            deleted = key in _deleted
+            _deleted.discard(key)
+        if deleted:  # 'Delete now' came while this ran: its DuckDB connections (spilling into d) are closed by now
+            gc.collect()
+            shutil.rmtree(d, ignore_errors=True)
+        else:
+            for p in d.glob("input*"):
+                p.unlink(missing_ok=True)
+            try:
+                lock_down(d)  # also after a failure: validation.json and rejects.tsv hold the user's rows
+            except FileNotFoundError:  # deleted meanwhile
+                pass
 
 
 def _annotate(src, d, progress):
@@ -370,7 +386,7 @@ def precompute(d):
 
 # ---- summary.json: everything the Overview tab shows, so it never scans the result ----
 
-SUMMARY_VERSION = 3  # 3: molQTL count and assay reasons
+SUMMARY_VERSION = 4  # 3: molQTL count and assay reasons; 4: MAF bins with the Table filter's edges
 REGION_GROUPS = {  # region filter / figure group -> SQL condition on region_class (the rest is 'other')
     "coding": "region_class IN ('CDS', 'splice_region')", "UTR": "region_class LIKE '%UTR'",
     "exon": "region_class = 'exon'", "intron": "region_class = 'intron'", "intergenic": "region_class IS NULL"}
@@ -452,7 +468,8 @@ def summarise(con, d, columns, w):
             s.setdefault(key, {})[name] = k
     maf, source = maf_sql(columns)
     if maf:
-        hist = dict(con.execute(f"SELECT least(floor(m / {MAF_BIN}), {round(0.5 / MAF_BIN) - 1})::INTEGER, count(*) "
+        # round(m, 9) * 20, not m / 0.05: 0.15 lands in [0.15, 0.2), as for the bar's Table filter (m >= 0.15) and the pool
+        hist = dict(con.execute(f"SELECT least(floor(round(m, 9) * {round(1 / MAF_BIN)}), {round(0.5 / MAF_BIN) - 1})::INTEGER, count(*) "
                                 f"FROM (SELECT {maf} AS m FROM r) GROUP BY 1").fetchall())
         s["maf"] = {"source": source, "width": MAF_BIN, "missing": hist.pop(None, 0),
                     "bins": [hist.get(i, 0) for i in range(round(0.5 / MAF_BIN))]}
@@ -565,9 +582,18 @@ def parse_paste(text, limit):
 # ---- lifecycle ----
 
 def delete(key):
-    """Delete a job folder now (the 'Delete now' button). A running job notices and stops writing."""
-    _queued.discard(str(key))
-    shutil.rmtree(folder(key), ignore_errors=True)
+    """Delete a job now (the 'Delete now' button). A running job's folder is DuckDB's spill folder, so it only loses
+    job.json (its pages say deleted, and it stops at its next stage); run() removes the folder when it ends."""
+    key = str(key)
+    with _lock:
+        _queued.discard(key)
+        running = key in _running
+        if running:
+            _deleted.add(key)
+    if running:
+        (folder(key) / "job.json").unlink(missing_ok=True)
+    else:
+        shutil.rmtree(folder(key), ignore_errors=True)
     log.info("job_deleted_by_user job_ref=%s", job_ref(key))
 
 

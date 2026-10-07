@@ -1,7 +1,9 @@
 {% load snpportal_tags %}
-{% comment %}Evidence card for one SNP (context: ev from locus.evidence, presets, switch_url, hx, mini_url, locus_url), the
-   body of card_page.html and variant.html (their H1 is the title). Parts render only when their columns exist;
+{% comment %}Evidence card for one SNP (context: ev from locus.evidence, presets, switch_url, hx, mini_url, locus_url, keep:
+   other parameters the trait form keeps), the body of card_page.html and variant.html (their H1 is the title); an htmx
+   swap also brings the breadcrumb, whose links carry the trait. Parts render only when their columns exist;
    expression, the user's own columns and details are closed.{% endcomment %}
+{% if hx and crumbs %}{% include 'snpportal/_crumbs.html' with oob=1 %}{% endif %}
 <div id="card-body" class="sp-card sp-small">
   <div class="d-flex flex-wrap align-items-start gap-2 mb-2">
     <p class="mb-0"><span class="sp-mono">{{ ev.position }}{% if ev.alleles %} {{ ev.alleles }}{% endif %}</span>
@@ -9,6 +11,7 @@
       {% if ev.gene %}· nearest gene <a href="{{ ev.gene.url }}"{% if ev.gene.tip %} title="{{ ev.gene.tip }}"{% endif %}>{% if ev.gene.named %}<em>{{ ev.gene.label }}</em>{% else %}{{ ev.gene.label }}{% endif %}</a> ({{ ev.gene.where }}){% endif %}</p>
     <form class="d-flex align-items-center gap-1 ms-auto sp-noprint" method="get" action="{{ switch_url }}"
           hx-get="{{ switch_url }}" hx-trigger="change" hx-target="#card-body" hx-select="#card-body" hx-swap="outerHTML" hx-push-url="true">
+      {% for name, value in keep %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
       <label class="sp-muted" for="card-trait">Trait</label>
       <select class="form-select form-select-sm w-auto" id="card-trait" name="trait">
         {% for value, label in presets %}<option value="{{ value }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
@@ -50,7 +53,7 @@
     <button type="button" class="btn btn-link btn-sm p-0" data-copy="{{ ev.assay.flank }}">Copy</button></details>{% endif %}{% endif %}
 
   {% if ev.maf %}<p class="mb-2">{% if ev.maf.value %}MAF {{ ev.maf.value }} from <span title="{{ ev.maf.tip }}">{{ ev.maf.fish }} public fish</span>, wild and farmed,
-    pooled; your strain can differ.{% else %}Not a site of the 504-fish public panel.{% endif %} Chromatin from 12 AquaGen fish.
+    pooled; your strain can differ.{% else %}Not a site of the 504-fish public panel.{% endif %} Chromatin: {{ ev.samples }}.
     <a href="{% url 'snpportal:about_data' %}">About the data &rarr;</a></p>{% endif %}
 
   {% if ev.molqtl %}<h3 class="h6 mt-3">molQTL lead SNP (nf-RASQUAL)</h3>

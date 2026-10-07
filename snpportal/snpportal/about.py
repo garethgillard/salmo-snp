@@ -7,6 +7,7 @@ closed items. Run it locally: the commands to score a confidential list on your 
 from __future__ import annotations
 
 import csv
+import hashlib
 import re
 from collections import Counter
 
@@ -16,24 +17,12 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from snpscore import formats
 
-from . import explore, jobs, palette, search
+from . import explore, figures, jobs, palette, search
 
-# One-line definitions; the states are AQUA-FAANG's ChromHMM labels.
-STATE_TEXT = {
-    "Active_TSS": "Active promoter: the start of an expressed gene (H3K4me3 with H3K27ac).",
-    "Flanking_upstream": "Next to an active promoter, upstream of it.",
-    "Flanking_downstream": "Next to an active promoter, downstream of it.",
-    "Active_enhancer": "Active enhancer: distal element with H3K27ac and H3K4me1.",
-    "Primed_enhancer": "Primed enhancer: H3K4me1 without H3K27ac.",
-    "Poised_enhancer_1": "Poised enhancer: H3K4me1 with the repressive H3K27me3.",
-    "Poised_enhancer_2": "Poised enhancer, second state of the model.",
-    "Accessible_chromatin": "Open chromatin (ATAC) without active histone marks.",
-    "Bivalent": "Both active H3K4me3 and repressive H3K27me3.",
-    "Repressed_polycomb": "Repressed by Polycomb (H3K27me3).",
-    "ZNF_genes_and_repeats": "Zinc-finger gene clusters and repeats.",
-    "Quiescent": "No marks: inactive or unmarked.",
-    "Unknown_1": "A state the model did not label.",
-}
+# AQUA-FAANG's ChromHMM states have no written definitions: the emission figure is the only one (RESEARCH.md section 6),
+# so the Methods table gives each state's label and model, and links the figure (one-line definitions: G to supply).
+EMISSIONS = "https://salmobase.org/datafiles/datasets/Aqua-Faang/figures/chromHMM.png"
+STATE_MODELS = {"Bivalent": "DevMap only", "Poised_enhancer_2": "BodyMap only"}  # BodyMap and DevMap: separate 12-state models
 TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.scored)
     "active": "An active state in at least one condition of the trait.",
     "active_elsewhere": "An active state only in conditions outside the trait.",
@@ -220,19 +209,19 @@ def methods(request):
         header = explore.provenance("benchmark of the known loci (n = %s, smoke test only)" % rows[0]["positives"])
         return explore.download((jobs.release() / "benchmark.tsv").read_text(), "benchmark.tsv", request, header)
     conditions = [c for c in explore.layer("chromatin").get("columns", []) if c != "summary"]
-    presets = [(name, ", ".join(prefixes or []), len([c for c in conditions if not prefixes or c.startswith(tuple(prefixes))]))
-               for name, prefixes in (w.get("presets") or {}).items()]
+    presets = [(jobs.trait_label(name), ", ".join(figures.STAGE_LABELS.get(x, x) for x in prefixes or []),
+                len([c for c in conditions if not prefixes or c.startswith(tuple(prefixes))])) for name, prefixes in (w.get("presets") or {}).items()]
     cuts = list(w.get("tiers") or [])
     tiers = [(i + 1, f"tier_score {c} or more" if i == 0 else f"tier_score {c} to {cuts[i - 1] - 1}") for i, c in enumerate(cuts)]
     if cuts:
         tiers.append((len(cuts) + 1, f"tier_score below {cuts[-1]}: no evidence found (not evidence of no effect)"))
     active, weak = w.get("active_states") or [], w.get("weak_states") or []
-    states = [(name, palette.state(name)[2], STATE_TEXT.get(name, ""), "active" if name in active else "weak" if name in weak else "")
-              for name in palette.STATES]
+    states = [(name, palette.state(name)[2], STATE_MODELS.get(name, "BodyMap and DevMap"),
+               "active" if name in active else "weak" if name in weak else "") for name in palette.STATES]
     blocks = [(name, [(k, _flat(v)) for k, v in (value.items() if isinstance(value, dict) else [("value", value)])])
               for name, value in w.items() if name not in STANDARD]
     return render(request, "snpportal/methods.html", {
-        "nav": "about", "title": "Methods", "states": states, "presets": presets, "tiers": tiers, "blocks": blocks,
+        "nav": "about", "title": "Methods", "states": states, "emissions": EMISSIONS, "presets": presets, "tiers": tiers, "blocks": blocks,
         "weights": [(name, value, TERM_TEXT.get(name, "")) for name, value in sorted((w.get("weights") or {}).items(), key=lambda kv: -kv[1])],
         "finemap": w.get("finemap") or {},
         "glossary": [(a, t, text.format(window=(m.get("catalog") or {}).get("window") or 50_000)) for a, t, text in GLOSSARY],
@@ -318,9 +307,17 @@ def run_locally(request):
     if (release / "release.zip.sha256").exists():
         checksum = ((release / "release.zip.sha256").read_text().split() or [None])[0]
     folder = f"release/{info['version']}"
+    # A release built locally has its own manifest.json (build date, local genome path), so it is checked by its layers:
+    # one sha256 over the sorted 'name sha256' lines of the manifest's layers (each a parquet that builds byte-identically)
+    lines = sorted(f"{x['name']} {x.get('sha256')}\n" for x in info["layers"])
+    weights = release / "weights.yaml"
     return render(request, "snpportal/run_locally.html", {
         "nav": "about", "title": "Run it locally", "release": info, "presets": presets, "trait": trait, "folder": folder,
         "zip": (release / "release.zip").exists(), "zip_sha256": checksum,
+        "layers_sha256": hashlib.sha256("".join(lines).encode()).hexdigest() if lines else None,
+        "weights_sha256": jobs.sha256(weights) if weights.exists() else None,
+        "layers_check": (f"python3 -c \"import hashlib, json; m = json.load(open('{folder}/manifest.json')); print(hashlib.sha256(''.join("
+                         "sorted(x['name'] + ' ' + str(x.get('sha256')) + chr(10) for x in m['layers'])).encode()).hexdigest())\""),
         "command": f"snpscore annotate my_snps.vcf.gz --release {folder} --trait {trait} -o my_snps_{trait}.tsv",
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}"})
 

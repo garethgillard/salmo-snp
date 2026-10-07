@@ -5,7 +5,8 @@
   region it opens at vgll3. &slim=1 draws the card's mini view (genes and the trait's chromatin rows).
   htmx swaps #locus-view from /snp/locus/svg/ (same parameters); without htmx that URL is the SVG file.
 - Signal and ChromHMM come from tracks.yaml through snpscore.locus on a fixed public tile grid, cached in the Django
-  cache 'snpportal_tiles' (if configured) or a LocMemCache of 5,000 entries. Cache keys never hold a user's position.
+  cache 'snpportal_tiles' (if configured) or a LocMemCache of 5,000 entries. Views opened from a job (key=) only read
+  that cache: their tiles would record, for days, where the job's SNPs are.
 - The evidence card is addressed by job and row, so its URLs (and the mini locus') carry no coordinates.
 - /snp/variant/<chrom>-<pos>[-ref-alt]/ annotates one position against the release on the fly, without a job."""
 from __future__ import annotations
@@ -39,6 +40,7 @@ FULL = {"published", "molqtl", "regbuild", "gerp", "variants", "signal", "snps"}
 REGION_LANES = {"published", "gerp"}  # the regional association plot (its association lane is drawn on top)
 CARD_LANES = set()  # the card's mini view: genes and the trait's chromatin rows (and a GWAS job's association lane)
 CARD_FLANK = 5_000  # mini locus: the SNP +- this
+COMPACT_WIDTH = 640  # the card's mini locus and the landing figure: about the width they are shown at (no shrunk text)
 ASSAYS = ("ATAC", "H3K27ac", "H3K4me3")
 MAX_SNPS = 5_000  # user SNPs drawn per view
 VARIANT = re.compile(r"^(\w{1,40})-(\d{1,10})(?:-([ACGTNacgtn]{1,50})-([ACGTNacgtn]{1,50}))?$")
@@ -51,9 +53,24 @@ _TILES = LocMemCache("snpportal-tiles", {"TIMEOUT": 7 * 86400, "OPTIONS": {"MAX_
 _fragment = []
 
 
-def tile_cache():
-    """The Django cache 'snpportal_tiles' when settings.CACHES has it, else a process-local LocMemCache (5,000 tiles)."""
-    return caches["snpportal_tiles"] if "snpportal_tiles" in getattr(settings, "CACHES", {}) else _TILES
+def tile_cache(read_only=False):
+    """The Django cache 'snpportal_tiles' when settings.CACHES has it, else a process-local LocMemCache (5,000 tiles);
+    read_only: a view of it that never stores a tile."""
+    cache = caches["snpportal_tiles"] if "snpportal_tiles" in getattr(settings, "CACHES", {}) else _TILES
+    return ReadOnly(cache) if read_only else cache
+
+
+class ReadOnly:
+    """A tile cache that reads tiles others stored and stores none."""
+
+    def __init__(self, cache):
+        self.cache = cache
+
+    def get_many(self, keys):
+        return self.cache.get_many(keys)
+
+    def set_many(self, values):
+        pass
 
 
 def fragment():
@@ -100,7 +117,7 @@ def view_state(request):
     s = {"trait": g.get("trait") if g.get("trait") in presets else "all", "assay": g.get("assay") if g.get("assay") in ASSAYS else "ATAC",
          "hmm": g.get("hmm") == "1", "scale": "track" if g.get("scale") == "track" else "shared", "key": None, "row": None,
          "chrom": None, "error": None, "too_wide": False, "compact": g.get("compact") == "1", "slim": g.get("slim") == "1",
-         "mark": int(g["mark"]) if g.get("mark", "").isdecimal() else None}
+         "mark": int(g["mark"]) if g.get("mark", "").isdecimal() else None, "gwas": {}}
     if g.get("key"):
         try:
             finished(g["key"])
@@ -108,6 +125,7 @@ def view_state(request):
             raise Http404("Result not found or expired") from None
         s["key"] = str(uuid.UUID(g["key"]))  # canonical, as URLs spell it
         s["row"] = int(g["row"]) if g.get("row", "").isdecimal() else None
+        s["gwas"] = results.gwas_settings(request)  # a GWAS job's fine-mapping settings, kept by every link
     text = g.get("r") or g.get("region") or (f"{g['chrom']}:{g.get('start', '')}-{g.get('end', '')}" if g.get("chrom") else "")
     try:
         if text:
@@ -136,7 +154,8 @@ def query(s, **changes):
     """URL parameters of the view s, with changes (start/end in BED coordinates)."""
     start, end = changes.pop("start", s["start"]), changes.pop("end", s["end"])
     params = {"r": region_text(s["chrom"], start, end), "trait": s["trait"], "assay": s["assay"],
-              "hmm": "1" if s["hmm"] else "", "scale": "track" if s["scale"] == "track" else "", "key": s["key"] or ""}
+              "hmm": "1" if s["hmm"] else "", "scale": "track" if s["scale"] == "track" else "", "key": s["key"] or "",
+              **s.get("gwas", {})}
     params.update(changes)
     return urlencode({k: v for k, v in params.items() if v not in ("", None, "all", "ATAC")})
 
@@ -162,15 +181,17 @@ def user_snps(request, s, link=True):
         return []
     con, types = results.open_result(request, s["key"])[:2]
     optional = ", ".join(c if c in types else f"NULL AS {c}" for c in ("id", "ref", "alt"))  # lists may lack them
-    rows = con.execute(f"""SELECT file_row_number, {optional}, pos, tier, tier_score, tier_evidence FROM v
+    terms = "tier_terms" if "tier_terms" in types else "NULL"
+    rows = con.execute(f"""SELECT file_row_number, {optional}, pos, tier, tier_score, tier_evidence, {terms} FROM v
                            WHERE chrom = ? AND pos > ? AND pos <= ? ORDER BY tier NULLS LAST, pos LIMIT {MAX_SNPS}""",
                        [s["chrom"], s["start"], s["end"]]).fetchall()
     out = []
-    for row, sid, ref, alt, pos, tier, score, evidence in rows:
+    for row, sid, ref, alt, pos, tier, score, evidence, fired in rows:
+        evidence = results.evidence_text(evidence, fired)
         alleles = f" {ref}>{alt}" if ref else ""
         out.append({"pos": pos, "id": sid, "tier": tier, "tier_score": score,
                     "title": f"{sid or '(no id)'} · {s['chrom']}:{pos:,}{alleles} · tier {tier} (score {score}): {evidence or 'no evidence'}",
-                    "url": f"{reverse('snpportal:card', args=[s['key'], row])}?{urlencode({'trait': s['trait']})}" if link else None})
+                    "url": f"{reverse('snpportal:card', args=[s['key'], row])}?{urlencode({'trait': s['trait'], **s.get('gwas', {})})}" if link else None})
     return out
 
 
@@ -190,6 +211,10 @@ def molqtl_rows(chrom, start, end):
 def lanes(chrom, start, end):
     """snpscore.locus lanes plus the evidence kind of each published association and the molQTL leads."""
     data = sl.locus(jobs.release(), chrom, start, end)
+    names = explore.aliases()
+    for g in data.get("genes", []):  # one label per gene everywhere: the catalogue's name for genes Ensembl leaves unnamed
+        if not g.get("name") and g.get("id") in names:
+            g["label"] = names[g["id"]]
     for k in data.get("known", []):
         k["kind"] = explore.evidence_kind(k)
     data["molqtl"] = molqtl_rows(chrom, start, end)
@@ -211,6 +236,7 @@ def draw(request, s, download=False, show=FULL):
     signal = hmm = None
     deadline = float(jobs.setting("SNPPORTAL_SIGNAL_DEADLINE", 4.0))
     prefix = f"snpportal:{(info.get('sha256') or 'release')[:12]}"
+    tiles = tile_cache(read_only=bool(s["key"]))  # a view opened from a job may centre on one of its SNPs
     live = "signal" in show  # live salmobase rows: the locus browser only
     if live and cfg is None:
         notes.append("This release lists no signal tracks, so no signal rows are shown.")
@@ -218,7 +244,7 @@ def draw(request, s, download=False, show=FULL):
         signal = {"title": f"{s['assay']} signal", "rows": [], "note": f"Zoom in to {sl.MAX_SIGNAL // 1000} kb or less to see signal"}
     elif live:
         picked, t0 = pick_tracks(cfg, s["trait"], s["assay"]), time.monotonic()
-        read = sl.signal(picked, s["chrom"], s["start"], s["end"], tile_cache(), prefix, deadline)
+        read = sl.signal(picked, s["chrom"], s["start"], s["end"], tiles, prefix, deadline)
         rows = [{"track": t, "values": v, "label": " ".join(locus_svg.condition_label(t["condition"])) + f" {t.get('replicate') or ''}"
                  + (" SYNTHETIC" if synthetic_track(t) else "")} for t, v in zip(picked, read["values"])]
         signal = {"title": f"{s['assay']} signal", "subtitle": "salmobase, live", "rows": rows, "start": read["start"],
@@ -233,7 +259,7 @@ def draw(request, s, download=False, show=FULL):
             by_condition = {t["condition"]: t for t in cfg.get("chromhmm", [])}
             have = [by_condition[c] for c in data["conditions"] if c in by_condition]
             left = max(1.0, deadline - (time.monotonic() - t0))  # signal and segments share the deadline
-            found = dict(zip([t["condition"] for t in have], sl.segments(have, s["chrom"], s["start"], s["end"], tile_cache(), prefix, left)))
+            found = dict(zip([t["condition"] for t in have], sl.segments(have, s["chrom"], s["start"], s["end"], tiles, prefix, left)))
             hmm = [{"condition": c, "segments": found.get(c)} for c in data["conditions"]]
             synthetic = synthetic or any(synthetic_track(t) for t in have)
             if any(r["segments"] is None for r in hmm):
@@ -253,7 +279,7 @@ def draw(request, s, download=False, show=FULL):
         data, title=title, caption=caption if download else "", desc=f"{title}. {caption}", snps=snps,
         snp_note=f"tiers: {s['trait'].replace('_', ' ')}" if snps else "", signal=signal, hmm=hmm, chosen=chosen, mark=s["mark"],
         gene_url=None if download else (lambda gid: reverse("snpportal:gene", args=[gid])), compact=s["compact"],
-        width=760 if s["compact"] else locus_svg.WIDTH, gutter=118 if s["compact"] else locus_svg.GUTTER, synthetic=synthetic,
+        width=COMPACT_WIDTH if s["compact"] else locus_svg.WIDTH, gutter=118 if s["compact"] else locus_svg.GUTTER, synthetic=synthetic,
         gwas=gwas, lanes=None if show is FULL else show, heading=download)
     return svg, notes, synthetic
 
@@ -325,7 +351,8 @@ def evidence(snp, weights, trait, synthetic=False):
     ref, alt = snp.get("ref"), snp.get("alt")
     spec = f"{chrom}-{pos}" + (f"-{ref}-{alt}" if ref and alt else "")
     ev = {"trait": trait, "title": snp.get("id") or f"{chrom}:{pos:,}", "position": f"{chrom}:{pos}",
-          "alleles": f"{ref}>{alt}" if ref and alt else "", "spec": spec, "synthetic": synthetic, "tier": snp.get("tier")}
+          "alleles": f"{ref}>{alt}" if ref and alt else "", "spec": spec, "synthetic": synthetic, "tier": snp.get("tier"),
+          "samples": results.SAMPLES}
     terms = [(text, t["weight"]) for text, t in zip((snp.get("tier_evidence") or "").split("; "), snp.get("tier_terms") or [])
              if t["weight"]]  # tier_evidence and tier_terms list the fired terms in the same order
     ev["terms"] = [(CDS if text == "CDS" else text, w) for text, w in terms] or None
@@ -338,10 +365,8 @@ def evidence(snp, weights, trait, synthetic=False):
         if any(states.values()):
             ev["grid"] = mark_safe(locus_svg.chromatin_grid(states, chosen, bool(snp.get("blacklist")), synthetic))
         else:
-            tissues = sorted({c.split("_")[0].lower() for c in states if "_" in c})
-            stages = sum("_" not in c for c in states)
-            ev["no_peak"] = (f"No AQUA-FAANG peak in the {len(states)} conditions sampled ({', '.join(tissues)}, {stages} embryo "
-                             "stages; 12 AquaGen fish). No immune tissue, gill or skin.")
+            ev["no_peak"] = (results.NO_PEAK if len(states) == 21 else
+                             f"No AQUA-FAANG peak in the {len(states)} conditions sampled. No immune tissue, gill or skin.")
         ev["blacklisted"] = bool(snp.get("blacklist"))
     if snp.get("gene_id"):
         ev["gene"] = gene_context(snp)
@@ -356,7 +381,7 @@ def evidence(snp, weights, trait, synthetic=False):
         reasons = [r for r in (snp.get("assay_reasons") or "").split("; ") if r]
         reasons += [label for flag, label in (("lore", "LORe region"), ("strand_ambiguous", "A/T or C/G SNP"))
                     if snp.get(flag) and not any(r.startswith(label[:5]) for r in reasons)]
-        ev["assay"] = {"status": snp["assay_status"].replace("_", " "), "reasons": "; ".join(reasons), "flank": snp.get("assay_flank"),
+        ev["assay"] = {"status": snp["assay_status"].replace("_", " "), "reasons": "; ".join(map(results.reason_text, reasons)), "flank": snp.get("assay_flank"),
                        "tip": "; ".join(f"{k}: {v}" for k, v in TIPS.items() if any(r.startswith(k[:5]) for r in reasons))}
     if snp.get("public_af"):
         ev["maf"] = {"value": _fmt(snp.get("public_af_maf")), "fish": snp.get("public_af_ns") or 504,
@@ -412,9 +437,10 @@ def gene_context(snp):
             start, end, strand = hit
             upstream = snp["pos"] <= start if strand == "+" else snp["pos"] > end
             where = f"{locus_svg.fmt_bp(snp['gene_distance'])} {'upstream of the TSS' if upstream else 'downstream of the gene end'}"
-    return {"id": snp["gene_id"], "label": sl.gene_label(snp.get("gene_name"), snp.get("gene_ortholog_human"),
-                                                         snp.get("gene_ortholog_zebrafish"), snp["gene_id"]),
-            "named": bool(snp.get("gene_name")), "tip": "" if snp.get("gene_name") else explore.UNNAMED_TIP,
+    name = snp.get("gene_name") or explore.aliases().get(snp["gene_id"])  # the catalogue's name when Ensembl has none
+    return {"id": snp["gene_id"], "label": sl.gene_label(name, snp.get("gene_ortholog_human"), snp.get("gene_ortholog_zebrafish"),
+                                                         snp["gene_id"]),
+            "named": bool(name), "tip": "" if name else explore.UNNAMED_TIP,
             "biotype": snp.get("gene_biotype"), "strand": snp.get("gene_strand"),
             "description": snp.get("gene_description"), "human": snp.get("gene_ortholog_human"),
             "zebrafish": snp.get("gene_ortholog_zebrafish"), "where": where, "url": reverse("snpportal:gene", args=[snp["gene_id"]]),
@@ -473,10 +499,10 @@ def _fmt(v):
     return "n/a" if v is None else f"{v:.3g}" if isinstance(v, float) else str(v)
 
 
-def card_context(request, ev, presets, switch_url, mini_url, locus_url):
+def card_context(request, ev, presets, switch_url, mini_url, locus_url, keep=None):
     hx = bool(request.headers.get("HX-Request"))
     return {"nav": "score", "title": ev["title"], "ev": ev, "presets": presets, "switch_url": switch_url, "hx": hx,
-            "mini_url": mini_url, "locus_url": locus_url, "trait": ev["trait"]}
+            "mini_url": mini_url, "locus_url": locus_url, "trait": ev["trait"], "keep": sorted((keep or {}).items())}
 
 
 @private
@@ -493,10 +519,12 @@ def card(request, key, row):
     synthetic = bool(job.get("synthetic_input") or job.get("synthetic_layers"))
     ev = evidence(dict(zip(types, hit)), jobs.weights(d), chosen["trait"], synthetic)
     ev["gwas"] = association.snp_line(request, key, row, job)
-    q = urlencode({"trait": chosen["trait"]})
+    gwas_query = association.query_of(request)  # a GWAS job's fine-mapping settings
+    q = urlencode({"trait": chosen["trait"], **gwas_query})
     ctx = card_context(request, ev, jobs.presets(d), reverse("snpportal:card", args=[key, row]),
                        f"{reverse('snpportal:card_locus', args=[key, row])}?{q}",
-                       f"{reverse('snpportal:locus')}?{urlencode({'key': key, 'row': row, 'trait': chosen['trait']})}")
+                       f"{reverse('snpportal:locus')}?{urlencode({'key': key, 'row': row, 'trait': chosen['trait'], **gwas_query})}",
+                       gwas_query)
     ctx.update(job=job, synthetic=synthetic, crumbs=[("Results", f"{reverse('snpportal:results', args=[key])}?{q}"), ("SNP", None)])
     return render(request, "snpportal/card.html" if ctx["hx"] else "snpportal/card_page.html", ctx)
 

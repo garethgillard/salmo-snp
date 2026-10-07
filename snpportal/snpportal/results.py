@@ -5,7 +5,9 @@ request only for presets missing from it. The Overview reads summary.json (plus 
 table sorts and pages on the server in two steps (row numbers first, then that page's columns)."""
 from __future__ import annotations
 
+import os
 import re
+import uuid
 from urllib.parse import urlencode
 
 from django.http import Http404, HttpResponse
@@ -66,10 +68,9 @@ REASONS = {  # snpscore.assay reasons without their numbers -> label (others are
 FORMAT_NAMES = {"vcf": "VCF", "text": "text table", "tsv": "tab-separated table", "csv": "comma-separated table", "bim": "PLINK .bim", "map": "PLINK .map", "illumina": "Illumina manifest",
                 "axiom": "Axiom annotation", "paste": "pasted positions", "rows": "public variants (genes or intervals)"}
 STAGES = ["LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomitogenesis", "LateSomitogenesis"]
-STAGE_LABELS = {"LateBlastulation": "Blastula", "MidGastrulation": "Gastrula", "EarlySomitogenesis": "E somit.",
-                "MidSomitogenesis": "M somit.", "LateSomitogenesis": "L somit."}
-NO_PEAK = ("No AQUA-FAANG peak in the 21 conditions sampled (brain, gonad, liver, muscle, 5 embryo stages; 12 AquaGen "
-           "fish). No immune tissue, gill or skin.")
+STAGE_LABELS = figures.STAGE_LABELS
+SAMPLES = "brain, gonad, liver and muscle of 12 AquaGen fish (BodyMap); 5 embryo stages from embryo pools (DevMap)"
+NO_PEAK = f"No AQUA-FAANG peak in the 21 conditions sampled ({SAMPLES}). No immune tissue, gill or skin."
 CARD_SQL = "SELECT * FROM v WHERE file_row_number = ?"  # the card reads one row, never the whole result
 
 # Table columns, in display order: key -> (header, tooltip, columns (shown when any exists; () = always), sort [(SQL,
@@ -108,7 +109,8 @@ COLUMNS = {
 }
 DEFAULT_COLUMNS = ("id", "gene", "region", "tier", "evidence", "chromatin", "known", "maf", "assay")
 GWAS_COLUMNS = ("id", "p", "beta", "tier", "pip", "gene", "region", "chromatin")
-EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tier_evidence"), "known": ("known_locus_dist",),
+EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tier_evidence", "tier_terms"), "known": ("known_locus_dist",),
+         "evidence": ("tier_terms",),
          "gene": ("gene_ortholog_human",), "region": ("gene_distance",), "beta": ("se",), "pip": ("pip_functional",),
          "assay": ("assay_reasons", "blacklist", "lore", "strand_ambiguous", "flank_variants"),
          "molqtl": ("molqtl_tissues", "molqtl_kinds", "molqtl_features"), "cm": ("cm_male",)}  # also fetched
@@ -118,10 +120,29 @@ MORE = ("region", "active", "term", "known", "molqtl", "hide_blacklist", "hide_a
 
 # ---- opening a result with filters ----
 
-def _open(request, key, write=False):
+def chip_view(con, d, rel, weights):
+    """SQL adding on_chip, dist_to_chip, near_chip and novel_functional (tier 1-2, not near the chip) to `rel` by row
+    number, or None without a chip. The per-row columns are computed once per chip, on chrom and pos only, into
+    chip_rows_<sha>.parquet (snpscore.panel.compare_sql), so pages never ASOF-join the whole result."""
+    chip = d / "chip.parquet"
+    if not chip.exists() or not weights:
+        return None
+    rows = d / f"chip_rows_{jobs._file('sha256', chip)[:16]}.parquet"  # named by the chip's content (sha256 cached by mtime)
+    if not rows.exists():
+        narrow = f"(SELECT file_row_number, chrom, pos FROM read_parquet({lit(d / 'result.parquet')}, file_row_number=true))"
+        sql = snp_panel.compare_sql(narrow, f"read_parquet({lit(chip)})", int(snp_panel.settings(weights)["chip_window"]), "NULL")
+        tmp = d / f".chip-rows-{uuid.uuid4().hex}.parquet"
+        con.execute(f"COPY (SELECT file_row_number, dist_to_chip, on_chip, near_chip FROM ({sql})) TO {lit(tmp)} (FORMAT parquet)")
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, rows)
+    return (f"SELECT t.*, c.dist_to_chip, c.on_chip, c.near_chip, coalesce(t.tier <= 2, false) AND NOT coalesce(c.near_chip, false) "
+            f"AS novel_functional FROM {rel} t LEFT JOIN read_parquet({lit(rows)}) c USING (file_row_number)")
+
+
+def _open(request, key, write=False, chip=False):
     """(connection with views r and v, column types, filters, chosen settings, weights) for a finished job: v is the
-    result with the tiers of ?trait= (and the chip columns when the Panel tab has a chip; a GWAS job's p, beta and
-    se). The connection reads only the job folder (and writes there if `write`)."""
+    result with the tiers of ?trait= (a GWAS job's p, beta and se; with `chip`, the chip columns when the Panel tab
+    has a chip). The connection reads only the job folder (and writes there if `write`)."""
     d = jobs.folder(key)
     if not (d / "result.parquet").exists():
         raise Http404("Result not found or expired")
@@ -151,12 +172,8 @@ def _open(request, key, write=False):
                     f"LEFT JOIN read_parquet('{d / 'gwas.parquet'}') s USING (file_row_number)")
     else:
         con.execute("CREATE VIEW v1 AS SELECT * FROM v0")
-    chip = d / "chip.parquet"
-    if chip.exists() and weights:  # the Panel tab's chip adds on_chip, dist_to_chip, near_chip and novel_functional (P6.6)
-        window = int(snp_panel.settings(weights)["chip_window"])
-        con.execute(f"CREATE VIEW v AS {snp_panel.compare_sql('v1', f'read_parquet({lit(chip)})', window)}")
-    else:
-        con.execute("CREATE VIEW v AS SELECT * FROM v1")
+    chipped = chip and chip_view(con, d, "v1", weights)  # the Panel tab's chip (P6.6), for the pages that use its columns
+    con.execute(f"CREATE VIEW v AS {chipped or 'SELECT * FROM v1'}")
     types = dict(con.execute("SELECT column_name, column_type FROM (DESCRIBE v)").fetchall())
     conds = filters(request, types, weights)
     chosen = {"trait": trait}
@@ -165,10 +182,10 @@ def _open(request, key, write=False):
     return con, types, conds, chosen, weights
 
 
-def open_result(request, key, write=False):
+def open_result(request, key, write=False, chip=False):
     """DuckDB view `v` over a finished job's result with the tiers of ?trait=, and the WHERE clause of the table
     filters in the request (see filters()). Returns (connection, column types, WHERE clause, the request's settings)."""
-    con, types, conds, chosen, _ = _open(request, key, write)
+    con, types, conds, chosen, _ = _open(request, key, write, chip)
     return con, types, _where(conds), chosen
 
 
@@ -269,16 +286,53 @@ def trait_tip(weights, trait):
         text = ", ".join(prefixes) + (" only" if len(prefixes) == 1 else "")
     if "disease" in trait:
         text += " (no immune tissue, gill or skin sampled)"
-    return f"{trait}: {text}"
+    return f"{jobs.trait_label(trait)}: {text}"
 
 
 def gene_label(name, gene_id, human):
-    """The Ensembl name, else '~VGLL3' from the human ortholog (UNNAMED is its tooltip), else the gene id."""
-    if name:
-        return name
-    if human:
-        return "~" + human.split(",")[0]
-    return gene_id or ""
+    """explore.display_name: the Ensembl name, else the known-loci catalogue's name ('vgll3'), else '~VGLL3' from the
+    human ortholog (UNNAMED is its tooltip), else the gene id; '' without a gene."""
+    from . import explore  # explore imports locus, which imports this module
+    return explore.display_name(name, explore.aliases().get(gene_id), human, gene_id) if name or gene_id or human else ""
+
+
+def evidence_text(evidence, terms=None):
+    """tier_evidence as shown: without the terms that count nothing (weight 0, e.g. molQTL leads: display only) and
+    with condition lists spelled out ('active: Brain, E somit., Gonad')."""
+    parts = [x for x in (evidence or "").split("; ") if x]
+    if terms is not None and len(terms) == len(parts):  # both list the fired terms in the same order
+        parts = [x for x, t in zip(parts, terms) if t["weight"]]
+    out = []
+    for x in parts:
+        head, sep, items = x.partition(": ")
+        out.append(head + sep + ", ".join(STAGE_LABELS.get(i, i) for i in items.split(",")) if sep else x)
+    return "; ".join(out)
+
+
+def reason_text(reason):
+    """One snpscore assay reason in words, with its number and unit: 'repeat 1.0' -> 'repeat (soft-masked) flanks
+    (100%)', 'GC 0.72' -> 'GC content out of range (72%)', 'homopolymer 7' -> 'long homopolymer (7 bases)'."""
+    m = re.fullmatch(r"(?:[0-9]+ )?(.*?)((?: +[0-9.+-]+)*)", reason.strip())
+    name, value = m.group(1), m.group(2).strip()
+    if value and name in ("GC", "repeat"):
+        try:
+            value = f"{float(value):.0%}"
+        except ValueError:
+            pass
+    elif value and (name == "homopolymer" or name.endswith(" run")):
+        value += " bases"
+    return REASONS.get(name, name) + (f" ({value})" if value else "")
+
+
+def reasons_text(reasons):
+    """assay_reasons ('repeat 1.0; LORe region') in words, '; ' between them."""
+    return "; ".join(reason_text(r) for r in (reasons or "").split("; ") if r.strip())
+
+
+def gwas_settings(request):
+    """A GWAS job's fine-mapping settings in the request (association.FIELDS), for links that keep them."""
+    from . import association  # association imports this module
+    return association.query_of(request)
 
 
 def pct(k, n):
@@ -308,8 +362,8 @@ def _known_caveats():
 
 
 def _assay_tip(g):
-    """An assay badge's tooltip: snpscore's reasons, then the flags they don't name."""
-    reasons = g("assay_reasons") or ""
+    """An assay badge's tooltip: snpscore's reasons in words, then the flags they don't name."""
+    reasons = reasons_text(g("assay_reasons"))
     extra = [text for column, text, word in (("blacklist", "blacklisted region", "blacklist"),
                                              ("lore", "LORe: probes may cross-hybridise", "LORe"),
                                              ("strand_ambiguous", "A/T or C/G: strand-ambiguous", "A/T"))
@@ -336,9 +390,11 @@ def table(request, key, job=None):
         con.execute(f"CREATE VIEW vt AS SELECT v.*, f.pip_uniform, f.pip_functional FROM v LEFT JOIN ({pips}) f USING (file_row_number)")
         types = dict(con.execute("SELECT column_name, column_type FROM (DESCRIBE vt)").fetchall())
         conds = filters(request, types, weights)
+        settings = a["query"]  # the fine-mapping settings travel with every link, as the PIPs depend on them
         chosen = {"trait": a["trait"], **{k: v for params, _, _ in conds for k, v in params.items()}}
     else:
-        con, types, conds, chosen, weights = _open(request, key)
+        con, types, conds, chosen, weights = _open(request, key, chip=True)  # chip columns joined by row number (chip_view)
+        settings = {}
     view = "vt" if gwas else "v"
     get = request.GET.get
     summary = jobs.read_json(jobs.folder(key) / "summary.json")
@@ -356,11 +412,14 @@ def table(request, key, job=None):
 
     total = con.execute("SELECT count(*) FROM r").fetchone()[0]
     where = _where(conds)
-    src = view if gwas or sort in ("tier", "score") or {"tier", "term"} & set(chosen) else "r"  # skip the tiers join when unused
+    order = [f"{sql.format(maf=maf)} {'ASC' if asc != desc else 'DESC'} NULLS LAST" for sql, asc in (COLUMNS[sort][3] if sort else [])]
+    # Count and page on the raw result r (no tiers join) unless the filters or the sort use a column only v has right
+    only_v = (set(types) - {c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()}) | set(jobs.TIER_COLUMNS)
+    uses_v = any(re.search(rf"\b{re.escape(c)}\b", sql) for c in only_v for sql in [where] + order)
+    src = view if gwas or uses_v else "r"
     matching = con.execute(f"SELECT count(*) FROM {src} {where}").fetchone()[0] if conds else total
     pages = max(1, -(-matching // size))
     page = min(int(get("page")) if get("page", "").isdecimal() else 1, pages) or 1
-    order = [f"{sql.format(maf=maf)} {'ASC' if asc != desc else 'DESC'} NULLS LAST" for sql, asc in (COLUMNS[sort][3] if sort else [])]
     ids = [i for i, in con.execute(f"SELECT file_row_number FROM {src} {where} ORDER BY {', '.join(order + ['file_row_number'])} "
                                    f"LIMIT {size} OFFSET {(page - 1) * size}").fetchall()]
     conditions = conditions_of(types)
@@ -370,7 +429,7 @@ def table(request, key, job=None):
     if not custom_cols and any(r["id"] and str(r["pos"]) not in r["id"] for r in rows):
         shown.insert(1, "position")  # ids such as rs or AX numbers don't say where the SNP is
 
-    base = {"tab": "table", **chosen, "sort": sort if explicit else "", "desc": "1" if desc else "",
+    base = {"tab": "table", **chosen, **settings, "sort": sort if explicit else "", "desc": "1" if desc else "",
             "size": str(size) if size != PAGE_SIZE else "", "cols": "1" if custom_cols else "",
             "col": shown[1:] if custom_cols else []}
 
@@ -434,23 +493,24 @@ def table(request, key, job=None):
         headers.append((k, label, tip, href, ("descending" if desc else "ascending") if on else ""))
     tier_counts = sorted((summary.get("tiers") or {}).get(chosen["trait"], {}).items()) or (
         con.execute(f"SELECT tier, count(*) FROM {view} GROUP BY tier ORDER BY tier").fetchall() if "tier" in types else [])
-    filtered = urlencode({k: v for k, v in chosen.items()})
+    filtered = urlencode(chosen)
     return {
         "total": total, "matching": matching, "first": (page - 1) * size + 1 if matching else 0,
-        "last": min(page * size, matching), "tiers": tier_counts, "chosen": chosen, "query": urlencode({"trait": chosen["trait"]}),
+        "last": min(page * size, matching), "tiers": tier_counts, "chosen": chosen, "query": urlencode({"trait": chosen["trait"], **settings}),
         "selects": selects, "more": more, "checks": checks, "n_more": n_more,
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
         "start": chosen.get("start", ""), "end": chosen.get("end", ""),
         "hidden": [(k, base[k]) for k in ("sort", "desc") if base[k]]  # and filters with no control on the form
-        + [(k, chosen[k]) for k in ("hide_lore", "hide_reason", "max_maf") if k in chosen],
+        + [(k, chosen[k]) for k in ("hide_lore", "hide_reason", "max_maf") if k in chosen] + list(settings.items()),
         "columns": [(k, COLUMNS[k][0], k in shown) for k in available if k != "id"], "chips": chips,
         "clear": link(drop=filter_keys, page=None) if conds else None, "suggest": suggest,
         "headers": headers, "shown": shown, "rows": rows, "page": page, "pages": pages,
         "prev": link(page=page - 1) if page > 1 else None, "next": link(page=page + 1) if page < pages else None,
         "download": f"{reverse('snpportal:download', args=[key])}?{filtered}" if conds else None,
         "vendor": f"?{urlencode({'tab': 'export', 'scope': 'filtered', **chosen})}" if conds and not gwas else None,
+        "keep": [(k, x) for k, v in base.items() if k not in ("tab", "trait") for x in (v if isinstance(v, list) else [v]) if x],
         "snp": snp, "drawer": _drawer(con, view, snp, types, weights, chosen["trait"], key, conditions, in_preset,
-                                      link(page=here)) if snp is not None else None,
+                                      link(page=here), settings) if snp is not None else None,
     }
 
 
@@ -475,7 +535,7 @@ def _row(r, groups, in_preset, active_states, caveats):
     g = r.get
     distance = g("gene_distance")
     out = {"n": r["file_row_number"], "id": g("id") if g("id") not in (None, ".") else None, "chrom": g("chrom"), "pos": g("pos"),
-           "alleles": _alleles(g), "tier": g("tier"), "score": g("tier_score"), "evidence": g("tier_evidence") or "",
+           "alleles": _alleles(g), "tier": g("tier"), "score": g("tier_score"), "evidence": evidence_text(g("tier_evidence"), g("tier_terms")),
            "known": g("known_locus"), "known_dist": g("known_locus_dist"), "caveat": caveats.get(g("known_locus")),
            "gene": gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")), "gene_id": g("gene_id") or "",
            "region": CLASS_LABELS.get(g("region_class"), g("region_class")) or "intergenic",
@@ -522,16 +582,17 @@ def tier_line(tier, evidence, terms):
     """'Tier 2 · CDS (amino-acid effect not computed) +3': the tier and the evidence terms that fired, with weights."""
     if tier is None:
         return ""
+    counted = [t for t in terms or [] if t["weight"]]
+    evidence = evidence_text(evidence, terms)
     if tier == 4 or not evidence:
         return f"Tier {tier} · no evidence found (not evidence of no effect)"
     parts = evidence.split("; ")
-    weights = [t["weight"] for t in terms or []]
-    if len(weights) == len(parts):
-        parts = [f"{p} +{w}" for p, w in zip(parts, weights)]
+    if len(counted) == len(parts):
+        parts = [f"{p} +{t['weight']}" for p, t in zip(parts, counted)]
     return f"Tier {tier} · " + " · ".join(re.sub(r"^CDS\b", "CDS (amino-acid effect not computed)", p) for p in parts)
 
 
-def _drawer(con, view, row, types, weights, trait, key, conditions, in_preset, close):
+def _drawer(con, view, row, types, weights, trait, key, conditions, in_preset, close, settings=None):
     """The Table's evidence drawer for one SNP: the tier line, the known locus with its caveat, one chromatin line, one
     assay line and a link to the full card; None when the row doesn't exist."""
     cur = con.execute(f"SELECT * FROM {view} WHERE file_row_number = ?", [row])
@@ -565,7 +626,7 @@ def _drawer(con, view, row, types, weights, trait, key, conditions, in_preset, c
             "tier_line": tier_line(g("tier"), g("tier_evidence"), g("tier_terms")),
             "gene": gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")), "known": known, "chromatin": chromatin,
             "assay": status and f"Assay: {status.replace('_', ' ')}" + (f" ({_assay_tip(g)})" if _assay_tip(g) else ""),
-            "card": f"{reverse('snpportal:card', args=[key, row])}?{urlencode({'trait': trait})}", "close": close}
+            "card": f"{reverse('snpportal:card', args=[key, row])}?{urlencode({'trait': trait, **(settings or {})})}", "close": close}
 
 
 # ---- the top SNPs (Overview and report) ----
@@ -577,7 +638,7 @@ def top(request, key, job, n=TOP):
     con, types, where, chosen = open_result(request, key)
     gwas = job.get("input_kind") == "gwas" and "neglog10p" in types
     maf, _ = jobs.maf_sql(types)
-    cols = [c for c in ("chrom", "pos", "id", "ref", "alt", "tier", "tier_score", "tier_evidence", "gene_name", "gene_id",
+    cols = [c for c in ("chrom", "pos", "id", "ref", "alt", "tier", "tier_score", "tier_evidence", "tier_terms", "gene_name", "gene_id",
                         "gene_ortholog_human", "region_class", "known_locus", "known_locus_dist", "assay_status",
                         "assay_reasons", "neglog10p", "lore", "blacklist", "strand_ambiguous", "flank_variants") if c in types]
     order = "neglog10p DESC NULLS LAST, " if gwas else \
@@ -585,7 +646,7 @@ def top(request, key, job, n=TOP):
     cur = con.execute(f"SELECT file_row_number, {', '.join(map(ident, cols))}{f', {maf} AS _maf' if maf else ''} "
                       f"FROM v {where} ORDER BY {order}file_row_number LIMIT {int(n)}")
     names = [d[0] for d in cur.description]
-    q = urlencode({"trait": chosen["trait"]})
+    q = urlencode({"trait": chosen["trait"], **gwas_settings(request)})
     caveats = _known_caveats() if "known_locus" in types else {}
     rows = []
     for r in (dict(zip(names, x)) for x in cur.fetchall()):
@@ -594,7 +655,7 @@ def top(request, key, job, n=TOP):
         rows.append({
             "url": f"{reverse('snpportal:card', args=[key, r['file_row_number']])}?{q}", "n": r["file_row_number"],
             "snp": _snp_name(g), "position": f"{g('chrom')}:{g('pos'):,}", "alleles": _alleles(g),
-            "tier": g("tier"), "score": g("tier_score"), "evidence": g("tier_evidence") or "",
+            "tier": g("tier"), "score": g("tier_score"), "evidence": evidence_text(g("tier_evidence"), g("tier_terms")),
             "gene": gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")),
             "region": CLASS_LABELS.get(g("region_class"), g("region_class")) or "intergenic",
             "known": g("known_locus") or "", "known_dist": g("known_locus_dist"), "caveat": caveats.get(g("known_locus")),
@@ -786,7 +847,7 @@ OPEN = ("tiers", "ideogram", "conditions")  # open on the Overview; the rest are
 
 
 def _figure_context(key, job, trait, summary, d):
-    return {"key": key, "job": job, "trait": trait, "preset": trait.replace("_", " "), "s": summary, "weights": jobs.weights(d),
+    return {"key": key, "job": job, "trait": trait, "preset": jobs.trait_label(trait), "s": summary, "weights": jobs.weights(d),
             "manifest": jobs.manifest(d), "background": background(),
             "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers")),
             "chip": jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}}
@@ -837,7 +898,7 @@ def overview(request, key, job):
         loci = len(association.analyse(request, key)["loci"])
     qc_items, qc_warning = qc(validation)
     rejected = sum(v for v in (validation.get("rejected") or {}).values() if isinstance(v, int))
-    association = f"{reverse('snpportal:association', args=[key])}?{urlencode({'trait': trait})}" if gwas else None
+    association = f"{reverse('snpportal:association', args=[key])}?{urlencode({'trait': trait, **gwas_settings(request)})}" if gwas else None
     tiles = kpis(s, trait, validation, link, jobs.manifest(d), loci)
     for k in tiles:
         if k["label"] == "loci":
@@ -849,7 +910,8 @@ def overview(request, key, job):
         "association": association,
         "qc_items": qc_items, "qc_warning": qc_warning, "qc_alias": validation.get("alias_warnings") or [],
         "qc_line": qc_line(validation), "qc_open": qc_problem(validation),
-        "rejects": (d / "rejects.tsv").exists() and bool(rejected), "trait": trait, "trait_label": trait.replace("_", " "),
+        "rejects": (d / "rejects.tsv").exists() and bool(rejected), "trait": trait, "trait_label": jobs.trait_label(trait),
+        "keep": [(k, v) for k, v in best["chosen"].items() if k != "trait"] + list(gwas_settings(request).items()),
     }
 
 
@@ -972,7 +1034,7 @@ def qc(validation):
         "duplicates_merged": ("Duplicate rows dropped", n), "indels": ("Indels", n), "multiallelic": ("Multi-allelic rows", n),
         "ref_check": ("Reference alleles", lambda x: counts(x, REF_CHECKS)),
         "assay": ("Assay status", counts),
-        "assay_reasons": ("Assay reasons", counts),
+        "assay_reasons": ("Assay reasons", lambda x: counts(x, REASONS)),
     }
     for key, value in v.items():
         if key in ("ref_check_sampled", "assembly") or key in QUIET and not value:

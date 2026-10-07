@@ -35,9 +35,12 @@
   <div class="col-lg-6 sp-stack">
     <section class="sp-card" id="states" aria-labelledby="s-h">
       <h2 id="s-h">Chromatin states</h2>
-      <p class="sp-small sp-muted mt-1">AQUA-FAANG's ChromHMM states, known only inside robust ATAC peaks.</p>
+      <p class="sp-small sp-muted mt-1">AQUA-FAANG's ChromHMM state labels, known only inside robust ATAC peaks. BodyMap (adult
+        tissues) and DevMap (embryo stages) are separate 12-state models. The states have no written definitions yet: see
+        <a href="{{ emissions }}" rel="noreferrer noopener" target="_blank">the emission figure</a> (ATAC, H3K27ac, H3K4me1,
+        H3K4me3 and H3K27me3 signal per state).</p>
       <table class="table table-sm sp-small mb-0">
-        <thead><tr><th scope="col">State</th><th scope="col">Meaning</th><th scope="col">Counts as</th></tr></thead>
+        <thead><tr><th scope="col">State</th><th scope="col">Model</th><th scope="col">Counts as</th></tr></thead>
         <tbody>{% for name, abbr, text, counts in states %}<tr id="state-{{ name }}">
           <td class="text-nowrap"><span class="sp-state st-{{ name }}">{{ abbr }}</span> <span class="sp-mono">{{ name }}</span></td>
           <td>{{ text }}</td><td>{% if counts %}{{ counts }}{% else %}<span class="sp-muted">nothing</span>{% endif %}</td></tr>{% endfor %}

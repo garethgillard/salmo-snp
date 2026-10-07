@@ -1,6 +1,7 @@
 """Explore without an upload (P5.1-P5.4) on a release built from salmo-snpscore's fixture: the search resolver and
 suggestions, gene pages with candidates (with and without a pool), candidate jobs from genes and intervals, the
 known-loci page, and the data, methods, help and run-locally pages generated from the release."""
+import hashlib
 import logging
 import os
 import shutil
@@ -183,7 +184,11 @@ class ExploreTest(SimpleTestCase):
         self.assertEqual((job["state"], job["input_kind"]), ("done", "from_rows"))
         self.assertEqual(job["n_rows"], self.public_sites(self.release, windows))
         self.assertEqual(self.client.get(response.url).status_code, 200)  # 'Score these' lands on a results page
-        for targets, message in [("vgll3", "matches 2 genes"), ("nosuchgene", "is not a gene id"), ("", "at least one")]:
+        named = self.client.post(reverse("snpportal:candidates"), {"targets": "vgll3"})  # two copies: the known-loci one (chr25)
+        self.assertIn("chr25, the known-loci gene", jobs.read(named.url.split("/")[-2])["label"])
+        secret = self.client.post(reverse("snpportal:candidates"), {"targets": "MYSECRET_REGION\n25:" + "9" * 400})
+        self.assertEqual((secret.status_code, secret["Cache-Control"]), (400, "no-store, private"))  # a long number: no 500
+        for targets, message in [("nosuchgene", "is not a gene id"), ("", "at least one")]:
             response = self.client.post(reverse("snpportal:candidates"), {"targets": targets})
             self.assertContains(response, message, status_code=400)
             self.assertContains(response, 'class="tab-pane active" id="pane-regions"', status_code=400)  # Score's 'Genes or regions' tab
@@ -251,7 +256,9 @@ class ExploreTest(SimpleTestCase):
         self.assertIn("Not yet validated against known causal variants (n = 6)", edited)
         self.assertTrue(tsv.startswith("# ") and "\nfeature\tpositives" in tsv)
         self.assertContains(local, "--trait maturation")
-        self.assertContains(local, jobs.release_info()["sha256"])
+        lines = sorted(f"{x['name']} {x.get('sha256')}\n" for x in jobs.release_info()["layers"])  # a self-built release:
+        self.assertContains(local, hashlib.sha256("".join(lines).encode()).hexdigest())  # checked by its layers,
+        self.assertNotContains(local, jobs.release_info()["sha256"])  # not by its manifest (build date, genome path)
 
 
     def test_viewer_palette_cookie(self):  # R8: a cookie picks the state palette per viewer (the locus browser's toggle)

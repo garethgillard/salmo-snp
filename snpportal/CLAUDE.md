@@ -26,15 +26,17 @@ No Docker, Apache, server, deployment or hosting work until the prototype works 
 - Panels, filters, card sections and export columns render only when their column exists in the result.
 - `hx-boost` only on links and forms that stay on the same page (a boosted file or other-page link swaps in nothing; tested).
 - Results tabs: Overview | Table | Panel | Export; GWAS jobs: Association | Overview | Table | Export. View state lives in whitelisted GET
-  parameters; derived files are cached in the job folder by a hash of their parameters (`panels/<hash>.parquet`), so the
-  same URL gives the same file.
+  parameters (a trait change keeps each tab's `keep` list; GWAS links keep the fine-mapping settings); derived files are
+  cached in the job folder by a hash of their parameters (`panels/<hash>.parquet`, `loci/<hash>.parquet`), so the
+  same URL gives the same file. User SNP names (must-include ids) are POSTed, never put in a URL.
 
 ## Provisional (G to confirm)
 Thresholds and defaults live in the release's weights.yaml (`assay`, `design`, `finemap` blocks, copied into each job),
 in tracks.yaml `defaults`, or in a named constant; the UI's caveat line and every download say they are provisional. Portal-side ones:
 `SNPPORTAL_MAX_VENDOR_SNPS` (50,000 per vendor file), the panel gap highlight (3x the mean spacing, rounded), the
-candidate and tour flank (50 kb around a gene), the Manhattan thinning (p > 0.01 thinned to the top SNP per 50 kb) and
-the regional plot window (lead +- credible set + 20 kb, 50-250 kb).
+candidate and tour flank (50 kb around a gene), the Manhattan thinning (p > 0.01 thinned to the top SNP per 50 kb),
+the regional plot window (lead +- credible set + 20 kb, 50-250 kb), the GWAS loci cap (`association.MAX_LOCI`: the 200
+strongest loci are listed and fine-mapped) and the settings form's suggestive-p ceiling (0.01).
 
 ## Data safety
 - Uploaded files are deleted right after scoring; results are deleted after `SNPPORTAL_KEEP_HOURS` (24 h) or on 'Delete now'.

@@ -5,6 +5,7 @@ rs table), genes by Ensembl id, name, catalogue name, NCBI LOC symbol
 SNP names. One hit redirects; several show a list; suggest/ gives the top 10 for htmx autocomplete."""
 from __future__ import annotations
 
+import math
 import re
 import time
 from functools import lru_cache
@@ -32,7 +33,10 @@ MATCHED = ["Ensembl id", "name", "ortholog", "name starts with", "id starts with
 
 
 def _number(text, unit):
-    return int(round(float(text.replace(",", "")) * UNITS[unit.lower() if unit else None]))
+    value = float(text.replace(",", "")) * UNITS[unit.lower() if unit else None]
+    if not math.isfinite(value):  # e.g. 400 nines: float() gives inf, which round() can't take
+        raise ValueError("number too large")
+    return int(round(value))
 
 
 @lru_cache(maxsize=4)

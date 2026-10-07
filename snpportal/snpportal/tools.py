@@ -3,7 +3,8 @@ panel), the Export tab and its downloads, and the figures of both.
 
 snpscore.panel and snpscore.export do the work. This module turns whitelisted URL parameters into their arguments,
 keeps each panel as panels/<hash>.parquet (+ .json) and the chip as chip.parquet (+ chip.json) in the job folder (they
-expire with the job), and draws the figures. The hash is of the parameters, so the same URL gives the same file.
+expire with the job), and draws the figures. The hash is of the parameters, so the same URL gives the same file. The
+designer's form is POSTed (must-include ids are the user's SNP names: never in a URL) and shows the panel by its hash.
 Design defaults, the chip window W and the assay rules come from the job's weights.yaml snapshot: all PROVISIONAL."""
 from __future__ import annotations
 
@@ -52,7 +53,7 @@ BINDING = {"min_spacing": "the minimum spacing", "min_spacing_cm": "the minimum 
 CM_MAPS = {"mean": "sex-averaged", "female": "female", "male": "male"}  # snpscore.panel.CM_MAPS
 FORMATS = [  # (format, label, contents) of the Export tab's rows; vendor rows add their counts and checks
     ("tsv", "Table (TSV)", "Every annotation column, one row per SNP."),
-    ("kasp", "KASP / Agena", ""), ("illumina", "Illumina", ""), ("axiom", "Axiom", ""),
+    ("kasp", "KASP", ""), ("illumina", "Illumina", ""), ("axiom", "Axiom", ""),  # no Agena layout: not checked (RESEARCH.md 10)
     ("bundle", "Everything (zip)", "The table, BED and vendor files, with methods, provenance and figures."),
 ]
 MORE_FORMATS = [("parquet", "Parquet", "the same columns; provenance in the file's metadata"),
@@ -98,7 +99,8 @@ def _trait(request, weights):
 def _open(d, trait, weights):
     """Sandboxed connection that reads the job folder and the release (genome neighbours, pool) and writes only the
     job folder, with view v = the result plus the tiers of `trait` (as on the Table tab) and, when the job has a chip,
-    view vc = v plus on_chip, dist_to_chip, near_chip and novel_functional. Returns (con, view name, its column types)."""
+    view vc = v plus on_chip, dist_to_chip, near_chip and novel_functional (results.chip_view). Returns (con, view name,
+    its column types)."""
     con = jobs.connect([d, jobs.release()], d)
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet({lit(d / 'result.parquet')}, file_row_number=true)")
     columns = _columns(con, "r")
@@ -115,15 +117,11 @@ def _open(d, trait, weights):
     else:
         con.execute("CREATE VIEW v AS SELECT * FROM r")
     view = "v"
-    if (d / "chip.parquet").exists():
-        window = int(snp_panel.settings(weights)["chip_window"])
-        con.execute(f"CREATE VIEW vc AS {snp_panel.compare_sql('v', _chip_rel(d), window)}")
+    chipped = results.chip_view(con, d, "v", weights)
+    if chipped:
+        con.execute(f"CREATE VIEW vc AS {chipped}")
         view = "vc"
     return con, view, _columns(con, view)
-
-
-def _chip_rel(d):
-    return f"read_parquet({lit(d / 'chip.parquet')})"
 
 
 def chip_info(d):
@@ -253,7 +251,7 @@ def _fig_coverage(c, link, desc):
             for g in p["gaps"] if g["size"] > gap]
     href = (lambda chrom, a, b: link(chrom=chrom, start=a, end=b)) if link else None
     legend = [(_tier_fill(t), figures.TIER_NAMES[t]) for t in (1, 2, 3, 4)] + [_gap_legend(f"gap > {gap / 1e6:g} Mb")]
-    svg = coverage(_chroms(c["d"], [(chrom, end) for chrom, _, end in ends]), marks, f"Panel markers along the genome, {c['preset']} preset",
+    svg = coverage(_chroms(c["d"], [(chrom, end) for chrom, _, end in ends]), marks, f"Panel markers along the genome, {c['preset']}",
                    desc, c["synthetic"], gaps, counts=counts, legend=legend, link=href)
     tsv = c["con"].execute(f"SELECT panel_rank, chrom, pos, {ident}, tier, selection_reason FROM {p['rel']} ORDER BY panel_rank").fetchall()
     return svg, ["panel_rank", "chrom", "pos", "id", "tier", "selection_reason"], tsv
@@ -277,7 +275,7 @@ def _fig_chip(c, link, desc):
     legend = [(figures.mix(palette.GREY[200], palette.GREY[700], 0.6), "chip markers per Mb"),
               (palette.TIERS[1][0], "novel functional, tier 1"), (palette.TIERS[2][0], "tier 2"),
               _gap_legend(f"chip gap > {res['summary']['gap_bp'] / 1e6:g} Mb")]
-    svg = coverage(_chroms(c["d"], ends.items()), marks, f"Chip coverage and novel functional SNPs, {c['preset']} preset",
+    svg = coverage(_chroms(c["d"], ends.items()), marks, f"Chip coverage and novel functional SNPs, {c['preset']}",
                    desc, c["synthetic"], gaps, density, counts, legend, href)
     tsv = [(g["chrom"], g["start"], g["end"], g["size"], *((g["filler"][k] for k in ("chrom", "pos", "id", "tier", "source"))
                                                          if g["filler"] else ("",) * 5)) for g in res["gaps"]]
@@ -353,24 +351,24 @@ def figure(request, key, name):
 
 
 def _context(key, job, d, trait, con):
-    return {"key": key, "job": job, "d": d, "trait": trait, "preset": trait.replace("_", " "), "con": con,
+    return {"key": key, "job": job, "d": d, "trait": trait, "preset": jobs.trait_label(trait), "con": con,
             "synthetic": _synthetic(job)}
 
 
 # ---- the panel designer ----
 
-def _params(request, weights, types):
-    """(design parameters, form state) from the URL: blank or out-of-range values give the release's 'design' defaults.
-    Before the form is first sent (no design=1) the default checkboxes are ticked. The Assay select (?assay=, as on the
-    Table) sets require_assay_pass and the LORe exclusion; ?assay_pass=1 and ?exclude=lore of older links still work."""
-    get, default = request.GET.get, snp_panel.settings(weights)
+def _params(data, weights, types, ids=()):
+    """Design parameters from the designer's fields in `data` (the URL's GET parameters, or the form's POST) and the
+    must-include `ids` (the POST's only): blank or out-of-range values give the release's 'design' defaults. Before the
+    form is first sent (no design=1) the default checkboxes are ticked. The Assay select (assay=, as on the Table) sets
+    require_assay_pass and the LORe exclusion; assay_pass=1 and exclude=lore of older links still work."""
+    get, default = data.get, snp_panel.settings(weights)
     sent = get("design") == "1"
     allowed = [f for f in EXCLUDE if f in types]
-    ids = MUST.findall(get("must", "")[:20_000])
     if sent:
         choice = get("assay") if get("assay") in results.ASSAY_FILTERS else "pass" if get("assay_pass") == "1" else \
-            "ok_nolore" if "lore" in request.GET.getlist("exclude") else "ok"
-        flags = {f for f in request.GET.getlist("exclude") if f != "lore"} | ({"lore"} if choice == "ok_nolore" else set())
+            "ok_nolore" if "lore" in data.getlist("exclude") else "ok"
+        flags = {f for f in data.getlist("exclude") if f != "lore"} | ({"lore"} if choice == "ok_nolore" else set())
     else:
         flags = set(default["exclude_flags"])
         choice = "pass" if default["require_assay_pass"] else "ok_nolore" if "lore" in flags else "ok"
@@ -389,11 +387,18 @@ def _params(request, weights, types):
         cm = _number(get("spacing_cm"), float, 0, 1000, None if sent else default.get("min_spacing_cm"))
         if cm:  # only then in the parameters, so bp-only panels keep their hash
             p.update(min_spacing_cm=cm, cm_map=get("cm_map") if get("cm_map") in CM_MAPS else default.get("cm_map") or "mean")
+    return p
+
+
+def _state(p, weights, gap):
+    """The designer's form state for parameters p: the Assay choice and how many Advanced settings are not the defaults."""
+    default = snp_panel.settings(weights)
+    choice = "pass" if p["require_assay_pass"] else "ok_nolore" if "lore" in p["exclude_flags"] else "ok"
     changed = sum([p["min_maf"] != float(default["min_maf"]), p["backbone_fraction"] != float(default["backbone_fraction"]),
                    p["max_per_gene"] != int(default["max_per_gene"]), p["max_per_element"] != int(default["max_per_element"]),
-                   p.get("min_spacing_cm") != default.get("min_spacing_cm"), bool(get("gap_mb")),
+                   p.get("min_spacing_cm") != default.get("min_spacing_cm"), bool(gap),
                    set(p["exclude_flags"]) - {"lore"} != set(default["exclude_flags"]) - {"lore"}])
-    return p, {"too_many_ids": len(set(ids)) > MAX_MUST, "assay": choice, "advanced": changed}
+    return choice, changed
 
 
 def _fields(p, types, gap_mb):
@@ -492,7 +497,7 @@ def panel_name(info, time=False):
         when = f"{when.day} {when:%b}" + (f" {when:%H:%M}" if time else "")
     except ValueError:
         pass
-    return " · ".join(x for x in [f"{info['summary']['n_selected']:,} markers", (info.get("preset") or "all").replace("_", " "), when] if x)
+    return " · ".join(x for x in [f"{info['summary']['n_selected']:,} markers", jobs.trait_label(info.get("preset") or "all"), when] if x)
 
 
 def panel_line(s):
@@ -534,7 +539,7 @@ def _listed(con, info, d, trait, key, limit):
                     "gene": gene, "gene_tip": results.UNNAMED if gene.startswith("~") else g("gene_id") or "",
                     "region": results.CLASS_LABELS.get(g("region_class"), g("region_class")) or "intergenic",
                     "maf": "" if g("_maf") is None else f"{g('_maf'):.2f}",
-                    "assay": (results.ASSAY.get(status, ("?", "not_checked")) + (status.replace("_", " "), g("assay_reasons") or ""))
+                    "assay": (results.ASSAY.get(status, ("?", "not_checked")) + (status.replace("_", " "), results.reasons_text(g("assay_reasons"))))
                     if status else None, "on_chip": g("on_chip")})
     return out
 
@@ -568,9 +573,11 @@ def panel(request, key, job):
     chip = chip_info(d)
     c = _context(key, job, d, trait, con)
     link = results.table_link(trait)
-    p, notes = _params(request, weights, types)
+    saved = _saved(d, request.GET.get("panel"))  # a panel the form designed, with its must-include ids (never in the URL)
+    p = saved["params"] if saved else _params(request.GET, weights, types)  # another trait: the same parameters for it
     info = _design(con, view, d, trait, p, weights, chip)
     gap = _number(request.GET.get("gap_mb"), float, 0.01, 1000, None)
+    choice, changed = _state(p, weights, request.GET.get("gap_mb"))
     pv = _panel_view(d, info, gap * 1e6 if gap else None)
     c.update(panel=pv, synthetic=_synthetic(job, info.get("chip_synthetic")))
     s = info["summary"]
@@ -579,9 +586,9 @@ def panel(request, key, job):
     more["show"] = "all"
     visible, advanced = _fields(p, types, pv["gap_bp"] / 1e6)
     designer = {
-        "fields": visible, "advanced": advanced, "n_advanced": notes["advanced"], "must": " ".join(p["must_include"]),
-        "too_many_ids": notes["too_many_ids"], "max_must": MAX_MUST,
-        "assay": [(k, label, k == notes["assay"]) for k, (label, _) in results.ASSAY_FILTERS.items()
+        "fields": visible, "advanced": advanced, "n_advanced": changed, "must": " ".join(p["must_include"]),
+        "too_many_ids": request.GET.get("must_capped") == "1", "max_must": MAX_MUST, "url": reverse("snpportal:panel_design", args=[key]),
+        "assay": [(k, label, k == choice) for k, (label, _) in results.ASSAY_FILTERS.items()
                   if k != "ok_nolore" or "lore" in types] if "assay_status" in types else [],
         "cm_maps": [(k, label, k == p.get("cm_map", "mean")) for k, label in CM_MAPS.items()] if {"cm_female", "cm_male"} <= set(types) else [],
         "checks": [(f, EXCLUDE[f], f in p["exclude_flags"]) for f in EXCLUDE if f in types and f != "lore"],
@@ -593,7 +600,26 @@ def panel(request, key, job):
         "reset": "?" + urlencode({"tab": "panel", "trait": trait}),
     }
     return {"designer": designer, "readiness": assay_readiness(d, _synthetic(job), link),
+            "keep": [("panel", pv["hash"])] + ([("gap_mb", f"{gap:g}")] if gap else []),  # another trait: the same parameters
             "chip": _chip_context(request, key, job, d, trait, con, weights, chip, link)}
+
+
+@private
+def design(request, key):
+    """POST of the panel designer: designs the panel (cached by its parameters' hash) and redirects to the Panel tab
+    showing it by that hash, so the must-include ids reach no URL, server log or browser history."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    _views().finished(key)
+    d = jobs.folder(key)
+    weights = jobs.weights(d)
+    trait = _trait(request, weights)
+    con, view, types = _open(d, trait, weights)
+    ids = MUST.findall(request.POST.get("must", "")[:20_000])
+    info = _design(con, view, d, trait, _params(request.POST, weights, types, ids), weights, chip_info(d))
+    query = {"tab": "panel", "trait": trait, "panel": info["hash"], "gap_mb": request.POST.get("gap_mb", "")[:20],
+             "must_capped": "1" if len(set(ids)) > MAX_MUST else ""}
+    return redirect(f"{reverse('snpportal:results', args=[key])}?{urlencode({k: v for k, v in query.items() if v})}#designer")
 
 
 # ---- chip comparison ----
@@ -614,10 +640,8 @@ def _compared(con, d, trait, weights, chip):
             "ON v.chrom = g.chrom AND v.pos = g.pos GROUP BY ALL").fetchall())
         for f in listed:
             f["row"] = rows.get((f["chrom"], f["pos"]))
-    window = int(snp_panel.settings(weights)["chip_window"])
-    res["novel_bins"] = [list(x) for x in con.execute(
-        f"SELECT chrom, pos // {BIN} * {BIN}, min(tier), count(*) FROM ({snp_panel.compare_sql('v', _chip_rel(d), window)}) "
-        "WHERE novel_functional GROUP BY ALL ORDER BY ALL").fetchall()]
+    res["novel_bins"] = [list(x) for x in con.execute(  # vc: v with the chip columns (see _open)
+        f"SELECT chrom, pos // {BIN} * {BIN}, min(tier), count(*) FROM vc WHERE novel_functional GROUP BY ALL ORDER BY ALL").fetchall()]
     chip.setdefault("results", {})[trait] = res
     jobs._write_json(d / "chip.json", chip)
     return chip
@@ -692,8 +716,8 @@ def _chip(request, key):
     d = jobs.folder(key)
     trait = _trait(request, jobs.weights(d))
     if request.POST.get("remove"):
-        for name in ("chip.parquet", "chip.json"):
-            (d / name).unlink(missing_ok=True)
+        for path in [d / "chip.parquet", d / "chip.json", *d.glob("chip_rows_*.parquet")]:
+            path.unlink(missing_ok=True)
         return _chip_redirect(key, trait)
     upload, demo = request.FILES.get("chip"), jobs.release() / "demo" / "chip_demo_SYNTHETIC.tsv"
     if request.POST.get("demo") and demo.is_file():
@@ -721,6 +745,8 @@ def _chip(request, key):
     density = [list(x) for x in con.execute(f"SELECT chrom, (pos - 1) // 1000000, count(*) FROM read_parquet({lit(new)}) "
                                             "GROUP BY ALL ORDER BY ALL").fetchall()]
     os.chmod(new, 0o600)
+    for path in d.glob("chip_rows_*.parquet"):  # the old chip's per-SNP columns (results.chip_view makes the new ones)
+        path.unlink(missing_ok=True)
     os.replace(new, d / "chip.parquet")
     rejected = {k: v for k, v in (report.get("rejected") or {}).items() if v}
     jobs._write_json(d / "chip.json", {"label": label, "synthetic": synthetic, "kept": report["snps_kept"],
@@ -879,15 +905,20 @@ def _vendor_notes(con, rel, n):
 def exports(request, key, job):
     """Context for the Export tab: one scope choice (the filtered table when the Table has filters, else the latest
     panel of this trait, else all SNPs), five download rows with each vendor file's counts and checks, and 'More
-    formats'. GWAS jobs lead with their association files and one KASP / Agena row for the credible-set SNPs."""
+    formats'. GWAS jobs lead with their association files and one KASP row for the credible-set SNPs."""
     d = jobs.folder(key)
     weights = jobs.weights(d)
     trait = _trait(request, weights)
     con, view, types = _open(d, trait, weights)
     gwas = job.get("input_kind") == "gwas"
+    settings = results.gwas_settings(request) if gwas else {}  # the loci and credible sets of the Association page's settings
     conds = results.filters(request, types, weights)
     chosen = {k: v for params, _, _ in conds for k, v in params.items()}
     chip = chip_info(d)
+    wanted = request.GET.get("scope")
+    old = _saved(d, wanted[6:]) if not gwas and (wanted or "").startswith("panel-") else None
+    if old and old.get("preset") != trait:  # a panel of another trait (the Trait changed): its parameters for this trait
+        wanted = "panel-" + _design(con, view, d, trait, old["params"], weights, chip)["hash"]
     scopes = []  # (value, label, SNPs, relation, a synthetic chip contributes)
     if gwas:
         rows = ", ".join(str(int(r)) for r in credible_rows(request, key)) or "NULL"
@@ -904,11 +935,10 @@ def exports(request, key, job):
             scopes.append((f"panel-{info['hash']}", panel_name(info, names.count(panel_name(info)) > 1), info["summary"]["n_selected"],
                            f"read_parquet({lit(d / 'panels' / (info['hash'] + '.parquet'))})", info.get("chip_synthetic")))
         scopes.append(("all", "All SNPs", con.execute("SELECT count(*) FROM r").fetchone()[0], view, view == "vc" and chip.get("synthetic")))
-    wanted = request.GET.get("scope")
     value, label, n, rel, chip_synthetic = next((x for x in scopes if x[0] == wanted), scopes[0])
     cap = int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000))
     genome = bool(jobs.manifest(d).get("genome"))  # vendor files need the genome
-    query = {"trait": trait, "scope": value, **chosen}
+    query = {"trait": trait, "scope": value, **chosen, **settings}
     url = reverse("snpportal:download", args=[key])
 
     def href(fmt, **extra):
@@ -918,12 +948,13 @@ def exports(request, key, job):
     rows = []  # (label, [notes], download URL or None)
     if gwas:
         gwas_url = reverse("snpportal:association_download", args=[key])
-        rows = [("Fine-mapping (TSV)", ["Every SNP in a locus with tier score and PIP under both priors."], f"{gwas_url}?{urlencode({'trait': trait, 'format': 'finemap'})}" if n else None),
-                ("Loci (TSV)", ["One row per locus: lead SNP, p, credible-set sizes."], f"{gwas_url}?{urlencode({'trait': trait, 'format': 'loci'})}"),
-                ("Loci (BED)", ["The locus windows, for genome browsers."], f"{gwas_url}?{urlencode({'trait': trait, 'format': 'bed'})}"),
+        rows = [("Fine-mapping (TSV)", ["Every SNP in a locus with tier score and PIP under both priors."],
+                 f"{gwas_url}?{urlencode({'trait': trait, **settings, 'format': 'finemap'})}" if n else None),
+                ("Loci (TSV)", ["One row per locus: lead SNP, p, credible-set sizes."], f"{gwas_url}?{urlencode({'trait': trait, **settings, 'format': 'loci'})}"),
+                ("Loci (BED)", ["The locus windows, for genome browsers."], f"{gwas_url}?{urlencode({'trait': trait, **settings, 'format': 'bed'})}"),
                 ("All SNPs (TSV)", ["Every annotation column, one row per SNP."], f"{url}?{urlencode({'trait': trait, 'scope': 'all', 'format': 'tsv'})}")]
         if "kasp" in vendor:
-            rows.append((f"KASP / Agena: credible-set SNPs ({n:,})", [x for x in notes.get("kasp", []) if x] if n else
+            rows.append((f"KASP: credible-set SNPs ({n:,})", [x for x in notes.get("kasp", []) if x] if n else
                          ["No credible sets: no locus could be fine-mapped."], href("kasp") if notes else None))
     else:
         for fmt, name, about in FORMATS:
@@ -940,7 +971,8 @@ def exports(request, key, job):
         if "sidecars" in inspect.signature(snp_export.export).parameters:
             more += [(f"{fmt.upper() if fmt == 'kasp' else fmt.capitalize()} {part} file", tip, href(f"{fmt}.{part}"))
                      for fmt in (("kasp",) if gwas else vendor) for part, tip in (("provenance", "how it was made"), ("lookup", "your ids, TOP/BOT and assay status"))]
-    return {"query": urlencode({"trait": trait, **chosen}), "exports": {
+    return {"query": urlencode({"trait": trait, **chosen, **settings}), "keep": sorted(chosen.items()) + [("scope", value)] + list(settings.items()),
+            "exports": {
         "scopes": [(v, f"{lab} ({k:,})" if v != "credible" else lab, v == value) for v, lab, k, _, _ in scopes], "gwas": gwas,
         "trait": trait, "hidden": sorted(chosen.items()), "rows": rows, "more": more, "n": n,
         "synthetic": bool(chip_synthetic) and not _synthetic(job), "panel_link": "?" + urlencode({"tab": "panel", "trait": trait}),
