@@ -132,6 +132,37 @@ def test_z_n_af_only_gives_the_same_pips(synthetic, release, runs, tmp_path):
     assert worst < 1e-3
 
 
+def test_trait_sd_follows_the_units(synthetic, release, runs, tmp_path):
+    """W is on the SD scale: the same statistics in other units (beta and se x 50) give the same credible sets, as the
+    trait SD is estimated from se, N and af; a trait SD far from that estimate gets a warning."""
+    report, _, summary, _ = runs[f"{STEM}.tsv"]
+    assert report["trait_sd_estimate"] == pytest.approx(1, abs=0.01) and report["finemap"]["trait_sd_source"].startswith("estimated")
+    lines = (synthetic / f"{STEM}.tsv").read_text().splitlines()
+    head = lines.index("chrom\tpos\tid\tref\talt\tbeta\tse\tp\taf\tn")
+    scaled = ["\t".join(f[:5] + [repr(float(f[5]) * 50), repr(float(f[6]) * 50)] + f[7:])
+              for f in (x.split("\t") for x in lines[head + 1:])]
+    (tmp_path / "x50_SYNTHETIC.tsv").write_text("\n".join(lines[:head + 1] + scaled) + "\n")
+    report50, _, summary50 = gwas.run(tmp_path / "x50_SYNTHETIC.tsv", release, tmp_path / "out", trait="maturation")
+    assert report50["trait_sd_estimate"] == pytest.approx(50, rel=0.01) and not report50["warnings"]
+    assert [(s["size_uniform"], s["size_functional"]) for s in summary50.values()] == \
+        [(s["size_uniform"], s["size_functional"]) for s in summary.values()]
+    assert "imply 50" in gwas.trait_sd_warning(report50, gwas.settings(None, report50, trait_sd=1.0))
+
+
+def test_rs_moved_rows_keep_their_statistics(release, tmp_path):
+    """Rows that annotate moves from ICSASG_v2 by their rs ID (fixture EVA tables) join their statistics by row."""
+    f = tmp_path / "v2_SYNTHETIC.tsv"
+    f.write_text("# SYNTHETIC test data\nchrom\tpos\tid\tref\talt\tbeta\tse\tp\n"
+                 "25\t28880187\trs863807512\tA\tC\t0.5\t0.05\t1e-20\n25\t28656101\trs863754587\tT\tC\t0.3\t0.05\t1e-8\n"
+                 "25\t28996400\tx3\tA\tG\t0.1\t0.1\t0.3\n")
+    report, loci, _ = gwas.run(f, release, tmp_path / "out")
+    got = duckdb.sql(f"SELECT pos, ref, alt, beta FROM read_parquet('{tmp_path / 'out' / 'gwas.parquet'}') ORDER BY row").fetchall()
+    assert report["kept"] == report["annotated"] == 3 and [g[0] for g in got] == [29329831, 28996360, 28996400]
+    assert got[1] == (28996360, "C", "T", -0.3)  # moved to vgll3 Met54Thr, effect allele C = the genome base: swapped
+    assert loci[0]["lead"] == 29329831 and loci[0]["significant"]
+    assert "in_row" not in duckdb.sql(f"SELECT * FROM read_parquet('{tmp_path / 'out' / 'result.parquet'}')").columns
+
+
 def test_sql_normal_helpers_and_unplaced_scaffolds(release, tmp_path):
     con = duckdb.connect()
     for z in (0.1, 1.0, 3.0, 8.0, 20.0):

@@ -1,7 +1,7 @@
 """Assay designability QC (P6.2): probe flanks from the soft-masked Ssal_v3.1 genome, with neighbouring public variants
 as upper-case IUPAC codes (N for indels; KASP reads lower case as 'uncertain'), and pass / warn / fail / not_checked
-rules from the weights.yaml 'assay' block (PROVISIONAL). annotate's sequence step reads the windows with read_flanks()
-and adds the columns with assay_sql(); export.py reuses read_flanks() for the longer vendor flanks. Vendor rules
+rules from the weights.yaml 'assay' block (PROVISIONAL). annotate's sequence step reads the windows with iter_flanks()
+and adds the columns with assay_sql(); export.py uses read_flanks() for the longer vendor flanks. Vendor rules
 behind the defaults: RESEARCH.md section 5."""
 from __future__ import annotations
 
@@ -36,21 +36,26 @@ def iupac(alleles):
     return IUPAC.get(bases, "N") if all(len(a) == 1 for a in alleles) else "N"
 
 
-def neighbours(con, table, flank, public_af):
-    """{idx: {offset: [alleles]}} for the public variants within `flank` bp of each SNP in `table` (idx, chrom, pos),
-    offset 0 being the SNP's own position. One DuckDB range join on public_af.parquet, through fixed-size bins."""
+def neighbours(con, chrom, flank, public_af):
+    """({idx: {offset: [alleles]}}, {idx: 'REF/ALT'}) for the SNPs of `chrom` in table _flank_snps (idx, chrom, pos):
+    the distinct alleles of the public variants within `flank` bp (offset 0 = the SNP's own position), and the public
+    site at the SNP's own position with its REF/ALT order kept. One equality join through fixed-size bins."""
+    f = int(flank)
     rows = con.execute(f"""
-        WITH s AS (SELECT DISTINCT idx, chrom, pos, unnest([(pos - {int(flank)}) // {BIN}, (pos + {int(flank)}) // {BIN}]) AS bin
-                   FROM {table}),
-        l AS (SELECT chrom, "end" AS p, ref, alt, "end" // {BIN} AS bin FROM read_parquet({lit(public_af)}))
+        WITH s AS (SELECT idx, pos, unnest(range((pos - {f}) // {BIN}, (pos + {f}) // {BIN} + 1)) AS bin
+                   FROM _flank_snps WHERE chrom = $1),
+        l AS (SELECT "end" AS p, ref, alt, "end" // {BIN} AS bin FROM read_parquet({lit(public_af)}) WHERE chrom = $1)
         SELECT s.idx, l.p - s.pos AS off, -- a string, not a list: DuckDB converts lists to Python slowly
-               array_to_string(list_sort(list_distinct(flatten(list(string_split(l.ref || ',' || l.alt, ','))))), ',')
-        FROM s JOIN l ON s.chrom = l.chrom AND s.bin = l.bin AND abs(l.p - s.pos) <= {int(flank)}
-        GROUP BY 1, 2""").fetchall()
-    found = {}
-    for idx, off, alleles in rows:
-        found.setdefault(idx, {})[off] = alleles.split(",")
-    return found
+               array_to_string(list_sort(list_distinct(flatten(list(string_split(l.ref || ',' || l.alt, ','))))), ','),
+               min(l.ref || '/' || l.alt)
+        FROM s JOIN l ON s.bin = l.bin AND abs(l.p - s.pos) <= {f}
+        GROUP BY 1, 2""", [chrom]).fetchall()
+    near, sites = {}, {}
+    for idx, off, alleles, site in rows:
+        near.setdefault(idx, {})[off] = alleles.split(",")
+        if off == 0:
+            sites[idx] = site
+    return near, sites
 
 
 def window(fasta, chrom, pos, flank, near=None):
@@ -71,16 +76,22 @@ def window(fasta, chrom, pos, flank, near=None):
     return left, base, right, "".join(li), "".join(ri)
 
 
+def iter_flanks(con, fasta, rows, flank, public_af=None):
+    """(idx, left, base, right, left_iupac, right_iupac, public site 'REF/ALT' or None) for the SNPs of the SQL relation
+    `rows` (idx, chrom, pos) that are on the genome's chromosomes, in genome order (see window). One chromosome's
+    SNPs and neighbours at a time, so a long list never sits in Python memory."""
+    con.execute(f"CREATE OR REPLACE TEMP TABLE _flank_snps AS SELECT idx, chrom, pos FROM {rows} WHERE pos > 0")
+    for chrom, in con.execute("SELECT DISTINCT chrom FROM _flank_snps ORDER BY chrom").fetchall():
+        if chrom not in fasta.index:
+            continue
+        near, sites = neighbours(con, chrom, flank, public_af) if public_af else ({}, {})
+        for idx, pos in con.execute("SELECT idx, pos FROM _flank_snps WHERE chrom = ? ORDER BY pos", [chrom]).fetchall():
+            yield (idx,) + window(fasta, chrom, pos, flank, near.get(idx)) + (sites.get(idx),)
+
+
 def read_flanks(con, fasta, rows, flank, public_af=None):
-    """{idx: (left, base, right, left_iupac, right_iupac, public_alleles 'REF/ALT' or None)} for the SNPs of the SQL
-    relation `rows` (idx, chrom, pos) that are on the genome's chromosomes, read in genome order (see window)."""
-    near = neighbours(con, rows, flank, public_af) if public_af else {}
-    out = {}
-    for idx, chrom, pos in con.execute(f"SELECT idx, chrom, pos FROM {rows} ORDER BY chrom, pos").fetchall():
-        if chrom in fasta.index and pos > 0:
-            nb = near.get(idx, {})
-            out[idx] = window(fasta, chrom, pos, flank, nb) + ("/".join(nb[0]) if 0 in nb else None,)
-    return out
+    """{idx: (left, base, right, left_iupac, right_iupac, public site 'REF/ALT' or None)} (see iter_flanks)."""
+    return {x[0]: x[1:] for x in iter_flanks(con, fasta, rows, flank, public_af)}
 
 
 def walk_sql(left, right):

@@ -24,22 +24,27 @@ class Fasta:
         self.uncompressed = [u for _, u in pairs]  # and in the uncompressed FASTA text
         self.blocks = {}
 
-    def _block(self, i):
-        """Uncompressed block i. A block ends where the next one starts; each is one gzip member of at most 64 KiB.
-        Safe when threads share this Fasta (open_fasta): another thread may clear self.blocks at any time."""
-        block = self.blocks.get(i)
-        if block is None:
+    def _block(self, i, need=None):
+        """Uncompressed block i, or at least its first `need` bytes. A block ends where the next one starts; each is one
+        gzip member of at most 64 KiB, decompressed only as far as asked (and at least doubled when it grows): a SNP's
+        window needs ~71 bytes. Safe when threads share this Fasta (open_fasta): a stored decompressor is copied before
+        it continues, and another thread may clear self.blocks at any time."""
+        d, data, tail = self.blocks.get(i) or (None, b"", b"")
+        if d is None:
             size = self.compressed[i + 1] - self.compressed[i] if i + 1 < len(self.compressed) else 65536
-            block = zlib.decompressobj(31).decompress(self.src.read(self.compressed[i], size))
+            d, tail = zlib.decompressobj(31), self.src.read(self.compressed[i], size)
+        if (need is None or len(data) < need) and not d.eof:
+            d = d.copy()
+            data += d.decompress(tail, 0 if need is None else max(need - len(data), len(data), 4096))  # 0: all
             if len(self.blocks) > 256:
                 self.blocks.clear()
-            self.blocks[i] = block
-        return block
+            self.blocks[i] = (d, data, d.unconsumed_tail)
+        return data
 
     def _text(self, start, end):
         first = bisect.bisect_right(self.uncompressed, start) - 1
         last = bisect.bisect_right(self.uncompressed, end - 1) - 1
-        data = b"".join(self._block(i) for i in range(first, last + 1))
+        data = b"".join(self._block(i, end - self.uncompressed[i] if i == last else None) for i in range(first, last + 1))
         return data[start - self.uncompressed[first]:end - self.uncompressed[first]]
 
     def fetch(self, chrom, start, end):

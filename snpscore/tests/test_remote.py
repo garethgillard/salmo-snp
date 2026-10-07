@@ -208,7 +208,10 @@ def test_registry(tmp_path):
     presets = yaml.safe_load((ROOT / "weights.yaml").read_text())["presets"]
     rows = tracks.default_tracks(cfg, "maturation", presets)
     assert len(rows) == 8 and all(t["replicate"] == "R1" and t["tissue"] in ("Brain", "Gonad") for t in rows)
-    assert len({t["tissue"] for t in tracks.default_tracks(cfg, "all", presets)}) == 6
+    # 'all': one row per tissue and an embryo stage; gill only for ChIP, as AQUA-FAANG discarded gill ATAC
+    assert {t["tissue"] for t in tracks.default_tracks(cfg, "all", presets)} == {"Brain", "Gonad", "Liver", "Muscle", "Embryo"}
+    assert "Gill" in {t["tissue"] for t in tracks.select(cfg, "H3K27ac", cfg["defaults"]["presets"]["all"])}
+    assert not tracks.select(cfg, "ATAC", ["Gill"])
 
 
 def test_registry_policy(tmp_path, remote):

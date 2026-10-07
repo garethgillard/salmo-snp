@@ -12,15 +12,15 @@ On top of that: assay designability QC, a panel designer, chip comparison, vendo
 ## Quick start
 
 ```bash
-pip install -e .
+pip install -e ".[test]"                         # the test extra adds pytest
 snpscore fetch                                   # download public inputs into data/raw (~1.5 GB kept; about 7 min)
 snpscore build --out release/v0.1                # standardise every layer in layers.yaml, copy weights.yaml
-snpscore annotate my_snps.vcf.gz --release release/v0.1 --trait maturation -o my_snps_annotated.tsv
+snpscore annotate my_snps.vcf.gz --release release/v0.1 --trait maturation -o my_snps_annotated.parquet  # or .tsv
 snpscore rsid rs863754587 --release release/v0.1  # Ssal_v3.1 and ICSASG_v2 position of an rs ID
 snpscore benchmark --release release/v0.1 -o release/v0.1/benchmark.tsv
 snpscore pool --release release/v0.1             # public background pool: release/v0.1/pool/ (about 40 s for 1.6M sites)
 snpscore panel my_snps_annotated.parquet --release release/v0.1 --preset maturation --n 384 -o panel.parquet
-snpscore export panel.parquet --release release/v0.1 --format illumina   # or axiom, kasp, bed, tsv, parquet, bundle
+snpscore export panel.parquet --release release/v0.1 --preset maturation --format illumina  # or axiom, kasp, bed, ...
 snpscore compare my_snps_annotated.parquet --chip my_chip.csv --release release/v0.1 --pool
 python prep/make_synthetic.py chip               # SYNTHETIC demo chip (data/synthetic; --scale fixture for tests)
 python prep/make_synthetic.py gwas               # SYNTHETIC maturation GWAS with planted loci (data/synthetic)
@@ -112,7 +112,7 @@ parquets are zstd-compressed.
 | `interval` | non-overlapping intervals (`build` checks) | `<layer>` (true if inside an interval), `<layer>_<column>`; with `id: true` also `<layer>_id` = `chrom:start-end` of the interval (BED coordinates); with `interpolate: true` the parquet has `<column>` (value at start) and `<column>_next` (value at end) and `<layer>_<column>` is interpolated linearly at pos (3 decimals) |
 | `nearest` | features, may overlap | `<layer>_<column>` of the nearest feature within `max_distance` and `<layer>_distance` (0 = inside; ties go to the lower start) |
 | `count` | 1-bp features, one per position (`build` checks) | `<layer>`: number of features within `window` bp either side, not counting the SNP's own position |
-| `point` | 1-bp features with `ref`, `alt`, one per position and allele pair (`build` checks) | `<layer>` (true if a feature is at the SNP's position), `<layer>_<column>` for the columns other than ref/alt; with input alleles `<layer>_alleles` (`same`, `swapped`, `strand_flip`, `strand_flip_swapped`, `other`), and `af` and `*_af` (as 1 - af) and `ac` (as an - ac) turned to the input's alt (NULL when `other`) |
+| `point` | 1-bp features with `ref`, `alt`, one per position and allele pair (`build` checks) | `<layer>` (true if a feature with the SNP's alleles is at its position), `<layer>_<column>` for the columns other than ref/alt; with input alleles `<layer>_alleles` (`same`, `swapped`, `strand_flip`, `strand_flip_swapped`, `other`), and `af` and `*_af` (as 1 - af) and `ac` (as an - ac) turned to the input's alt. `other` = a different variant at the position: `<layer>` is false and every `<layer>_<column>` NULL. Without input alleles a feature at the position is a hit |
 | `gene` | one row per `gene_id` (`build` checks) | `<layer>_<column>` for the SNP's nearest gene |
 | `features` | overlapping features for the viewers | nothing (never annotated) |
 
@@ -157,9 +157,9 @@ the published ICSASG_v2 position, or EVA release 9's for natively Ssal_v3.1 rows
 ## Annotate output
 
 `snpscore annotate` (and `snpscore.annotate()`) writes one row per kept input SNP, in input order (TSV, or Parquet/CSV
-by file extension): `chrom` (after aliases), `pos`, the other input columns, then the layer columns in layers.yaml order,
-then:
-- `position_source` (only when rows were placed through rs IDs): `rsid`, `ICSASG_v2 <chrom>:<pos>` or NULL (as given)
+by file extension): `chrom` (after aliases), `pos`, the other input columns, `position_source` (only when rows were
+placed through rs IDs: `rsid`, `ICSASG_v2 <chrom>:<pos>` or NULL = as given), then the layer columns in layers.yaml
+order, then:
 - `known_locus` (id of the nearest catalogue SNP within `catalog.window` bp), `known_locus_dist`, and at its exact
   position `known_effect_allele` (in the input's alleles: complemented when only its complement is one of them) and
   `known_effect_note` (`alt`, `ref`, `alt, other strand`, `ref, other strand`, `not one of the input alleles`)
@@ -201,8 +201,10 @@ Next to the output, `<stem>.validation.json` and `<stem>.rejects.tsv`:
 Problems with the input raise `snpscore.InputError` (a ValueError) with a message that is safe to show: no SQL, file
 paths or input lines. DuckDB runs in a sandbox (`snpscore.connect(read_dirs, write_dir, threads=2,
 memory_limit='2GB')`): it can read only the input's folder, the release and the output folder, write only the output
-folder, and has no network or extension loading. Lists over 250,000 SNPs are written in input order through sorted
-Parquet parts in the output folder (hidden, removed afterwards), so the 1.6M public sites annotate within the 2 GB.
+folder (which is also where it spills; a connection without write_dir never spills, so a query over memory_limit
+fails rather than writing rows to DuckDB's default `.tmp`), and has no network or extension loading. Lists over
+250,000 SNPs are written in input order through sorted Parquet parts in the output folder (hidden, removed
+afterwards), so the 1.6M public sites annotate within the 2 GB.
 
 A SNP at 1-based `pos` is inside an interval when `start < pos <= end`.
 
@@ -245,7 +247,10 @@ keeps `min_spacing_bp` (bisect per chromosome; `coordinate(chrom, pos)` can map 
 `max_per_gene` per `gene_id` and `max_per_element` per `chromatin_id`. Filters: MAF (your `maf`/`af` column, else
 `public_af_maf`; unknown passes), assay (`fail` dropped, or all but `pass` with require_assay_pass), and
 `exclude_flags` (columns true or > 0, e.g. blacklist, lore, strand_ambiguous, flank_variants, near_chip). Tiers come
-from `tier__<preset>` when present (pool, the portal's tiers.parquet), else `tier`. Ties go to the lower row number.
+from `tier__<preset>` when present (pool, the portal's tiers.parquet); a parquet/TSV path without them holds the
+tiers of the preset it was annotated with, so its tier columns are recomputed for `preset` with `weights` (the CLI
+passes the release's; `synthetic=` names the layers that never count), and a connection's `tier` is used as it is. A
+TSV/CSV source reads `chrom`, `id`, `ref`, `alt` and `genome_base` as text. Ties go to the lower row number.
 Returns {`params`, `hash` (same input and params -> same hash and parquet sha256), `summary`, `selected`}; `out` gets
 the source columns plus `source_row` (0-based row in the source), `selection_reason` (`must_include`, `backbone`,
 `functional` = tier 1-3, `fill` = tier 4), `panel_rank` and `design_score`, ordered by panel_rank. `summary`:
@@ -259,19 +264,34 @@ chip SNP on the chromosome), `near_chip` (<= window_bp) and `novel_functional` (
 `compare(source, chip, preset, window_bp, gap_bp, pool=, weights=, chrom_sizes=)` returns `summary` {total, shared,
 novel_functional, other (the three add up to total), chip_snps, window_bp, gap_bp, gaps} and `gaps` [{chrom, start,
 end, size, filler: {chrom, pos, id, tier, source: list | pool} or None}] for chip gaps over gap_bp (design
-`chip_window` 10 kb and `chip_gap` 1 Mb). `read_chip(path, release, out)` reads any input layout through the aliases
-into chrom, pos, id.
+`chip_window` 10 kb and `chip_gap` 1 Mb). `read_chip(path, release, out, max_snps=CHIP_MAX)` reads any input layout
+through the aliases into chrom, pos, id, and stops with InputError past `max_snps` rows (3,000,000).
 
 `snpscore.export`: `provenance(manifest, weights, meta)` -> '# ' lines (release, manifest and weights sha256,
 versions, preset, filters, panel, PROVISIONAL rules, SYNTHETIC when synthetic data contributes, the equivalent
-command); `methods_text(manifest, weights, preset, release_dir)` -> methods paragraphs and references (layer
-citations, GERP++, the catalogue's DOIs; 'DOI to add' where none is known); `export(source, fmt, out, release_dir,
-preset, meta, include_failed, plain)` for tsv, parquet (provenance in the KV metadata), bed, and the vendor layouts in
-`VENDORS` (each 'layout to confirm against the vendor's current template'): `illumina` (60 bp flanks, alleles in
-Illumina A/B order, `TopBot` by Illumina's TOP/BOT rules incl. the sequence walk for A/T and C/G), `axiom` (35 bp
-flanks, `[REF/ALT]`, `Two_Probes` for A/T and C/G) and `kasp` (50 bp flanks). Vendor files leave out assay fail and
-not_checked SNPs, or keep them with `Assay_Status` columns (include_failed); flanks use the genome and public IUPAC
-codes. `bundle_zip(out, source, release_dir, preset, meta, formats, svgs)` zips the exports, manifest.json,
+command); `methods_text(manifest, weights, preset, release_dir, finemap=None)` -> methods paragraphs and references
+(layer citations, each '; '-separated part once and 'DOI to add' where it has no doi:, GERP++, the catalogue's DOIs;
+with `finemap`, the GWAS settings used, a loci and fine-mapping paragraph and Wakefield 2009); `export(source, fmt, out,
+release_dir, preset, meta, include_failed, plain, flank=, template=, sidecars=True)` for tsv, parquet (provenance in
+the KV metadata), bed, and the vendor layouts (`illumina`, `axiom`, `kasp`; columns per template version in
+`TEMPLATES`, each 'layout to confirm against the vendor's current template'). A path source's tiers are recomputed
+for `preset` as in design(). Rows keep the source's order (a connection's view is written in sorted `_row` ranges).
+- Vendor files hold one row per SNP and no comment lines. `Sequence` is `<flank>[REF/ALT]<flank>` on the forward (+)
+  strand, upper case, neighbouring public variants as IUPAC codes (N for indels); REF/ALT are the input's alleles
+  (complemented for `strand_flip`), else the public site's. Flanks: illumina 60 bp (60-200), axiom 35 bp, kasp 50 bp
+  (50-100). Columns: illumina (designstudio-2026) `Locus_Name, Target_Type, Sequence, Chromosome, Coordinate,
+  Genome_Build_Version, Source, Source_Version, Sequence_Orientation, Plus_Minus, Species, Force_Infinium_I,
+  Replication_Count` (iselect-2016 also available); axiom `SNP_ID, Chromosome, Position, Strand, Sequence`; kasp
+  `SNP ID, Sequence, Position`. Locus names are `Ssa<chromosome>p<position>` (chromosome 0 off 1-29).
+- Next to each vendor file: `<file>.provenance.txt` (the '# ' provenance, template, flank, left-out counts and panel
+  warnings) and `<file>.lookup.tsv` (`locus_name, id, chrom, pos, ref, alt, topbot, allele_a, allele_b, two_probes,
+  assay_status, assay_reasons, export_notes`: TOP/BOT by Illumina's rules incl. the sequence walk for A/T and C/G,
+  with Illumina's A/B alleles).
+- Left out: SNPs without known biallelic alleles or a full flank, and unless include_failed (then kept, with the
+  reason in `export_notes`) assay fail and not_checked SNPs and, for illumina, SNPs whose TOP/BOT strand cannot be
+  determined (code 103).
+
+`bundle_zip(out, source, release_dir, preset, meta, formats, svgs)` zips the exports, manifest.json,
 weights.yaml, methods.txt, provenance.txt, README.txt and figures/*.svg. `filename(fmt, release, preset, tag)` names
 files `snpscore_<release>_<preset>[_<tag>][_<vendor>].<ext>`.
 
@@ -284,12 +304,16 @@ like any list, and writes into OUT: `sumstats.parquet` (as read), `gwas.parquet`
 - Reading (`detect`, `read`, `prepare`): one SQL pass derives `z` and `neglog10p` (-log10 p, parsed as text so
   `1e-400` gives 400), recovers z from p for p-only rows (`z_from_p`), keeps only additive tests, drops unplaced
   scaffolds and duplicates (counted in `gwas.json` `dropped`). A `# SYNTHETIC` first line marks the file synthetic.
-- Harmonisation (`attach`): alleles are turned to the Ssal_v3.1 reference (genome base, else the public 12-fish site);
-  a swap flips beta, z and af. `gwas.parquet`: `file_row_number, row, chrom, pos, id, ref, alt, beta, se, z, z_from_p,
-  neglog10p, af, n, harmonised` (`ok`, `swapped`, `strand_flip`, `strand_flip_swapped`, `unchecked`, `mismatch`,
-  `not_snp`, `no_alleles`) and `harmonised_by` (`genome`, `public sites`).
+- Harmonisation (`attach`): the statistics join annotate's rows by the sumstats row (`in_row`, written by `prepare` and
+  dropped from result.parquet afterwards), so rows annotate moved from ICSASG_v2 by their rs ID keep their statistics
+  at the Ssal_v3.1 position; alleles (as annotated) are turned to the Ssal_v3.1 reference (genome base, else the public
+  12-fish site); a swap flips beta, z and af. `gwas.parquet`: `file_row_number, row, chrom, pos, id, ref, alt, beta,
+  se, z, z_from_p, neglog10p, af, n, harmonised` (`ok`, `swapped`, `strand_flip`, `strand_flip_swapped`,
+  `unchecked`, `mismatch`, `not_snp`, `no_alleles`) and `harmonised_by` (`genome`, `public sites`).
 - `gwas.json`: `format`, `rows_read`, `kept`, `dropped`, `unknown_chromosomes`, `with_beta_se`, `z_from_p`,
-  `lambda_gc`, `max_neglog10p`, `n_significant`, `synthetic`, `harmonised`, ...
+  `lambda_gc`, `max_neglog10p`, `n_significant`, `trait_sd_estimate` (median se x sqrt(2 N af (1 - af)), as coloc
+  estimates sdY; NULL without se, N and af), `synthetic`, `harmonised`, `annotated`; after `run`, `finemap` (the
+  settings used, with `trait_sd_source`) and `warnings`.
 - Analysis on any table with those columns plus the tiers: `lambda_gc`, `manhattan` (thinned below p 0.01), `qq` (by
   tier, region or active state), `clump` (greedy distance clumping into loci) and `finemap`: Wakefield approximate
   Bayes factors with V from se (or 1/(2N af(1-af))) and W = prior_sd^2, under a uniform prior and a functional prior
@@ -297,6 +321,9 @@ like any list, and writes into OUT: `sumstats.parquet` (as read), `gwas.parquet`
   credible sets. No LD is used.
 - Defaults (`snpscore.gwas.DEFAULTS`, overridden by the weights.yaml `finemap` block, PROVISIONAL): prior_sd 0.2,
   functional_lambda 0.5, coverage 0.95, significant 5e-8, suggestive 1e-5, window 1 Mb, trait_sd 1.
+  `settings(weights, report, **changes)` replaces trait_sd with the report's `trait_sd_estimate` when there is one (W is
+  on the SD scale: betas in phenotype units with trait_sd 1 make every Bayes factor about 1), and
+  `trait_sd_warning(report, cfg)` says when the trait SD used differs more than 2x (`TRAIT_SD_RATIO`) from it.
 - `python prep/make_synthetic.py gwas [--scale fixture|dev]` writes `gwas_maturation_SYNTHETIC.tsv` (+ `.fastGWA`,
   `.glm.linear`, `_ponly.tsv`, `_truth.tsv` with the planted causal SNPs and lambda) over public sites; the same seed
   gives the same files.

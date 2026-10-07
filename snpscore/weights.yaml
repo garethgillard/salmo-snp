@@ -78,4 +78,5 @@ finemap:
   suggestive: 1.0e-5        # loci down to this p are listed as suggestive
   window: 1000000           # bp either side of a lead SNP (greedy distance clumping; farmed lines have long-range LD)
   near_lead: 2              # 'near the lead': within this many log10 units of the lead's p
-  trait_sd: 1.0             # betas are divided by this (1 = summary statistics of a standardised trait)
+  trait_sd: 1.0             # betas are divided by this (1 = a standardised trait); replaced by the SD that se, N and af
+                            # imply when the statistics have them (gwas.settings)

@@ -30,10 +30,13 @@ DEFAULTS = {  # PROVISIONAL (G to confirm): the signal rows a view shows before 
     "replicate": "R1",
     "max_rows": 8,
     # preset -> condition prefixes. Presets not listed here use their weights.yaml prefixes (see default_tracks).
-    # 'all' = the first condition of each tissue in trackDb order.
+    # 'all' = the first condition of each tissue in trackDb order (Gill gives ChIP rows only: see DISCARDED).
     "presets": {"all": ["Brain_Immature_Female", "Gill_Immature_Female", "Gonad_Immature_Female", "Liver_Immature_Female",
                         "Muscle_Immature_Female", "LateBlastulation"]},
 }
+
+
+DISCARDED = {("ATAC", "Gill")}  # (assay, tissue) that AQUA-FAANG discarded (RESEARCH.md section 6): never selected
 
 
 def _condition(cond):
@@ -133,12 +136,13 @@ def load_tracks(path):
 
 def select(tracks, assay="ATAC", conditions=None, replicate="R1", limit=8):
     """Tracks of one assay and replicate whose condition starts with one of `conditions` (None = all), in the order
-    of `conditions`, then registry order; at most `limit`. `tracks` is the tracks.yaml dict or its track list."""
+    of `conditions`, then registry order; at most `limit`. `tracks` is the tracks.yaml dict or its track list. DISCARDED
+    assays (gill ATAC) are never selected."""
     tracks = tracks["tracks"] if isinstance(tracks, dict) else tracks
     prefixes = list(conditions) if conditions else [""]
     rank = lambda t: next((i for i, p in enumerate(prefixes) if t["condition"].startswith(p)), None)
-    chosen = [t for t in tracks if t["assay"] == assay and (replicate is None or t["replicate"] == replicate)
-              and rank(t) is not None]
+    chosen = [t for t in tracks if t["assay"] == assay and (assay, t.get("tissue")) not in DISCARDED
+              and (replicate is None or t["replicate"] == replicate) and rank(t) is not None]
     return sorted(chosen, key=rank)[:limit]
 
 

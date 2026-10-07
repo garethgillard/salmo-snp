@@ -15,7 +15,7 @@ import pytest
 import yaml
 
 from range_server import RangeServer
-from snpscore import annotate, assay, bbi, build, export, panel
+from snpscore import InputError, annotate, assay, bbi, build, cli, export, panel
 from snpscore.fasta import Fasta
 from snpscore.pool import background_summary, build_pool
 
@@ -158,6 +158,20 @@ def test_assay_on_the_fixture_genome(release, annotated):
     assert report["assay_reasons"]["N in flank"] == report["assay"]["fail"]  # reasons by name (no ref mismatch here)
 
 
+def test_public_alleles_keep_ref_alt_order(release, tmp_path):
+    """Without input alleles, assay_flank and vendor files show the public site's REF/ALT, not alphabetical order."""
+    sites = duckdb.sql(f"""SELECT chrom, "end", ref, alt FROM read_parquet('{release / 'public_af.parquet'}')
+                           WHERE chrom = '25' AND "end" BETWEEN 28990000 AND 29000000 AND ref > alt ORDER BY "end" LIMIT 3""").fetchall()
+    f = tmp_path / "SYNTHETIC_no_alleles.tsv"
+    f.write_text(SYNTHETIC + "chrom\tpos\n" + "".join(f"{c}\t{p}\n" for c, p, _, _ in sites))
+    out = annotate(f, release, tmp_path / "out.parquet")
+    assert len(sites) == 3 and [r["assay_flank"][35:40] for r in rows(out)] == [f"[{a}/{b}]" for _, _, a, b in sites]
+    assert all(r["genome_base"] == a for r, (_, _, a, _) in zip(rows(out), sites))
+    export.export(out, "kasp", tmp_path / "k.csv", release, include_failed=True)
+    lookup = [x for x in (tmp_path / "k.csv.lookup.tsv").read_text().splitlines() if not x.startswith("#")]
+    assert [tuple(x.split("\t")[4:6]) for x in lookup[1:]] == [(a, b) for _, _, a, b in sites]
+
+
 def test_remote_genome_over_the_cap_is_not_checked(release, tmp_path, monkeypatch):
     for ext in ("", ".fai", ".gzi"):
         shutil.copy(FIXTURE / (GENOME + ext), tmp_path)
@@ -229,6 +243,51 @@ def test_panel_constraints_and_determinism(release, annotated, tmp_path):
     # A larger target than the filters allow names the binding constraint
     big = panel.design(annotated["snps.vcf"], "maturation", n_target=5000, weights=weights)
     assert big["summary"]["n_selected"] < 5000 and "filters" in big["summary"]["binding"]
+
+
+def test_cli_reads_annotate_tsv_and_recomputes_tiers(release, annotated, tmp_path, monkeypatch, capsys):
+    """panel, export and compare read annotate's TSV as its parquet (chromosomes as text), and a file's tiers follow
+    --preset: annotate output only holds the tiers of the --trait it was annotated with."""
+    tsv = annotate(FIXTURE / "snps.vcf", release, tmp_path / "out.tsv")
+
+    def run(*args):
+        monkeypatch.setattr(sys, "argv", ["snpscore", *map(str, args)])
+        cli.main()
+        return capsys.readouterr().out
+
+    run("panel", tsv, "--release", release, "--n", 20, "-o", tmp_path / "p.parquet")
+    assert json.loads((tmp_path / "p.summary.json").read_text())["n_selected"] == 20
+    written = [run("export", src, "--release", release, "--format", "illumina", "-o", tmp_path / f"x{i}.csv")
+               .split(": ")[1].split(" SNPs")[0] for i, src in enumerate((tsv, annotated["snps.vcf"]))]
+    assert written[0] == written[1] and int(written[0]) > 0
+    chip = FIXTURE / "synthetic" / "chip_demo_SYNTHETIC.tsv"
+    on_tsv, on_parquet = (json.loads(run("compare", src, "--chip", chip, "--release", release).splitlines()[0])
+                          for src in (tsv, annotated["snps.vcf"]))
+    assert on_tsv == on_parquet and on_tsv["total"] == 2519
+    with pytest.raises(SystemExit, match="not found"):
+        run("panel", tmp_path / "no_such.parquet", "--release", release)
+    # The same 'all' annotation designed for two presets: different panels, with the preset's tiers
+    weights = yaml.safe_load((release / "weights.yaml").read_text())
+    picks = {p: panel.design(annotated["snps.vcf"], p, n_target=30, weights=weights)["selected"] for p in ("all", "liver")}
+    assert [x["row"] for x in picks["all"]] != [x["row"] for x in picks["liver"]]
+    liver = rows(annotate(FIXTURE / "snps.vcf", release, tmp_path / "liver.parquet", trait="liver"))
+    assert all(x["tier"] == liver[x["row"]]["tier"] for x in picks["liver"])
+    # A chip list is read up to a cap: a small .gz could otherwise hold billions of rows
+    with pytest.raises(InputError, match="more than 5"):
+        panel.read_chip(chip, release, tmp_path / "chip.parquet", max_snps=5)
+
+
+def test_export_of_a_view_keeps_row_order(release, annotated, tmp_path, monkeypatch):
+    """A connection's view (maybe a join) is written in sorted _row ranges, not one ORDER BY over every wide row."""
+    monkeypatch.setattr(sys.modules["snpscore.annotate"], "WRITE_PART", 100)
+    con = duckdb.connect()
+    con.execute(f"CREATE VIEW v AS SELECT * FROM read_parquet('{annotated['snps.vcf']}', file_row_number=true) ORDER BY random()")
+    for fmt in ("tsv", "parquet"):
+        export.export(con, fmt, tmp_path / f"view.{fmt}", release, plain=True)
+        export.export(annotated["snps.vcf"], fmt, tmp_path / f"file.{fmt}", release, plain=True)
+    assert (tmp_path / "view.tsv").read_text() == (tmp_path / "file.tsv").read_text()
+    assert rows(tmp_path / "view.parquet") == rows(tmp_path / "file.parquet")
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["file.parquet", "file.tsv", "view.parquet", "view.tsv"]
 
 
 # P6.4 exports

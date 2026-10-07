@@ -17,6 +17,7 @@ from pathlib import Path
 from . import assay
 from .annotate import connect, read_snps
 from .formats import InputError, lit, q
+from .score import scored
 
 DEFAULTS = {  # PROVISIONAL; weights.yaml 'design' overrides these
     "n_target": 384, "backbone_fraction": 0.5, "min_spacing": 20000, "min_maf": 0.05, "max_per_gene": 2,
@@ -29,8 +30,10 @@ CM_MAPS = {"female": "try_cast(cm_female AS DOUBLE)", "male": "try_cast(cm_male 
            "mean": "(coalesce(cm_male, cm_female) + coalesce(cm_female, cm_male)) / 2"}
 INFINIUM_I_MIN, INFINIUM_I_POLYPLOID, INFINIUM_II_MIN = 100, 200, 1000  # Illumina error 111, warning 604 (vendor rules)
 CLOSE_BP = 60  # Illumina warning 340: another listed polymorphism within 60 nt
-PAGE = 20000  # functional fill reads candidates in pages of this many rows
+PAGE = 20000  # functional fill reads the sorted candidates in batches of this many rows
 PER_BIN = 25  # backbone: candidates tried per bin
+TEXT = ("chrom", "id", "ref", "alt", "genome_base")  # columns read as text from a TSV/CSV source
+CHIP_MAX = 3_000_000  # read_chip refuses longer chip lists (a small .gz can hold billions of rows)
 
 
 def settings(weights=None, **given):
@@ -47,25 +50,44 @@ def params_hash(params):
     return hashlib.sha256(json.dumps(params, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
-def _relation(path_or_table):
-    """read_parquet (with file_row_number) or read_csv of an existing file, else the name of a table or view."""
-    path = Path(str(path_or_table))
+def _file(path):
+    path = Path(path).resolve()
     if not path.is_file():
-        return str(path_or_table)
+        raise InputError(f"The file {path.name} was not found.")
+    return path
+
+
+def _relation(con, path):
+    """read_parquet (with file_row_number) or read_csv of a file. TEXT columns of a TSV/CSV are read as text: chromosome
+    names look like numbers, and a column of T alleles like booleans."""
+    path = _file(path)
     if path.suffix == ".parquet":
-        return f"read_parquet({lit(path.resolve())}, file_row_number=true)"
-    return f"read_csv({lit(path.resolve())}, header=true)"
+        return f"read_parquet({lit(path)}, file_row_number=true)"
+    csv = f"read_csv({lit(path)}, header=true{{}})"
+    names = _types(con, csv.format(", all_varchar=true"))
+    types = ", ".join(f"{lit(c)}: 'VARCHAR'" for c in TEXT if c in names)
+    return csv.format(f", types={{{types}}}" if types else "")
 
 
-def _open(source, table, read=(), out=None):
+def _types(con, rel):
+    return dict(con.execute(f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM {rel})").fetchall())
+
+
+def _open(source, table, read=(), out=None, preset=None, weights=None, synthetic=()):
     """(connection, relation SQL with _row = the row number, column types) for a parquet/TSV path (a sandboxed
-    connection that may also read the folders `read` and write out's folder) or a connection and a table name."""
+    connection that may also read the folders `read` and write out's folder) or a connection and a table name.
+    A path holds the tiers of the preset it was annotated with: without tier__<preset> columns, its tier columns are
+    recomputed for `preset` with `weights` (the manifest's `synthetic` layers never count)."""
     if isinstance(source, (str, Path)):
-        path = Path(source).resolve()
-        con, rel = connect([path.parent, *read], Path(out).resolve().parent if out else None), _relation(path)
+        path = _file(source)
+        con = connect([path.parent, *read], Path(out).resolve().parent if out else None)
+        rel = _relation(con, path)
     else:
         con, rel = source, table
-    columns = dict(con.execute(f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM {rel})").fetchall())
+    columns = _types(con, rel)
+    if isinstance(source, (str, Path)) and preset and weights and "tier" in columns and f"tier__{preset}" not in columns:
+        rel = f"({scored(rel, weights, list(columns), preset, synthetic)})"
+        columns = _types(con, rel)
     row = "file_row_number" if "file_row_number" in columns else "row_number() OVER () - 1"
     return con, f"(SELECT {row} AS _row, * FROM {rel})", columns
 
@@ -124,15 +146,16 @@ def vendor_checks(snps):
 
 def design(source, preset="all", n_target=None, min_spacing_bp=None, min_maf=None, backbone_fraction=None,
            max_per_gene=None, max_per_element=None, require_assay_pass=None, exclude_flags=None, must_include=None,
-           weights=None, chrom_sizes=None, table="v", out=None, min_spacing_cm=None, cm_map=None):
+           weights=None, chrom_sizes=None, table="v", out=None, min_spacing_cm=None, cm_map=None, synthetic=()):
     """Choose a panel from annotated SNPs: `source` is a parquet/TSV path or a DuckDB connection with `table`.
     Parameters left None come from weights['design'] (else DEFAULTS). `exclude_flags` are column names: rows where
     they are true (or > 0 for counts, e.g. flank_variants) are dropped; `must_include` ids are always selected first.
     `chrom_sizes` (manifest) sets the backbone bins (default: the largest position per chromosome). With
     `min_spacing_cm`, markers are also kept that many cM apart on the `cm_map` map (female, male or mean of annotate's
     cm_female and cm_male; SNPs beyond the first or last map marker take that marker's cM, and on a chromosome without
-    a map they are left out). Writes the selected rows (all columns plus selection_reason, panel_rank, design_score)
-    to `out` if given.
+    a map they are left out). A path's tiers are recomputed for `preset` with `weights` when it has no tier__<preset>
+    columns (see _open). Writes the selected rows (all columns plus selection_reason, panel_rank, design_score) to
+    `out` if given.
     Returns {'params', 'hash', 'summary', 'selected': [{row, chrom, pos, id, selection_reason, panel_rank,
     design_score, tier}]}; selection_reason is must_include, backbone, functional (tier 1-3) or fill (tier 4)."""
     p = settings(weights, n_target=n_target, min_spacing=min_spacing_bp, min_maf=min_maf,
@@ -140,7 +163,7 @@ def design(source, preset="all", n_target=None, min_spacing_bp=None, min_maf=Non
                  require_assay_pass=require_assay_pass, exclude_flags=exclude_flags, must_include=must_include,
                  min_spacing_cm=min_spacing_cm, cm_map=cm_map)
     p["preset"] = preset
-    con, rel, columns = _open(source, table, out=out)
+    con, rel, columns = _open(source, table, out=out, preset=preset, weights=weights, synthetic=synthetic)
     tier, tier_score = _tier_cols(columns, preset)
     cm_spacing = None if p["min_spacing_cm"] is None else float(p["min_spacing_cm"])
     if cm_spacing is not None and not {"cm_male", "cm_female"} <= set(columns):
@@ -221,18 +244,16 @@ def design(source, preset="all", n_target=None, min_spacing_bp=None, min_maf=Non
             if (chrom, b) not in filled and n_backbone < n_bb and take(row, chrom, pos, cm, gene, element, "backbone"):
                 filled.add((chrom, b))
                 n_backbone += 1
-    # Functional fill: the best design_score first
-    offset = 0
+    # Functional fill: the best design_score first, sorted once and read in batches
+    ranked = con.execute("SELECT _row, chrom, pos, _cm, gene, element, tier FROM _cand WHERE _ok ORDER BY design_score DESC, _row")
     while len(chosen) < n:
-        page = con.execute(f"""SELECT _row, chrom, pos, _cm, gene, element, tier FROM _cand WHERE _ok
-                               ORDER BY design_score DESC, _row LIMIT {PAGE} OFFSET {offset}""").fetchall()
+        page = ranked.fetchmany(PAGE)
         for row, chrom, pos, cm, gene, element, t in page:
             take(row, chrom, pos, cm, gene, element, "functional" if t is not None and t <= 3 else "fill")
             if len(chosen) >= n:
                 break
         if len(page) < PAGE:
             break
-        offset += PAGE
     return _finish(con, rel, columns, p, chosen, sizes, n_rows, n_ok, skipped, out)
 
 
@@ -318,18 +339,20 @@ def _narrow(rel, columns, preset):
 
 
 def compare(source, chip, preset="all", window_bp=None, gap_bp=None, pool=None, weights=None, chrom_sizes=None,
-            table="v"):
+            table="v", synthetic=()):
     """Compare annotated SNPs with a chip: `chip` is a parquet/TSV with chrom and pos (see read_chip) or a table in
     the source's connection; `pool` the release's pool/pool.parquet (optional). With a path source the files may be
-    in other folders; with a connection, it must be allowed to read them.
+    in other folders, and its tiers are recomputed for `preset` as in design(); with a connection, it must be allowed
+    to read them.
     Returns {'summary': {total, shared, novel_functional, other, chip_snps, window_bp, gap_bp, gaps}, 'gaps':
     [{chrom, start, end, size, filler}]}: chip gaps longer than gap_bp (also from a chromosome end when chrom_sizes are
     given), largest first, each with the best SNP inside it from the list (lowest tier, then highest tier_score,
     then MAF, then row), else from the pool, else None. compare_sql() gives the per-SNP columns."""
     p = settings(weights, chip_window=window_bp, chip_gap=gap_bp)
     extra = [Path(x).resolve().parent for x in (chip, pool) if x and Path(str(x)).is_file()]
-    con, rel, columns = _open(source, table, extra)
-    chip = _relation(chip)
+    con, rel, columns = _open(source, table, extra, preset=preset, weights=weights, synthetic=synthetic)
+    if isinstance(source, (str, Path)) or Path(str(chip)).is_file():  # else a table in the source's connection
+        chip = _relation(con, chip)
     con.execute(f"CREATE OR REPLACE TEMP TABLE _chip AS SELECT DISTINCT chrom::VARCHAR AS chrom, pos::BIGINT AS pos FROM {chip}")
     tier = _tier_cols(columns, preset)[0]
     total, shared, novel = con.execute(f"""SELECT count(*), count(*) FILTER (WHERE on_chip), count(*) FILTER (WHERE novel_functional)
@@ -363,15 +386,16 @@ def compare(source, chip, preset="all", window_bp=None, gap_bp=None, pool=None, 
     return {"summary": summary, "gaps": gaps}
 
 
-def read_chip(chip_path, release_dir, out_path):
+def read_chip(chip_path, release_dir, out_path, max_snps=CHIP_MAX):
     """Read a chip's SNP list (any snpscore input layout: manifest, PLINK, VCF, table) through the release's chromosome
-    aliases and write chrom, pos, id to out_path (parquet). Returns the validation counts."""
+    aliases and write chrom, pos, id to out_path (parquet). Returns the validation counts. A list with more than
+    `max_snps` rows raises InputError (reading stops there)."""
     path, release, out = Path(chip_path).resolve(), Path(release_dir).resolve(), Path(out_path).resolve()
     manifest = json.loads((release / "manifest.json").read_text())
     con = connect([path.parent, release], out.parent)
     try:
         alias = release / "alias.parquet"
-        report = read_snps(con, path, manifest.get("chrom_sizes") or [], alias if alias.exists() else None)
+        report = read_snps(con, path, manifest.get("chrom_sizes") or [], alias if alias.exists() else None, max_snps)
         ident = "id" if "id" in [r[0] for r in con.execute("DESCRIBE snps").fetchall()] else "NULL::VARCHAR AS id"
         con.execute(f"COPY (SELECT chrom, pos, {ident} FROM snps ORDER BY idx) TO {lit(out)} (FORMAT parquet)")
     finally:

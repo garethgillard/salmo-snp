@@ -29,6 +29,7 @@ CHI2_MEDIAN = 0.4549364231195724  # median of a chi-square with 1 df: lambda_GC 
 # Fine-mapping and loci defaults; weights.yaml 'finemap' (PROVISIONAL) overrides them, the portal's form overrides that.
 DEFAULTS = {"prior_sd": 0.2, "functional_lambda": 0.5, "coverage": 0.95, "significant": 5e-8, "suggestive": 1e-5,
             "window": 1_000_000, "near_lead": 2.0, "trait_sd": 1.0}
+TRAIT_SD_RATIO = 2.0  # PROVISIONAL: warn when the trait SD used and the one se, N and af imply differ more than this
 ALIASES = {  # canonical column -> header names (formats.norm), first match wins
     "chrom": ("chrom", "chr", "chromosome", "chr_name", "chromosome_name"),
     "pos": ("pos", "bp", "position", "base_pair_location", "ps", "physical_position", "genpos"),  # BOLT GENPOS is cM: BP wins
@@ -112,12 +113,27 @@ def p_text(nlp):
     return f"{m:.2g}e-{e}"
 
 
-def settings(weights=None, **changes):
-    """DEFAULTS, then the weights.yaml 'finemap' block, then `changes` (None values are ignored)."""
+def settings(weights=None, report=None, **changes):
+    """DEFAULTS, then the weights.yaml 'finemap' block, then the trait SD the statistics imply (the gwas.json `report`'s
+    trait_sd_estimate), then `changes` (None values are ignored)."""
     cfg = dict(DEFAULTS)
     cfg.update((weights or {}).get("finemap") or {})
+    if (report or {}).get("trait_sd_estimate"):
+        cfg["trait_sd"] = report["trait_sd_estimate"]
     cfg.update({k: v for k, v in changes.items() if v is not None})
     return cfg
+
+
+def trait_sd_warning(report, cfg):
+    """A warning when the trait SD that fine-mapping divides betas by differs more than TRAIT_SD_RATIO times from the
+    one se, N and af imply (report's trait_sd_estimate, median se x sqrt(2 N af (1 - af)), as coloc estimates sdY),
+    else None. W is on the SD scale: with betas in phenotype units and trait_sd 1, every Bayes factor is about 1 and
+    the prior alone ranks the SNPs."""
+    est, sd = (report or {}).get("trait_sd_estimate"), float(cfg["trait_sd"])
+    if est and max(est / sd, sd / est) > TRAIT_SD_RATIO:
+        return (f"Fine-mapping divides the betas by a trait SD of {sd:.3g}, but their se, N and allele frequency imply "
+                f"{est:.3g}: PIPs and credible sets are only meaningful with the trait's own SD.")
+    return None
 
 
 # ---- reading ----
@@ -217,10 +233,11 @@ def read(con, path, known=(), alias=None, max_snps=None):
         FROM parsed""")
     con.execute("""CREATE OR REPLACE TABLE ss AS SELECT row, chrom, pos, id, ea, oa, beta, se, z, z_from_p, neglog10p, af, n
                    FROM checked WHERE reason IS NULL ORDER BY row""")
-    kept, with_beta, with_alleles, from_p, with_af_n, lam, top, sig = con.execute(f"""SELECT count(*),
+    kept, with_beta, with_alleles, from_p, with_af_n, lam, top, sig, sd = con.execute(f"""SELECT count(*),
         count(*) FILTER (WHERE beta IS NOT NULL AND se IS NOT NULL), count(*) FILTER (WHERE ea IS NOT NULL AND oa IS NOT NULL),
         count(*) FILTER (WHERE z_from_p), count(*) FILTER (WHERE af IS NOT NULL AND n IS NOT NULL),
-        median(z * z) / {CHI2_MEDIAN}, max(neglog10p), count(*) FILTER (WHERE neglog10p >= {-math.log10(DEFAULTS['significant'])})
+        median(z * z) / {CHI2_MEDIAN}, max(neglog10p), count(*) FILTER (WHERE neglog10p >= {-math.log10(DEFAULTS['significant'])}),
+        median(se * sqrt(2 * n * af * (1 - af))) FILTER (WHERE af > 0 AND af < 1) -- the trait SD (se^2 ~ SD^2 / (2 N af (1-af)))
         FROM ss""").fetchone()
     dropped = dict(con.execute("SELECT reason, count(*) FROM checked WHERE reason IS NOT NULL GROUP BY 1 ORDER BY 2 DESC, 1").fetchall())
     report = {
@@ -231,7 +248,7 @@ def read(con, path, known=(), alias=None, max_snps=None):
         "with_beta_se": round(with_beta / kept, 4) if kept else 0, "with_alleles": round(with_alleles / kept, 4) if kept else 0,
         "z_from_p": from_p, "with_af_n": with_af_n, "lambda_gc": round(lam, 4) if lam is not None else None,
         "max_neglog10p": round(top, 3) if top is not None else None, "min_p": p_text(top), "n_significant": sig,
-        "synthetic": layout["synthetic"],
+        "trait_sd_estimate": float(f"{sd:.6g}") if sd else None, "synthetic": layout["synthetic"],
     }
     con.execute("DROP TABLE raw; DROP TABLE parsed; DROP TABLE checked")
     return report
@@ -239,8 +256,9 @@ def read(con, path, known=(), alias=None, max_snps=None):
 
 def prepare(path, release_dir, out_dir, threads=2, memory_limit="2GB", max_snps=None):
     """Read summary statistics into <out_dir>/sumstats.parquet and write <out_dir>/gwas.json (the validation report)
-    and <out_dir>/input.snps.tsv (chrom, pos, id, ref = other allele, alt = effect allele) for annotate. Returns the
-    TSV's path. Problems with the file raise InputError with a safe message."""
+    and <out_dir>/input.snps.tsv (chrom, pos, id, ref = other allele, alt = effect allele, row = the sumstats row,
+    which annotate keeps as in_row for attach) for annotate. Returns the TSV's path. Problems with the file raise
+    InputError with a safe message."""
     path, release, out = Path(path).resolve(), Path(release_dir).resolve(), Path(out_dir).resolve()
     manifest = json.loads((release / "manifest.json").read_text())
     alias = release / "alias.parquet"
@@ -250,7 +268,8 @@ def prepare(path, release_dir, out_dir, threads=2, memory_limit="2GB", max_snps=
         report = read(con, path, list(manifest.get("chrom_sizes") or []), alias if alias.exists() else None, max_snps)
         if report["kept"]:
             con.execute(f"COPY (SELECT * FROM ss ORDER BY row) TO {lit(out / 'sumstats.parquet')} (FORMAT parquet)")
-            con.execute(f"COPY (SELECT chrom, pos, id, oa AS ref, ea AS alt FROM ss ORDER BY row) TO {lit(snps)} (HEADER, DELIMITER '\t')")
+            con.execute(f"COPY (SELECT chrom, pos, id, oa AS ref, ea AS alt, row FROM ss ORDER BY row) TO {lit(snps)} "
+                        "(HEADER, DELIMITER '\t')")
     except duckdb.Error as e:
         if os.environ.get("SNPSCORE_DEBUG"):
             raise
@@ -266,11 +285,14 @@ def prepare(path, release_dir, out_dir, threads=2, memory_limit="2GB", max_snps=
 
 
 def attach(out_dir, threads=2, memory_limit="2GB"):
-    """gwas.parquet: sumstats.parquet joined to annotate's result.parquet (file_row_number) with the alleles turned to
-    the Ssal_v3.1 reference: by the genome base where the genome has sequence, else by the public 12-fish site's
-    alleles (public_af_alleles). Swapped rows get -beta, -z and 1 - af; strand flips are complemented; rows that can't
-    be checked keep their alleles (harmonised = unchecked / mismatch / not_snp / no_alleles). Updates gwas.json."""
+    """gwas.parquet: sumstats.parquet joined to annotate's result.parquet (file_row_number) by the sumstats row (in_row,
+    which is then dropped from result.parquet), so rows that annotate moved from ICSASG_v2 by their rs ID keep their
+    statistics. Positions and alleles are the annotated ones, turned to the Ssal_v3.1 reference: by the genome base
+    where the genome has sequence, else by the public 12-fish site's alleles (public_af_alleles). Swapped rows get
+    -beta, -z and 1 - af; strand flips are complemented; rows that can't be checked keep their alleles (harmonised =
+    unchecked / mismatch / not_snp / no_alleles). Updates gwas.json."""
     d = Path(out_dir).resolve()
+    tmp = d / f".result-{os.getpid()}.parquet"  # result.parquet without the in_row helper, in the same row order
     con = connect([d], d, threads, memory_limit)
     try:
         con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet({lit(d / 'result.parquet')}, file_row_number=true)")
@@ -278,12 +300,12 @@ def attach(out_dir, threads=2, memory_limit="2GB"):
         gb = "r.genome_base" if "genome_base" in cols else "NULL"
         pa = "r.public_af_alleles" if "public_af_alleles" in cols else "NULL"
         flip = "translate({}, 'ACGT', 'TGCA')"
-        status = f"""CASE WHEN s.ea IS NULL OR s.oa IS NULL THEN 'no_alleles'
-            WHEN length(s.ea) <> 1 OR length(s.oa) <> 1 THEN 'not_snp'
-            WHEN {gb} IN ('A', 'C', 'G', 'T') THEN CASE WHEN s.oa = {gb} THEN 'ok' WHEN s.ea = {gb} THEN 'swapped'
-                WHEN {flip.format('s.oa')} = {gb} THEN 'strand_flip' WHEN {flip.format('s.ea')} = {gb} THEN 'strand_flip_swapped'
+        status = f"""CASE WHEN ea IS NULL OR oa IS NULL THEN 'no_alleles'
+            WHEN length(ea) <> 1 OR length(oa) <> 1 THEN 'not_snp'
+            WHEN g IN ('A', 'C', 'G', 'T') THEN CASE WHEN oa = g THEN 'ok' WHEN ea = g THEN 'swapped'
+                WHEN {flip.format('oa')} = g THEN 'strand_flip' WHEN {flip.format('ea')} = g THEN 'strand_flip_swapped'
                 ELSE 'mismatch' END
-            WHEN {pa} IN ('same', 'swapped', 'strand_flip', 'strand_flip_swapped') THEN replace({pa}, 'same', 'ok')
+            WHEN pa IN ('same', 'swapped', 'strand_flip', 'strand_flip_swapped') THEN replace(pa, 'same', 'ok')
             ELSE 'unchecked' END"""
         swap = "h IN ('swapped', 'strand_flip_swapped')"
         con.execute(f"""COPY (
@@ -296,13 +318,17 @@ def attach(out_dir, threads=2, memory_limit="2GB"):
                    neglog10p, CASE WHEN {swap} THEN 1 - af ELSE af END AS af, n, h AS harmonised,
                    CASE WHEN g IN ('A', 'C', 'G', 'T') THEN 'genome' WHEN h IN ('ok', 'swapped', 'strand_flip', 'strand_flip_swapped')
                         THEN 'public sites' END AS harmonised_by
-            FROM (SELECT r.file_row_number, {gb} AS g, s.*, {status} AS h
-                  FROM read_parquet({lit(d / 'sumstats.parquet')}) s JOIN r ON r.chrom = s.chrom AND r.pos = s.pos
-                       AND r.ref IS NOT DISTINCT FROM s.oa AND r.alt IS NOT DISTINCT FROM s.ea)
+            FROM (SELECT *, {status} AS h FROM (
+                SELECT r.file_row_number, r.chrom, r.pos, upper(r.ref) AS oa, upper(r.alt) AS ea, {gb} AS g, {pa} AS pa,
+                       s.* EXCLUDE (chrom, pos, oa, ea)
+                FROM read_parquet({lit(d / 'sumstats.parquet')}) s JOIN r ON r.in_row::BIGINT = s.row))
             ORDER BY row) TO {lit(d / 'gwas.parquet')} (FORMAT parquet)""")
         counts = dict(con.execute(f"SELECT harmonised, count(*) FROM read_parquet({lit(d / 'gwas.parquet')}) GROUP BY 1 ORDER BY 2 DESC").fetchall())
+        con.execute(f"COPY (SELECT * EXCLUDE (file_row_number, in_row) FROM r) TO {lit(tmp)} (FORMAT parquet)")
+        os.replace(tmp, d / "result.parquet")
     finally:
         con.close()
+        tmp.unlink(missing_ok=True)
     report = json.loads((d / "gwas.json").read_text())
     report["harmonised"] = counts
     report["annotated"] = sum(counts.values())
@@ -462,8 +488,9 @@ def finemap(con, table, loci, cfg=None):
 # ---- the whole pipeline, for the command line and the tests ----
 
 def run(sumstats, release_dir, out_dir, trait="all", threads=2, memory_limit="2GB", **changes):
-    """sumstats -> out_dir: sumstats.parquet, result.parquet (annotate, tiers for `trait`), gwas.parquet, gwas.json,
-    loci.tsv and finemap.tsv. `changes` override the fine-mapping settings. Returns (report, loci, summary)."""
+    """sumstats -> out_dir: sumstats.parquet, result.parquet (annotate, tiers for `trait`), gwas.parquet, gwas.json
+    (with the fine-mapping settings used, `finemap`, and any `warnings`), loci.tsv and finemap.tsv. `changes` override
+    the fine-mapping settings (trait_sd defaults to the one se, N and af imply). Returns (report, loci, summary)."""
     release, out = Path(release_dir).resolve(), Path(out_dir).resolve()
     out.mkdir(parents=True, exist_ok=True)
     snps = prepare(sumstats, release, out, threads, memory_limit)
@@ -472,7 +499,12 @@ def run(sumstats, release_dir, out_dir, trait="all", threads=2, memory_limit="2G
     finally:
         snps.unlink(missing_ok=True)
     report = attach(out, threads, memory_limit)
-    cfg = settings(load_weights(release), **changes)
+    cfg = settings(load_weights(release), report, **changes)
+    source = ("given" if changes.get("trait_sd") is not None else "estimated from se, N and allele frequency"
+              if report.get("trait_sd_estimate") else "weights.yaml (1 = a standardised trait)")
+    report["finemap"] = {**{k: cfg[k] for k in DEFAULTS}, "trait_sd_source": source}
+    report["warnings"] = [w for w in [trait_sd_warning(report, cfg)] if w]
+    (out / "gwas.json").write_text(json.dumps(report, indent=1))
     con = connect([out], out, threads, memory_limit)
     try:
         con.execute(view_sql(out))
@@ -517,7 +549,10 @@ def main(argv=None):
         report, loci, summary = run(args.sumstats, args.release, args.out, args.trait, args.threads, args.memory, **changes)
     except InputError as e:
         raise SystemExit(f"error: {e}")
-    print(f"{report['format']}: {report['kept']:,} of {report['rows_read']:,} rows kept, lambda_GC {report['lambda_gc']}")
+    print(f"{report['format']}: {report['kept']:,} of {report['rows_read']:,} rows kept, lambda_GC {report['lambda_gc']}; "
+          f"trait SD {report['finemap']['trait_sd']:g} ({report['finemap']['trait_sd_source']})")
+    for w in report["warnings"]:
+        print("warning: " + w)
     for x in loci:
         s = summary.get(x["locus"], {})
         print(f"locus {x['locus']}: {x['chrom']}:{x['lead']} {x['id']} p {p_text(x['neglog10p'])}"

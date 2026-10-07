@@ -44,9 +44,12 @@ def build_pool(release_dir, background, assay=False, threads=4, memory_limit="4G
                             tier_score AS {q('tier_score__' + p)} FROM ({scored('a', weights, columns, p, synthetic)})""")
         joins = "".join(f" JOIN t{i} USING (file_row_number)" for i in range(len(presets)))
         tmp = out / f".pool-{uuid.uuid4().hex}.parquet"
-        con.execute(f"""COPY (SELECT * EXCLUDE (file_row_number) FROM a{joins} ORDER BY file_row_number)
-                        TO {lit(tmp)} (FORMAT parquet)""")
-        tmp.replace(out / "pool.parquet")
+        try:
+            con.execute(f"""COPY (SELECT * EXCLUDE (file_row_number) FROM a{joins} ORDER BY file_row_number)
+                            TO {lit(tmp)} (FORMAT parquet)""")
+            tmp.replace(out / "pool.parquet")
+        finally:  # a failed COPY leaves no partial file in the release
+            tmp.unlink(missing_ok=True)
         summary = background_summary(con, f"read_parquet({lit(out / 'pool.parquet')})", weights)
         con.close()
     summary.update(release=manifest["version"], created=datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),

@@ -30,15 +30,19 @@ ERRORS = (  # shown instead of DuckDB's own text, which can quote SQL, file path
 
 def connect(read_dirs=(), write_dir=None, threads=2, memory_limit="2GB"):
     """A DuckDB connection that can only read and write files under read_dirs and write_dir (also its spill
-    directory), has no network or extension loading, and can't change these settings."""
+    directory; without write_dir it never spills, so a query over memory_limit fails instead of writing the rows to
+    DuckDB's default .tmp in the working directory), has no network or extension loading, and can't change these
+    settings."""
     dirs = {str(Path(d).resolve()) for d in [*read_dirs, *([write_dir] if write_dir else [])]}  # DuckDB refuses symlinks
     # DuckDB 1.2.2 refuses files in a listed folder when one of its subfolders is listed too, so list only the outer one
     dirs = [d for d in dirs if not any(d.startswith(other + os.sep) for other in dirs)]
     con = duckdb.connect()
     con.execute("SET allowed_directories = ?", [dirs])  # must come before enable_external_access = false
+    spill = ""  # '' = no spilling: allowed_directories does not cover DuckDB's own temp files
     if write_dir:  # spill into the listed folder that holds write_dir: a nested temp_directory blocks its parent's files
         write = str(Path(write_dir).resolve())
-        con.execute("SET temp_directory = ?", [next(d for d in dirs if write == d or write.startswith(d + os.sep))])
+        spill = next(d for d in dirs if write == d or write.startswith(d + os.sep))
+    con.execute("SET temp_directory = ?", [spill])
     con.execute(f"SET memory_limit = {lit(memory_limit)}")
     con.execute(f"SET threads = {int(threads)}")
     for setting in ("autoinstall_known_extensions", "autoload_known_extensions", "enable_external_access"):
@@ -223,21 +227,21 @@ def nearest_sql(name, cols, parquet, layer):
 
 
 def count_sql(name, cols, parquet, layer):
-    # Features are points numbered along each chromosome; the count in [pos - w, pos + w] is the difference of the
-    # numbers found by two ASOF joins, minus the SNP's own position (found by a third).
-    w = int(layer["window"])
+    # Points in [pos - w, pos + w] other than the SNP's own position. SNPs and points meet in fixed bins (assay.BIN),
+    # each SNP in every bin its window touches, so it is an equality join (numbering all 7.6M points cost ~10 s).
+    w, b = int(layer["window"]), assay.BIN
     return f"""
-        WITH v AS (SELECT chrom, "end" AS p, row_number() OVER (PARTITION BY chrom ORDER BY "end") AS r
-                   FROM read_parquet({lit(parquet)}))
-        SELECT s.idx, coalesce(hi.r, 0) - coalesce(lo.r, 0) - coalesce(me.p = s.pos, false)::INT AS {q(name)}
-        FROM pos s ASOF LEFT JOIN v hi ON s.chrom = hi.chrom AND s.pos + {w} >= hi.p
-                   ASOF LEFT JOIN v lo ON s.chrom = lo.chrom AND s.pos - {w} > lo.p
-                   ASOF LEFT JOIN v me ON s.chrom = me.chrom AND s.pos >= me.p"""
+        WITH s AS (SELECT idx, chrom, pos, unnest(range((pos - {w}) // {b}, (pos + {w}) // {b} + 1)) AS bin FROM pos),
+        l AS (SELECT chrom, "end" AS p, "end" // {b} AS bin FROM read_parquet({lit(parquet)})),
+        n AS (SELECT s.idx, count(*) AS n FROM s JOIN l ON s.chrom = l.chrom AND s.bin = l.bin
+              WHERE abs(l.p - s.pos) <= {w} AND l.p <> s.pos GROUP BY 1)
+        SELECT p.idx, coalesce(n.n, 0) AS {q(name)} FROM pos p LEFT JOIN n USING (idx)"""
 
 
 def point_sql(name, cols, parquet, layer):
     # Exact position match. With input alleles, <layer>_alleles says how they compare with the layer's ref/alt, and the
-    # ALT allele frequencies and count are turned to the input alt when they are swapped (NULL when they don't match).
+    # ALT allele frequencies and count are turned to the input alt when they are swapped. A site with other alleles
+    # (a different variant at the same position) is no hit: <layer> is false and every value NULL, alleles 'other'.
     fref, falt = "translate(s.ref, 'ACGT', 'TGCA')", "translate(s.alt, 'ACGT', 'TGCA')"
     match = f"""WHEN s.ref = l.ref AND (s.alt IS NULL OR s.alt = l.alt) THEN 'same'
                 WHEN s.ref = l.alt AND (s.alt IS NULL OR s.alt = l.ref) THEN 'swapped'
@@ -246,11 +250,11 @@ def point_sql(name, cols, parquet, layer):
     def swapped(c):  # an ALT allele frequency (af, <population>_af) or count (ac, with an) in the input's alt allele
         return (f"round(1 - {q(c)}, 6)" if c == "af" or c.endswith("_af") else
                 f"{q('an')} - {q(c)}" if c == "ac" and "an" in cols else None)
-    values = "".join(f", CASE WHEN m IN ('swapped', 'strand_flip_swapped') THEN {swapped(c)} "
-                     f"WHEN m = 'other' THEN NULL ELSE {q(c)} END AS {q(name + '_' + c)}" if swapped(c)
-                     else f", {q(c)} AS {q(name + '_' + c)}" for c in cols if c not in ("ref", "alt"))
+    values = "".join(", CASE WHEN m = 'other' THEN NULL"
+                     + (f" WHEN m IN ('swapped', 'strand_flip_swapped') THEN {swapped(c)}" if swapped(c) else "")
+                     + f" ELSE {q(c)} END AS {q(name + '_' + c)}" for c in cols if c not in ("ref", "alt"))
     return f"""
-        SELECT idx, found AS {q(name)}{values}, m AS {q(name + '_alleles')} FROM (
+        SELECT idx, found AND m IS DISTINCT FROM 'other' AS {q(name)}{values}, m AS {q(name + '_alleles')} FROM (
             SELECT s.idx, l."end" IS NOT NULL AS found, l.*,
                    CASE WHEN l."end" IS NULL OR s.ref IS NULL THEN NULL {match} ELSE 'other' END AS m
             FROM pos s LEFT JOIN read_parquet({lit(parquet)}) l ON s.chrom = l.chrom AND s.pos = l."end"
@@ -306,11 +310,11 @@ def add_sequence_checks(con, location, write_dir, weights=None, public_af=None):
     rows = "pos" if full else f"(SELECT * FROM pos ORDER BY hash(idx) LIMIT {REMOTE_SAMPLE})"
     flank = int(rules["flank"])
     width = max(flank, FLANK)
-    windows = assay.read_flanks(con, fasta, rows, width, public_af if full else None)
     tmp = Path(write_dir) / f".sequence-{uuid.uuid4().hex}.tsv"
     try:
-        with open(tmp, "w") as out:
-            for idx, (left, base, right, li, ri, pub) in windows.items():
+        windows = assay.iter_flanks(con, fasta, rows, width, public_af if full else None)
+        with open(tmp, "w") as out:  # each window is written as it is read: nothing is kept per SNP in Python
+            for idx, left, base, right, li, ri, pub in windows:
                 f = left[len(left) - FLANK:] + right[:FLANK] if base else ""  # flank_gc and flank_repeat: FLANK bases
                 lw, rw = left.rjust(width, "N")[width - flank:], right.ljust(width, "N")[:flank]  # the assay's flanks
                 li, ri = li[width - flank:], ri[:flank]
@@ -340,7 +344,7 @@ def add_sequence_checks(con, location, write_dir, weights=None, public_af=None):
     disabled = None if full else f"genome read remotely: lists over {assay.REMOTE_MAX:,} SNPs are not checked"
     windows = "(SELECT * FROM windows WHERE false)" if disabled else "windows"
     con.execute(f"CREATE OR REPLACE TABLE snps AS {assay.assay_sql('snps', windows, rules, columns, disabled)}")
-    con.execute("DROP TABLE windows")  # frees the window text before the output is written
+    con.execute("DROP TABLE windows; DROP TABLE IF EXISTS _flank_snps")  # frees them before the output is written
 
 
 def annotate(snps_path, release_dir, out_path, trait="all", sequence=True, progress=None, max_snps=None,
@@ -439,21 +443,22 @@ def _annotate(con, path, release, out, manifest, weights, trait, sequence, step,
     return report
 
 
-def write_in_order(con, out):
-    """COPY snps (without idx) to out in input (idx) order: Parquet, CSV or TSV by its suffix. A long list is sorted in
-    idx ranges of WRITE_PART into Parquet parts next to out, which are then copied in turn (DuckDB keeps the order of a
-    file list): one ORDER BY over ~1.6M annotated SNPs runs out of memory at 2 GB (DuckDB 1.2.2)."""
-    fmt = ("FORMAT parquet" if out.suffix == ".parquet" else "HEADER, DELIMITER ','" if out.suffix == ".csv"
-           else "HEADER, DELIMITER '\t'")
-    n, top = con.execute("SELECT count(*), max(idx) FROM snps").fetchone()
+def write_in_order(con, out, table="snps", key="idx", drop="idx", options=None):
+    """COPY `table` without the `drop` columns to out in `key` order, with the COPY `options` (default: Parquet, CSV
+    or TSV by out's suffix). A long table is sorted in key ranges of WRITE_PART into Parquet parts next to out, which
+    are then copied in turn (DuckDB keeps the order of a file list): one ORDER BY over ~1.6M annotated SNPs runs out
+    of memory at 2 GB (DuckDB 1.2.2)."""
+    fmt = options or ("FORMAT parquet" if out.suffix == ".parquet" else "HEADER, DELIMITER ','" if out.suffix == ".csv"
+                      else "HEADER, DELIMITER '\t'")
+    n, top = con.execute(f"SELECT count(*), max({key}) FROM {table}").fetchone()
     if n <= WRITE_PART:
-        con.execute(f"COPY (SELECT * EXCLUDE (idx) FROM snps ORDER BY idx) TO {lit(out)} ({fmt})")
+        con.execute(f"COPY (SELECT * EXCLUDE ({drop}) FROM {table} ORDER BY {key}) TO {lit(out)} ({fmt})")
         return
     parts = [out.parent / f".{out.name}.{uuid.uuid4().hex}.part{i}.parquet" for i in range(top // WRITE_PART + 1)]
     try:
         for i, part in enumerate(parts):
-            con.execute(f"COPY (SELECT * EXCLUDE (idx) FROM snps WHERE idx >= {i * WRITE_PART} AND idx < {(i + 1) * WRITE_PART} "
-                        f"ORDER BY idx) TO {lit(part)} (FORMAT parquet)")
+            con.execute(f"COPY (SELECT * EXCLUDE ({drop}) FROM {table} WHERE {key} >= {i * WRITE_PART} "
+                        f"AND {key} < {(i + 1) * WRITE_PART} ORDER BY {key}) TO {lit(part)} (FORMAT parquet)")
         con.execute(f"COPY (SELECT * FROM read_parquet([{', '.join(lit(p) for p in parts)}])) TO {lit(out)} ({fmt})")
     finally:
         for part in parts:

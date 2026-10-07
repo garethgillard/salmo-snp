@@ -62,7 +62,8 @@ def main():
                                      "options left out come from the release's weights.yaml 'design' block")
     n.add_argument("annotated", help="snpscore annotate output (.parquet or TSV), or a pool.parquet")
     n.add_argument("--release", required=True)
-    n.add_argument("--preset", default="all")
+    n.add_argument("--preset", default="all", help="trait preset whose tiers rank the SNPs (recomputed when the input "
+                                                  "was annotated with another --trait)")
     n.add_argument("--n", type=int, dest="n_target", help="number of SNPs")
     n.add_argument("--min-spacing", type=int, dest="min_spacing_bp", help="bp between selected SNPs")
     n.add_argument("--min-maf", type=float)
@@ -79,7 +80,7 @@ def main():
     e.add_argument("annotated", help="snpscore annotate or panel output (.parquet or TSV)")
     e.add_argument("--release", required=True)
     e.add_argument("--format", required=True, choices=["tsv", "parquet", "bed", "illumina", "axiom", "kasp", "bundle"])
-    e.add_argument("--preset", default="all", help="for the provenance header and file name")
+    e.add_argument("--preset", default="all", help="trait preset: the tier columns, provenance header and file name")
     e.add_argument("--include-failed", action="store_true", help="keep assay fail/not_checked SNPs, flagged")
     e.add_argument("--plain", action="store_true", help="no '#' provenance lines")
     e.add_argument("-o", "--out", help="default: snpscore_<release>_<preset>[_<vendor>].<ext>")
@@ -88,7 +89,7 @@ def main():
     c.add_argument("annotated", help="snpscore annotate output (.parquet or TSV)")
     c.add_argument("--chip", required=True, help="the chip's SNPs (manifest, PLINK, VCF or a chrom/pos table)")
     c.add_argument("--release", required=True)
-    c.add_argument("--preset", default="all")
+    c.add_argument("--preset", default="all", help="trait preset whose tiers say which SNPs are functional")
     c.add_argument("--pool", action="store_true", help="fill gaps from <release>/pool/pool.parquet when the list has none")
 
     args, rest = p.parse_known_args()
@@ -149,6 +150,7 @@ def tools(args):
 
     release = Path(args.release)
     manifest = json.loads((release / "manifest.json").read_text())
+    synthetic = [l["name"] for l in manifest["layers"] if l.get("synthetic")]  # never counted in recomputed tiers
     if args.cmd == "pool":
         t0 = time.time()
         out = build_pool(release, args.background, args.assay, args.threads, args.memory)
@@ -159,7 +161,7 @@ def tools(args):
         result = panel.design(args.annotated, args.preset, args.n_target, args.min_spacing_bp, args.min_maf,
                               args.backbone_fraction, args.max_per_gene, args.max_per_element, args.require_assay_pass,
                               split(args.exclude_flags), split(args.must_include), weights=load_weights(release),
-                              chrom_sizes=manifest.get("chrom_sizes"), out=args.out)
+                              chrom_sizes=manifest.get("chrom_sizes"), out=args.out, synthetic=synthetic)
         out = Path(args.out)
         summary = {"hash": result["hash"], "params": result["params"], **result["summary"]}
         out.with_name(out.stem + ".summary.json").write_text(json.dumps(summary, indent=2))
@@ -181,7 +183,8 @@ def tools(args):
             panel.read_chip(args.chip, release, chip)
             pool = release / "pool" / "pool.parquet"
             result = panel.compare(args.annotated, chip, args.preset, pool=pool if args.pool and pool.exists() else None,
-                                   weights=load_weights(release), chrom_sizes=manifest.get("chrom_sizes"))
+                                   weights=load_weights(release), chrom_sizes=manifest.get("chrom_sizes"),
+                                   synthetic=synthetic)
         print(json.dumps(result["summary"]))
         for g in result["gaps"]:
             f = g["filler"]

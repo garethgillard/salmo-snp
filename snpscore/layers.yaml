@@ -72,7 +72,7 @@ layers:
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/robust_ATAC_peaks/unified_annotated_peaks/AtlanticSalmon_unified_peaks.bed
     id: true
     description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 21 conditions (empty = no peak there)
-    citation: AQUA-FAANG consortium, Atlantic salmon unified ATAC peaks and ChromHMM states (salmobase.org)
+    citation: AQUA-FAANG consortium, Atlantic salmon unified ATAC peaks and ChromHMM states (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
 
   - name: region
     type: interval
@@ -111,7 +111,7 @@ layers:
     file: AtlanticSalmon_blacklist.bed
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/blacklist/AtlanticSalmon_blacklist.bed
     description: AQUA-FAANG blacklist; no peak here means "can't tell", not "no function"
-    citation: AQUA-FAANG consortium, Atlantic salmon blacklist (salmobase.org)
+    citation: AQUA-FAANG consortium, Atlantic salmon blacklist (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
 
   - name: lore
     type: interval
@@ -120,7 +120,7 @@ layers:
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/tables/Ssal_late_rediploidized_regions.tsv
     columns: [label]
     description: Late-rediploidized (LORe) regions, where the two Ss4R copies are near-identical
-    citation: AQUA-FAANG tables, Ssal_late_rediploidized_regions.tsv (salmobase.org)
+    citation: AQUA-FAANG tables, Ssal_late_rediploidized_regions.tsv (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
 
   - name: gene
     type: nearest
@@ -163,7 +163,7 @@ layers:
     format: vcf
     file: ALL_chrome_phased_filtered_HWE_1e6_biSNPs_MAF_0.01.sites.vcf.gz
     window: 35
-    description: Known variants within 35 bp either side (Axiom probe flank), from the public 504-fish panel (about 7.9M SNPs with MAF > 0.01)
+    description: Known variants within 35 bp either side (Axiom probe flank), from the public 504-fish panel (7,572,808 SNPs with MAF > 0.01)
     citation: nf-rasqual 504-fish reference panel, sites only (salmobase.org)
 
   - name: public_af

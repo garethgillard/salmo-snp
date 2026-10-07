@@ -122,6 +122,9 @@ def test_sandbox(tmp_path):
                     "INSTALL httpfs", "SET enable_external_access = true", "COPY (SELECT 1) TO '/tmp/x.csv'"]:
             with pytest.raises(duckdb.Error):
                 con.execute(sql)
+        # Spills go to the write folder; a read-only connection never spills (DuckDB's default is <cwd>/.tmp)
+        assert con.execute("SELECT current_setting('temp_directory')").fetchone()[0] == str(job.resolve())
+        assert connect([job]).execute("SELECT current_setting('temp_directory')").fetchone()[0] == ""
     finally:
         link.unlink()
 
@@ -257,7 +260,7 @@ def test_known_chromosomes_from_manifest(release, tmp_path):
 def test_public_af(release, tmp_path):
     f = tmp_path / "SYNTHETIC.tsv"
     f.write_text(SYNTHETIC + "chrom\tpos\tid\tref\talt\n25\t28996360\tsame\tC\tT\n25\t28996360\tswapped\tT\tC\n"
-                 "25\t28996361\tnot_public\tA\tG\n")
+                 "25\t28996361\tnot_public\tA\tG\n25\t28996360\tother\tC\tG\n")
     rows = {r["id"]: r for r in read(annotate(f, release, tmp_path / "out.parquet"))}
     # vgll3 Met54Thr in the 504-fish panel (INFO AF=0.480159, AC=484, AN=1008, NS=504); 0.67 is the 12 AQUA-FAANG fish
     same, swapped = rows["same"], rows["swapped"]
@@ -268,6 +271,10 @@ def test_public_af(release, tmp_path):
     assert swapped["public_af_af"] == pytest.approx(0.519841) and swapped["public_af_maf"] == 0.480159
     assert swapped["public_af_ac"] == 524 and swapped["public_af_aquafaang12_af"] == pytest.approx(0.33)
     assert not rows["not_public"]["public_af"] and rows["not_public"]["public_af_af"] is None
+    # A different variant at the position (the panel has C/T): no hit, and none of its values (MAF included)
+    other = rows["other"]
+    assert not other["public_af"] and other["public_af_alleles"] == "other"
+    assert other["public_af_maf"] is None and other["public_af_ns"] is None and other["public_af_af"] is None
 
 
 def test_transcripts_and_gene_columns(release, tmp_path):
@@ -297,6 +304,32 @@ def test_known_loci(release, tmp_path):
     assert rows["swapped"]["known_effect_allele"] == "T" and rows["swapped"]["known_effect_note"] == "ref"
     assert rows["near"]["known_locus"] == "vgll3_Met54Thr" and rows["near"]["known_locus_dist"] == 100
     assert rows["near"]["known_effect_allele"] is None
+
+
+def test_catalogue_text_is_for_users():
+    """Caveats and notes are shown to users as they are: no editorial instructions or to-dos."""
+    catalog = list(__import__("csv").DictReader(open(ROOT / "benchmark" / "known_loci.tsv"), delimiter="\t"))
+    for r in catalog:
+        text = f"{r['caveat']} {r['note']}"
+        assert not __import__("re").search(r"(?i)never show|do not show|\btodo\b|\bfixme\b|\btbd\b|\bask G\b|\bG to\b", text), r["id"]
+
+
+def test_sites_only_drops_genotypes(tmp_path):
+    """fetch streams the 504-fish VCF through sites_only: sample names and genotypes never reach the output."""
+    from snpscore.build import sites_only
+    src = tmp_path / "SYNTHETIC.vcf.gz"
+    with gzip.open(src, "wt") as f:  # the last line has no newline
+        f.write('##fileformat=VCFv4.2\n##INFO=<ID=AF,Number=A,Type=Float,Description="x">\n'
+                '##INFO=<ID=DR2,Number=A,Type=Float,Description="x">\n##FORMAT=<ID=GT,Number=1,Type=String,Description="x">\n'
+                "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tfishA\tfishB\n"
+                "25\t100\t.\tC\tT\t.\tPASS\tAF=0.25;DR2=0.9\tGT\t0|1\t0|0\n25\t200\trs1\tG\tA\t.\tPASS\tDR2=0.5;AF=0.5\tGT\t1|1\t0|0")
+    out = tmp_path / "sites.vcf.gz"
+    sites_only(src.as_uri(), out, ["AF"])
+    lines = gzip.open(out, "rt").read().splitlines()
+    assert [x for x in lines if not x.startswith("##")] == ["#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
+                                                         "25\t100\t.\tC\tT\t.\tPASS\tAF=0.25", "25\t200\trs1\tG\tA\t.\tPASS\tAF=0.5"]
+    assert '##INFO=<ID=AF,Number=A,Type=Float,Description="x">' in lines
+    assert not any(w in x for x in lines for w in ("fishA", "fishB", "GT", "DR2", "0|1"))
 
 
 def test_manifest(release):

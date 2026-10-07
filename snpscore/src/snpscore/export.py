@@ -20,7 +20,7 @@ import duckdb
 import yaml
 
 from . import assay
-from .annotate import genome_location
+from .annotate import genome_location, write_in_order
 from .fasta import Fasta
 from .formats import InputError, lit, q
 from .panel import _open, vendor_checks
@@ -48,6 +48,8 @@ FORMATS = ("tsv", "parquet", "bed", *VENDORS)
 REFERENCES = {  # DOIs only where certain; the others are marked 'DOI to add'
     "gerp": "Davydov EV et al. (2010) Identifying a high fraction of the human genome to be under selective constraint "
             "using GERP++. PLoS Comput Biol 6: e1001025. doi:10.1371/journal.pcbi.1001025",
+    "wakefield": "Wakefield J (2009) Bayes factors for genome-wide association studies: comparison with P-values. "
+                 "Genet Epidemiol 33: 79-86. doi:10.1002/gepi.20359",
 }
 FLIP = str.maketrans("ACGT", "TGCA")
 
@@ -105,9 +107,11 @@ def provenance(manifest, weights, meta=None):
     return ["# " + line for line in lines]
 
 
-def methods_text(manifest, weights, preset="all", release_dir=None):
-    """Paste-ready methods paragraphs (annotation layers, tiers, assay QC) and the references: layer citations, GERP++,
-    and the DOIs of the known-loci catalogue (read from release_dir when given). PROVISIONAL rules are named as such."""
+def methods_text(manifest, weights, preset="all", release_dir=None, finemap=None):
+    """Paste-ready methods paragraphs (annotation layers, tiers, assay QC; with `finemap`, the GWAS settings used as in
+    gwas.json 'finemap', the loci and fine-mapping) and the references: layer citations (each '; '-separated part once,
+    'DOI to add' where it has no doi:), GERP++, Wakefield 2009 and the DOIs of the known-loci catalogue (read from
+    release_dir when given). PROVISIONAL rules are named as such."""
     manifest, weights, _, _ = _load(manifest, weights)
     layers = [l for l in manifest.get("layers", []) if l.get("type") != "features"]
     syn = [l["name"] for l in layers if l.get("synthetic")]
@@ -141,9 +145,24 @@ def methods_text(manifest, weights, preset="all", release_dir=None):
                                                           if a.get("flank_variants_per_side") else "in the two flanks")
         + f", an A/T or C/G SNP whose Illumina TOP/BOT strand cannot be determined from the flanks, or "
         f"{', '.join(a['warn_flags'])}. These thresholds are PROVISIONAL, to confirm with the genotyping provider.")
-    refs = sorted({l["citation"] for l in layers if l.get("citation")})
-    refs = [REFERENCES["gerp"] if l.startswith("Ensembl Compara") and "GERP" in l else f"{l} (DOI to add)" for l in refs]
-    refs = sorted(set(refs) | ({REFERENCES["gerp"]} if any(l["name"] == "gerp" for l in layers) else set()))
+    if finemap:
+        f = finemap
+        text.append(
+            f"GWAS summary statistics were turned to the {manifest.get('assembly')} reference alleles, and loci formed "
+            f"by greedy distance clumping: the strongest SNP with p < {f['suggestive']:g} leads a locus of all SNPs within "
+            f"{f['window'] / 1000:g} kb (genome-wide significance p < {f['significant']:g}). Each locus was fine-mapped "
+            f"with Wakefield's approximate Bayes factors (Wakefield 2009), assuming one causal variant per locus and "
+            f"using no LD reference: V = (se / trait SD)^2, or 1 / (2 N af (1 - af)) without se, with trait SD "
+            f"{f['trait_sd']:g}" + (f" ({f['trait_sd_source']})" if f.get("trait_sd_source") else "")
+            + f", and prior variance W = {f['prior_sd']:g}^2 = {f['prior_sd'] ** 2:g}. Posterior inclusion "
+            f"probabilities were computed under a uniform prior and a functional prior proportional to "
+            f"exp({f['functional_lambda']:g} x tier_score), with {f['coverage']:.0%} credible sets. These settings are "
+            "PROVISIONAL.")
+    parts = {p.strip() for l in layers if l.get("citation") for p in l["citation"].split("; ")}
+    refs = [REFERENCES["gerp"] if p.startswith("Ensembl Compara") and "GERP" in p else p if "doi:" in p
+            else f"{p} (DOI to add)" for p in parts]
+    refs = sorted(set(refs) | ({REFERENCES["gerp"]} if any(l["name"] == "gerp" for l in layers) else set())
+                  | ({REFERENCES["wakefield"]} if finemap else set()))
     catalog = Path(release_dir) / manifest["catalog"]["file"] if release_dir and manifest.get("catalog") else None
     if catalog and catalog.exists():
         rows = list(csv.DictReader(io.StringIO(catalog.read_text()), delimiter="\t"))
@@ -326,27 +345,34 @@ def export(source, fmt, out, release_dir, preset="all", meta=None, include_faile
     weights = weights or (release / "weights.yaml" if (release / "weights.yaml").exists() else None)
     meta = {"preset": preset, **(meta or {}), **({"vendor": fmt} if fmt in VENDORS else {})}
     header = [] if plain else provenance(manifest, weights, meta)
-    m = _load(manifest, weights)[0]
-    con, rel, columns = _open(source, table, [release], out)
+    m, w = _load(manifest, weights)[:2]
+    synthetic = [l["name"] for l in m.get("layers", []) if l.get("synthetic")]
+    con, rel, columns = _open(source, table, [release], out, preset, w, synthetic)
     hide = ", ".join(c for c in ("_row", "file_row_number") if c == "_row" or c in columns)
-    if fmt == "parquet":
-        kv = "" if plain else f", KV_METADATA {{provenance: {lit(chr(10).join(header))}}}"
-        con.execute(f"COPY (SELECT * EXCLUDE ({hide}) FROM {rel} ORDER BY _row) TO {lit(out)} (FORMAT parquet{kv})")
-        return {"rows": con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0], "skipped": {}, "warnings": [],
-                "files": [out.name]}
-    if fmt in ("tsv", "bed"):
-        body = out.with_name(out.name + ".part")
-        sql = (f"SELECT * EXCLUDE ({hide}) FROM {rel} ORDER BY _row" if fmt == "tsv" else
-               f"""SELECT chrom, pos - 1 AS start, pos AS "end", {q('id') if 'id' in columns else "chrom || ':' || pos"} AS name
-                   FROM {rel} ORDER BY _row""")
-        con.execute(f"COPY ({sql}) TO {lit(body)} (HEADER {'true' if fmt == 'tsv' else 'false'}, DELIMITER '\t')")
-        n = con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0]
-        with open(out, "w") as f, open(body) as b:
-            f.write("".join(line + "\n" for line in header))
-            for chunk in iter(lambda: b.read(1 << 20), ""):
-                f.write(chunk)
-        body.unlink()
-        return {"rows": n, "skipped": {}, "warnings": [], "files": [out.name]}
+    ordered = isinstance(source, (str, Path))  # a file is read in order; a view may not be (a join)
+    body = out.with_name(out.name + ".part")
+    try:
+        if fmt == "parquet":
+            kv = "" if plain else f", KV_METADATA {{provenance: {lit(chr(10).join(header))}}}"
+            _copy(con, rel, hide, out, f"FORMAT parquet{kv}", ordered)
+            return {"rows": con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0], "skipped": {}, "warnings": [],
+                    "files": [out.name]}
+        if fmt in ("tsv", "bed"):
+            if fmt == "tsv":
+                _copy(con, rel, hide, body, "HEADER true, DELIMITER '\t'", ordered)
+            else:
+                name = q("id") if "id" in columns else "chrom || ':' || pos"
+                con.execute(f"""COPY (SELECT chrom, pos - 1 AS start, pos AS "end", {name} AS name FROM {rel} ORDER BY _row)
+                                TO {lit(body)} (HEADER false, DELIMITER '\t')""")
+            n = con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0]
+            with open(out, "w") as f, open(body) as b:
+                f.write("".join(line + "\n" for line in header))
+                for chunk in iter(lambda: b.read(1 << 20), ""):
+                    f.write(chunk)
+            return {"rows": n, "skipped": {}, "warnings": [], "files": [out.name]}
+    finally:  # also DuckDB's own temp file of a COPY that failed (it writes tmp_<name> when <name> exists)
+        for path in (body, out.with_name("tmp_" + out.name), body.with_name("tmp_" + body.name)):
+            path.unlink(missing_ok=True)
     recs, skipped = records(con, rel, columns, fmt, release, m, include_failed, flank)
     head, rows = vendor_rows(fmt, recs, m, template)
     with open(out, "w", newline="") as f:
@@ -368,11 +394,21 @@ def export(source, fmt, out, release_dir, preset="all", meta=None, include_faile
     return {"rows": len(rows), "skipped": skipped, "warnings": warnings, "files": files}
 
 
+def _copy(con, rel, hide, out, options, ordered):
+    """COPY `rel` without the `hide` columns to `out` in _row order: as read when `ordered`, else sorted in _row ranges
+    (annotate.write_in_order), as one ORDER BY over a wide 1.6M-row result runs out of memory at 2 GB."""
+    if ordered:
+        con.execute(f"COPY (SELECT * EXCLUDE ({hide}) FROM {rel}) TO {lit(out)} ({options})")
+    else:
+        write_in_order(con, out, rel, "_row", hide, options)
+
+
 def bundle_zip(out, source, release_dir, preset="all", meta=None, formats=("tsv", "illumina", "axiom", "kasp", "bed"),
                svgs=None, include_failed=False, table="v", manifest=None, weights=None):
     """A zip with the exports in `formats` (vendor files with their .provenance.txt and .lookup.tsv sidecars),
-    manifest.json, weights.yaml, methods.txt, provenance.txt, README.txt and the figure SVGs ({name: svg text}). File
-    names carry SYNTHETIC when synthetic data contributes. Returns the zip path."""
+    manifest.json, weights.yaml, methods.txt (with the fine-mapping paragraph when meta has 'finemap', the GWAS
+    settings used), provenance.txt, README.txt and the figure SVGs ({name: svg text}). File names carry SYNTHETIC when
+    synthetic data contributes. Returns the zip path."""
     release, out = Path(release_dir).resolve(), Path(out).resolve()
     manifest = manifest or release / "manifest.json"
     weights = weights or (release / "weights.yaml" if (release / "weights.yaml").exists() else None)
@@ -412,7 +448,7 @@ def bundle_zip(out, source, release_dir, preset="all", meta=None, formats=("tsv"
             z.writestr("manifest.json", json.dumps(m, indent=2))
             z.writestr("weights.yaml", yaml.safe_dump(w, sort_keys=False) if isinstance(weights, dict) or not weights
                        else Path(weights).read_text())
-            z.writestr("methods.txt", methods_text(m, w, preset, release))
+            z.writestr("methods.txt", methods_text(m, w, preset, release, (meta or {}).get("finemap")))
             z.writestr("provenance.txt", "\n".join(header) + "\n")
             z.writestr("README.txt", "\n".join(readme) + "\n")
             for name, svg in (svgs or {}).items():
