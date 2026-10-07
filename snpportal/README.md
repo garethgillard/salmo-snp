@@ -2,7 +2,8 @@
 
 Django app for salmobase.org: score a SNP list against AQUA-FAANG functional maps and tier it for a trait, then explore
 the result (overview, filterable table, evidence card per SNP), design a genotyping panel, compare it with an existing
-chip, export it (TSV, Parquet, BED, Illumina-, Axiom- and KASP-style files, or a zip bundle) and print a one-page report.
+chip, export it (TSV, Parquet, BED, Illumina-, Axiom- and KASP-style files, genomic-prediction priors, or a zip bundle) and
+print a one-page report.
 GWAS summary statistics get an Association page (Manhattan, tier-stratified QQ, loci, regional plot and fine-mapping
 with a functional prior). Without a list: search (genes, NCBI LOC symbols, rs IDs, positions), gene pages, a locus
 browser with live salmobase signal, published associations and molQTL leads, the known-loci catalogue (36 published SNPs
@@ -71,7 +72,7 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 | `results/<key>/?tab=panel&design=1&n=&spacing_kb=&spacing_cm=&cm_map=&backbone=&maf=&per_gene=&per_element=&assay=&exclude=&gap_mb=` | panel designer as a link (blank or invalid values fall back to weights.yaml `design`; `spacing_cm` and `cm_map` (mean, female, male) only with the `cm` columns) |
 | `results/<key>/panel/` (POST) | the designer's form, the same fields plus `must` (must-include ids, which never go in a URL): designs the panel and redirects to `?tab=panel&panel=<hash>`, which shows a saved panel with its parameters (for another trait: the same parameters) |
 | `results/<key>/chip/` (POST) | `chip` file, `demo=1` or `remove=1` |
-| `results/<key>/download/?format=tsv\|parquet\|bed\|illumina\|axiom\|kasp\|bundle&scope=all\|filtered\|panel-<hash>` | exports with provenance (`&plain=1` drops it, `&include_failed=1` keeps assay failures in vendor files); vendor files hold no comment lines, so `format=<vendor>.provenance` and `.lookup` give snpscore's sidecars; `format=rejects` gives the dropped rows |
+| `results/<key>/download/?format=tsv\|parquet\|bed\|illumina\|axiom\|kasp\|bundle\|priors&scope=all\|filtered\|panel-<hash>` | exports with provenance (`&plain=1` drops it, `&include_failed=1` keeps assay failures in vendor files); vendor files hold no comment lines, so `format=<vendor>.provenance` and `.lookup` give snpscore's sidecars; `format=rejects` gives the dropped rows |
 | `results/<key>/report/?trait=[&filters][&panel=<hash>]` | one-page printable report (two A4 pages) |
 | `results/<key>/figure/<name>.svg`, `results/<key>/tools/<name>.svg` | overview and Panel-tab figures (`&format=tsv` for their data) |
 | `results/<key>/association/` (+ `<name>.svg`, `download/`, `region/`) | GWAS jobs: QC, Manhattan, QQ, loci, fine-mapping, regional plot |
@@ -104,6 +105,17 @@ Public data on the pages (R1, R3-R8 of salmo-snpscore's ROADMAP 'Push 2'):
   `vendor_checks.txt`; alleles are the list's, else the assay flank's (public) ones, as in the vendor files. Help
   (`#exports`) explains the `Ssa<chrom>p<pos>` locus names, the bins' error 111 / warning 604 minimums and the
   `.provenance.txt` and `.lookup.tsv` sidecars.
+- Coding consequences (`coding_*` columns, snpscore's VEP-lite): the Table and Overview Region cell shows the
+  consequence (missense, synonymous, stop gained, splice donor, ..., tooltip `p.Thr46Met · <transcript>`); the Region
+  filter (More filters) adds `region=missense` (missense, stop and start changes) and `region=synonymous`; the card's
+  tier line names it (`Missense p.Thr46Met (ENSSSAT00000230965; published as Met54Thr) +3`, the published label when
+  the catalogue's residue number differs) and its closed Details add the codons; the variant page gets the same through
+  `snpscore.locus.annotate_position`.
+- Genomic-prediction priors: the Export tab's closed 'More formats' offers `format=priors` (snpscore's zip of BayesRC
+  classes, GFBLUP/MultiBLUP sets, LDAK partitions and an annotation matrix) for the selected scope (`all` on GWAS jobs).
+- Benchmark: with `benchmark_molqtl.tsv` in the release, Methods shows one enrichment figure (log2 axis, 95% intervals)
+  for known loci, caQTL and eQTL leads against matched controls, with `?download=benchmark.svg` and
+  `benchmark_figure.tsv`; without it, the one-line 'not yet validated' note stays.
 - Upload QC: chromosome-name warnings (e.g. `HG993277.1`, an older chromosome 18) as alerts; `.2` GenBank names are
   accepted; the Panel tab's Assay readiness card labels snpscore's reasons.
 - Data page: layer population and licence, the AQUA-FAANG samples (ENA projects, BodyMap fish) and a 'How to cite'
@@ -126,7 +138,12 @@ saved files keep their colours). No colours or inline styles in templates (a tes
 carry one caveat line (`_caveat.html`, starting 'SYNTHETIC data' on synthetic jobs) instead of PROVISIONAL or SYNTHETIC
 badges; figure cards show a title, an (i) and one download menu, with provenance only in the SVG's `<desc>` and the
 downloads. Every SVG has `role="img"`,
-`<title>` and `<desc>`; text colours pass WCAG AA (a test checks); focus is always visible.
+`<title>` and `<desc>`; text colours pass WCAG AA (a test checks); focus is always visible. Checked for colour blindness
+(deuteranopia, protanopia, tritanopia; no tier or portal-palette pair collides only under CVD; 'Ensembl regulatory' in
+the 'why this tier' bar is `palette.REGBUILD`, Okabe-Ito sky blue). Below 992 px, figures drawn 1200 px wide keep 0.8x
+and scroll sideways in their card; at 992-1199 px 'More charts' stack one per row. Print: the card fits one A4 page
+(10pt root, closed sections left out), the report two (8.5pt); salmobase's nav, header and footer and Copy buttons
+never print. Checked in headless Chrome only (not Safari or Firefox print, not touch tablets).
 
 **Privacy.** Results pages (also their 404s) send `Cache-Control: no-store, private` and `Referrer-Policy: same-origin`;
 error reports from them and from the Score page (also its 'Genes or regions' list) carry no POST values, uploaded file

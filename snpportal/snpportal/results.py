@@ -29,6 +29,13 @@ REGION_LABELS = {"coding": "coding (CDS, splice)", "UTR": "UTR", "exon": "non-co
                  "intergenic": "intergenic", "other": "other"}
 CLASS_LABELS = {"CDS": "CDS", "splice_region": "splice region", "five_prime_UTR": "5′ UTR", "three_prime_UTR": "3′ UTR",
                 "exon": "non-coding exon", "intron": "intron"}
+CONSEQUENCES = {"missense_variant": "missense", "synonymous_variant": "synonymous", "stop_gained": "stop gained",
+                "stop_lost": "stop lost", "start_lost": "start lost", "stop_retained_variant": "stop retained",
+                "incomplete_terminal_codon_variant": "incomplete last codon", "coding_sequence_variant": "CDS",
+                "splice_donor_variant": "splice donor", "splice_acceptor_variant": "splice acceptor"}  # snpscore.coding
+CODING_FILTERS = {  # Region filter values that need coding_consequence -> (label, SQL)
+    "missense": ("missense/nonsense", "coding_consequence IN ('missense_variant', 'stop_gained', 'stop_lost', 'start_lost')"),
+    "synonymous": ("synonymous", "coding_consequence IN ('synonymous_variant', 'stop_retained_variant')")}
 HIDE = {  # checkbox -> (label, column it needs, SQL condition a SNP must meet to stay); hide_lore: older links (now in Assay)
     "hide_blacklist": ("blacklisted", "blacklist", "NOT blacklist"),
     "hide_lore": ("LORe", "lore", "NOT lore"),
@@ -48,7 +55,8 @@ MAFS = ("0.01", "0.05", "0.1", "0.2")
 MAF_TIP = "Minor allele frequency in 504 public fish, pooled; your strain can differ"
 UNNAMED = "Unnamed in Ensembl; named by its human ortholog"
 TERMS = {"active": "active in the trait's conditions", "active_elsewhere": "active elsewhere only",
-         "weak": "weak state in the trait's conditions", "coding": "CDS", "splice": "splice region", "utr": "UTR",
+         "weak": "weak state in the trait's conditions", "coding": "CDS (not synonymous)", "synonymous": "CDS (synonymous)",
+         "splice": "splice region", "utr": "UTR",
          "constrained": "GERP constrained", "regbuild": "Ensembl regulatory", "molqtl": "molQTL lead (display only)"}
 QUIET = ("unknown_chromosomes", "aliases_applied", "alias_warnings", "columns_renamed", "columns_dropped",
          "duplicates_merged", "indels", "multiallelic")  # upload QC lines left out when empty or zero
@@ -87,7 +95,8 @@ COLUMNS = {
             "Blank outside loci", ("pip_uniform",), [("pip_functional", False)]),
     "gene": ("Gene", "Nearest Ensembl 116 gene; ~NAME: unnamed in Ensembl, named by its human ortholog", ("gene_name", "gene_id"),
              [("coalesce(gene_name, gene_ortholog_human, gene_id)", True)]),
-    "region": ("Region", "Genic region class (Ensembl 116 gene models)", ("region_class",), [("region_class", True)]),
+    "region": ("Region", "Genic region class, or the coding consequence (Ensembl 116 gene models)", ("region_class",),
+               [("region_class", True)]),
     "distance": ("To gene", "Distance to the nearest gene", ("gene_distance",), [("gene_distance", True)]),
     "score": ("Score", "Tier score: the summed weights of the evidence terms", ("tier_score",), [("tier_score", True)]),
     "evidence": ("Evidence", "The evidence behind the tier", ("tier_evidence",), []),
@@ -111,7 +120,7 @@ DEFAULT_COLUMNS = ("id", "gene", "region", "tier", "evidence", "chromatin", "kno
 GWAS_COLUMNS = ("id", "p", "beta", "tier", "pip", "gene", "region", "chromatin")
 EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tier_evidence", "tier_terms"), "known": ("known_locus_dist",),
          "evidence": ("tier_terms",),
-         "gene": ("gene_ortholog_human",), "region": ("gene_distance",), "beta": ("se",), "pip": ("pip_functional",),
+         "gene": ("gene_ortholog_human",), "region": ("gene_distance", "coding_consequence", "coding_hgvsp", "coding_transcript"), "beta": ("se",), "pip": ("pip_functional",),
          "assay": ("assay_reasons", "blacklist", "lore", "strand_ambiguous", "flank_variants"),
          "molqtl": ("molqtl_tissues", "molqtl_kinds", "molqtl_features"), "cm": ("cm_male",)}  # also fetched
 MORE = ("region", "active", "term", "known", "molqtl", "hide_blacklist", "hide_ambiguous", "hide_flank", "hide_near_chip",
@@ -211,6 +220,8 @@ def filters(request, types, weights):
     region = get("region", "")
     if region in REGIONS and "region_class" in types:
         out.append(({"region": region}, f"Region: {REGION_LABELS[region]}", REGIONS[region]))
+    elif region in CODING_FILTERS and "coding_consequence" in types:
+        out.append(({"region": region}, f"Region: {CODING_FILTERS[region][0]}", CODING_FILTERS[region][1]))
     chrom, start, end = get("chrom", ""), get("start", ""), get("end", "")
     if re.fullmatch(r"[\w.]{1,40}", chrom):
         if start.isdecimal() and end.isdecimal() and int(start) < int(end):  # start < pos <= end, as for layers
@@ -473,7 +484,9 @@ def table(request, key, job=None):
         select(selects, "assay", "Assay", [(k, label) for k, (label, _) in ASSAY_FILTERS.items() if k != "ok_nolore" or "lore" in types],
                any_label="All", tip="LORe: region where the duplicated chromosomes still pair; probes may cross-hybridise")
     if "region_class" in types:
-        select(more, "region", "Region", [(r, REGION_LABELS[r]) for r in REGIONS])
+        regions = [(r, REGION_LABELS[r]) for r in REGIONS]  # coding, then its missense/nonsense and synonymous parts
+        coding = [(k, label) for k, (label, _) in CODING_FILTERS.items()] if "coding_consequence" in types else []
+        select(more, "region", "Region", regions[:1] + coding + regions[1:])
     if weights and conditions:
         select(more, "active", "Active in", [(c, condition_label(c)) for c in conditions])
     if weights and "tier_terms" in types:
@@ -539,7 +552,7 @@ def _row(r, groups, in_preset, active_states, caveats):
            "alleles": _alleles(g), "tier": g("tier"), "score": g("tier_score"), "evidence": evidence_text(g("tier_evidence"), g("tier_terms")),
            "known": g("known_locus"), "known_dist": g("known_locus_dist"), "caveat": caveats.get(g("known_locus")),
            "gene": gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")), "gene_id": g("gene_id") or "",
-           "region": CLASS_LABELS.get(g("region_class"), g("region_class")) or "intergenic",
+           "region": region_text(g), "region_tip": coding_tip(g),
            "distance": "" if distance is None else "in gene" if distance == 0 else
            f"{distance:,} bp" if distance < 1000 else f"{distance / 1000:,.1f} kb",
            "gerp": "" if g("gerp_score") is None else f"{g('gerp_score'):.1f}", "regbuild": g("regbuild_type") or "",
@@ -577,6 +590,34 @@ def _row(r, groups, in_preset, active_states, caveats):
         out["barcode"] = cells
         out["barcode_label"] = f"Active in {active}, a peak in {peaks} of {sum(len(i) for _, i in groups)} conditions"
     return out
+
+
+def region_text(g):
+    """The Region cell: the coding consequence where there is one ('missense', 'splice donor'), else the region class."""
+    return CONSEQUENCES.get(g("coding_consequence") or "") or CLASS_LABELS.get(g("region_class"), g("region_class")) or "intergenic"
+
+
+def coding_tip(g):
+    """'p.Thr46Met · ENSSSAT00000230965' for the Region cell's tooltip, or ''."""
+    return " · ".join(x for x in (g("coding_hgvsp"), g("coding_transcript")) if x)
+
+
+def coding_label(g, known_id=None, known_dist=None):
+    """'Missense p.Thr46Met (ENSSSAT00000230965; published as Met54Thr)' for the card, None without a consequence.
+    The published label is the catalogue id's (e.g. vgll3_Met54Thr) at this exact position, when its residue differs."""
+    consequence = g("coding_consequence")
+    if not consequence:
+        return None
+    if consequence == "coding_sequence_variant":
+        return f"CDS (amino-acid effect not computed: {g('coding_note') or 'alleles unknown'})"
+    notes = [x for x in (g("coding_transcript"),) if x]
+    published = re.search(r"([A-Z][a-z]{2})(\d+)([A-Z][a-z]{2})", known_id or "") if known_dist == 0 else None
+    if published and g("coding_aa_pos") and int(published.group(2)) != g("coding_aa_pos"):
+        notes.append(f"published as {published.group(0)}")
+    if g("coding_note"):
+        notes.append(g("coding_note"))
+    text = CONSEQUENCES.get(consequence, consequence).capitalize() + (f" {g('coding_hgvsp')}" if g("coding_hgvsp") else "")
+    return text + (f" ({'; '.join(notes)})" if notes else "")
 
 
 def tier_line(tier, evidence, terms):
@@ -640,7 +681,7 @@ def top(request, key, job, n=TOP):
     gwas = job.get("input_kind") == "gwas" and "neglog10p" in types
     maf, _ = jobs.maf_sql(types)
     cols = [c for c in ("chrom", "pos", "id", "ref", "alt", "tier", "tier_score", "tier_evidence", "tier_terms", "gene_name", "gene_id",
-                        "gene_ortholog_human", "region_class", "known_locus", "known_locus_dist", "assay_status",
+                        "gene_ortholog_human", "region_class", "coding_consequence", "coding_hgvsp", "coding_transcript", "known_locus", "known_locus_dist", "assay_status",
                         "assay_reasons", "neglog10p", "lore", "blacklist", "strand_ambiguous", "flank_variants") if c in types]
     order = "neglog10p DESC NULLS LAST, " if gwas else \
         "tier ASC NULLS LAST, tier_score DESC NULLS LAST, " if {"tier", "tier_score"} <= set(types) else ""
@@ -658,7 +699,7 @@ def top(request, key, job, n=TOP):
             "snp": _snp_name(g), "position": f"{g('chrom')}:{g('pos'):,}", "alleles": _alleles(g),
             "tier": g("tier"), "score": g("tier_score"), "evidence": evidence_text(g("tier_evidence"), g("tier_terms")),
             "gene": gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")),
-            "region": CLASS_LABELS.get(g("region_class"), g("region_class")) or "intergenic",
+            "region": region_text(g), "region_tip": coding_tip(g),
             "known": g("known_locus") or "", "known_dist": g("known_locus_dist"), "caveat": caveats.get(g("known_locus")),
             "maf": "" if g("_maf") is None else f"{g('_maf'):.2f}", "p": "",
             "assay": (ASSAY.get(status, ("?", "not_checked")) + (status.replace("_", " "), _assay_tip(g))) if status else None})

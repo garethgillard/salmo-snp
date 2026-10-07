@@ -14,15 +14,21 @@
         <tbody>{% for name, value, text in weights %}<tr id="term-{{ name }}"><th scope="row" class="fw-normal sp-mono">{{ name }}</th>
           <td class="sp-num">{{ value }}</td><td>{{ text }}</td></tr>{% endfor %}</tbody>
       </table>
+      <p class="sp-small sp-muted mt-1 mb-0" id="coding">Coding consequences (missense, synonymous, stop, start, splice donor or
+        acceptor) are read from the Ensembl 116 canonical transcript, else the longest CDS, and the Ssal_v3.1 genome, with
+        Ensembl VEP's terms and residue numbers.</p>
     </section>
     <section class="sp-card" id="tiers" aria-labelledby="t-h">
       <h2 id="t-h">Tiers</h2>
       <table class="table table-sm sp-small mt-1 mb-1">
         <tbody>{% for tier, rule in tiers %}<tr><td>{% include 'snpportal/_badges.html' with kind='tier' value=tier %}</td><td>{{ rule }}</td></tr>{% endfor %}</tbody>
       </table>
-      {% if benchmark %}<p class="sp-small sp-muted mb-0" id="benchmark">Not yet validated against known causal variants (n = {{ benchmark }}).
+      {% if benchmark and not benchmark_fig %}<p class="sp-small sp-muted mb-0" id="benchmark">Not yet validated against known causal variants (n = {{ benchmark }}).
         <a href="?download=benchmark.tsv" download>Benchmark data</a></p>{% endif %}
     </section>
+    {% if benchmark_fig %}<div id="benchmark">{% include 'snpportal/_figure.html' with fig=benchmark_fig %}
+      <p class="sp-small sp-muted mt-1 mb-0">caQTLs are called on the same AQUA-FAANG ATAC data, so their chromatin enrichment
+        is partly expected; eQTLs are the fairer test. Leads from 12 fish carry winner's curse.</p></div>{% endif %}
     <section class="sp-card" id="presets" aria-labelledby="p-h">
       <h2 id="p-h">Traits</h2>
       <p class="sp-small sp-muted mt-1">The chromatin conditions each trait counts.</p>

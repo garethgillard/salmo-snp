@@ -82,6 +82,8 @@ BLACKLISTED = ("#FFFFFF", "#878787", "BL")  # fill, hatch colour, label
 TISSUES = {"Brain": "#0072B2", "Gill": "#56B4E9", "Gonad": "#CC79A7", "Liver": "#D55E00", "Muscle": "#009E73",
            "Embryo": "#E69F00"}
 
+REGBUILD = "#56B4E9"  # Okabe-Ito sky blue: 'Ensembl regulatory' in the 'why this tier' bar (apart from the blues under CVD)
+
 # Status -> (text, background, border). Always shown with an icon and text, never colour alone.
 STATUS = {
     "ok": ("#1B5E20", "#EAF5EA", "#2E7D32"),

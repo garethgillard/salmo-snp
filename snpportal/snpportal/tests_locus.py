@@ -178,7 +178,7 @@ class LocusTest(SimpleTestCase):
         scores = dict(jobs.connect([d]).execute(f"SELECT file_row_number, tier_score__brain FROM read_parquet('{d / 'tiers.parquet'}')").fetchall())
         line = re.search(r'class="sp-badge sp-tier-\d"[^>]*>Tier \d</span>\s*&middot;(.*?)</p>', card, re.S).group(1)
         self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)", line)), scores[0])  # the tier line sums to tier_score
-        self.assertIn("CDS (amino-acid effect not computed) +3", line)
+        self.assertIn("Missense p.Thr46Met (ENSSSAT00000230965; published as Met54Thr) +3", line)
         self.assertIn("No AQUA-FAANG peak in the 21 conditions sampled", card)  # one line instead of an empty grid
         self.assertNotIn("Chromatin state per condition", card)
         self.assertIn("Expression of the nearest gene (not necessarily the target)</summary>", card)  # closed

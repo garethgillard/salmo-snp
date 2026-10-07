@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import math
 import re
 from collections import Counter
+from html import escape
 
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.safestring import mark_safe
 
 from snpscore import formats
 
@@ -27,7 +30,8 @@ TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.sc
     "active": "An active state in at least one condition of the trait.",
     "active_elsewhere": "An active state only in conditions outside the trait.",
     "weak": "A weak state in a condition of the trait, and no active state there.",
-    "coding": "Inside a coding sequence (CDS); amino-acid effect not computed.",
+    "coding": "A CDS change to the protein (missense, stop gained or lost, start lost) or of unknown effect.",
+    "synonymous": "A synonymous CDS change (or stop retained): no amino-acid change.",
     "splice": "In a splice region.",
     "utr": "In a 5' or 3' UTR.",
     "constrained": "Inside a GERP constrained element (65 fish).",
@@ -90,6 +94,12 @@ LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall
     "cm": ("Genetic map position (cM)", "Brekke et al."),
     "expression": ("Expression of the nearest gene per tissue", "nf-RASQUAL RNA-seq"),
 }
+# Methods benchmark figure: (set in the release's benchmark TSVs, label, colour, marker) and (feature, label) rows
+BENCH_SETS = [("known_loci", "Known loci", palette.GREY[900], "diamond"), ("molqtl:ca", "caQTL leads", palette.GREY[500], "square"),
+              ("molqtl:e", "eQTL leads", palette.ACCENT, "circle")]
+BENCH_FEATURES = [("chromatin", "ATAC peak"), ("evidence = active", "Active state"), ("region_class = CDS", "CDS"),
+                  ("evidence = utr", "UTR"), ("gerp", "GERP constrained"), ("tier <= 2", "Tier 1\u20132")]
+BENCH_AXIS = (1 / 8, 64)  # enrichment axis (log2); intervals beyond it end in an arrow
 ENA = "https://www.ebi.ac.uk/ena/browser/view/{}"
 AQUAFAANG_PROJECTS = [  # (atlas, assay, ENA project); RESEARCH.md section 6
     ("BodyMap", "RNA-seq", "PRJEB47409"), ("BodyMap", "ATAC-seq", "PRJEB47408"), ("BodyMap", "ChIP-seq", "PRJEB55063"),
@@ -190,24 +200,128 @@ def track_summary():
             "defaults": cfg.get("defaults") or {}, "generated": cfg.get("generated"), "hosts": cfg.get("hosts") or []}
 
 
-def benchmark_rows():
-    path = jobs.release() / "benchmark.tsv"
+def benchmark_rows(name="benchmark.tsv"):
+    """Rows of a release benchmark TSV ('#' lines skipped); a row without a set column is from the known loci."""
+    path = jobs.release() / name
     if not path.exists():
         return []
     with open(path, newline="") as f:
         rows = list(csv.DictReader((line for line in f if not line.startswith("#")), delimiter="\t"))
-    return [r for r in rows if r.get("share_pos") not in (None, "") and r.get("positives")]
+    return [dict(r, set=r.get("set") or "known_loci") for r in rows if r.get("share_pos") not in (None, "") and r.get("positives")]
+
+
+def benchmark_sets():
+    """({set: {feature: row}} for the BENCH_SETS in benchmark.tsv and benchmark_molqtl.tsv, synthetic: a file says
+    SYNTHETIC in its '#' lines)."""
+    out, synthetic = {}, False
+    for name in ("benchmark.tsv", "benchmark_molqtl.tsv"):
+        for r in benchmark_rows(name):
+            out.setdefault(r["set"], {})[r["feature"]] = r
+        path = jobs.release() / name
+        if path.exists():
+            with open(path) as f:
+                synthetic = synthetic or any(line.startswith("#") and "SYNTHETIC" in line for line in f)
+    return {s: out[s] for s, *_ in BENCH_SETS if s in out}, synthetic
+
+
+def _float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def benchmark_svg(sets, desc="", synthetic=False):
+    """Enrichment over matched controls on a log scale with 95% intervals: a row per BENCH_FEATURES item, a mark per
+    set (shape and colour from BENCH_SETS); intervals beyond the axis end in an arrow; a set with no hit gets '0 of n'."""
+    left, plot, row, top = 128, 360, 34, 4
+    lo, hi = (math.log2(v) for v in BENCH_AXIS)
+    shown = [b for b in BENCH_SETS if b[0] in sets]
+
+    def x(v):
+        return left + plot * (min(max(math.log2(v), lo), hi) - lo) / (hi - lo)
+
+    def mark(shape, cx, cy, fill, tip):
+        tip = f"<title>{escape(tip)}</title>"
+        if shape == "circle":
+            return f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="4.5" fill="{fill}">{tip}</circle>'
+        if shape == "square":
+            return f'<rect x="{cx - 4:.1f}" y="{cy - 4:.1f}" width="8" height="8" fill="{fill}">{tip}</rect>'
+        return f'<path d="M{cx:.1f} {cy - 5.5:.1f}L{cx + 5.5:.1f} {cy:.1f}L{cx:.1f} {cy + 5.5:.1f}L{cx - 5.5:.1f} {cy:.1f}Z" fill="{fill}">{tip}</path>'
+
+    bottom = top + row * len(BENCH_FEATURES)
+    parts = []
+    for v in (1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8, 16, 32, 64):
+        parts.append(f'<line x1="{x(v):.1f}" x2="{x(v):.1f}" y1="{top}" y2="{bottom}" '
+                     f'stroke="{palette.GREY[700] if v == 1 else palette.GREY[200]}"/>'
+                     + figures._text(x(v), bottom + 13, f"1/{round(1 / v)}" if v < 1 else f"{v:g}", "middle", font_size=10, fill=palette.GREY[700]))
+    for i, (feature, label) in enumerate(BENCH_FEATURES):
+        y0 = top + i * row
+        parts.append(figures._text(left - 8, y0 + row / 2 + 4, label, "end"))
+        for j, (s, name, fill, shape) in enumerate(shown):
+            r = sets[s].get(feature)
+            if not r:
+                continue
+            y = y0 + row / 2 + (j - (len(shown) - 1) / 2) * 8
+            e, low, high = (_float(r.get(k)) for k in ("enrichment", "enrichment_low", "enrichment_high"))
+            sp, sc = _float(r.get("share_pos")) or 0, _float(r.get("share_ctrl")) or 0
+            tip = (f"{name}, {label}: {100 * sp:.1f}% vs {100 * sc:.1f}% of matched controls"
+                   + (f", {e:.2f}x" if e else "") + (f" (95% interval {low:.2f}-{high:.2f})" if low and high else ""))
+            if not e and not sp:  # no hit: the interval spans the whole axis and says nothing
+                parts.append(figures._text(left + 4, y + 3.5, f"0 of {r.get('positives')}", font_size=9, fill=fill))
+                continue
+            if low and high:
+                parts.append(f'<line x1="{x(low):.1f}" x2="{x(high):.1f}" y1="{y:.1f}" y2="{y:.1f}" stroke="{fill}" stroke-width="1.5"/>')
+                for end, out, sign in ((low, low < BENCH_AXIS[0], -1), (high, high > BENCH_AXIS[1], 1)):
+                    if out:
+                        tip_x = x(end) + 3 * sign
+                        parts.append(f'<path d="M{tip_x:.1f} {y:.1f}L{tip_x - 5 * sign:.1f} {y - 3:.1f}L{tip_x - 5 * sign:.1f} {y + 3:.1f}Z" fill="{fill}"/>')
+            if e:
+                parts.append(mark(shape, x(e), y, fill, tip))
+    parts.append(figures._text(left, bottom + 28, "Enrichment over matched controls (log scale; bars: 95% intervals)",
+                               font_size=10, fill=palette.GREY[700]))
+    lx, ly = 6, bottom + 46
+    for s, name, fill, shape in shown:
+        n = next(iter(sets[s].values())).get("positives", "")
+        text = f"{name} (n = {int(n):,})" if str(n).isdigit() else name
+        parts.append(mark(shape, lx + 5, ly - 4, fill, text) + figures._text(lx + 14, ly, text, font_size=11))
+        lx += 34 + 6.2 * len(text)
+    return figures.svg(left + plot + 24, ly + 6, "Benchmark against matched controls", desc, "".join(parts), synthetic)
+
+
+def benchmark_tsv(sets):
+    """The shown sets' rows (every feature) as TSV."""
+    cols = ["set", "trait", "feature", "positives", "controls", "share_pos", "share_ctrl", "enrichment", "enrichment_low",
+            "enrichment_high"]
+    return "\t".join(cols) + "\n" + "".join("\t".join(str(r.get(c) or "") for c in cols) + "\n"
+                                             for rows in sets.values() for r in rows.values())
 
 
 def methods(request):
     """/snp/about/methods/: the tier rules from weights.yaml (weights, tiers, chromatin states with their colours,
-    presets with their conditions), a glossary, fine-mapping, the other settings (closed), the benchmark as one line
-    (?download=benchmark.tsv) and the methods text for a paper."""
+    presets with their conditions), a glossary, fine-mapping, the other settings (closed), the benchmark and the methods
+    text for a paper. The benchmark is a figure when the release has benchmark_molqtl.tsv (?download=benchmark.svg,
+    benchmark_figure.tsv), else one line on the known loci (?download=benchmark.tsv)."""
     w, m = jobs.weights() or {}, jobs.manifest()
-    rows = benchmark_rows()
-    if request.GET.get("download") == "benchmark.tsv" and rows:
+    rows, what = benchmark_rows(), request.GET.get("download")
+    if what == "benchmark.tsv" and rows:
         header = explore.provenance("benchmark of the known loci (n = %s, smoke test only)" % rows[0]["positives"])
         return explore.download((jobs.release() / "benchmark.tsv").read_text(), "benchmark.tsv", request, header)
+    sets, synthetic = benchmark_sets()
+    fig = None
+    if "molqtl:ca" in sets or "molqtl:e" in sets:  # with the molQTL sets the benchmark is a figure, else one line
+        what_is = "benchmark of the known loci and nf-RASQUAL lead SNPs against matched controls"
+        if what == "benchmark.svg":
+            note = " ".join(line[2:] for line in explore.provenance(what_is))
+            return explore.download(benchmark_svg(sets, note, synthetic), "benchmark.svg", request, [])
+        if what == "benchmark_figure.tsv":
+            return explore.download(benchmark_tsv(sets), "benchmark_figure.tsv", request, explore.provenance(what_is))
+        base = reverse("snpportal:methods")
+        fig = {"name": "benchmark", "title": "Benchmark against matched controls", "svg": mark_safe(benchmark_svg(sets, "", synthetic)),
+               "info": "How much more often positives have each kind of evidence than controls: 10 public SNPs per positive "
+                       "at the same distance to the nearest gene and public MAF. Tiers use the provisional weights; the "
+                       "intervals assume simple random sampling.",
+               "svg_url": f"{base}?download=benchmark.svg", "tsv_url": f"{base}?download=benchmark_figure.tsv"}
     conditions = [c for c in explore.layer("chromatin").get("columns", []) if c != "summary"]
     presets = [(jobs.trait_label(name), ", ".join(figures.STAGE_LABELS.get(x, x) for x in prefixes or []),
                 len([c for c in conditions if not prefixes or c.startswith(tuple(prefixes))])) for name, prefixes in (w.get("presets") or {}).items()]
@@ -225,7 +339,8 @@ def methods(request):
         "weights": [(name, value, TERM_TEXT.get(name, "")) for name, value in sorted((w.get("weights") or {}).items(), key=lambda kv: -kv[1])],
         "finemap": w.get("finemap") or {},
         "glossary": [(a, t, text.format(window=(m.get("catalog") or {}).get("window") or 50_000)) for a, t, text in GLOSSARY],
-        "benchmark": rows[0]["positives"] if rows else None, "text": methods_text(m, w), "citations": citations(m)})
+        "benchmark": rows[0]["positives"] if rows else None, "benchmark_fig": fig, "text": methods_text(m, w),
+        "citations": citations(m)})
 
 
 def _flat(value):

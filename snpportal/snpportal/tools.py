@@ -35,7 +35,7 @@ from snpscore.formats import lit
 
 from . import figures, jobs, palette, results
 
-EXPORTS = ("tsv", "parquet", "bed", "illumina", "axiom", "kasp", "bundle")  # ?format= of the download URL
+EXPORTS = ("tsv", "parquet", "bed", "illumina", "axiom", "kasp", "bundle", "priors")  # ?format= of the download URL
 VENDORS = ("illumina", "axiom", "kasp")
 MAX_TARGET = 20_000  # largest panel the form designs
 MAX_MUST = 200  # must-include ids per panel
@@ -58,9 +58,10 @@ FORMATS = [  # (format, label, contents) of the Export tab's rows; vendor rows a
     ("bundle", "Everything (zip)", "The table, BED and vendor files, with methods, provenance and figures."),
 ]
 MORE_FORMATS = [("parquet", "Parquet", "the same columns; provenance in the file's metadata"),
-                ("bed", "BED", "chrom, pos − 1, pos and the SNP name, for genome browsers")]
+                ("bed", "BED", "chrom, pos − 1, pos and the SNP name, for genome browsers"),
+                ("priors", "Genomic-prediction priors (zip)", "SNP categories for BayesRC, GFBLUP/MultiBLUP and LDAK")]  # P6.5
 MIME = {"tsv": "text/tab-separated-values; charset=utf-8", "bed": "text/plain; charset=utf-8", "parquet": "application/vnd.apache.parquet",
-        "bundle": "application/zip", **{v: "text/csv; charset=utf-8" for v in VENDORS}}
+        "bundle": "application/zip", "priors": "application/zip", **{v: "text/csv; charset=utf-8" for v in VENDORS}}
 CHIP_ERRORS = {  # ?chip_error= -> message (codes only: no file content or names in URLs)
     "missing": "Choose a chip file, or use the demo chip.",
     "type": "This file type isn't accepted for a chip. Upload a manifest or table (.csv, .tsv, .txt, optionally gzipped), "
@@ -993,7 +994,8 @@ def exports(request, key, job):
             if fmt in VENDORS and n > cap:
                 text = [f"Vendor files hold at most {cap:,} SNPs: filter the table or design a panel."]
             rows.append((name, text, None if fmt in VENDORS and not notes else href(fmt)))
-    more = [(name, about, href(fmt)) for fmt, name, about in MORE_FORMATS] + [("Table without # lines (TSV)", "for scripts", href("tsv", plain="1"))]
+    more = [(name, about, href(fmt, **({"scope": "all"} if gwas and fmt == "priors" else {})))  # GWAS: priors of every SNP
+            for fmt, name, about in MORE_FORMATS if fmt != "priors" or fmt in getattr(snp_export, "FORMATS", ())] + [("Table without # lines (TSV)", "for scripts", href("tsv", plain="1"))]
     if notes:
         more += [(f"{fmt.upper() if fmt == 'kasp' else fmt.capitalize()}: keep SNPs that fail the assay check or are not checked, flagged", "",
                   href(fmt, include_failed="1")) for fmt in (("kasp",) if gwas else vendor)]

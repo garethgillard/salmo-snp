@@ -123,6 +123,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 
 /* figures */
 .sp-figure { margin: 0; }
+.sp-stack > * + .sp-figure { margin-top: 1rem; }  /* the reset above would otherwise drop the stack's gap (Panel tab) */
 .sp-figure svg { display: block; max-width: 100%; height: auto; }
 .sp-caption { font-size: .75rem; color: var(--sp-grey-700); margin-top: .5rem; }
 .sp-downloads { margin-left: auto; display: flex; gap: .35rem; font-size: .8rem; }
@@ -167,14 +168,33 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-footer p { margin: 0 0 .25rem; }
 
 @media (max-width: 576px) { .sp-release { margin-left: 0; } .sp-actions { margin-left: 0; } }
+/* Tablet portrait and narrower: figures drawn 1120-1200 px wide (locus browser, gene locus and regional plot at
+   locus_svg.WIDTH, PIP shifts) keep 80% of their drawn size, as at 1024 px, so 8.5 px labels stay readable; they scroll
+   sideways inside their card, whose title and download menu stay put. */
+@media (max-width: 991.98px) {
+  .sp-figure:has(> svg[width="1200"]), #fig-pip { overflow-x: auto; }
+  .sp-figure > svg[width="1200"], #fig-pip > svg { min-width: 60rem; }
+  .sp-figure > .sp-card-head { position: sticky; left: 0; }
+}
+/* 992-1199 px: the two-up 'More charts' columns are too narrow for 600-780 px figures; stack them */
+@media (min-width: 992px) and (max-width: 1199.98px) { .sp-more .row > .col-lg-6 { width: 100%; } }
 
 @media print {
-  .sp-nav, .sp-actions, .sp-downloads, .sp-dlmenu, .sp-noprint, .sp .nav-tabs, .sp form { display: none !important; }
+  .sp-nav, .sp-actions, .sp-downloads, .sp-dlmenu, .sp-noprint, .sp .nav-tabs, .sp form, .sp [data-copy] { display: none !important; }
+  body:has(.sp) > nav, body:has(.sp) > header, body:has(.sp) > footer { display: none; }  /* salmobase's own chrome */
   .sp, .sp-footer { background: none; }
   .sp-card, .sp-figure { break-inside: avoid; border-color: var(--sp-grey-500); }
   .sp-scroll { max-height: none; overflow: visible; border: 0; }
   .sp a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .75em; }
+  .sp a[href^="https://doi.org/"]::after { content: none; }  /* 'doi:...' already names it */
   .sp-state, .sp-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* evidence card page and variant page (not the table's drawer): one A4 page. Text scales with the root size; closed
+     sections don't print; a card taller than the page flows on instead of leaving page 1 empty. */
+  html:has(.sp-narrow > #card-body) { font-size: 10pt; }
+  .sp:has(.sp-narrow > #card-body) .sp-main { padding: 0; }
+  .sp .sp-narrow > #card-body { break-inside: auto; }
+  .sp-narrow > #card-body details:not([open]) { display: none; }
+  .sp:has(.sp-narrow > #card-body) .sp-footer { padding: .5rem 0 0; }
 }
 .sp-card-slot { top: 1rem; }
 .sp-narrow { max-width: 44rem; }
@@ -240,15 +260,13 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-tour kbd { color: var(--sp-grey-900); background: var(--sp-grey-100); border: 1px solid var(--sp-grey-300); font-size: .75rem; padding: 0 .3rem; }
 /* end tour */
 
-/* report (P3.5): printable report of a job; two A4 pages (key numbers, figures and provenance, then top SNPs and methods) */
-.sp-report-figs { display: grid; gap: 1rem; align-items: start; }
+/* report (P3.5): printable report of a job; two A4 pages (key numbers, top SNPs and the tier bar, then the genome map,
+   methods, references and provenance) */
 .sp-report-text p, .sp-report-text li { max-width: 62rem; }
 .sp-report-prov { list-style: none; padding: 0; margin: 0; font-family: var(--sp-mono); font-size: .75rem; overflow-wrap: anywhere; }
-@media (min-width: 992px) { .sp-report-figs { grid-template-columns: 7fr 5fr; } .sp-report-main { grid-row: span 2; } }
 @media print {
   @page { size: A4 portrait; margin: 11mm 11mm 12mm; }
   html:has(.sp-report) { font-size: 8.5pt; }  /* every rem in the report scales with it */
-  body:has(.sp-report) > nav, body:has(.sp-report) > header, body:has(.sp-report) > footer { display: none; }
   .sp:has(.sp-report) .sp-main { padding: 0; }
   .sp:has(.sp-report) .sp-crumbs, .sp:has(.sp-report) .sp-footer { display: none; }
   .sp-report.sp-stack > * + * { margin-top: .6rem; }
@@ -256,10 +274,9 @@ a.sp-card:hover { border-color: var(--sp-accent); }
   .sp-report .sp-kpis { grid-template-columns: repeat(4, 1fr); gap: .4rem; }
   .sp-report .sp-kpi { padding: .3rem .5rem; }
   .sp-report .sp-card { padding: .5rem .6rem; }
-  .sp-report-figs { grid-template-columns: 7fr 5fr; gap: .5rem; }
-  .sp-report-main { grid-row: span 2; }
+  .sp-report .sp-figure svg { max-width: 80%; }  /* figures shrink with the text (8.5pt root), leaving page 2 room */
   .sp-report .sp-info { display: none; }
-  .sp-report-top { break-before: page; }
+  .sp-report a[href^="http"]::after { content: none; }  /* the methods link prints its URL as its text */
   .sp-report .table > :not(caption) > * > * { padding: .1rem .3rem; }
 }
 /* end report */

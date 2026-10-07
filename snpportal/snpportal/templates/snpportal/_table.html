@@ -69,7 +69,7 @@
         {% elif col == 'evidence' %}<td title="{{ r.evidence }}">{{ r.evidence }}</td>
         {% elif col == 'known' %}<td>{% if r.known %}<span class="sp-known" title="{% if r.known_dist == 0 %}At{% else %}{{ r.known_dist|thousands }} bp from{% endif %} the published SNP {{ r.known }}{% if r.caveat %}; caveat: {{ r.caveat }}{% endif %}">&#9733; {{ r.known }}{% if r.caveat %} ({{ r.caveat }}){% endif %}</span>{% endif %}</td>
         {% elif col == 'gene' %}<td title="{{ r.gene_tip }}">{{ r.gene }}</td>
-        {% elif col == 'region' %}<td>{{ r.region }}</td>
+        {% elif col == 'region' %}<td{% if r.region_tip %} title="{{ r.region_tip }}"{% endif %}>{{ r.region }}</td>
         {% elif col == 'distance' %}<td class="sp-num">{{ r.distance }}</td>
         {% elif col == 'chromatin' %}<td>{% if r.barcode %}<span class="sp-bc" role="img" aria-label="{{ r.barcode_label }}">{% for cells in r.barcode %}<span>{% for cls, title in cells %}<i class="{{ cls }}" title="{{ title }}"></i>{% endfor %}</span>{% endfor %}</span>{% endif %}</td>
         {% elif col == 'molqtl' %}<td title="{{ r.molqtl.1 }}">{{ r.molqtl.0 }}</td>

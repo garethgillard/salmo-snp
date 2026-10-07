@@ -19,10 +19,11 @@ TERMS = {  # tier_terms term -> (state name or colour, label) for the 'why this 
     "active_elsewhere": ("Flanking_upstream", "active elsewhere"),
     "weak": ("Primed_enhancer", "weak state"),
     "coding": (palette.TIERS[1][0], "CDS"),
+    "synonymous": (palette.TIERS[1][0], "synonymous CDS"),
     "splice": (palette.TIERS[2][0], "splice region"),
     "utr": (palette.TIERS[3][0], "UTR"),
     "constrained": (palette.GREY[700], "GERP constrained"),
-    "regbuild": ("Accessible_chromatin", "Ensembl regulatory"),
+    "regbuild": (palette.REGBUILD, "Ensembl regulatory"),
     "molqtl": (palette.TISSUES["Gonad"], "molQTL lead (display only)"),
 }
 EVIDENCE = {  # published-association marker by evidence kind (explore.evidence_kind): (colour, label)
