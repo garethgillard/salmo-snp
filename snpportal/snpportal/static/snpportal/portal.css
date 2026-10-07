@@ -315,6 +315,20 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-trait-nav { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
 .sp-loci td, .sp-loci th { vertical-align: top; }
 .sp-loci details summary { cursor: pointer; color: var(--sp-link); }
+/* end known loci */
+
+/* landing: 'Score your SNPs' and 'Take the tour' as icon tiles, square from 576 px, two side by side at every width */
 .sp-hero { display: block; }
 .sp-hero svg { width: 100%; height: auto; }
-/* end known loci */
+.sp-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 10.5rem)); gap: .75rem; }
+.sp .sp-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .55rem;
+  aspect-ratio: 1; padding: .9rem .75rem; text-align: center; text-wrap: balance; text-decoration: none; line-height: 1.25;
+  border: 1px solid var(--sp-accent); border-radius: .5rem; background: var(--sp-white); color: var(--sp-accent); }
+.sp-tile-icon { flex: none; }
+.sp-tile-label { font-size: 1.0625rem; font-weight: 600; }
+.sp .sp-tile:hover { background: var(--sp-grey-50); box-shadow: 0 2px 8px var(--sp-grey-300); }
+.sp .sp-tile-primary { background: var(--sp-accent); color: var(--sp-accent-text); }
+.sp .sp-tile-primary:hover { background: var(--sp-link); border-color: var(--sp-link); }
+/* keyboard focus: the '.sp a:focus-visible' rule above draws the 3px --sp-focus ring */
+@media (max-width: 575.98px) { .sp .sp-tile { aspect-ratio: auto; min-height: 8.75rem; } }
+/* end landing */
