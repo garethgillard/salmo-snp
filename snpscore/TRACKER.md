@@ -166,15 +166,20 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [x] R9 P4.5 note: vgll3 Met54Thr is T46M on ENSSSAT00000230965 (offset 8 to the published numbering) (S, could)
 
 ### Simplification pass (plan in [SIMPLIFY.md](SIMPLIFY.md); cuts are reversible from git)
-- [ ] S1 One caveat line per page (synthetic prefix), qualifiers next to numbers, no per-figure provenance captions, slim footer
-- [ ] S2 Overview: top-10 SNPs first, 4 tiles, 3 open figures; the rest behind one click
-- [ ] S3 Table: one row of filters + 'More filters', default columns, drawer
-- [ ] S4 Panel and Export: panel first, 1 figure, 25 rows; whole-list downloads only on Export
-- [ ] S5 Association and regional plot: Manhattan and loci first, settings under 'Advanced settings', QC as one line
-- [ ] S6 Evidence card and variant page: tier and why first, word budget
-- [ ] S7 Score, GWAS page and landing: one trait select, one primary action, short search help
-- [ ] S8 Gene and known loci pages: word budgets, 10/25-row lists
-- [ ] S9 Help, Methods, Data, Tour (5 steps) and Report: definitions in one place
+- [x] S1 One caveat line per page (synthetic prefix), qualifiers next to numbers, no per-figure provenance captions, slim footer
+- [x] S2 Overview: top-10 SNPs first, 4 tiles, 3 open figures; the rest behind one click
+- [x] S3 Table: one row of filters + 'More filters', default columns, drawer
+- [x] S4 Panel and Export: panel first, 1 figure, 25 rows; whole-list downloads only on Export
+- [x] S5 Association and regional plot: Manhattan and loci first, settings under 'Advanced settings', QC as one line
+- [x] S6 Evidence card and variant page: tier and why first, word budget
+- [x] S7 Score, GWAS page and landing: one trait select, one primary action, short search help
+- [x] S8 Gene and known loci pages: word budgets, 10/25-row lists
+- [x] S9 Help, Methods, Data, Tour (5 steps) and Report: definitions in one place
+
+### Review pass (2026-10-07)
+- [x] Six-lens review (correctness, security/privacy, Python 3.8 + performance, UI/UX, science, tests/docs): 49 findings, 48 confirmed by two skeptics, fixed (commits e246d89 / 59c27b0)
+- [x] Final check: snpscore 100 + portal 57 tests, dev and live suites, 953-URL smoke test on release/dev
+- [ ] Cross-package leftovers (chip cap, trait SD check, spill dirs, allele note, MAF bins, demo script, GWAS methods text, export panel list)
 
 ### Manual QA (not automatable)
 - [ ] Evidence card prints on one A4 page; report on two

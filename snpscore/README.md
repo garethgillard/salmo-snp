@@ -14,6 +14,7 @@ On top of that: assay designability QC, a panel designer, chip comparison, vendo
 ```bash
 pip install -e ".[test]"                         # the test extra adds pytest
 snpscore fetch                                   # download public inputs into data/raw (~1.5 GB kept; about 7 min)
+bash prep/make_demo.sh                           # portal demo inputs before build: public_50k, SYNTHETIC chip and GWAS (~20 s)
 snpscore build --out release/v0.1                # standardise every layer in layers.yaml, copy weights.yaml
 snpscore annotate my_snps.vcf.gz --release release/v0.1 --trait maturation -o my_snps_annotated.parquet  # or .tsv
 snpscore rsid rs863754587 --release release/v0.1  # Ssal_v3.1 and ICSASG_v2 position of an rs ID
@@ -22,8 +23,7 @@ snpscore pool --release release/v0.1             # public background pool: relea
 snpscore panel my_snps_annotated.parquet --release release/v0.1 --preset maturation --n 384 -o panel.parquet
 snpscore export panel.parquet --release release/v0.1 --preset maturation --format illumina  # or axiom, kasp, bed, ...
 snpscore compare my_snps_annotated.parquet --chip my_chip.csv --release release/v0.1 --pool
-python prep/make_synthetic.py chip               # SYNTHETIC demo chip (data/synthetic; --scale fixture for tests)
-python prep/make_synthetic.py gwas               # SYNTHETIC maturation GWAS with planted loci (data/synthetic)
+python prep/make_synthetic.py chip --scale fixture  # SYNTHETIC demo chip for the tests (tests/fixture/synthetic)
 snpscore gwas sumstats.tsv --release release/v0.1 --trait maturation -o gwas_out/   # loci.tsv, finemap.tsv
 pytest -q                                        # tests run on the small regions in tests/fixture
 ```
@@ -83,8 +83,8 @@ release/v0.1/
   tracks.yaml            track registry for the locus browser (if tracks.yaml is next to layers.yaml)
   benchmark.tsv          optional: `snpscore benchmark` output for this release
   demo/                  example inputs for the portal's buttons (layers.yaml `demo`): known_loci.tsv, public_50k.vcf
-                         (dev only), chip_demo_SYNTHETIC.tsv and gwas_maturation_SYNTHETIC.tsv (dev only; both made
-                         by prep/make_synthetic.py)
+                         (dev only), chip_demo_SYNTHETIC.tsv and gwas_maturation_SYNTHETIC.tsv (dev only; made by
+                         prep/make_demo.sh, the last two through prep/make_synthetic.py)
   pool/pool.parquet      optional: `snpscore pool` (see "Public background pool"); annotate never reads it
   pool/background.json   optional: the pool's shares, for the dashboard
 ```
@@ -322,8 +322,10 @@ like any list, and writes into OUT: `sumstats.parquet` (as read), `gwas.parquet`
 - Defaults (`snpscore.gwas.DEFAULTS`, overridden by the weights.yaml `finemap` block, PROVISIONAL): prior_sd 0.2,
   functional_lambda 0.5, coverage 0.95, significant 5e-8, suggestive 1e-5, window 1 Mb, trait_sd 1.
   `settings(weights, report, **changes)` replaces trait_sd with the report's `trait_sd_estimate` when there is one (W is
-  on the SD scale: betas in phenotype units with trait_sd 1 make every Bayes factor about 1), and
-  `trait_sd_warning(report, cfg)` says when the trait SD used differs more than 2x (`TRAIT_SD_RATIO`) from it.
+  on the SD scale: betas in phenotype units with trait_sd 1 make every Bayes factor about 1) and records where it came
+  from (`trait_sd_source`); `trait_sd_implied(report, cfg)` gives the estimate when the trait SD used differs more than
+  2x (`TRAIT_SD_RATIO`) from it (else None), `trait_sd_warning(report, cfg)` the same as a sentence. Pass the settings
+  to `export.methods_text(..., finemap=cfg)` (or `bundle_zip` meta `finemap`) for the fine-mapping paragraph.
 - `python prep/make_synthetic.py gwas [--scale fixture|dev]` writes `gwas_maturation_SYNTHETIC.tsv` (+ `.fastGWA`,
   `.glm.linear`, `_ponly.tsv`, `_truth.tsv` with the planted causal SNPs and lambda) over public sites; the same seed
   gives the same files.

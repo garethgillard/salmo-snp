@@ -389,7 +389,7 @@ def compare(source, chip, preset="all", window_bp=None, gap_bp=None, pool=None, 
 def read_chip(chip_path, release_dir, out_path, max_snps=CHIP_MAX):
     """Read a chip's SNP list (any snpscore input layout: manifest, PLINK, VCF, table) through the release's chromosome
     aliases and write chrom, pos, id to out_path (parquet). Returns the validation counts. A list with more than
-    `max_snps` rows raises InputError (reading stops there)."""
+    `max_snps` rows raises TooMany, an InputError (reading stops there)."""
     path, release, out = Path(chip_path).resolve(), Path(release_dir).resolve(), Path(out_path).resolve()
     manifest = json.loads((release / "manifest.json").read_text())
     con = connect([path.parent, release], out.parent)

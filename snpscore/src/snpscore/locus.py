@@ -186,7 +186,10 @@ def rung(width, target=600):
 
 
 def _key(prefix, kind, url, *parts):
-    """Cache key of a public tile: track URL (hashed), chromosome and grid position. Never a user's position."""
+    """Cache key of a public tile: '<prefix>:<kind>:<first 16 hex of the track URL's sha1>:<chrom>[:<rung>]:<tile>'
+    (signal tiles carry their rung; tile = index on the fixed grid), never a user's position. Which tiles are cached
+    still shows which windows were viewed, so views of a user's SNPs pass a cache that stores nothing (the portal
+    does for views opened from a job)."""
     return ":".join([prefix, kind, hashlib.sha1(url.encode()).hexdigest()[:16], *map(str, parts)])
 
 

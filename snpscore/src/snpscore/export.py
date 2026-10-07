@@ -108,10 +108,11 @@ def provenance(manifest, weights, meta=None):
 
 
 def methods_text(manifest, weights, preset="all", release_dir=None, finemap=None):
-    """Paste-ready methods paragraphs (annotation layers, tiers, assay QC; with `finemap`, the GWAS settings used as in
-    gwas.json 'finemap', the loci and fine-mapping) and the references: layer citations (each '; '-separated part once,
-    'DOI to add' where it has no doi:), GERP++, Wakefield 2009 and the DOIs of the known-loci catalogue (read from
-    release_dir when given). PROVISIONAL rules are named as such."""
+    """Paste-ready methods paragraphs (annotation layers, tiers, assay QC; with `finemap`, the GWAS settings used as
+    gwas.settings() returns them and gwas.json 'finemap' records them, a loci and fine-mapping paragraph) and the
+    references: layer citations (each '; '-separated part once, 'DOI to add' where it has no doi:), GERP++, Wakefield
+    2009 (with `finemap`) and the DOIs of the known-loci catalogue (read from release_dir when given). PROVISIONAL
+    rules are named as such."""
     manifest, weights, _, _ = _load(manifest, weights)
     layers = [l for l in manifest.get("layers", []) if l.get("type") != "features"]
     syn = [l["name"] for l in layers if l.get("synthetic")]

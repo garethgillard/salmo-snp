@@ -34,6 +34,10 @@ class InputError(ValueError):
     """A problem with the user's file or request. The message is safe to show: no SQL, paths or input lines."""
 
 
+class TooMany(InputError):
+    """The file has more rows than the caller's cap (max_snps): reading stopped there."""
+
+
 def q(ident):
     """SQL identifier, quoted."""
     return '"' + str(ident).replace('"', '""') + '"'

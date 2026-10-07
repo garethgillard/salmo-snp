@@ -11,7 +11,7 @@ from statistics import NormalDist
 import duckdb
 import pytest
 
-from snpscore import build, gwas
+from snpscore import build, export, gwas
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "tests" / "fixture"
@@ -146,7 +146,13 @@ def test_trait_sd_follows_the_units(synthetic, release, runs, tmp_path):
     assert report50["trait_sd_estimate"] == pytest.approx(50, rel=0.01) and not report50["warnings"]
     assert [(s["size_uniform"], s["size_functional"]) for s in summary50.values()] == \
         [(s["size_uniform"], s["size_functional"]) for s in summary.values()]
-    assert "imply 50" in gwas.trait_sd_warning(report50, gwas.settings(None, report50, trait_sd=1.0))
+    given = gwas.settings(None, report50, trait_sd=1.0)
+    assert "imply 50" in gwas.trait_sd_warning(report50, given) and given["trait_sd_source"] == "given"
+    assert gwas.trait_sd_implied(report50, given) == pytest.approx(50, rel=0.01) and not gwas.trait_sd_implied(report50, gwas.settings(None, report50))
+    # The methods text describes the settings used (a GWAS report or bundle passes them) and then cites Wakefield 2009
+    methods = export.methods_text(release / "manifest.json", release / "weights.yaml", "maturation", finemap=given)
+    assert "Wakefield 2009" in methods and "trait SD 1 (given)" in methods and "doi:10.1002/gepi.20359" in methods
+    assert "Wakefield" not in export.methods_text(release / "manifest.json", release / "weights.yaml", "maturation")
 
 
 def test_rs_moved_rows_keep_their_statistics(release, tmp_path):

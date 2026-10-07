@@ -16,6 +16,14 @@ from .formats import lit, q
 from .score import load_weights, scored
 
 FLAGS = ("chromatin", "regbuild", "gerp", "blacklist", "lore", "public_af", "strand_ambiguous")  # boolean columns
+MAF_EDGES = tuple(i / 20 for i in range(1, 10))  # MAF histogram: [0, 0.05), [0.05, 0.1), ..., [0.45, 0.5]
+
+
+def maf_bin_sql(maf):
+    """SQL for the MAF histogram bin (0-9; NULL when `maf`, an SQL expression, is NULL): the number of MAF_EDGES at or
+    below it, so bin i holds exactly the rows that the filters 'MAF >= <its lower edge>' and 'MAF < <its upper edge>'
+    keep, with the edges written as in those filters (0.15, not 3 * 0.05). The last bin includes 0.5."""
+    return "(" + " + ".join(f"({maf} >= {e:g})::INTEGER" for e in MAF_EDGES) + ")"
 
 
 def build_pool(release_dir, background, assay=False, threads=4, memory_limit="4GB", progress=None):
@@ -80,10 +88,11 @@ def background_summary(con, table, weights):
     if "region_class" in columns:
         summary["region_class"] = shares(grouped("coalesce(region_class, 'intergenic')"))
     maf = next((c for c in ("public_af_maf", "maf") if c in columns), None)
-    if maf:  # 10 bins of 0.05 (the last one includes 0.5)
-        b = f"least(floor({q(maf)} * 20), 9)"
+    if maf:  # bins as the portal's MAF filters cut them: maf_bin_sql of least(af, 1 - af), keyed '0.15-0.20'
+        x = f"TRY_CAST({q(maf)} AS DOUBLE)"
+        b = maf_bin_sql(f"least({x}, 1 - {x})")
         summary["maf_histogram"] = shares(grouped(
-            f"CASE WHEN {q(maf)} IS NULL THEN 'unknown' ELSE printf('%.2f-%.2f', {b} / 20, ({b} + 1) / 20) END"))
+            f"CASE WHEN {x} IS NULL THEN 'unknown' ELSE printf('%.2f-%.2f', {b} / 20, ({b} + 1) / 20) END"))
     conditions = [c for c in columns if c.startswith("chromatin_") and c not in ("chromatin_id", "chromatin_summary")]
     if conditions and n and weights:
         states = ", ".join(lit(s) for s in weights["active_states"])

@@ -11,7 +11,7 @@ import duckdb
 
 from . import assay
 from .fasta import Fasta
-from .formats import ACCEPTED, RESERVED, InputError, detect, lit, q, source  # noqa: F401 (RESERVED re-exported)
+from .formats import ACCEPTED, RESERVED, InputError, TooMany, detect, lit, q, source  # noqa: F401 (RESERVED re-exported)
 from .score import load_weights, scored
 
 FLANK = 35  # probe flank either side of the SNP (Axiom); also used for GC and repeat content
@@ -66,7 +66,7 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None):
     con.execute(f"CREATE OR REPLACE TABLE raw AS SELECT row_number() OVER () AS idx, * FROM ({source(path, layout, limit)})")
     rows = con.execute("SELECT count(*) FROM raw").fetchone()[0]
     if max_snps and rows > max_snps:
-        raise InputError(f"The file has more than {max_snps:,} SNPs. Split it, or run snpscore locally.")
+        raise TooMany(f"The file has more than {max_snps:,} SNPs. Split it, or run snpscore locally.")
     cols = [r[0] for r in con.execute("DESCRIBE raw").fetchall()]
     con.execute("CREATE OR REPLACE TEMP TABLE known AS SELECT unnest(?::VARCHAR[]) AS chrom", [list(known)])
     mapped, join, warning = "trim(r.chrom)", "", "NULL"

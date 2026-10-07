@@ -22,7 +22,7 @@ from pathlib import Path
 import duckdb
 
 from .annotate import annotate, connect, user_message
-from .formats import InputError, _delim, _open, _split, lit, norm, q, source
+from .formats import InputError, TooMany, _delim, _open, _split, lit, norm, q, source
 from .score import load_weights
 
 CHI2_MEDIAN = 0.4549364231195724  # median of a chi-square with 1 df: lambda_GC = median(z^2) / this
@@ -115,25 +115,36 @@ def p_text(nlp):
 
 def settings(weights=None, report=None, **changes):
     """DEFAULTS, then the weights.yaml 'finemap' block, then the trait SD the statistics imply (the gwas.json `report`'s
-    trait_sd_estimate), then `changes` (None values are ignored)."""
+    trait_sd_estimate), then `changes` (None values are ignored); `trait_sd_source` says which one set the trait SD.
+    This is what gwas.json 'finemap' records and export.methods_text(finemap=) describes."""
     cfg = dict(DEFAULTS)
     cfg.update((weights or {}).get("finemap") or {})
+    cfg["trait_sd_source"] = "weights.yaml (1 = a standardised trait)"
     if (report or {}).get("trait_sd_estimate"):
-        cfg["trait_sd"] = report["trait_sd_estimate"]
-    cfg.update({k: v for k, v in changes.items() if v is not None})
+        cfg["trait_sd"], cfg["trait_sd_source"] = report["trait_sd_estimate"], "estimated from se, N and allele frequency"
+    changes = {k: v for k, v in changes.items() if v is not None}
+    cfg.update(changes)
+    if "trait_sd" in changes:
+        cfg["trait_sd_source"] = "given"
     return cfg
 
 
-def trait_sd_warning(report, cfg):
-    """A warning when the trait SD that fine-mapping divides betas by differs more than TRAIT_SD_RATIO times from the
-    one se, N and af imply (report's trait_sd_estimate, median se x sqrt(2 N af (1 - af)), as coloc estimates sdY),
-    else None. W is on the SD scale: with betas in phenotype units and trait_sd 1, every Bayes factor is about 1 and
-    the prior alone ranks the SNPs."""
+def trait_sd_implied(report, cfg):
+    """The trait SD that se, N and af imply (report's trait_sd_estimate, median se x sqrt(2 N af (1 - af)), as coloc
+    estimates sdY) when it differs more than TRAIT_SD_RATIO times from cfg's trait_sd (the SD fine-mapping divides the
+    betas by), else None. W is on the SD scale: with betas in phenotype units and trait_sd 1, every Bayes factor is
+    about 1 and the prior alone ranks the SNPs."""
     est, sd = (report or {}).get("trait_sd_estimate"), float(cfg["trait_sd"])
-    if est and max(est / sd, sd / est) > TRAIT_SD_RATIO:
-        return (f"Fine-mapping divides the betas by a trait SD of {sd:.3g}, but their se, N and allele frequency imply "
-                f"{est:.3g}: PIPs and credible sets are only meaningful with the trait's own SD.")
-    return None
+    return est if est and max(est / sd, sd / est) > TRAIT_SD_RATIO else None
+
+
+def trait_sd_warning(report, cfg):
+    """A sentence when trait_sd_implied() finds the trait SD used far from the implied one, else None."""
+    est = trait_sd_implied(report, cfg)
+    if est is None:
+        return None
+    return (f"Fine-mapping divides the betas by a trait SD of {float(cfg['trait_sd']):.3g}, but their se, N and allele "
+            f"frequency imply {est:.3g}: PIPs and credible sets are only meaningful with the trait's own SD.")
 
 
 # ---- reading ----
@@ -190,7 +201,7 @@ def read(con, path, known=(), alias=None, max_snps=None):
     con.execute(f"CREATE OR REPLACE TEMP TABLE raw AS SELECT row_number() OVER () AS row, * FROM ({source(path, layout, limit)})")
     rows = con.execute("SELECT count(*) FROM raw").fetchone()[0]
     if max_snps and rows > max_snps:
-        raise InputError(f"The file has more than {max_snps:,} rows. Split it, or run snpscore locally.")
+        raise TooMany(f"The file has more than {max_snps:,} rows. Split it, or run snpscore locally.")
 
     def text(c):
         return f"nullif(upper(trim(r.{q(c)})), '')" if c in names else "NULL::VARCHAR"
@@ -500,9 +511,7 @@ def run(sumstats, release_dir, out_dir, trait="all", threads=2, memory_limit="2G
         snps.unlink(missing_ok=True)
     report = attach(out, threads, memory_limit)
     cfg = settings(load_weights(release), report, **changes)
-    source = ("given" if changes.get("trait_sd") is not None else "estimated from se, N and allele frequency"
-              if report.get("trait_sd_estimate") else "weights.yaml (1 = a standardised trait)")
-    report["finemap"] = {**{k: cfg[k] for k in DEFAULTS}, "trait_sd_source": source}
+    report["finemap"] = {k: cfg[k] for k in [*DEFAULTS, "trait_sd_source"]}
     report["warnings"] = [w for w in [trait_sd_warning(report, cfg)] if w]
     (out / "gwas.json").write_text(json.dumps(report, indent=1))
     con = connect([out], out, threads, memory_limit)

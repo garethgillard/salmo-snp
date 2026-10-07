@@ -63,6 +63,10 @@ Open (ask G):
 - Public AF: the 504-fish panel is mostly Bertolotti 2020 (PRJEB38061) wild/farmed fish plus the 12 AQUA-FAANG fish; may we host
   derived AF, and how should the population be described? (RESEARCH.md section 4)
 - ImmunoMap regions; Enhancer-CNE source; vetting of the 36-row known-loci catalogue (RESEARCH.md section 2).
+- Data gap: the public 12-fish VCF (pool, demo list, synthetic GWAS) has only 70 sites on chr10 and stops near 105 Mb on chr1,
+  while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
+- Assay QC: flank repeat shares are mostly 0 or 1, so ~55% of public SNPs warn on 'repeat' whatever the cut-off; should fully
+  soft-masked flanks warn at all? (without it ~46% pass instead of ~20%)
 
 ## Commands
 ```bash

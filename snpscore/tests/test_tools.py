@@ -15,7 +15,7 @@ import pytest
 import yaml
 
 from range_server import RangeServer
-from snpscore import InputError, annotate, assay, bbi, build, cli, export, panel
+from snpscore import TooMany, annotate, assay, bbi, build, cli, export, panel
 from snpscore.fasta import Fasta
 from snpscore.pool import background_summary, build_pool
 
@@ -273,7 +273,7 @@ def test_cli_reads_annotate_tsv_and_recomputes_tiers(release, annotated, tmp_pat
     liver = rows(annotate(FIXTURE / "snps.vcf", release, tmp_path / "liver.parquet", trait="liver"))
     assert all(x["tier"] == liver[x["row"]]["tier"] for x in picks["liver"])
     # A chip list is read up to a cap: a small .gz could otherwise hold billions of rows
-    with pytest.raises(InputError, match="more than 5"):
+    with pytest.raises(TooMany, match="more than 5"):
         panel.read_chip(chip, release, tmp_path / "chip.parquet", max_snps=5)
 
 

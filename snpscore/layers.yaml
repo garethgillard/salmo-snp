@@ -57,7 +57,8 @@ catalog:
 
 # Example inputs for the portal's buttons: build copies those that exist into release/<v>/demo/, with the catalogue.
 # Paths are relative to the --data folder (data/raw for release/dev, tests/fixture for the test release).
-# The SYNTHETIC demo chip and GWAS come from `python prep/make_synthetic.py chip|gwas [--scale fixture]`.
+# `bash prep/make_demo.sh` makes the dev ones (public_50k, SYNTHETIC chip and GWAS); `python prep/make_synthetic.py chip
+# --scale fixture` the test chip.
 demo: [../demo/public_50k.vcf, ../synthetic/chip_demo_SYNTHETIC.tsv, synthetic/chip_demo_SYNTHETIC.tsv,
        ../synthetic/gwas_maturation_SYNTHETIC.tsv]
 
