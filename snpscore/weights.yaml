@@ -4,7 +4,7 @@
 # Layers marked synthetic: true in the release manifest never count.
 
 # The blocks below that G still has to confirm; build lists them in the release manifest.
-provisional: [active_states, weak_states, weights, tiers, presets, assay, design, finemap]
+provisional: [active_states, weak_states, weights, tiers, presets, assay, design, finemap, priors]
 
 active_states: [Active_TSS, Active_enhancer]
 # Counted as weak evidence. Not counted at all: Repressed_polycomb, Quiescent, ZNF_genes_and_repeats, Unknown_1.
@@ -15,7 +15,8 @@ weights:  # whole numbers (tier_score is an integer)
   active: 3            # active state in at least one condition of the preset
   active_elsewhere: 1  # active only in conditions outside the preset
   weak: 1              # weak state in a preset condition, and not active there
-  coding: 3            # CDS; amino-acid effect unknown until VEP is added
+  coding: 3            # CDS change to the protein (missense, stop gained or lost, start lost) or of unknown effect
+  synonymous: 3        # PROVISIONAL: synonymous CDS change (or stop retained); as coding until G decides if it scores lower
   splice: 3            # splice region
   utr: 1               # 5' or 3' UTR
   constrained: 2       # GERP constrained element (65 fish)
@@ -80,3 +81,7 @@ finemap:
   near_lead: 2              # 'near the lead': within this many log10 units of the lead's p
   trait_sd: 1.0             # betas are divided by this (1 = a standardised trait); replaced by the SD that se, N and af
                             # imply when the statistics have them (gwas.settings)
+
+# Genomic-prediction priors (snpscore export --format priors). PROVISIONAL: chosen by Claude so the prototype works; G to confirm.
+priors:
+  order: [tier1_2, active, coding, constrained, regulatory]  # BayesRC class / LDAK partition = the first category a SNP is in; 'none' is always last

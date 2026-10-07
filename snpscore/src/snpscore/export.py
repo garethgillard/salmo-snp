@@ -1,5 +1,6 @@
-"""Exports (P6.4, P1.4): provenance header lines, a methods paragraph with references, vendor submission files
-(Illumina-style, Axiom-style, KASP), BED, TSV, Parquet and a zip bundle. TSV and BED start with '#' provenance lines
+"""Exports (P6.4, P1.4, P6.5): provenance header lines, a methods paragraph with references, vendor submission files
+(Illumina-style, Axiom-style, KASP), BED, TSV, Parquet, a zip bundle and a genomic-prediction priors zip (BayesRC
+classes, GFBLUP/MultiBLUP SNP sets, LDAK partitions, an annotation matrix). TSV and BED start with '#' provenance lines
 (plain=True drops them); a SYNTHETIC line is added whenever synthetic data contributes. Vendor files never hold comment
 lines (no vendor accepts them): their provenance goes in a <file>.provenance.txt sidecar and their extra columns (your
 ids, TOP/BOT, assay status) in a <file>.lookup.tsv sidecar. Vendor column headers are kept per template version in
@@ -23,7 +24,8 @@ from . import assay
 from .annotate import genome_location, write_in_order
 from .fasta import Fasta
 from .formats import InputError, lit, q
-from .panel import _open, vendor_checks
+from .panel import _open, _tier_cols, vendor_checks
+from .score import preset_conditions
 
 LAYOUT_NOTE = "layout to confirm against the vendor's current template"
 _ILLUMINA = ["Locus_Name", "Target_Type", "Sequence", "Chromosome", "Coordinate", "Genome_Build_Version", "Source",
@@ -44,7 +46,7 @@ VENDORS = {  # flank: default bases either side of the SNP and the allowed range
 ACCESSIONS = {"Ssal_v3.1": "GenBank GCA_905237065.2, RefSeq GCF_905237065.1"}
 LOOKUP = ["locus_name", "id", "chrom", "pos", "ref", "alt", "topbot", "allele_a", "allele_b", "two_probes",
           "assay_status", "assay_reasons", "export_notes"]
-FORMATS = ("tsv", "parquet", "bed", *VENDORS)
+FORMATS = ("tsv", "parquet", "bed", *VENDORS, "priors")
 REFERENCES = {  # DOIs only where certain; the others are marked 'DOI to add'
     "gerp": "Davydov EV et al. (2010) Identifying a high fraction of the human genome to be under selective constraint "
             "using GERP++. PLoS Comput Biol 6: e1001025. doi:10.1371/journal.pcbi.1001025",
@@ -130,10 +132,18 @@ def methods_text(manifest, weights, preset="all", release_dir=None, finemap=None
             f"Each SNP was given a functional tier (1 best to 4) for the '{preset}' preset ({conds}). tier_score adds "
             f"the weights of the evidence it has: an active chromatin state ({', '.join(weights.get('active_states', []))}) "
             f"in a preset condition ({w.get('active')}), active only in other conditions ({w.get('active_elsewhere')}), "
-            f"a weak state ({w.get('weak')}), CDS ({w.get('coding')}), splice region ({w.get('splice')}), UTR "
+            f"a weak state ({w.get('weak')}), a CDS change to the protein or of unknown effect ({w.get('coding')}), a "
+            f"synonymous CDS change ({w.get('synonymous', w.get('coding'))}), splice region ({w.get('splice')}), UTR "
             f"({w.get('utr')}), a GERP constrained element ({w.get('constrained')}) and an Ensembl regulatory feature "
             f"outside AQUA-FAANG peaks ({w.get('regbuild')}); tiers 1-3 need a score of at least "
             f"{', '.join(str(t) for t in weights.get('tiers', []))}. These rules are PROVISIONAL.")
+    models = next((l for l in manifest.get("layers", []) if l.get("format") == "gff3_transcripts"), None)
+    if models and manifest.get("genome"):
+        text.append(
+            f"Coding consequences (Sequence Ontology terms as Ensembl VEP writes them, with HGVS protein changes) were "
+            f"computed from the genome sequence on one transcript per SNP ({models.get('citation') or models['name']}; "
+            f"the canonical transcript, else the longest CDS), after turning swapped or strand-flipped alleles to the "
+            f"reference; splice donor and acceptor sites are the two intronic bases at internal exon ends.")
     a = assay.rules(weights)
     by_base = ", ".join(f"{b} > {n}" for b, n in sorted((a.get("homopolymer_by_base") or {}).items()))
     text.append(
@@ -318,23 +328,27 @@ def vendor_notes(fmt, template, flank, manifest, written, skipped, warnings, nam
 
 
 def filename(fmt, release, preset="all", tag=None, synthetic=False):
-    """snpscore[_SYNTHETIC]_<release>_<preset>[_<tag>][_<vendor>].<ext>, e.g. snpscore_dev_maturation_illumina.csv
-    (SYNTHETIC labels files built from synthetic data, which vendor files can't say inside)."""
-    ext = VENDORS[fmt]["ext"] if fmt in VENDORS else "zip" if fmt == "bundle" else fmt
+    """snpscore[_SYNTHETIC]_<release>_<preset>[_<tag>][_<vendor> | _priors].<ext>, e.g.
+    snpscore_dev_maturation_illumina.csv (SYNTHETIC labels files built from synthetic data, which vendor files can't
+    say inside)."""
+    ext = VENDORS[fmt]["ext"] if fmt in VENDORS else "zip" if fmt in ("bundle", "priors") else fmt
     parts = (["snpscore"] + (["SYNTHETIC"] if synthetic else []) + [release, preset] + ([tag] if tag else [])
-             + ([fmt] if fmt in VENDORS else []))
+             + ([fmt] if fmt in VENDORS or fmt == "priors" else []))
     return "_".join(re.sub(r"[^A-Za-z0-9.-]", "-", str(p)) for p in parts) + "." + ext
 
 
 def export(source, fmt, out, release_dir, preset="all", meta=None, include_failed=False, plain=False, table="v",
            manifest=None, weights=None, flank=None, template=None, sidecars=True):
     """Write SNPs (annotate output: a parquet/TSV path, or a DuckDB connection with `table`) as `fmt`: tsv, parquet,
-    bed, illumina, axiom or kasp. manifest and weights default to the release's (pass a job's snapshots instead).
-    Vendor formats take `flank` (within VENDORS[fmt]['range']) and `template` (a TEMPLATES[fmt] version), and with
-    `sidecars` also write <out>.provenance.txt and <out>.lookup.tsv next to `out` (plain drops the lookup's '#' lines).
-    Returns {'rows': written, 'skipped': {reason: n}, 'warnings': [panel-level vendor checks], 'files': [names]}."""
+    bed, illumina, axiom, kasp or priors (a zip: see priors()). manifest and weights default to the release's (pass a
+    job's snapshots instead). Vendor formats take `flank` (within VENDORS[fmt]['range']) and `template` (a
+    TEMPLATES[fmt] version), and with `sidecars` also write <out>.provenance.txt and <out>.lookup.tsv next to `out`
+    (plain drops the lookup's '#' lines). Returns {'rows': written, 'skipped': {reason: n}, 'warnings': [panel-level
+    vendor checks], 'files': [names]}."""
     if fmt not in FORMATS:
         raise InputError(f"Unknown export format '{fmt}'. Choose from: {', '.join(FORMATS)}")
+    if fmt == "priors":
+        return priors(source, out, release_dir, preset, meta, table=table, manifest=manifest, weights=weights)
     if fmt in VENDORS:
         lo, hi = VENDORS[fmt]["range"]
         if flank is not None and not lo <= int(flank) <= hi:
@@ -455,3 +469,171 @@ def bundle_zip(out, source, release_dir, preset="all", meta=None, formats=("tsv"
             for name, svg in (svgs or {}).items():
                 z.writestr(f"figures/{re.sub(r'[^A-Za-z0-9_.-]', '_', name)}.svg", svg)
     return out
+
+
+# ---- P6.5 genomic-prediction priors ----
+
+PRIOR_ORDER = ["tier1_2", "active", "coding", "constrained", "regulatory"]  # PROVISIONAL: weights.yaml 'priors: order'
+NONSYNONYMOUS = ("missense_variant", "stop_gained", "stop_lost", "start_lost")  # coding_consequence (P4.5) for 'coding'
+PRIOR_REFERENCES = [  # DOIs checked in PubMed, 2026-10-07
+    "Edwards SM et al. (2016) Genomic prediction for quantitative traits is improved by mapping variants to gene "
+    "ontology categories in Drosophila melanogaster. Genetics 203: 1871-1883. doi:10.1534/genetics.116.187161",
+    "MacLeod IM et al. (2016) Exploiting biological priors and sequence variants enhances QTL discovery and genomic "
+    "prediction of complex traits. BMC Genomics 17: 144. doi:10.1186/s12864-016-2443-6",
+    "Speed D, Balding DJ (2014) MultiBLUP: improved SNP-based prediction for complex traits. Genome Res 24: 1550-1557. "
+    "doi:10.1101/gr.169375.113",
+    "Speed D et al. (2012) Improved heritability estimation from genome-wide SNPs. Am J Hum Genet 91: 1011-1021. "
+    "doi:10.1016/j.ajhg.2012.10.010",
+]
+
+
+def prior_categories(columns, weights, preset="all", synthetic=(), chosen=None):
+    """[(name, SQL condition, definition)] of the genomic-prediction prior categories the annotate `columns` allow, in
+    the order of weights.yaml 'priors: order' (PROVISIONAL; default PRIOR_ORDER) and limited to the names in `chosen`:
+    tier1_2 (tier 1-2 for the preset), active (an active state in a preset condition), coding (a non-synonymous coding
+    consequence when the result has them, else CDS), constrained (GERP element), regulatory (Ensembl regulatory
+    feature). Categories from synthetic layers are left out; 'none' (in none of them) is always last."""
+    w = weights or {}
+    order = list(dict.fromkeys((w.get("priors") or {}).get("order") or PRIOR_ORDER))
+    unknown = [str(c) for c in [*order, *(chosen or [])] if c not in PRIOR_ORDER]
+    if unknown:
+        raise InputError(f"Unknown prior categories: {', '.join(unknown)}. Choose from: {', '.join(PRIOR_ORDER)}")
+    tier = _tier_cols(columns, preset)[0]
+    states = w.get("active_states") or []
+    conds = preset_conditions(w, columns, preset)[0] if w.get("presets") else []
+    found = {"tier1_2": (None, f"{tier} <= 2", "functional tier 1 or 2 for the preset"
+                         + (f" (tier_score >= {w['tiers'][1]})" if w.get("tiers") else ""))}
+    if states and conds:
+        where = ", ".join(w["presets"][preset]) or f"any of the {len(conds)} conditions"
+        found["active"] = ("chromatin", " OR ".join(f"{q('chromatin_' + c)} IN ({', '.join(map(lit, states))})" for c in conds),
+                           f"{' or '.join(states)} in at least one preset condition ({where})")
+    if "coding_consequence" in columns:
+        found["coding"] = ("region", f"coding_consequence IN ({', '.join(map(lit, NONSYNONYMOUS))})",
+                           "a non-synonymous coding SNP (missense, stop gained, stop lost or start lost; not SNPs whose "
+                           "alleles are unknown)")
+    elif "region_class" in columns:
+        found["coding"] = ("region", "region_class = 'CDS'", "in a CDS (amino-acid effect not computed)")
+    if "gerp" in columns:
+        found["constrained"] = ("gerp", "gerp", "in a GERP constrained element")
+    if "regbuild" in columns:
+        found["regulatory"] = ("regbuild", "regbuild", "in an Ensembl regulatory feature (with or without an AQUA-FAANG peak)")
+    out = [(c, f"coalesce(({found[c][1]}), false)", found[c][2]) for c in order
+           if c in found and found[c][0] not in synthetic and (chosen is None or c in chosen)]
+    return out + [("none", " AND ".join(f"NOT {sql}" for _, sql, _ in out) or "true", "in none of the categories above")]
+
+
+def priors(source, out, release_dir, preset="all", meta=None, categories=None, table="v", manifest=None, weights=None):
+    """A zip of genomic-prediction prior files (P6.5) for the SNPs of `source` (annotate output: a parquet/TSV path, or
+    a DuckDB connection with `table`), every SNP list in input order and no '#' lines in the data files:
+    bayesrc_classes.txt (SNP <tab> class, no header; a SNP's class is the first of its prior_categories(), numbered
+    over the non-empty ones, 'none' last), sets/<category>.txt (the SNPs of each category, which overlap: GFBLUP or
+    MultiBLUP sets), ldak_partitions/partition<k> (the SNPs of class k: disjoint), annot.tsv (CHR, BP, SNP, a 0/1
+    column per category, tier_score and active_<condition> 0/1 for every chromatin condition), snp_lookup.tsv (SNPs
+    without an id, named Ssa<chromosome>p<position> as vendor files name them), README.txt (provenance, files, the
+    PROVISIONAL category definitions with their counts, classes, a methods paragraph and references) and methods.txt.
+    SNP names are the list's ids. Returns {'rows', 'skipped', 'warnings', 'files', 'categories': {name: n},
+    'classes': [(class, category, n)]}."""
+    release, out = Path(release_dir).resolve(), Path(out).resolve()
+    manifest = manifest or release / "manifest.json"
+    weights = weights or (release / "weights.yaml" if (release / "weights.yaml").exists() else None)
+    m, w = _load(manifest, weights)[:2]
+    synthetic = [l["name"] for l in m.get("layers", []) if l.get("synthetic")]
+    con, rel, columns = _open(source, table, [release], out, preset, w, synthetic)
+    cats = prior_categories(columns, w, preset, synthetic, categories)
+    names = [c for c, _, _ in cats]
+    states = ", ".join(map(lit, w.get("active_states") or []))
+    every = preset_conditions(w, columns, preset)[1] if states and w.get("presets") and "chromatin" not in synthetic else []
+    flags = "".join(f", coalesce({q('chromatin_' + c)} IN ({states}), false)::INTEGER AS {q('active_' + c)}" for c in every)
+    col = lambda c: f"{q(c)}::VARCHAR" if c in columns else "NULL::VARCHAR"  # noqa: E731
+    ident = f"nullif(nullif(trim({q('id')}::VARCHAR), ''), '.')" if "id" in columns else "NULL::VARCHAR"
+    placed = ", ".join(map(lit, sorted(_placed(m))))
+    con.execute(f"""CREATE OR REPLACE TEMP TABLE _priors AS
+        SELECT *, coalesce(_id, _name || CASE WHEN _k > 1 THEN 'v' || _k ELSE '' END) AS SNP,
+               CASE {' '.join(f'WHEN {q(c)} THEN {i + 1}' for i, c in enumerate(names))} END AS _class
+        FROM (SELECT *, row_number() OVER (PARTITION BY _id IS NULL, _name ORDER BY _row) AS _k
+              FROM (SELECT _row, chrom::VARCHAR AS chrom, pos, {col('ref')} AS ref, {col('alt')} AS alt, {ident} AS _id,
+                           'Ssa' || CASE WHEN chrom::VARCHAR IN ({placed}) THEN chrom::VARCHAR ELSE '0' END || 'p' || pos::VARCHAR AS _name,
+                           {', '.join(f'{sql} AS {q(c)}' for c, sql, _ in cats)}, {_tier_cols(columns, preset)[1]} AS tier_score{flags}
+                    FROM {rel}))""")
+    try:
+        n, made, *counts = con.execute(f"SELECT count(*), count(*) FILTER (_id IS NULL), "
+                                       f"{', '.join(f'count(*) FILTER ({q(c)})' for c in names)} FROM _priors").fetchone()
+        if not n:
+            raise InputError("There are no SNPs to write priors for.")
+        by_class = dict(con.execute("SELECT _class, count(*) FROM _priors GROUP BY 1").fetchall())
+        kept = [(i + 1, c) for i, c in enumerate(names) if by_class.get(i + 1)]  # classes are numbered without gaps
+        classes = [(k + 1, c, by_class[old]) for k, (old, c) in enumerate(kept)]
+        renumber = f"CASE _class {' '.join(f'WHEN {old} THEN {k + 1}' for k, (old, _) in enumerate(kept))} END"
+        files = ["bayesrc_classes.txt", "annot.tsv", *[f"sets/{c}.txt" for c in names],
+                 *[f"ldak_partitions/partition{k}" for k, _, _ in classes], *(["snp_lookup.tsv"] if made else [])]
+        command = (f"snpscore annotate <your list> --release <release {m.get('version')}> --trait {preset} -o "
+                   f"annotated.parquet; snpscore export annotated.parquet --release <release {m.get('version')}> "
+                   f"--preset {preset} --format priors")
+        readme = _priors_readme(m, w, preset, cats, counts, classes, n, made,
+                                provenance(manifest, weights, {"preset": preset, "command": command, **(meta or {})}))
+        with tempfile.TemporaryDirectory(dir=out.parent, prefix=".priors-") as tmp:
+            for sub in ("sets", "ldak_partitions"):
+                (Path(tmp) / sub).mkdir()
+
+            def copy(sql, name, header=False):
+                con.execute(f"COPY ({sql} ORDER BY _row) TO {lit(Path(tmp) / name)} "
+                            f"(FORMAT csv, HEADER {'true' if header else 'false'}, DELIMITER '\t')")
+            copy(f"SELECT SNP, {renumber} FROM _priors", "bayesrc_classes.txt")
+            copy("SELECT chrom AS CHR, pos AS BP, SNP, " + ", ".join(f"{q(c)}::INTEGER AS {q(c)}" for c in names)
+                 + ", tier_score" + "".join(f", {q('active_' + c)}" for c in every) + " FROM _priors", "annot.tsv", True)
+            for c in names:
+                copy(f"SELECT SNP FROM _priors WHERE {q(c)}", f"sets/{c}.txt")
+            for k, (old, _) in enumerate(kept):
+                copy(f"SELECT SNP FROM _priors WHERE _class = {old}", f"ldak_partitions/partition{k + 1}")
+            if made:
+                copy("SELECT SNP, chrom, pos, ref, alt FROM _priors WHERE _id IS NULL", "snp_lookup.tsv", True)
+            with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+                z.writestr("README.txt", readme)
+                z.writestr("methods.txt", methods_text(m, w, preset, release))
+                for name in files:
+                    z.write(Path(tmp) / name, name)
+    finally:
+        con.execute("DROP TABLE IF EXISTS _priors")
+    return {"rows": n, "skipped": {}, "warnings": [], "files": [out.name], "categories": dict(zip(names, counts)),
+            "classes": classes}
+
+
+def _priors_readme(m, w, preset, cats, counts, classes, n, made, header):
+    """README.txt of the priors zip: provenance lines, files, categories with counts, classes, methods, references."""
+    k, classed = len(classes), {c for _, c, _ in classes}
+    where = ", ".join((w.get("presets") or {}).get(preset) or []) or "all conditions"
+    unclassed = [f"{c} ({'every SNP in it is in an earlier category' if x else 'no SNPs'})"
+                 for (c, _, _), x in zip(cats, counts) if c not in classed]
+    lines = [
+        "salmobase functional SNP portal / snpscore genomic-prediction priors", "", *header, "",
+        f"{n:,} SNPs, preset {preset} ({where}). Every file lists SNPs in the order of your list, without comment lines.",
+        "", "Files:",
+        f"  bayesrc_classes.txt: each SNP and its class (1-{k}, below), tab-separated, no header (the class column "
+        "alone: cut -f2)",
+        "  sets/<category>.txt: the SNPs of each category, one per line (categories overlap): GFBLUP feature sets "
+        "(a set against the rest) or MultiBLUP classes",
+        f"  ldak_partitions/partition1-{k}: the SNPs of each class (no overlap, together all SNPs), e.g. LDAK "
+        f"--partition-number {k} --partition-prefix ldak_partitions/partition",
+        "  annot.tsv: CHR, BP, SNP, a 0/1 column per category, tier_score and active_<condition> (1 = an active "
+        "chromatin state in that condition)",
+        *(["  snp_lookup.tsv: the SNPs without an id in your list, named Ssa<chromosome>p<position> (chromosome 0 = not "
+           "on 1-29; v2, v3 for a repeated position), with chrom, pos, ref and alt"] if made else []),
+        "  methods.txt: how the SNPs were annotated and tiered, with references",
+        "SNP names are your ids" + (f" ({made:,} SNPs had none: see snp_lookup.tsv)" if made else "")
+        + ". Match them to the SNP names in your genotype files. Layouts follow each program's documented input; "
+        "confirm them against the version you run.",
+        "", "Categories (PROVISIONAL: definitions and order under review):",
+        *[f"  {c}: {x:,} SNPs, {d}" for (c, _, d), x in zip(cats, counts)],
+        "", "Classes (BayesRC, LDAK partitions): each SNP takes the first category it is in, in the order above:",
+        *[f"  class {i}: {c}, {x:,} SNPs" for i, c, x in classes],
+        *([f"  no class of its own: {', '.join(unclassed)}"] if unclassed else []),
+        "", "Methods",
+        f"SNP categories for genomic prediction were taken from the snpscore annotation (release {m.get('version')}, "
+        f"assembly {m.get('assembly')}, '{preset}' preset: {where}): "
+        + "; ".join(f"{c}, {d}" for c, _, d in cats[:-1]) + ". Categories overlap. For BayesRC (MacLeod et al. 2016) "
+        "and MultiBLUP/LDAK partitions (Speed and Balding 2014; Speed et al. 2012), each SNP was assigned to the first "
+        "category it belongs to in that order, and SNPs in none of them formed the last class; GFBLUP (Edwards et al. "
+        "2016) feature sets were the SNPs of each category. These category definitions and their order are PROVISIONAL.",
+        "", "References", *[f"- {r}" for r in PRIOR_REFERENCES],
+    ]
+    return "\n".join(lines) + "\n"

@@ -18,10 +18,11 @@ bash prep/make_demo.sh                           # portal demo inputs before bui
 snpscore build --out release/v0.1                # standardise every layer in layers.yaml, copy weights.yaml
 snpscore annotate my_snps.vcf.gz --release release/v0.1 --trait maturation -o my_snps_annotated.parquet  # or .tsv
 snpscore rsid rs863754587 --release release/v0.1  # Ssal_v3.1 and ICSASG_v2 position of an rs ID
-snpscore benchmark --release release/v0.1 -o release/v0.1/benchmark.tsv
-snpscore pool --release release/v0.1             # public background pool: release/v0.1/pool/ (about 40 s for 1.6M sites)
+snpscore pool --release release/v0.1 --assay --memory 8GB  # public background pool: release/v0.1/pool/ (about 100 s)
+snpscore benchmark --release release/v0.1 -o release/v0.1/benchmark.tsv   # known loci; controls from the pool
+snpscore benchmark --release release/v0.1 --positives molqtl:ca molqtl:e --by-tissue -o release/v0.1/benchmark_molqtl.tsv
 snpscore panel my_snps_annotated.parquet --release release/v0.1 --preset maturation --n 384 -o panel.parquet
-snpscore export panel.parquet --release release/v0.1 --preset maturation --format illumina  # or axiom, kasp, bed, ...
+snpscore export panel.parquet --release release/v0.1 --preset maturation --format illumina  # or axiom, kasp, bed, priors, ...
 snpscore compare my_snps_annotated.parquet --chip my_chip.csv --release release/v0.1 --pool
 python prep/make_synthetic.py chip --scale fixture  # SYNTHETIC demo chip for the tests (tests/fixture/synthetic)
 snpscore gwas sumstats.tsv --release release/v0.1 --trait maturation -o gwas_out/   # loci.tsv, finemap.tsv
@@ -81,7 +82,9 @@ release/v0.1/
   catalog/known_loci.tsv the known-loci catalogue (copy of benchmark/known_loci.tsv)
   weights.yaml           tier rules and trait presets; PROVISIONAL `assay`, `design` and `finemap` blocks
   tracks.yaml            track registry for the locus browser (if tracks.yaml is next to layers.yaml)
-  benchmark.tsv          optional: `snpscore benchmark` output for this release
+  benchmark.tsv          optional: `snpscore benchmark` output for this release (known loci)
+  benchmark_molqtl.tsv   optional: `snpscore benchmark --positives molqtl:ca molqtl:e --by-tissue` (nf-RASQUAL leads
+                         vs matched controls); same columns as benchmark.tsv (see "Benchmark")
   demo/                  example inputs for the portal's buttons (layers.yaml `demo`): known_loci.tsv, public_50k.vcf
                          (dev only), chip_demo_SYNTHETIC.tsv and gwas_maturation_SYNTHETIC.tsv (dev only; made by
                          prep/make_demo.sh, the last two through prep/make_synthetic.py)
@@ -179,6 +182,18 @@ order, then:
   (Illumina code 103), or a true `warn_flags` column (lore, blacklist, strand_ambiguous). not_checked = chromosome
   not in the genome, or a remote genome and more than 2,000 SNPs (`assay.REMOTE_MAX`; the reference check then uses
   the 200-SNP sample)
+- with a genome and a `gff3_transcripts` features layer (genome local, or at most `assay.REMOTE_MAX` SNPs), the coding
+  consequence (`snpscore.coding`, VEP-lite): `coding_consequence` (Sequence Ontology term as VEP writes it:
+  `missense_variant`, `synonymous_variant`, `stop_gained`, `stop_lost`, `start_lost`, `stop_retained_variant`,
+  `incomplete_terminal_codon_variant`, `coding_sequence_variant` (effect unknown), `splice_donor_variant`,
+  `splice_acceptor_variant`; NULL outside CDS and splice sites), `coding_hgvsp` (3-letter: `p.Thr46Met`, `p.Thr46=`,
+  `p.Lys352Ter`, `p.Met1?`, `p.Ter357ArgextTer?`), `coding_aa_pos` (Ensembl residue number), `coding_codons` (VEP style,
+  `aCg/aTg`), `coding_transcript` (canonical, else longest CDS, else lowest id) and `coding_note` (`first of several
+  alt alleles`, `alt allele from the public panel`, `alleles unknown`, `alleles do not match the genome`, `not a SNP`,
+  `genome base unknown`). Only SNPs whose `region_class` is CDS or splice_region are looked up; codons can span
+  introns; swapped or strand-flipped alleles are turned to the reference first; splice donor/acceptor = the 2 intronic
+  bases at internal exon ends, for SNPs in no CDS. Checked against Ensembl VEP REST (release 116) on 233 stratified
+  SNPs with 0 differences. Ensembl numbers vgll3 Met54Thr as Thr46Met (published residue numbers are Ensembl's + 8).
 - `strand_ambiguous` (A/T or C/G; if the input has `ref` and `alt`)
 - `tier` (1 best to 4), `tier_score`, `tier_evidence`, and `tier_terms`
   (`LIST(STRUCT(term VARCHAR, weight INTEGER))`: the weights.yaml terms that fired) for the `--trait` preset (default
@@ -193,7 +208,7 @@ Next to the output, `<stem>.validation.json` and `<stem>.rejects.tsv`:
   `checked`, `mismatch_or_flip_share`, and a `message` when (mismatch + strand_flip) / checked > 10%: probably
   ICSASG_v2 coordinates or the other strand), `assay` ({assay_status: rows}), `assay_reasons` ({reason: SNPs} over
   the warn and fail SNPs, by name without the numbers (`assay.breakdown`), most frequent first; a SNP counts once per
-  reason).
+  reason), `coding` ({consequence: SNPs}) and `coding_notes` ({note: SNPs}).
 - rejects.tsv: `row` (1 = first SNP row of the input), `chrom`, `pos`, (`id`, `ref`, `alt`), `reason`
   (`missing_chrom`, `unknown_rsid`, `bad_pos`, `unknown_chrom`, `duplicate`: same chrom, pos, ref, alt as an earlier
   row, after rs placement).
@@ -211,9 +226,13 @@ A SNP at 1-based `pos` is inside an interval when `start < pos <= end`.
 ## Tiers
 
 `tier_score` adds up the weights in `weights.yaml` for each kind of evidence a SNP has: an active chromatin state in a
-condition of the preset, active only elsewhere, a weak state, CDS, splice region, UTR, GERP constrained element, and an
+condition of the preset, active only elsewhere, a weak state, a CDS change to the protein or of unknown effect
+(`coding`), a synonymous CDS change or stop retained (`synonymous`; PROVISIONAL, weighted as `coding` until G decides; a
+weights.yaml without the key falls back to the coding weight), splice region, UTR, GERP constrained element, and an
 Ensembl regulatory feature where AQUA-FAANG has no peak, and an nf-RASQUAL molQTL lead (`molqtl`, weight 0: listed in
-`tier_terms` and `tier_evidence`, never scored until G decides). Tiers are score cut-offs. A preset is a list of condition
+`tier_terms` and `tier_evidence`, never scored until G decides). `tier_evidence` names the coding consequence
+('missense p.Thr46Met', 'synonymous p.Thr46=', 'splice donor'), or 'CDS' / 'splice region' when it was not computed.
+Tiers are score cut-offs. A preset is a list of condition
 prefixes (e.g. `maturation: [Brain, Gonad]`). Weights are whole numbers, so `tier_score` is always an integer. Layers
 marked `synthetic: true` never count. All of this is provisional:
 see "Biology decisions" in CLAUDE.md and `provisional` in the manifest.
@@ -291,6 +310,15 @@ for `preset` as in design(). Rows keep the source's order (a connection's view i
   reason in `export_notes`) assay fail and not_checked SNPs and, for illumina, SNPs whose TOP/BOT strand cannot be
   determined (code 103).
 
+`--format priors` (`export.priors(source, out, release_dir, preset, meta, categories=None)`) writes a zip of
+genomic-prediction prior files: `bayesrc_classes.txt` (SNP<TAB>class, no header, input order), `sets/<category>.txt`
+(GFBLUP/MultiBLUP sets, which overlap), `ldak_partitions/partition1..K` (disjoint, covering every SNP), `annot.tsv`
+(CHR, BP, SNP, a 0/1 column per category, tier_score, `active_<condition>` for the 21 conditions), `snp_lookup.tsv`
+(only when some ids are missing: names `Ssa<chrom>p<pos>`), `README.txt` (provenance, category definitions and counts,
+a methods paragraph, references) and `methods.txt`. Categories: tier1_2, active, coding (non-synonymous
+`coding_consequence`, else region_class CDS), constrained, regulatory, none; a SNP's class is the first category it is
+in, in the PROVISIONAL weights.yaml `priors: order`.
+
 `bundle_zip(out, source, release_dir, preset, meta, formats, svgs)` zips the exports, manifest.json,
 weights.yaml, methods.txt, provenance.txt, README.txt and figures/*.svg. `filename(fmt, release, preset, tag)` names
 files `snpscore_<release>_<preset>[_<tag>][_<vendor>].<ext>`.
@@ -346,9 +374,17 @@ salmobase track hubs.
 
 ## Benchmark
 
-`snpscore benchmark` annotates a positive SNP set and a background SNP set (default: the public 12-fish nf-rasqual VCF),
-draws controls from the background matched on distance to the nearest gene, and reports, per layer, region class and tier,
-the share of positives and of controls that hit it.
+`snpscore benchmark --release R [--positives FILE|molqtl[:ca|e][:Tissue] ...] [--by-tissue] [--background FILE]`
+(`benchmark.benchmark_sets`) draws 10 controls per positive from the background (default `R/pool/pool.parquet`, else the
+public 12-fish VCF), matched on distance to the nearest gene (6 bins) and public MAF (0.05 bins; positives without a
+public MAF on distance only), seeded, never at a positive's position. Tiers and evidence terms are recomputed for the
+trait (a one-tissue molQTL set uses that tissue's preset). Rows: every shared boolean layer, each weights.yaml evidence
+term (`evidence = <term>`), `region_class = <class>`, `<*_consequence> = <value>` (when the background has it: pool
+`--assay`) and `tier <= N`, with the share of positives and controls, enrichment, and 95% intervals (Wilson for shares,
+Katz log for the enrichment; approximate, as controls are stratified). Columns: set, trait, feature, positives,
+controls, share_pos, share_ctrl, enrichment, hits_pos, hits_ctrl, share_pos_low/high, share_ctrl_low/high,
+enrichment_low/high, after '#' provenance lines. caQTLs share the AQUA-FAANG ATAC data with the chromatin layer, so
+their chromatin enrichment is partly circular; eQTLs are the fairer test; leads come from 12 fish (winner's curse).
 
 Positive sets:
 - `benchmark/known_loci.tsv` (also the release catalogue): 37 rows (36 published SNPs and the sdY gene region) across 8 traits, from
@@ -357,7 +393,8 @@ Positive sets:
   the inferred ones. bco1l rs863785818: A on the + strand = red flesh (the paper's T, other strand). vgll3 Met54Thr is
   T46M on Ensembl's ENSSSAT00000230965 (aCg/aTg): the published residue numbers are Ensembl's + 8 (Asn323Lys is
   N315K there); labels keep the published numbering. Rows are still to be vetted by G.
-- nf-rasqual caQTL/eQTL lead SNPs: the `molqtl` layer.
+- nf-rasqual caQTL/eQTL lead SNPs (`molqtl`, `molqtl:ca`, `molqtl:e`, `molqtl:e:Gill`, ...): the release `molqtl` layer
+  (BF < `max_bf` 0.1, PROVISIONAL); the molqtl row itself is left out (true for every positive).
 
 ## Adding a layer
 

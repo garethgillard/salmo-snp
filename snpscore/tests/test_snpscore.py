@@ -452,8 +452,12 @@ def test_read_snps_keeps_input_order(tmp_path):
 # Push 2: 504-fish AF, molqtl, cm gave a42d8176...; then only assay columns changed (checked by reverting each change):
 # - R2 assay rules: neighbours as upper-case IUPAC in assay_flank, flank variants per side ('flank variants on both
 #   sides'; 2 fixture SNPs warn -> pass), the code-103 reason (no fixture SNP gets it): 1ef4cfca...
-# - weights.yaml max_repeat 0.5 -> 0.9: 9 SNPs lose a 'repeat' reason, 3 of them warn -> pass
-GOLDEN = "2aabe7b833c6e74b0cfb67299da9f55337ffa9733f042ebc23ec4d76429bcf72"
+# - weights.yaml max_repeat 0.5 -> 0.9: 9 SNPs lose a 'repeat' reason, 3 of them warn -> pass: 2aabe7b8...
+# - P4.5 coding consequence (snpscore.coding): six coding_* columns after the assay columns; tier_evidence names the
+#   consequence for the 5 fixture SNPs it was computed for, 4 missense ('missense p.Thr46Met' instead of 'CDS') and 1
+#   synonymous, which fires the 'synonymous' term instead of 'coding' (same weight). tier and tier_score are unchanged
+#   for every preset (checked against the old scoring path without the coding columns, as in test_coding.py).
+GOLDEN = "eceb7d778ebe738d34d56f9b8ea073a68d61af90b5630f9defdf037af6357a21"
 
 
 def test_long_lists_are_written_in_sorted_parts(release, tmp_path, monkeypatch):

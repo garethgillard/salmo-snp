@@ -5,6 +5,7 @@ from pathlib import Path
 
 import yaml
 
+from .coding import SYNONYMOUS
 from .formats import InputError, lit, q
 
 ADDED = ["tier", "tier_score", "tier_evidence", "tier_terms"]
@@ -30,7 +31,9 @@ def scored(table, weights, columns, trait, synthetic=()):
     (LIST(STRUCT(term, weight)): the weights.yaml terms that fired) for a preset. Terms from the layers named in
     `synthetic` (manifest layers with synthetic: true) never count."""
     chosen, every = preset_conditions(weights, columns, trait)
-    w = weights["weights"]
+    w = dict(weights["weights"])
+    if "coding" in w:  # releases made before the coding consequence: synonymous CDS changes weigh as any CDS change
+        w.setdefault("synonymous", w["coding"])
 
     def having(conditions, states):  # SQL list of the conditions whose state is one of `states`
         quoted = ", ".join(lit(s) for s in states)
@@ -47,10 +50,20 @@ def scored(table, weights, columns, trait, synthetic=()):
          f"'active elsewhere: ' || {tissues('_active_any')}"),
         ("chromatin", "weak", "len(_active) = 0 AND len(_weak) > 0", f"'weak: ' || {tissues('_weak')}"),
     ]
-    if "region_class" in columns:
+    if "region_class" in columns and "coding_consequence" in columns:
+        # 'missense p.Thr46Met', 'synonymous p.Thr46=', 'splice donor'; 'CDS' when not computed (alleles unknown)
+        named = ("replace(replace(coding_consequence, '_variant', ''), '_', ' ') || coalesce(' ' || coding_hgvsp, '')")
+        text = f"CASE WHEN coalesce(coding_consequence, 'coding_sequence_variant') = 'coding_sequence_variant' THEN 'CDS' ELSE {named} END"
+        syn = f"coalesce(coding_consequence IN ({', '.join(lit(c) for c in SYNONYMOUS)}), false)"
+        terms += [("region", "coding", f"region_class = 'CDS' AND NOT {syn}", text),
+                  ("region", "synonymous", f"region_class = 'CDS' AND {syn}", text),
+                  ("region", "splice", "region_class = 'splice_region'",
+                   f"CASE WHEN coding_consequence LIKE 'splice_%' THEN {named} ELSE 'splice region' END")]
+    elif "region_class" in columns:
         terms += [("region", "coding", "region_class = 'CDS'", "'CDS'"),
-                  ("region", "splice", "region_class = 'splice_region'", "'splice region'"),
-                  ("region", "utr", "region_class IN ('five_prime_UTR', 'three_prime_UTR')", "'UTR'")]
+                  ("region", "splice", "region_class = 'splice_region'", "'splice region'")]
+    if "region_class" in columns:
+        terms.append(("region", "utr", "region_class IN ('five_prime_UTR', 'three_prime_UTR')", "'UTR'"))
     if "gerp" in columns:
         terms.append(("gerp", "constrained", "gerp", "'constrained'"))
     if "regbuild" in columns:  # mostly the same elements as the AQUA-FAANG peaks, so only counted where there is no peak

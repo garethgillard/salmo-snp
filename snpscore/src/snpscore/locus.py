@@ -315,6 +315,11 @@ def annotate_position(release_dir, chrom, pos, ref=None, alt=None, trait="all", 
                                 TO {lit(mini / src.name)} (FORMAT parquet)""")
             elif layer["type"] == "gene":
                 shutil.copy(src, mini)
+            elif layer.get("format") == "gff3_transcripts":  # whole transcripts at the position: codons can span exons
+                con.execute(f"""COPY (SELECT * FROM read_parquet({lit(src)}) WHERE transcript_id IN (
+                                          SELECT transcript_id FROM read_parquet({lit(src)}) WHERE chrom = {lit(chrom)}
+                                          AND start < {int(pos) + 2} AND "end" > {int(pos) - 3}))
+                                TO {lit(mini / src.name)} (FORMAT parquet)""")
         con.close()
         for name in ("manifest.json", "weights.yaml", "alias.parquet", (manifest.get("catalog") or {}).get("file")):
             if name and (release / name).exists():

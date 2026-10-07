@@ -36,7 +36,7 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   plus one preset per tissue and `all`.
 - Weights and tier cut-offs: see weights.yaml (active 3, CDS/splice 3, constrained 2, weak/UTR/active elsewhere/Ensembl
   regulatory 1; tiers at 5, 3, 1). Ensembl regulatory features count only where AQUA-FAANG has no peak (68-86% overlap).
-- Benchmark controls matched on distance to the nearest gene only (not MAF or LD).
+- Benchmark controls matched on distance to the nearest gene and public MAF (0.05 bins), not LD.
 - Known loci set includes GWAS lead SNPs (six6, bco1l), not only likely-causal missense SNPs (vgll3).
 - Portal roadmap v2, stage 1 (2026-10-06):
   - Known-locus window 50 kb; effect alleles vgll3 Met54Thr T / Asn323Lys C = early maturation; bco1l direction 'to verify' (strand).
@@ -55,6 +55,9 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     5e-8 / 1e-5, 1 Mb clumping; one causal variant per locus and no LD reference (stated on the page).
   - Locus browser: up to 8 signal rows (R1), ATAC/H3K27ac/H3K4me3, signal and ChromHMM up to 500 kb, lanes up to 2 Mb, 4 s deadline.
   - Vendor layouts (Illumina 60 bp TOP/BOT, Axiom 35 bp, KASP 50 bp) are 'to confirm against the vendor template' (see RESEARCH.md 5).
+- Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
+  counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
+  priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).
 
 Open (ask G; all collected with options and recommendations in DECISIONS.md):
 - Everything under Provisional.

@@ -19,13 +19,14 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 
 ## Step 2: benchmark harness
 - [x] Known loci positive set: `benchmark/known_loci.tsv` (vgll3 missense x2, six6 lead x2, bco1l lead x2; published ICSASG_v2 SNPs lifted to Ssal_v3.1)
-- [ ] Positive set: nf-rasqual caQTL/eQTL lead SNPs (tables are public now, see R4; not yet used by the benchmark)
+- [x] Positive set: nf-rasqual caQTL/eQTL lead SNPs (`--positives molqtl:ca molqtl:e --by-tissue` -> release `benchmark_molqtl.tsv`; controls matched on gene distance and public MAF, 95% intervals; Methods figure)
 - [x] `snpscore benchmark`: share of positives vs controls matched on gene-distance bins, per layer, region class and tier; output goes in the release folder
 
 ## Step 3: remaining layers (one change each)
 - [x] Ensembl 116 regulatory build (counts towards tiers only where AQUA-FAANG has no peak)
 - [x] Stand-in: genic region class from Ensembl 116 GFF3 (CDS, splice region, UTR, non-coding exon, intron)
-- [ ] VEP consequences (missense/synonymous; Ensembl has a Ssal_v3.1 VEP cache), then SIFT4G
+- [x] Coding consequences, VEP-lite (P4.5): missense/synonymous/stop/start/splice donor-acceptor from the canonical CDS and the genome; 0 differences from Ensembl VEP REST on 233 stratified SNPs
+- [ ] SIFT4G (or another missense deleteriousness score)
 - [x] GERP constrained elements (Ensembl 116 65-fish alignment; `fetch` decodes the bigBed)
 - [ ] Enhancer-CNEs
 - [ ] Ohnolog pairs and element duplication class (shared / alignable-only / exclusive)
@@ -100,7 +101,7 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [x] P4.3b Live AQUA-FAANG ATAC signal lanes from salmobase (M, must, **now**) (live salmobase ATAC: 1.4 s cold, 0.1 s warm)
 - [x] P4.3c Per-condition ChromHMM lanes (genome-wide segmentation) and ChIP/RNA rows (M, should) (ChromHMM toggle + H3K27ac/H3K4me3 rows; RNA rows not shown)
 - [x] P4.4a Evidence card core and permanent variant page (M, must, **now**)
-- [ ] P4.5 Coding consequence (VEP-lite) from the canonical CDS and the genome (M, should)
+- [x] P4.5 Coding consequence (VEP-lite) from the canonical CDS and the genome (M, should) (weights.synonymous PROVISIONAL = coding)
 - [x] P4.6 molQTL evidence contract (minimal, synthetic until nf-rasqual tables arrive) (S, could) (real public tables instead: R4)
 - [ ] P4.7 Condition x assay signal matrix at the SNP (M, should)
 - [ ] P4.8 Genome-wide ChromHMM state layer (not only inside robust peaks) (M, should)
@@ -129,7 +130,7 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [x] P6.2 Assay designability QC from the Ssal_v3.1 genome (M, must, **now**) (thresholds provisional; revisited in push 2)
 - [x] P6.3 Panel designer (backbone + functional fill under constraints) (M, must, **now**)
 - [x] P6.4 Vendor submission exports (Illumina-style, Axiom-style, KASP) and the zip bundle (M, must, **now**)
-- [ ] P6.5 Genomic-prediction priors bundle (BayesRC, GFBLUP/MultiBLUP, LDAK, annot) (S, must)
+- [x] P6.5 Genomic-prediction priors bundle (BayesRC, GFBLUP/MultiBLUP, LDAK, annot) (S, must) (`--format priors`; portal: default categories under 'More formats', no category checkboxes yet)
 - [x] P6.6 Compare with an existing chip (overlap, gaps, new functional coverage) (S, should, **now**)
 - [ ] P6.7 Saved, versioned panels with diff (opt-in retention) (M, could)
 - [ ] P6.8 Ohnolog cross-hybridisation risk for probes (L, could)
@@ -185,6 +186,6 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [x] Cross-package leftovers (chip cap, trait SD check, spill dirs, allele note, MAF bins, demo script, GWAS methods text, export panel list) (commits 5abd2a2 / b5ed092)
 
 ### Manual QA (not automatable)
-- [ ] Evidence card prints on one A4 page; report on two
-- [ ] Locus browser readable at 1280 px and on a tablet
-- [ ] Colour-blind check of tier and ChromHMM palettes (e.g. with a simulator)
+- [x] Evidence card prints on one A4 page; report on two (49 cards and 5 reports, headless Chrome A4; not Safari/Firefox print)
+- [x] Locus browser readable at 1280 px and on a tablet (768/1024/1280 px in headless Chrome; below 992 px wide figures scroll in their card; no real tablet)
+- [x] Colour-blind check of tier and ChromHMM palettes (Machado 2009 simulation, CIEDE2000; 'Ensembl regulatory' moved to sky blue; AQUA-FAANG palette's Bivalent vs Repressed_polycomb is close under deuteranopia: labels on cells, tooltips only on lanes)

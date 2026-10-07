@@ -9,7 +9,7 @@ from pathlib import Path
 
 import duckdb
 
-from . import assay
+from . import assay, coding
 from .fasta import Fasta
 from .formats import ACCEPTED, RESERVED, InputError, TooMany, detect, lit, q, source  # noqa: F401 (RESERVED re-exported)
 from .score import load_weights, scored
@@ -424,12 +424,23 @@ def _annotate(con, path, release, out, manifest, weights, trait, sequence, step,
                 report["assembly"] = assembly_verdict(report["ref_check"])
                 report["assay"] = dict(con.execute("SELECT assay_status, count(*) FROM snps GROUP BY 1 ORDER BY 1").fetchall())
                 report["assay_reasons"] = assay.breakdown(con, "(SELECT assay_reasons FROM snps WHERE assay_status IN ('warn', 'fail'))")
+                models = next((l for l in manifest["layers"] if l.get("format") == "gff3_transcripts"), None)
+                if models and (release / models["file"]).exists() and not report["ref_check_sampled"]:
+                    step("coding")  # table `coding` (idx, coding_*), joined below
+                    coding.consequences(con, location, release / models["file"], point and release / point["file"])
+                    for key, col in (("coding", "coding_consequence"), ("coding_notes", "coding_note")):
+                        report[key] = dict(con.execute(f"SELECT {col}, count(*) FROM coding WHERE {col} IS NOT NULL "
+                                                       "GROUP BY 1 ORDER BY 2 DESC, 1").fetchall())
             except OSError:  # remote genome unreachable: annotate without the sequence columns
                 report["assembly"] = {"verdict": "not_checked", "checked": 0, "message": "The genome could not be read."}
-        if alleles:
-            # A/T and C/G SNPs read the same on both strands, which some genotyping assays can't tell apart.
-            con.execute("""CREATE OR REPLACE TABLE snps AS
-                           SELECT *, upper(ref) || upper(alt) IN ('AT', 'TA', 'CG', 'GC') AS strand_ambiguous FROM snps""")
+        # A/T and C/G SNPs read the same on both strands, which some genotyping assays can't tell apart.
+        ambiguous = ", upper(ref) || upper(alt) IN ('AT', 'TA', 'CG', 'GC') AS strand_ambiguous" if alleles else ""
+        has_coding = "coding" in report
+        if ambiguous or has_coding:  # one rewrite of the whole table for both
+            coding_cols = "".join(f", c.{c}" for c in coding.COLUMNS) if has_coding else ""
+            con.execute(f"""CREATE OR REPLACE TABLE snps AS SELECT s.*{coding_cols}{ambiguous}
+                            FROM snps s{' LEFT JOIN coding c USING (idx)' if has_coding else ''}""")
+            con.execute("DROP TABLE IF EXISTS coding")
         if weights:
             step("scoring")
             columns = [r[0] for r in con.execute("DESCRIBE snps").fetchall()]
