@@ -215,8 +215,15 @@ class PortalTest(SimpleTestCase):
         self.assertContains(table, "vgll3_Met54Thr")
 
     def test_examples_run_end_to_end(self):
-        page = self.client.get(reverse("snpportal:upload"))
-        self.assertContains(page, 'name="example" value="known_loci"')
+        page = self.client.get(reverse("snpportal:upload")).content.decode()
+        tabs = re.findall(r'role="tab"[^>]*>([^<]+)</a>', page)
+        self.assertEqual(tabs, ["Upload SNPs", "Paste positions", "Genes or regions", "GWAS"])
+        self.assertIn('name="example" value="known_loci">Known loci <small>', page)  # the 'Try it' box
+        self.assertRegex(page, r'value="chip_demo_SYNTHETIC">SNP chip <small>synthetic, [\d,]+ SNPs</small>')
+        chip =self.client.post(reverse("snpportal:upload"), {"example": "chip_demo_SYNTHETIC"})
+        job = jobs.read(self.key(chip))
+        self.assertEqual((job["state"], job["label"], job["synthetic_input"]), ("done", "Example: SNP chip (synthetic)", True))
+        self.assertContains(self.client.get(chip.url), "SYNTHETIC data")  # the caveat line of synthetic jobs
         response = self.client.post(reverse("snpportal:upload"), {"example": "known_loci"})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(jobs.read(self.key(response))["state"], "done")

@@ -90,16 +90,26 @@ class GwasTest(SimpleTestCase):
         cls.tmp.cleanup()
         super().tearDownClass()
 
-    def test_score_page_offers_the_synthetic_example(self):
+    def test_score_page_gwas_tab_and_example(self):
         html = self.client.get(reverse("snpportal:upload")).content.decode()
-        section = html[html.index('id="gwas"'):]
-        section = section[:section.index("</details>")]  # the closed 'Have GWAS summary statistics?' section
-        self.assertIn(f'value="{STEM}"', section)
-        self.assertIn("(synthetic)", section)
-        self.assertIn('name="trait" value="maturation"', section)  # the example opens with trait=maturation
+        box = html[html.index('id="try-it"'):html.index('aria-label="Your data"')]  # the 'Try it' box
+        self.assertEqual(re.findall(r'name="example" value="(\w+)"', box), ["known_loci", "chip_demo_SYNTHETIC", STEM])
+        form = box[box.rindex("<form", 0, box.index(f'value="{STEM}"')):]  # the GWAS example's form
+        self.assertTrue(form.startswith(f'<form method="post" action="{reverse("snpportal:gwas_score")}">'))
+        self.assertIn('name="trait" value="maturation"', form)  # the example opens with trait=maturation
+        self.assertIn("synthetic, maturation", form)
         self.assertEqual(html.count(f'value="{STEM}"'), 1)  # not offered as a SNP-list example too
-        error = self.client.post(reverse("snpportal:gwas_score"), {})  # errors re-show Score with the GWAS section open
-        self.assertContains(error, 'id="gwas" open', status_code=400)
+        gwas = self.client.get(reverse("snpportal:upload"), {"input": "gwas"})  # the GWAS tab, also without JavaScript
+        self.assertContains(gwas, 'class="tab-pane active" id="pane-gwas" role="tabpanel" aria-labelledby="tab-gwas" '
+                                  f'method="post" action="{reverse("snpportal:gwas_score")}"')
+        self.assertRedirects(self.client.get(reverse("snpportal:gwas_score")), reverse("snpportal:upload") + "?input=gwas",
+                             fetch_redirect_response=False)
+        error = self.client.post(reverse("snpportal:gwas_score"), {})  # errors re-show Score on the GWAS tab
+        self.assertContains(error, "Choose a summary-statistics file", status_code=400)
+        self.assertContains(error, 'class="nav-link active" id="tab-gwas"', status_code=400)
+        self.assertContains(error, 'class="tab-pane active" id="pane-gwas"', status_code=400)
+        self.assertContains(error, f'id="pane-file" role="tabpanel" aria-labelledby="tab-file" method="post" '
+                                   f'action="{reverse("snpportal:upload")}"', status_code=400)  # not this page's URL
 
     def test_example_job_and_association_page(self):
         job = jobs.read(self.key)

@@ -12,7 +12,7 @@
 {% elif job.state == 'failed' %}
   <div class="sp-status sp-status-fail" role="alert">
     <p><strong>&#10007; These summary statistics could not be analysed.</strong> {{ job.error }}</p>
-    <p><a href="{% url 'snpportal:upload' %}#gwas">Upload them again</a> · <a href="{% url 'snpportal:help' %}">Help with formats</a></p>
+    <p><a href="{% url 'snpportal:upload' %}?input=gwas">Upload them again</a> · <a href="{% url 'snpportal:help' %}">Help with formats</a></p>
   </div>
 {% else %}
   {% if release_changed %}<div class="sp-status sp-status-warn" role="status">&#9888; The annotation release or its rules have changed since

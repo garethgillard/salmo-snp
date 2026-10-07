@@ -25,10 +25,11 @@ python manage.py test snpportal                       # builds a release from sa
 ```
 
 `snpscore build` copies only the examples that exist, so run it again after making them. To try the portal, use the
-example buttons at the top of the Score page (the release's `demo/` inputs: known loci and the 50K public sites; the
-SYNTHETIC maturation GWAS is in the Score page's closed GWAS section), paste a few positions or rs IDs, upload
-`../salmo-snpscore/tests/fixture/snps.vcf`, or follow the guided tour (`/snp/tour/`). On a results page, the Panel tab's
-'Use the demo chip' button compares the list with the SYNTHETIC demo chip.
+'Try it' box at the top of the Score page (the release's `demo/` inputs: known loci, the SYNTHETIC demo chip and the
+SYNTHETIC maturation GWAS; `example=public_50k` still works but is not offered), paste a few positions or rs IDs, upload
+`../salmo-snpscore/tests/fixture/snps.vcf`, or follow the guided tour (`/snp/tour/`). The Score card's tabs (Upload SNPs,
+Paste positions, Genes or regions, GWAS) open with `?input=file|paste|regions|gwas` (or `#gwas`). On a results page,
+the Panel tab's 'Use the demo chip' button compares the list with the SYNTHETIC demo chip.
 `python manage.py tour_images [--base http://localhost:8000/snp/]` retakes the tour's screenshots (`static/snpportal/tour/`)
 from a running portal with headless Chrome (`--chrome` or `CHROME` if it is not in the usual place).
 

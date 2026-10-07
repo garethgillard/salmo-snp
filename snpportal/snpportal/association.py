@@ -39,7 +39,6 @@ from .jobs import ident
 G = palette.GREY
 SUFFIXES = (".fastgwa", ".linear", ".logistic", ".hybrid", ".regenie", ".mlma", ".assoc", ".stats", ".tsv", ".txt",
             ".csv", ".tab")  # accepted upload endings, optionally + .gz; the layout is read from the content
-EXAMPLE = "gwas_maturation_SYNTHETIC"  # release demo/ file offered as the GWAS example
 FIELDS = {  # URL parameter -> (finemap setting, lowest, highest); the window is given in kb. sugg <= 0.01 keeps clumping fast
     "sig": ("significant", 1e-300, 0.05), "sugg": ("suggestive", 1e-300, 0.01), "window": ("window", 10, 5000),
     "prior_sd": ("prior_sd", 0.01, 5), "lam": ("functional_lambda", 0, 3), "trait_sd": ("trait_sd", 1e-9, 1e9)}
@@ -67,7 +66,7 @@ def chrom_key(c):
     return (0, int(c), "") if str(c).isdigit() else (1, 0, str(c))
 
 
-# ---- the GWAS upload and example (POST from the Score page) ----
+# ---- the GWAS upload and example (POST from the Score page's GWAS tab and 'Try it' box) ----
 
 def suffix_of(name):
     """The upload's ending if it is a summary-statistics file ('.fastgwa', '.tsv.gz', ...), else None."""
@@ -79,9 +78,10 @@ def suffix_of(name):
 
 @csrf_exempt  # so the upload handler can be set before the body is read; _score checks the CSRF token
 def score(request):
-    """POST a summary-statistics file (or the example) -> a GWAS job -> its Association page."""
+    """POST a summary-statistics file (or the example) -> a GWAS job -> its Association page. Errors re-show the Score
+    page on its GWAS tab."""
     if request.method != "POST":
-        return redirect(f"{reverse('snpportal:upload')}#gwas")
+        return redirect(f"{reverse('snpportal:upload')}?input=gwas")
     max_mb = float(jobs.setting("SNPPORTAL_MAX_UPLOAD_MB", 300))
     try:
         length = int(request.META.get("CONTENT_LENGTH") or 0)
@@ -89,7 +89,7 @@ def score(request):
         length = 0
     if length > max_mb * 2 ** 20:
         return views.score_page(request, f"The upload is larger than {max_mb:g} MB. Compress it with gzip, or run "
-                                         "snpscore on your own computer (see 'Run it locally').", 413)
+                                         "snpscore on your own computer (see 'Run it locally').", 413, "gwas")
     request.exception_reporter_filter = views.PrivateReports()
     handler = views.UploadToResults(request)
     request.upload_handlers = [handler]
@@ -126,9 +126,10 @@ def _score(request):
         else:
             raise jobs.InputError("Choose a summary-statistics file or the GWAS example.")
     except jobs.InputError as e:
-        return views.score_page(request, str(e), 400)
+        return views.score_page(request, str(e), 400, "gwas")
     except jobs.QueueFull:
-        response = views.score_page(request, "The portal is busy scoring other lists. Please try again in a minute.", 503)
+        response = views.score_page(request, "The portal is busy scoring other lists. Please try again in a minute.",
+                                    503, "gwas")
         response["Retry-After"] = "60"
         return response
     return redirect(f"{reverse('snpportal:association', args=[key])}?{urlencode({'trait': preset})}")

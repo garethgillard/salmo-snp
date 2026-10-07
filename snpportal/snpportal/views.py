@@ -1,12 +1,13 @@
-"""Score SNPs and see the results: the Score page (upload, paste or example -> a job), job status, the results
-page with tabs (Overview | Table | Panel), downloads with provenance, figures and 'Delete now' (the card is in locus.py).
+"""Score SNPs and see the results: the Score page (upload, paste or example -> a job; its GWAS tab posts to
+association.score), job status, the results page with tabs (Overview | Table | Panel), downloads with provenance,
+figures and 'Delete now' (the card is in locus.py).
 Views that show a user's SNPs are private: no caching, same-origin referrers, and error reports without POST
 values, uploaded file names, local variables or DuckDB message text."""
 from __future__ import annotations
 
 import os
 import tempfile
-from functools import wraps
+from functools import lru_cache, wraps
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -28,12 +29,14 @@ from . import jobs, results as result_views, tools
 SUFFIXES = (".vcf.gz", ".vcf", ".tsv.gz", ".tsv", ".csv.gz", ".csv", ".txt.gz", ".txt", ".bim", ".map")
 PASTE_LINES = 10_000
 TABS = ("overview", "table", "panel", "export")
-EXAMPLES = {  # demo file name (without extension) -> label ({n}: its rows); files come from the release's demo/ folder
-    "known_loci": "{n} known salmon loci",
-    "public_50k": "50,000 public sites",
-    "chip_demo_SYNTHETIC": "Demo chip (synthetic)",
+EXAMPLES = {  # the release's demo/ files (name without extension) -> (title, what it is; {n}: its rows)
+    "known_loci": ("Known loci", "{n:,} from published studies"),
+    "chip_demo_SYNTHETIC": ("SNP chip", "synthetic, {n:,} SNPs"),
+    "gwas_maturation_SYNTHETIC": ("GWAS", "synthetic, maturation"),  # posted to association.score with trait=maturation
+    "public_50k": ("50,000 public sites", ""),  # not on the Score page, but still an example
 }
-INPUTS = {"file": "Upload file", "paste": "Paste positions", "regions": "Genes or regions"}  # the Score page's tabs (?input=)
+TRY = ("known_loci", "chip_demo_SYNTHETIC", "gwas_maturation_SYNTHETIC")  # the Score page's 'Try it' box, in this order
+INPUTS = {"file": "Upload SNPs", "paste": "Paste positions", "regions": "Genes or regions", "gwas": "GWAS"}  # Score tabs
 
 
 class PrivateReports(SafeExceptionReporterFilter):
@@ -102,38 +105,43 @@ def accepted_suffix(name):
 
 
 def examples():
-    """{name: {label, path, suffix, synthetic}} for the release's example inputs (demo/ and catalog/known_loci.tsv)."""
+    """{name: {title, what, label (the job's), path, suffix, synthetic}} for the release's example inputs (demo/ and
+    catalog/known_loci.tsv)."""
     release = jobs.release()
     files = sorted((release / "demo").iterdir()) if (release / "demo").is_dir() else []
     found = {}
     for p in files + [release / "catalog" / "known_loci.tsv"]:
         suffix = accepted_suffix(p.name)
-        if suffix and p.is_file():
-            name = p.name[:-len(suffix)]
-            label = EXAMPLES.get(name, name.replace("_", " "))
-            if "{n}" in label:
-                label = label.format(n=_rows(p))
-            found.setdefault(name, {"label": label, "path": p, "suffix": suffix, "synthetic": "SYNTHETIC" in p.name})
+        name = suffix and p.name[:-len(suffix)]
+        if name and name not in found and p.is_file():
+            title, what = EXAMPLES.get(name, (name.replace("_", " "), ""))
+            if "{n" in what:
+                what = what.format(n=_rows(p, p.stat().st_mtime_ns))
+            synthetic = "SYNTHETIC" in p.name
+            found[name] = {"title": title, "what": what, "label": f"{title} (synthetic)" if synthetic else title,
+                           "path": p, "suffix": suffix, "synthetic": synthetic}
     return found
 
 
-def _rows(path):
-    """Data rows of a small example file (lines that are not '#' comments, minus the header)."""
+@lru_cache(maxsize=64)
+def _rows(path, mtime_ns):
+    """Data rows of an example file (lines that are not '#' comments, minus the header), counted once per version."""
     with open(path) as f:
         return sum(1 for line in f if line.strip() and not line.startswith("#")) - 1
 
 
 def score_page(request, error=None, status=200, tab=None, targets=""):
-    """The Score page: examples, one card with the tabs Upload file | Paste positions | Genes or regions (?input=, or
-    `tab` after an error) and a closed GWAS section, open when the error came from the GWAS form."""
+    """The Score page: the 'Try it' examples (TRY) and one card with the tabs Upload SNPs | Paste positions | Genes or
+    regions | GWAS (?input=, or `tab` after an error, so each form's errors come back on its own tab)."""
     from .explore import FLANK, FLANKS  # the gene/region flank choices (explore.candidate_job reads them)
     tab = tab if tab in INPUTS else request.GET.get("input") if request.GET.get("input") in INPUTS else "file"
+    found = examples()
     return render(request, "snpportal/score.html", {
-        "nav": "score", "title": "Score SNPs", "error": error, "examples": examples(), "tabs": INPUTS.items(), "tab": tab,
+        "nav": "score", "title": "Score SNPs", "error": error, "tabs": INPUTS.items(), "tab": tab,
+        "tries": [dict(found[name], name=name, gwas=name.startswith("gwas_")) for name in TRY if name in found],
         "targets": targets, "flanks": FLANKS, "flank": FLANK, "paste_lines": PASTE_LINES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}",
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}",
-        "gwas_open": request.path == reverse("snpportal:gwas_score"),
     }, status=status)
 
 
