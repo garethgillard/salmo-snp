@@ -1,11 +1,12 @@
-{% comment %}Breadcrumb, H1, meta line and actions. Context: title, crumbs [(label, url or None)], meta, title_badges,
-   actions [{label, url, post, style, confirm, download}].{% endcomment %}
+{% comment %}Breadcrumb, H1, meta line and actions. Context: title, crumbs [(label, url or None)], meta,
+   actions [{label, url, post, style, confirm, download}]. No badges in the H1: pages that show tiers include
+   _caveat.html (with SYNTHETIC on synthetic jobs) instead.{% endcomment %}
 {% if crumbs %}<nav aria-label="Breadcrumb"><ol class="sp-crumbs">
   {% for label, url in crumbs %}<li>{% if url %}<a href="{{ url }}">{{ label }}</a>{% else %}<span aria-current="page">{{ label }}</span>{% endif %}</li>{% endfor %}
 </ol></nav>{% endif %}
 <header class="sp-page-header">
   <div>
-    <h1>{{ title }}{% for badge in title_badges %} {% include 'snpportal/_badges.html' with kind=badge %}{% endfor %}</h1>
+    <h1>{{ title }}</h1>
     {% if meta %}<p class="sp-meta">{{ meta }}</p>{% endif %}
   </div>
   {% if actions %}<div class="sp-actions" id="sp-actions">

@@ -84,18 +84,21 @@ class Axis:
 
 
 def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=None, hmm=None, chosen=(),
-          mark=None, gene_url=None, width=WIDTH, gutter=GUTTER, compact=False, synthetic=False, uid="lc", gwas=None, legend_on=True):
+          mark=None, gene_url=None, width=WIDTH, gutter=GUTTER, compact=False, synthetic=False, uid="lc", gwas=None, legend_on=True,
+          lanes=None, heading=True):
     """The locus figure. data: snpscore.locus.locus() dict. snps: [{pos, id, tier, tier_score, title, url}] (the user's
     SNPs, drawn at render time). signal: {title, start, rung, rows: [{track, label, values or None}], note, scale}.
     hmm: [{condition, segments or None}] to draw the genome-wide ChromHMM segmentation instead of states in peaks.
     chosen: preset conditions (highlighted). mark: a 1-based position to mark. gene_url(gene_id) links genes.
     gwas: a GWAS job's regional association lane, drawn on top (see gwas_lane). legend_on=False leaves the legend out
-    (the landing page's thumbnail)."""
+    (the landing page's thumbnail). lanes: the optional lanes to draw ('published', 'molqtl', 'regbuild', 'gerp',
+    'variants'), None = all. heading=False leaves the title line out (it stays the SVG's <title>)."""
+    show = lambda lane: lanes is None or lane in lanes
     ax = Axis(data["start"], data["end"], gutter, width - RIGHT)
     defs = [_hatch(uid, "bl", G[700]), _hatch(uid, "lore", LORE, -45), _hatch(uid, "na", G[500])]
     back, body, legend = [], [], {}  # bands behind everything; lanes; legend items {group: [(swatch svg, label)]}
     y = 4
-    if title:
+    if title and heading:
         body.append(_t(8, y + 13, title, 13.5, weight="600"))
         y += 22
 
@@ -123,7 +126,7 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
             body.append(_t(gutter - 10, yy + 11, sub, 9, G[700], "end"))
 
     if gwas:  # P7.3: -log10 p of a GWAS job's SNPs, on top (AGENT gwas)
-        y = gwas_lane(body, ax, gwas, y, lane_label, legend)
+        y = gwas_lane(body, ax, gwas, y, legend)
 
     # the user's SNPs: tier-coloured lollipops, stem height = tier_score
     if snps:
@@ -140,11 +143,11 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
         y += 46
 
     # published associations (the known-loci catalogue): diamonds by evidence kind, filled when the effect allele is stated
-    if data.get("known"):
+    if data.get("known") and show("published"):
         y = _published(body, ax, data["known"], y, lane_label, legend)
 
     # molQTL lead SNPs (nf-RASQUAL, 12 fish): a triangle per lead, in the colour of its first tissue
-    if data.get("molqtl"):
+    if data.get("molqtl") and show("molqtl"):
         lane_label("molQTL leads", y + 11, "nf-RASQUAL")
         for m in data["molqtl"]:
             x = ax.x(m["pos"] - 0.5)
@@ -168,7 +171,7 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
     legend["Chromatin state" + ("" if hmm else " (inside AQUA-FAANG robust peaks only)")] = states
 
     # regulatory build and GERP
-    if data.get("regbuild") or not compact:
+    if show("regbuild") and (data.get("regbuild") or not compact):
         lane_label("Ensembl regulatory", y + 10)
         for r in data.get("regbuild", []):
             x, w = ax.span(r["start"], r["end"])
@@ -181,7 +184,7 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
         if types:
             legend["Regulatory build"] = [(_swatch(_colour(REGBUILD[t])), t.replace("_", " ")) for t in types]
         y += 16
-    if data.get("gerp") or not compact:
+    if show("gerp") and (data.get("gerp") or not compact):
         lane_label("GERP constrained", y + 10)
         top_gerp = max([g.get("score") or 0 for g in data.get("gerp", [])] + [1])
         for g in data.get("gerp", []):
@@ -194,18 +197,19 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
         y += 16
 
     # public variants, tick height = minor allele frequency
-    lane_label("Public variants", y + 14, "504 fish, height = MAF")
-    body.append(f'<line x1="{gutter}" x2="{width - RIGHT}" y1="{y + 30}" y2="{y + 30}" stroke="{G[300]}"/>')
-    if not data.get("variants"):
-        body.append(_t(ax.x0, y + 26, "none in this window", 9, G[700]))
-    for v in data.get("variants", []):
-        x, h = ax.x(v["pos"] - 0.5), 3 + 24 * min(0.5, v.get("maf") or 0) / 0.5
-        tip = (f"{data['chrom']}:{v['pos']:,} {v.get('ref')}>{v.get('alt')} · 504-fish panel: MAF {_num(v.get('maf'))}, alt AF {_num(v.get('af'))}"
-               + (f" · AQUA-FAANG 12 fish: alt AF {_num(v.get('aquafaang12_af'))}, DR2 {_num(v.get('aquafaang12_dr2'))}"
-                  if v.get("aquafaang12_af") is not None else ""))
-        body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{y + 30}" y2="{y + 30 - h:.1f}" stroke="{G[700]}">'
-                    f"<title>{escape(tip)}</title></line>")
-    y += 36
+    if show("variants"):
+        lane_label("Public variants", y + 14, "504 fish, height = MAF")
+        body.append(f'<line x1="{gutter}" x2="{width - RIGHT}" y1="{y + 30}" y2="{y + 30}" stroke="{G[300]}"/>')
+        if not data.get("variants"):
+            body.append(_t(ax.x0, y + 26, "none in this window", 9, G[700]))
+        for v in data.get("variants", []):
+            x, h = ax.x(v["pos"] - 0.5), 3 + 24 * min(0.5, v.get("maf") or 0) / 0.5
+            tip = (f"{data['chrom']}:{v['pos']:,} {v.get('ref')}>{v.get('alt')} · 504-fish panel: MAF {_num(v.get('maf'))}, alt AF {_num(v.get('af'))}"
+                   + (f" · AQUA-FAANG 12 fish: alt AF {_num(v.get('aquafaang12_af'))}, DR2 {_num(v.get('aquafaang12_dr2'))}"
+                      if v.get("aquafaang12_af") is not None else ""))
+            body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{y + 30}" y2="{y + 30 - h:.1f}" stroke="{G[700]}">'
+                        f"<title>{escape(tip)}</title></line>")
+        y += 36
 
     # live signal rows
     if signal is not None:
@@ -507,8 +511,8 @@ def tier_contribution(terms, score, tier, cutoffs, synthetic=False, uid="tc"):
     if not terms:
         parts.append(_t(x0 + 4, 37, "no evidence counted for this preset: tier 4", 10, G[700]))
     legend = "; ".join(f"{TERMS.get(t['term'], (0, t['term']))[1]} +{t['weight']}" for t in terms or [] if t["weight"])
-    desc = f"tier_score {score} = {legend or 'nothing'}; tier {tier}. Weights and cut-offs are PROVISIONAL."
-    parts.append(_t(x0, 74, f"score {score} → tier {tier} · weights and cut-offs PROVISIONAL (weights.yaml)", 9.5, G[700]))
+    desc = f"tier_score {score} = {legend or 'nothing'}; tier {tier}. Weights and cut-offs are provisional."
+    parts.append(_t(x0, 74, f"score {score} → tier {tier}", 9.5, G[700]))
     return figures.svg(width, 82, "Why this tier", desc, "".join(parts), synthetic)
 
 
@@ -598,7 +602,7 @@ def _shape(kind, x, y, r, fill, ring, tip):
     return f'<path d="{d}" fill="{fill}" {edge}><title>{escape(tip)}</title></path>'
 
 
-def gwas_lane(body, ax, gwas, y, lane_label, legend=None, height=120):
+def gwas_lane(body, ax, gwas, y, legend=None, height=120):
     """-log10 p against position on the locus axis: points coloured by tier, a diamond for the lead SNP, triangles for
     CDS/splice SNPs, a dark ring for credible-set members, the significance line. gwas: {points: [{pos, neglog10p,
     tier, kind ('lead' | 'coding' | ''), cs, title, url}], significant (-log10 p of the line), note}. Appends to
@@ -611,7 +615,8 @@ def gwas_lane(body, ax, gwas, y, lane_label, legend=None, height=120):
     top = math.ceil(top / step) * step
     y0, h = y + 6, height - 24
     sy = lambda v: y0 + h - h * min(v, top) / top
-    lane_label("Association", y0 + 10, "-log10 p")
+    body.append(_t(ax.x0 - 26, y0 + 10, "Association", 10.5, G[900], "end", "600")  # left of the tick labels
+                + _t(ax.x0 - 26, y0 + 21, "-log10 p", 9, G[700], "end"))
     body.append(f'<line x1="{ax.x0}" x2="{ax.x1}" y1="{y0 + h}" y2="{y0 + h}" stroke="{G[500]}"/>')
     for v in range(0, int(top) + 1, int(step) or 1):
         body.append(f'<line x1="{ax.x0 - 4}" x2="{ax.x0}" y1="{sy(v):.1f}" y2="{sy(v):.1f}" stroke="{G[500]}"/>'
@@ -633,20 +638,16 @@ def gwas_lane(body, ax, gwas, y, lane_label, legend=None, height=120):
     return y + height
 
 
-def gwas_figure(gwas, chrom, start, end, title="", width=WIDTH, gutter=GUTTER):
-    """The association lane alone, on the locus browser's x axis, to stack above a locus() figure: (body, height)."""
+def gwas_figure(gwas, chrom, start, end, title="", width=WIDTH, gutter=GUTTER, height=120):
+    """The association lane alone (`height` px), on the locus browser's x axis, to stack above a locus() figure:
+    (body, height)."""
     ax = Axis(start, end, gutter, width - RIGHT)
     body, legend, y = [], {}, 4
     if title:
         body.append(_t(8, y + 13, title, 13.5, weight="600"))
         y += 22
 
-    def lane_label(text, yy, sub=""):
-        body.append(_t(gutter - 10, yy, text, 10.5, G[900], "end", "600"))
-        if sub:
-            body.append(_t(gutter - 10, yy + 11, sub, 9, G[700], "end"))
-
-    y = gwas_lane(body, ax, gwas, y, lane_label, legend)
+    y = gwas_lane(body, ax, gwas, y, legend, height)
     for t in ax.ticks(9):
         body.append(_t(ax.x(t), y + 2, f"{t:,}", 9, G[700], "middle"))
     y = _legend(body, legend, y + 8, width, gutter)

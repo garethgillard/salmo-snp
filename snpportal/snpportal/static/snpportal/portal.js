@@ -41,6 +41,24 @@
     }
   });
 
+  // Menus (<details class="sp-menu|sp-dlmenu">) close on a click outside them or on Escape.
+  function closeMenus(except) {
+    document.querySelectorAll("details.sp-menu[open], details.sp-dlmenu[open]").forEach(function (d) {
+      if (d !== except) d.removeAttribute("open");
+    });
+  }
+  document.addEventListener("click", function (e) { closeMenus(e.target.closest && e.target.closest("details.sp-menu, details.sp-dlmenu")); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeMenus(null); });
+
+  // A link to #id opens the closed <details> that is, or holds, that id (Help questions, the GWAS form on Score).
+  function openTarget() {
+    var id = decodeURIComponent(location.hash.slice(1)), el = id && document.getElementById(id);
+    for (var d = el; d; d = d.parentElement) if (d.tagName === "DETAILS") d.open = true;
+    if (el) el.scrollIntoView();
+  }
+  window.addEventListener("hashchange", openTarget);
+  openTarget();
+
   // Drag-and-drop onto <div class="sp-drop" data-drop-for="file input id">; shows the chosen file's name.
   document.querySelectorAll("[data-drop-for]").forEach(function (zone) {
     var input = document.getElementById(zone.getAttribute("data-drop-for"));

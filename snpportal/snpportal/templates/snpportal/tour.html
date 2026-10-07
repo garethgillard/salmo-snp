@@ -1,131 +1,77 @@
 {% extends 'snpportal/base_portal.html' %}
 {% load snpportal_tags %}
-{% comment %}Guided 'vgll3 and maturation' tour (explore.tour): one step per page (?step=), with the example job in ?key=.
-   Live figures load with htmx after the page, so it never waits for salmobase; each has a plain link too.{% endcomment %}
+{% comment %}Guided 'vgll3 and maturation' tour (explore.tour): five steps of a few lines each (?step=), with the example
+   job in ?key=. The live figure loads with htmx after the page, so it never waits for salmobase.{% endcomment %}
 {% block main %}
 <nav class="sp-tour-bar" aria-label="Tour steps">
   <strong class="sp-small">Step {{ n }} of {{ count }}</strong>
   <ol>{% for i, label, url in steps %}<li><a href="{{ url }}"{% if i == n %} aria-current="step"{% endif %}>{{ i }}. {{ label }}</a></li>{% endfor %}</ol>
   <span class="sp-tour-move">{% if prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ prev }}">&lsaquo; Back</a>{% endif %}
-    {% if next %}<a class="btn btn-sm btn-primary" href="{{ next }}">Next &rsaquo;</a>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'snpportal:upload' %}">Score your own list</a>{% endif %}</span>
+    {% if next %}<a class="btn btn-sm btn-primary" href="{{ next }}">Next &rsaquo;</a>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'snpportal:upload' %}">Score your SNPs</a>{% endif %}</span>
 </nav>
 {% if error %}<div class="sp-status sp-status-fail" role="alert">&#10007; {{ error }}</div>{% endif %}
-{% if expired %}<div class="sp-status sp-status-warn" role="status">&#9888; The example job has expired or was deleted. Score it again in step 4.</div>{% endif %}
+{% if expired %}<div class="sp-status sp-status-warn" role="status">&#9888; The example job has expired or was deleted. Score it again in step {{ score_step }}.</div>{% endif %}
 
 <section class="sp-card sp-stack sp-tour" aria-labelledby="step-h">
-  <h2 id="step-h">{{ n }}. {{ heading }}</h2>
+  <h2 id="step-h">{{ heading }}</h2>
 
   {% if slug == 'known' %}
-  <p>Sea age at maturity in Atlantic salmon has a large-effect locus around <em>vgll3</em> on chromosome {{ gene.chrom|default:"25" }}.
-    The release&rsquo;s known-loci catalogue holds its published SNPs, with the effect allele on the Ssal_v3.1 forward strand
-    and the paper&rsquo;s DOI.{% if gene and not gene.name %} Ensembl 116 leaves this gene ({{ gene.id }}) unnamed; the portal
-    shows it as <em>{{ gene.label }}</em>, the catalogue&rsquo;s name{% if gene.human %} (human ortholog {{ gene.human }}){% endif %}.{% endif %}</p>
-  {% if loci %}<div class="table-responsive"><table class="table table-sm sp-small mb-0">
-    <thead><tr><th scope="col">SNP</th><th scope="col">Position</th><th scope="col">Ref/alt</th><th scope="col">Effect allele</th><th scope="col">Effect</th><th scope="col">Publication</th></tr></thead>
-    <tbody>{% for r in loci %}<tr>
-      <th scope="row" class="fw-normal">{{ r.id }}</th>
-      <td class="sp-mono">{% if r.pos %}<a href="{% url 'snpportal:variant' r.chrom|add:'-'|add:r.pos %}">{{ r.chrom }}:{{ r.pos }}</a>{% else %}{{ r.chrom }}:{{ r.start }}-{{ r.end }}{% endif %}</td>
-      <td class="sp-mono">{{ r.ref }}{% if r.alt %}/{{ r.alt }}{% endif %}</td>
-      <td>{% if r.effect_allele %}<strong class="sp-mono">{{ r.effect_allele }}</strong>{% else %}&ndash;{% endif %}</td>
-      <td>{{ r.effect|default:"" }}</td>
-      <td>{% for doi in r.dois %}<a href="https://doi.org/{{ doi }}" rel="noreferrer noopener" target="_blank">{{ doi }}</a>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
-    </tr>{% endfor %}</tbody>
-  </table></div>{% endif %}
-  {% if namesakes %}<div class="sp-status sp-status-not_checked" role="note">&#9432; <strong>Two genes answer to &lsquo;vgll3&rsquo;.</strong>
-    Salmon kept two copies of many genes from the salmonid genome duplication (Ss4R).
-    {% for o in namesakes %}<a href="{% url 'snpportal:gene' o.id %}">{{ o.name|default:o.id }}</a> ({{ o.id }}, chromosome {{ o.chrom }}){% if not forloop.last %}; {% endif %}{% endfor %}
-    shares this gene&rsquo;s name or human ortholog and is probably its ohnolog (a curated ohnolog table is not in this release yet).
-    The published SNPs are in the chromosome {{ gene.chrom }} copy: check the chromosome before reading results by gene name.</div>{% endif %}
-  <p class="mb-0"><a href="{{ search_url }}">Search &lsquo;vgll3&rsquo;</a> (both copies, the catalogue&rsquo;s first)
-    {% if gene %}· <a href="{% url 'snpportal:gene' gene.id %}?trait={{ trait }}">Gene page of {{ gene.label }}</a>{% endif %}
-    · <a href="{% url 'snpportal:known_loci' %}">All known loci</a></p>
+  <p>Sea age at maturity in Atlantic salmon has a large-effect locus at <em>vgll3</em> on chromosome {{ gene.chrom|default:"25" }}.
+    The known-loci catalogue holds its published SNPs, with the effect allele on the Ssal_v3.1 forward strand.</p>
+  {% if loci %}<ul class="sp-tour-list sp-small">{% for r in loci %}<li>{% if r.pos %}<a href="{% url 'snpportal:variant' r.chrom|add:'-'|add:r.pos %}?trait={{ trait }}">{{ r.id }}</a>{% else %}{{ r.id }}{% endif %}: {% if r.effect_allele and r.effect_direction %}{{ r.effect_allele }} = {{ r.effect_direction }}{% else %}{{ r.effect|default:"effect not stated" }}{% endif %}</li>{% endfor %}</ul>{% endif %}
+  {% if namesakes %}<p class="sp-small mb-0">&#9432; Two genes answer to &lsquo;vgll3&rsquo; (salmonid genome duplication): the published
+    SNPs are in the chromosome {{ gene.chrom }} copy, not in {% for o in namesakes %}<a href="{% url 'snpportal:gene' o.id %}">{{ o.name|default:o.id }}</a> (chromosome {{ o.chrom }}){% if not forloop.last %} or {% endif %}{% endfor %}.</p>{% endif %}
+  <p class="mb-0">{% if gene %}<a href="{% url 'snpportal:gene' gene.id %}?trait={{ trait }}">Gene page</a> · {% endif %}<a href="{% url 'snpportal:known_loci' %}">All known loci</a></p>
 
   {% elif slug == 'variant' %}
-  <p>Every position has a permanent page, annotated on the fly against the release with no upload: its tier for the
-    preset and the evidence behind it, the ChromHMM state in each of the 21 conditions (the preset&rsquo;s outlined), the
-    nearest gene, the public allele frequency and the assay design checks. For a known SNP the catalogue&rsquo;s effect
-    allele is matched to the variant&rsquo;s own alleles. Tier rules are {% include 'snpportal/_badges.html' with kind='provisional' %}.</p>
-  <div id="card" class="sp-tour-embed" hx-get="{{ card_url }}" hx-trigger="load" hx-select="#card-body" hx-swap="innerHTML ignoreTitle:true">
-    <p class="sp-muted mb-0">Loading the evidence card&hellip;</p>
-  </div>
-  <p class="mb-0"><a href="{{ card_url }}">Open the variant page</a></p>
-
-  {% elif slug == 'locus' %}
-  <p>The locus browser draws the Ensembl 116 genes, the AQUA-FAANG robust ATAC peaks coloured by ChromHMM state in each
-    condition, public variants, GERP constrained elements and the Ensembl regulatory build, then ATAC signal read live
-    from the AQUA-FAANG bigWigs on salmobase.org.{% if tracks %} For the {{ preset }} preset the signal rows are the
-    {{ tracks }} conditions (replicate R1, at most 8 rows).{% endif %} Default track sets are
-    {% include 'snpportal/_badges.html' with kind='provisional' %}. When salmobase does not answer in time a row is
-    hatched &lsquo;signal unavailable&rsquo;: signal is never filled in.</p>
+  <p>Every position has a page, annotated on the fly: its tier for the trait, the evidence behind it and the chromatin state
+    in 21 conditions. The locus browser shows that evidence along the genome, with live ATAC signal from salmobase.</p>
   <div id="tour-locus" class="sp-figure sp-tour-embed" hx-get="{{ locus_svg }}" hx-trigger="load" hx-select="svg" hx-swap="innerHTML">
-    <p class="sp-muted mb-0">Loading {{ region }} with live ATAC signal&hellip;</p>
+    <p class="sp-muted mb-0">Loading {{ region }}&hellip;</p>
     <noscript><img class="img-fluid" src="{{ locus_svg }}" alt="Genes, chromatin states and ATAC signal at vgll3"></noscript>
   </div>
-  <p class="mb-0"><a href="{{ locus_url }}">Open {{ region }} in the locus browser</a> (zoom, pan, H3K27ac or H3K4me3)
-    · <a href="{{ hmm_url }}">with the genome-wide ChromHMM segmentation</a>
-    · <a href="{{ jbrowse }}" rel="noreferrer noopener" target="_blank">salmobase JBrowse</a></p>
+  <p class="mb-0"><a href="{{ variant_url }}">The vgll3 Met54Thr page</a> · <a href="{{ locus_url }}">Open the locus browser</a></p>
 
   {% elif slug == 'score' %}
-  <p>The release ships the published SNPs as an example list (the &lsquo;Known loci&rsquo; button on Score SNPs). The tour
-    scores them together with the public variants (sites of the release pool or the 504-fish panel) within 50 kb of <em>vgll3</em>, as one job for the
-    {{ preset }} preset, exactly as an upload would be. Like any result, it is deleted after {{ keep_hours }} hours.</p>
-  {% if example %}<p class="sp-small sp-muted mb-0">{{ example }}.</p>{% endif %}
-  {% if job %}<p class="mb-0">Your example job: {{ job.label }}{% if job.n_rows %}, {{ job.n_rows|thousands }} SNPs{% endif %} ({{ job.state }}).
-    {% if results_url %}<a href="{{ results_url }}">Open its results</a>, or go on to step 5.{% endif %}</p>{% endif %}
-
-  {% elif slug == 'overview' and results_url %}
-  <p>The overview reads a summary made once when the job finished, so it is as quick for a million SNPs as for
-    {{ job.n_rows|thousands }}. Every number, bar, bin and heatmap cell links to the table with that filter, and the tiers of
-    every preset were computed up front: switching presets never rescores. P marks numbers from
-    {% include 'snpportal/_badges.html' with kind='provisional' %} rules.</p>
+  <p>The tour scores the published SNPs and the public variants within 50 kb of <em>vgll3</em> as one job, like an upload.
+    Every number and bar opens the matching rows.</p>
+  {% if results_url %}
+  {% include 'snpportal/_caveat.html' %}
   <div class="sp-kpis" aria-label="Key numbers">
-    {% for k in kpis %}{% if k.href %}<a class="sp-kpi{% if k.warn %} sp-kpi-warn{% endif %}" href="{{ k.href }}">{% else %}<div class="sp-kpi">{% endif %}
-      <b>{{ k.value }}</b><span>{{ k.label }}{% if k.provisional %} <abbr class="sp-prov-mark" title="Rules are PROVISIONAL, pending decision by G">P</abbr>{% endif %}</span>
-      {% if k.note %}<small>{{ k.note }}</small>{% endif %}
-    {% if k.href %}</a>{% else %}</div>{% endif %}{% endfor %}
+    {% for k in kpis %}{% if k.href %}<a class="sp-kpi" href="{{ k.href }}">{% else %}<div class="sp-kpi">{% endif %}
+      <b>{{ k.value }}</b><span>{{ k.label }}</span>{% if k.href %}</a>{% else %}</div>{% endif %}{% endfor %}
   </div>
-  {% for fig in figs %}{% include 'snpportal/_figure.html' with fig=fig %}{% endfor %}
-  <p class="mb-0"><a href="{{ results_url }}">Open the whole overview</a> (ideogram, genic regions, evidence terms, MAF, assay status, gaps)</p>
+  {% for fig in figs %}<div>{% include 'snpportal/_figure.html' with fig=fig %}</div>{% endfor %}
+  <p class="mb-0"><a href="{{ results_url }}">Open the results</a></p>
+  {% endif %}
 
-  {% elif slug == 'table' and results_url %}
-  <p>The table sorts and pages on the server, so it stays quick on 1.6 million rows. Filters are URL parameters shown as
-    removable chips: a view can be bookmarked or shared, and Download TSV follows it. Click a row for its evidence
-    card; <kbd>j</kbd> and <kbd>k</kbd> move between rows.</p>
-  <ul class="sp-tour-list">{% for label, url, note in filters %}<li><a class="sp-chip" href="{{ url }}">{{ label }}</a> <span class="sp-small sp-muted">{{ note }}</span></li>{% endfor %}</ul>
-  <p class="mb-0"><a href="{{ table_url }}">Open the table</a></p>
-
-  {% elif slug == 'panel' and results_url %}
-  <p>The Panel tab designs a genotyping panel from the scored list: a genome-wide backbone plus a functional fill, under
-    spacing, MAF, assay and per-gene limits ({% include 'snpportal/_badges.html' with kind='provisional' %} defaults in
-    weights.yaml &lsquo;design&rsquo;). Every export starts with &lsquo;#&rsquo; provenance lines; vendor layouts are to
-    confirm against the vendor&rsquo;s current template. The printable report puts the key numbers, figures, top 20 SNPs,
-    methods and provenance on two A4 pages.</p>
-  {% if figs %}<div class="row g-3">{% for fig in figs %}<div class="col-lg-6">{% include 'snpportal/_figure.html' with fig=fig %}</div>{% endfor %}</div>{% endif %}
-  <p class="d-flex flex-wrap gap-2 mb-0"><a class="btn btn-sm btn-outline-primary" href="{{ panel_url }}">Open the panel designer</a>
-    <a class="btn btn-sm btn-outline-primary" href="{{ report_url }}">Printable report</a></p>
-  <p class="sp-small mb-0">Downloads of the whole list: {% for label, url in exports %}<a href="{{ url }}" download>{{ label }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+  {% elif slug == 'panel' %}
+  <p>Filters live in the URL and combine, so a view can be bookmarked or shared. The Panel tab picks the best-scoring SNPs
+    that pass the assay filter, spread over every chromosome; Export writes the vendor files.</p>
+  {% if results_url %}
+  <p class="sp-chips mb-0">{% for label, url in filters %}<a href="{{ url }}">{{ label }}</a>{% endfor %}</p>
+  <p class="d-flex flex-wrap gap-2 mb-0"><a class="btn btn-sm btn-outline-primary" href="{{ panel_url }}">Design a panel</a>
+    <a class="btn btn-sm btn-outline-primary" href="{{ export_url }}">Export</a></p>
+  {% endif %}
 
   {% elif slug == 'yours' %}
-  <p>Upload a VCF, SNP table, PLINK .bim/.map file or chip manifest, or paste positions; or start from genes or
-    intervals, whose public variants become a job. Uploaded files are deleted as soon as they are scored and results
-    after 24 hours. For confidential lists, run snpscore on your own computer with the same release.</p>
-  <div class="sp-grid">
-    <a class="sp-card" href="{% url 'snpportal:upload' %}"><h3 class="mt-0">Score SNPs</h3><p class="sp-small sp-muted mb-0">Upload, paste or try an example.</p></a>
-    <a class="sp-card" href="{% url 'snpportal:landing' %}#candidates"><h3 class="mt-0">Genes or intervals</h3><p class="sp-small sp-muted mb-0">Score the public variants of a gene list or QTL intervals.</p></a>
-    <a class="sp-card" href="{% url 'snpportal:run_locally' %}"><h3 class="mt-0">Run it locally</h3><p class="sp-small sp-muted mb-0">The same release and commands on your own computer.</p></a>
-    <a class="sp-card" href="{% url 'snpportal:help' %}#privacy"><h3 class="mt-0">Help and privacy</h3><p class="sp-small sp-muted mb-0">Formats, limits and what is kept.</p></a>
-  </div>
+  <p>Upload a VCF, SNP table, PLINK .bim/.map file or chip manifest, paste positions, or score the public variants of genes
+    or regions.</p>
+  <p class="sp-small">From a VCF only CHROM, POS, ID, REF and ALT are read. Other table columns are kept with the results for
+    24 h; anyone with the link can see them. Confidential? <a href="{% url 'snpportal:run_locally' %}">Run it locally</a>.</p>
+  <p class="d-flex flex-wrap gap-2 mb-0"><a class="btn btn-primary" href="{% url 'snpportal:upload' %}">Score your SNPs</a>
+    <a class="btn btn-outline-secondary" href="{% url 'snpportal:help' %}">Help</a></p>
   {% endif %}
 
   {% if needs_job %}
   {% if job and job.state == 'failed' %}<div class="sp-status sp-status-fail" role="alert">&#10007; The example could not be scored. {{ job.error }}</div>
   {% elif job %}{% include 'snpportal/_progress.html' %}
-  {% else %}<p class="mb-0">This step uses the example job of step 4: score it first (a few seconds, public data only).</p>{% endif %}
+  {% elif slug != 'score' %}<p class="mb-0">This step uses the example job of step {{ score_step }}.</p>{% endif %}
   {% endif %}
   {% if show_form %}
   <form method="post" action="{{ post_url }}" class="d-flex flex-wrap align-items-center gap-2">{% csrf_token %}
     <button class="btn btn-primary" type="submit">{% if job %}Score the example again{% else %}Score the example{% endif %}</button>
-    <span class="sp-small sp-muted">{{ preset }} preset; public data only</span>
+    <span class="sp-small sp-muted">a few seconds; public data only</span>
   </form>{% endif %}
 </section>
 {% endblock main %}

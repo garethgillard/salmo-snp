@@ -9,7 +9,7 @@ class SnpportalConfig(AppConfig):
 
     def ready(self):
         """settings.SNPPORTAL_STATE_PALETTE: the chromatin-state colours, 'portal' (default) or 'aquafaang' (AQUA-FAANG's
-        itemRgb), G to choose. A viewer's cookie (the footer's 'Chromatin colours' links) overrides it per request."""
+        itemRgb), G to choose. A viewer's cookie (the locus browser's 'Chromatin colours' links) overrides it per request."""
         from . import palette
         palette.use_states(getattr(settings, "SNPPORTAL_STATE_PALETTE", "portal"))
 

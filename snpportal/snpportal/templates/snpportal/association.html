@@ -1,7 +1,8 @@
 {% extends 'snpportal/base_portal.html' %}
 {% load snpportal_tags %}
-{% comment %}Association tab of a GWAS job (P7.1-P7.4): upload QC, Manhattan, QC plot, loci and fine-mapping. Settings are
-   plain GET parameters (whitelisted in association.py); every link and form works without JavaScript.{% endcomment %}
+{% comment %}Association tab of a GWAS job (P7.1-P7.4), the job's first tab: one QC line, Manhattan, loci, PIPs, then a
+   closed QQ plot and closed fine-mapping settings (open by themselves when changed). Settings are plain GET parameters
+   (whitelisted in association.py); the trait applies on change; every link and form works without JavaScript.{% endcomment %}
 
 {% block portal_head %}{% if job.state == 'queued' or job.state == 'running' %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock portal_head %}
 
@@ -16,101 +17,75 @@
 {% else %}
   {% if release_changed %}<div class="sp-status sp-status-warn" role="status">&#9888; The annotation release or its rules have changed since
     these results were made. They still use release {{ job.release }} as it was then.</div>{% endif %}
-  {% if job.synthetic_input %}<div class="sp-status sp-status-warn" role="status">{% include 'snpportal/_badges.html' with kind='synthetic' %}
-    These summary statistics are synthetic test data (loci planted over public sites): not real results.</div>{% endif %}
 
-  <ul class="nav nav-tabs mb-3">
-    <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ tabs }}&amp;tab=overview">Overview</a></li>
-    <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ tabs }}&amp;tab=table">Table</a></li>
-    <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ tabs }}&amp;tab=panel">Panel</a></li>
-    <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ tabs }}&amp;tab=export">Export</a></li>
-    <li class="nav-item"><a class="nav-link active" aria-current="page" href="?{{ settings_query }}">Association</a></li>
+  <div id="assoc" hx-target="#assoc" hx-select="#assoc" hx-swap="outerHTML">
+  <ul class="nav nav-tabs">
+    <li class="nav-item"><a class="nav-link active" aria-current="page" href="?{{ query }}">Association</a></li>
+    <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ query }}&amp;tab=overview">Overview</a></li>
+    <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ query }}&amp;tab=table">Table</a></li>
+    <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ query }}&amp;tab=export">Export</a></li>
+    <li class="ms-auto align-self-center">
+      <form method="get" class="d-flex align-items-center gap-2 sp-small" hx-get="{% url 'snpportal:association' key %}" hx-trigger="change" hx-push-url="true">
+        {% for name, value in settings %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+        <label for="trait">Trait</label>
+        <select class="form-select form-select-sm w-auto" id="trait" name="trait">
+          {% for value, label, tip in presets %}<option value="{{ value }}" title="{{ tip }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Apply</button></noscript>
+      </form>
+    </li>
   </ul>
+  {% include 'snpportal/_caveat.html' with synthetic=synthetic %}
 
-  <form method="get" class="sp-card sp-filters sp-small" aria-label="Association settings">
-    <label>Trait preset <select class="form-select form-select-sm" name="trait">
-      {% for value, label in presets %}<option value="{{ value }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select></label>
-    <label>Significant p <input class="form-control form-control-sm sp-pos" name="sig" value="{{ form.sig }}" inputmode="decimal"></label>
-    <label>Suggestive p <input class="form-control form-control-sm sp-pos" name="sugg" value="{{ form.sugg }}" inputmode="decimal"></label>
-    <label>Window &plusmn; kb <input class="form-control form-control-sm sp-pos" name="window" value="{{ form.window }}" inputmode="numeric"></label>
-    <label>Prior effect SD <input class="form-control form-control-sm sp-pos" name="prior_sd" value="{{ form.prior_sd }}" inputmode="decimal"
-      title="W = SD squared, on the standardised scale"></label>
-    <label>Functional &lambda; <input class="form-control form-control-sm sp-pos" name="lam" value="{{ form.lam }}" inputmode="decimal"
-      title="prior proportional to exp(lambda x tier_score); 0 = uniform"></label>
-    <label>Trait SD <input class="form-control form-control-sm sp-pos" name="trait_sd" value="{{ form.trait_sd }}" inputmode="decimal"
-      title="betas are divided by this; 1 = a standardised trait"></label>
-    <label>QQ strata <select class="form-select form-select-sm" name="qq">
-      {% for value, label in strata.items %}<option value="{{ value }}"{% if value == qq %} selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select></label>
-    <button class="btn btn-sm btn-primary" type="submit">Apply</button>
-    <span class="sp-muted">Defaults {% include 'snpportal/_badges.html' with kind='provisional' %} (weights.yaml <code>finemap</code>)</span>
-  </form>
-
-  <section class="sp-card" aria-labelledby="gqc-h">
-    <h2 id="gqc-h">Summary statistics QC</h2>
-    <dl class="sp-dl sp-small mb-0">{% for name, value in qc %}<dt>{{ name }}</dt><dd>{{ value|thousands }}</dd>{% endfor %}</dl>
-    <p class="sp-small sp-muted mt-2 mb-0">Alleles are turned to the Ssal_v3.1 reference (alt = effect allele) using the genome, else the
-      public sites of the 504-fish panel; p values are read as text, so p = 1e-400 stays 400 on the -log10 scale.</p>
-  </section>
+  <details class="sp-more mb-2"{% if qc_line.1 %} open{% endif %}><summary>{{ qc_line.0 }}. QC details</summary>
+    <dl class="sp-dl sp-small mb-2">{% for name, value in qc %}<dt>{{ name }}</dt><dd>{{ value|thousands }}</dd>{% endfor %}</dl>
+  </details>
 
   {% include 'snpportal/_figure.html' with fig=figs.manhattan %}
 
-  <section class="sp-card" aria-labelledby="loci-h">
+  <section class="sp-card mt-3" aria-labelledby="loci-h">
     <h2 id="loci-h">Loci</h2>
-    <p class="sp-small sp-muted">Greedy distance clumping: the strongest SNP with p &lt; {{ cfg.suggestive }} leads a locus of every SNP
-      within {{ form.window }} kb; the next strongest SNP outside it leads the next. Long-range LD in farmed lines can split or merge
-      loci. {% include 'snpportal/_badges.html' with kind='provisional' %}</p>
+    <p class="sp-small sp-muted">Loci: SNPs within &plusmn;{{ values.window }} kb of each lead with p &lt; {{ values.sugg }},
+      strongest first, by distance only (no LD). Long-range LD in farmed lines can split or merge loci.</p>
     {% if loci %}<div class="sp-scroll"><table class="table table-sm sp-small sp-table">
       <thead><tr><th scope="col">Locus</th><th scope="col">Lead SNP</th><th scope="col" class="sp-num">p</th><th scope="col" class="sp-num">beta (se)</th>
-        <th scope="col" class="sp-num">SNPs</th><th scope="col" class="sp-num" title="SNPs below the significance threshold">sig.</th>
-        <th scope="col" class="sp-num" title="tier 1-2 SNPs within 2 log10 units of the lead">tier 1-2 near lead</th>
-        <th scope="col">Best functional candidate</th><th scope="col">Gene</th><th scope="col">LORe</th>
-        <th scope="col" title="95% credible set size: uniform -> functional prior">Credible set</th><th scope="col">Plots</th></tr></thead>
+        <th scope="col" class="sp-num" title="SNPs in the locus window (below the significance threshold)">SNPs (sig.)</th>
+        <th scope="col" title="Highest PIP under the uniform prior; the functional prior's pick where it differs">Top SNP by PIP</th>
+        <th scope="col">Gene</th><th scope="col" class="sp-num" title="95% credible set size: uniform &rarr; functional prior">95% credible set</th></tr></thead>
       <tbody>{% for x in loci %}<tr>
-        <th scope="row">{{ x.locus }}{% if not x.significant %} <span class="sp-badge sp-badge-flag" title="lead p above the significance threshold">suggestive</span>{% endif %}</th>
-        <td class="sp-mono">{% if x.card %}<a href="{{ x.card }}">{{ x.id }}</a>{% else %}{{ x.id }}{% endif %}<br><span class="sp-muted">{{ x.chrom }}:{{ x.lead|thousands }}</span></td>
+        <th scope="row"><a class="link-primary" href="{{ x.region }}" title="Regional plot">{{ x.locus }}</a>{% if not x.significant %} <span class="sp-badge sp-badge-flag" title="lead p above the significance threshold">suggestive</span>{% endif %}{% if x.lore %} <span class="sp-badge sp-badge-flag" title="region where the duplicated chromosomes still pair; probes may cross-hybridise">LORe</span>{% endif %}</th>
+        <td class="sp-mono">{% if x.card %}<a href="{{ x.card }}">{{ x.id }}</a>{% else %}{{ x.id }}{% endif %}</td>
         <td class="sp-num">{{ x.p }}</td>
         <td class="sp-num">{% if x.beta is not None %}{{ x.beta|floatformat:3 }} ({{ x.se|floatformat:3 }}){% else %}&ndash;{% endif %}</td>
-        <td class="sp-num">{{ x.n_snps|thousands }}</td><td class="sp-num">{{ x.n_significant|thousands }}</td>
-        <td class="sp-num">{{ x.n_tier12_near|default_if_none:"" }}</td>
-        <td>{% if x.candidate %}{% include 'snpportal/_badges.html' with kind='tier' value=x.candidate_tier short=1 %} <span class="sp-mono">{{ x.candidate }}</span>{% endif %}</td>
-        <td>{{ x.candidate_gene|default_if_none:"" }}{% if x.gene and x.gene != x.candidate_gene %}<br><span class="sp-muted">lead: {{ x.gene }}</span>{% endif %}</td>
-        <td>{% if x.lore %}<span class="sp-badge sp-badge-flag" title="late-rediploidized region: near-identical ohnolog">LORe</span>{% endif %}</td>
-        <td class="text-nowrap">{% if x.fm.n %}{{ x.fm.size_uniform }} &rarr; {{ x.fm.size_functional }}{% else %}<span class="sp-muted">n/a</span>{% endif %}</td>
-        <td class="text-nowrap"><a href="{{ x.region }}">regional plot</a> · <a href="{{ x.browser }}">browser</a></td>
+        <td class="sp-num">{{ x.n_snps|thousands }} ({{ x.n_significant|thousands }})</td>
+        <td>{% if x.top %}{% include 'snpportal/_badges.html' with kind='tier' value=x.top.tier short=1 %} <a class="sp-mono" href="{{ x.top.card }}">{{ x.top.id }}</a>
+          {% if x.top_f %}&rarr; {% include 'snpportal/_badges.html' with kind='tier' value=x.top_f.tier short=1 %} <a class="sp-mono" href="{{ x.top_f.card }}">{{ x.top_f.id }}</a> <span class="sp-muted">(functional)</span>{% endif %}
+          {% else %}<span class="sp-muted">n/a</span>{% endif %}</td>
+        <td{% if x.gene_tip %} title="{{ x.gene_tip }}"{% endif %}>{{ x.gene|default_if_none:"" }}</td>
+        <td class="sp-num text-nowrap">{% if x.fm.n %}{{ x.fm.size_uniform }} &rarr; {{ x.fm.size_functional }}{% else %}<span class="sp-muted">n/a</span>{% endif %}</td>
       </tr>{% endfor %}</tbody>
     </table></div>
-    {% else %}<div class="sp-status sp-status-not_checked" role="status">No SNP reaches p &lt; {{ cfg.suggestive }}: no loci to show.</div>{% endif %}
+    {% else %}<div class="sp-status sp-status-not_checked" role="status">No SNP reaches p &lt; {{ values.sugg }}: no loci to show.</div>{% endif %}
   </section>
 
-  <div class="row g-3">
-    <div class="col-xl-5">{% include 'snpportal/_figure.html' with fig=figs.qq %}</div>
-    <div class="col-xl-7">
-      <section class="sp-card" aria-labelledby="fm-h" id="finemap">
-        <h2 id="fm-h">Fine-mapping: uniform vs functional prior {% include 'snpportal/_badges.html' with kind='provisional' %}</h2>
-        <div class="sp-status sp-status-warn" role="note">&#9888; {{ assumptions }}</div>
-        <p class="sp-small">Wakefield approximate Bayes factors with W = {{ cfg.prior_sd }}&sup2; on the standardised scale (betas divided by a trait
-          SD of {{ cfg.trait_sd }}; without se, V = 1/(2N&middot;af&middot;(1&minus;af))). Functional prior: &pi; &prop; exp({{ cfg.functional_lambda }} &times;
-          tier_score) for preset <strong>{{ trait }}</strong>. 95% credible sets in descending PIP.</p>
-        {% if finemapped %}<div class="sp-scroll"><table class="table table-sm sp-small sp-table">
-          <thead><tr><th scope="col">Locus</th><th scope="col">Lead</th><th scope="col" class="sp-num">SNPs fine-mapped</th>
-            <th scope="col" class="sp-num">Credible set, uniform</th><th scope="col" class="sp-num">Credible set, functional</th>
-            <th scope="col" class="sp-num" title="largest / smallest functional prior in the locus">Prior ratio</th>
-            <th scope="col">Top SNP, uniform (PIP)</th><th scope="col">Top SNP, functional (PIP)</th></tr></thead>
-          <tbody>{% for x in loci %}{% if x.fm.n %}<tr>
-            <th scope="row">{{ x.locus }}</th><td class="sp-mono">{{ x.id }}</td><td class="sp-num">{{ x.fm.n|thousands }}</td>
-            <td class="sp-num">{{ x.fm.size_uniform }}</td><td class="sp-num">{{ x.fm.size_functional }}</td>
-            <td class="sp-num">{{ x.fm.prior_ratio|floatformat:1 }}&times;</td>
-            <td class="sp-mono">{{ x.fm.top_uniform }} ({{ x.fm.pip_top_uniform|floatformat:3 }})</td>
-            <td class="sp-mono">{{ x.fm.top_functional }} ({{ x.fm.pip_top_functional|floatformat:3 }})</td>
-          </tr>{% endif %}{% endfor %}</tbody>
-        </table></div>
-        {% else %}<div class="sp-status sp-status-not_checked" role="status">No locus could be fine-mapped: that needs se (with beta or z),
-          or N and allele frequencies, for each SNP.</div>{% endif %}
-      </section>
-    </div>
+  {% if finemapped %}
+  <p class="sp-small mt-3 mb-1">One causal variant per locus, no LD: PIPs depend on the prior SD and &lambda;, and the functional prior
+    on provisional weights. <a href="{% url 'snpportal:methods' %}">Method &rarr;</a></p>
+  {% include 'snpportal/_figure.html' with fig=figs.pip %}
+  {% elif loci %}<div class="sp-status sp-status-not_checked mt-3" role="status">No locus could be fine-mapped: that needs se (with beta
+    or z), or N and allele frequencies, for each SNP.</div>{% endif %}
+
+  <details class="sp-more mt-3"><summary>QQ plot</summary>{% include 'snpportal/_figure.html' with fig=figs.qq %}</details>
+
+  <details class="sp-more"{% if changed %} open{% endif %}><summary>Fine-mapping settings{% if changed %} ({{ changed }} changed){% endif %}</summary>
+    <form method="get" class="sp-card sp-filters sp-small" aria-label="Fine-mapping settings">
+      <input type="hidden" name="trait" value="{{ trait }}">
+      {% for name, label, value, tip in fields %}<label{% if tip %} title="{{ tip }}"{% endif %}>{{ label }} <input class="form-control form-control-sm sp-pos" name="{{ name }}" value="{{ value }}" inputmode="decimal"></label>{% endfor %}
+      <button class="btn btn-sm btn-primary" type="submit">Apply</button>
+      <a class="btn btn-sm btn-outline-secondary" href="?trait={{ trait }}">Defaults</a>
+      <span class="sp-muted">Defaults are provisional.</span>
+    </form>
+  </details>
   </div>
-  {% if finemapped %}{% include 'snpportal/_figure.html' with fig=figs.pip %}{% endif %}
 {% endif %}
 {% endblock main %}

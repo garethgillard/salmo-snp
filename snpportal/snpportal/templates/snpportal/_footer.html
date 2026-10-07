@@ -1,18 +1,9 @@
-{% load snpportal_tags %}{% portal_release as rel %}{% state_palettes as palettes %}
+{% load snpportal_tags %}{% portal_release as rel %}
 <footer class="sp-footer">
   <div class="sp-wrap">
-    {% if job and job.manifest_sha256 %}
-    <p>These results: release {{ job.release }} ({{ job.assembly }}), manifest sha256 <span class="sp-mono">{{ job.manifest_sha256|slice:":12" }}</span>,
-      weights sha256 <span class="sp-mono">{{ job.weights_sha256|default:"none"|slice:":12" }}</span>, snpscore {{ job.snpscore_version|default:"?" }}, created {{ job.created_utc }}.</p>
-    {% endif %}
-    <p>Annotation release {{ rel.version }} ({{ rel.assembly }}){% if rel.created %}, built {{ rel.created }}{% endif %}{% if rel.sha256 %},
-      manifest sha256 <span class="sp-mono">{{ rel.sha256|slice:":12" }}</span>{% endif %}.
-      Data: AQUA-FAANG, Ensembl 116, Ensembl Compara GERP, the nf-RASQUAL 504-fish panel and molQTL, EVA and published loci.
-      Tier rules are {% include 'snpportal/_badges.html' with kind='provisional' %}.</p>
-    <p><a href="{% url 'snpportal:about_data' %}">Data</a> · <a href="{% url 'snpportal:methods' %}">Methods</a> ·
-      <a href="{% url 'snpportal:help' %}#privacy">Privacy</a> · <a href="{% url 'snpportal:about_data' %}#cite">How to cite</a> ·
-      <a href="{% url 'snpportal:run_locally' %}">Run it locally</a> ·
-      <span class="sp-noprint">Chromatin colours: {% for name, label, used in palettes %}{% if used %}<strong aria-current="true">{{ label }}</strong>{% else %}<a href="{% url 'snpportal:state_palette' %}?name={{ name }}" rel="nofollow" title="Chromatin-state colours: {{ label }} (remembered in a cookie)">{{ label }}</a>{% endif %}{% if not forloop.last %} | {% endif %}{% endfor %}
-        (<a href="{% url 'snpportal:help' %}#palettes">key</a>)</span></p>
+    <p>Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }} ·
+      <a href="{% url 'snpportal:about_data' %}">Data: AQUA-FAANG, Ensembl 116, EVA, published studies</a> ·
+      <a href="{% url 'snpportal:methods' %}">Methods</a> · <a href="{% url 'snpportal:help' %}#privacy">Privacy</a> ·
+      <a href="{% url 'snpportal:about_data' %}#cite">How to cite</a> · <a href="{% url 'snpportal:run_locally' %}">Run locally</a></p>
   </div>
 </footer>

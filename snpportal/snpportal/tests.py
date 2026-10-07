@@ -144,11 +144,11 @@ class PortalTest(SimpleTestCase):
         self.assertContains(page, "Tier 1:")
         filtered = self.client.get(url + "?tab=table&trait=maturation&max_tier=2&hide_lore=1")
         self.assertContains(filtered, "shown")
-        self.assertContains(filtered, '<option value="maturation" selected>')
+        self.assertContains(filtered, '<option value="maturation" title="maturation: Brain, Gonad" selected>')  # the Trait tooltip
 
         card = self.client.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain", HTTP_HX_REQUEST="true")
-        self.assertContains(card, "Chromatin state per condition")
-        self.assertContains(card, "for <em>brain</em>")
+        self.assertTrue("Chromatin state per condition" in card.content.decode() or "conditions sampled" in card.content.decode())
+        self.assertContains(card, '<option value="brain" selected>')
         self.assertContains(card, 'rel="noreferrer noopener"')
         self.assertEqual(card["Cache-Control"], "no-store, private")
         self.assertContains(self.client.get(reverse("snpportal:card", args=[key, 0])), "sp-nav")  # standalone page
@@ -157,7 +157,8 @@ class PortalTest(SimpleTestCase):
                                             "WHERE chromatin_id IS NOT NULL LIMIT 1").fetchone()
         peak = self.client.get(reverse("snpportal:card", args=[key, in_peak[0]]), HTTP_HX_REQUEST="true")
         self.assertNotContains(peak, 'title="Embryo id')  # the peak id is not a condition
-        self.assertContains(peak, "<dt>chromatin_id</dt>")
+        self.assertContains(peak, "Chromatin state per condition")  # a peak: the grid
+        self.assertNotContains(peak, "chromatin_id")  # internal columns are not listed ('Your columns' are the upload's)
         missing = self.client.get(reverse("snpportal:card", args=[uuid.uuid4(), 0]))
         self.assertEqual((missing.status_code, missing["Cache-Control"], missing["Referrer-Policy"]),
                          (404, "no-store, private", "same-origin"))
@@ -293,7 +294,7 @@ class PortalTest(SimpleTestCase):
         try:
             weights.write_text(original.replace("active: 3", "active: 0"))
             page = self.client.get(reverse("snpportal:results", args=[key]) + "?tab=table")
-            self.assertContains(page, "have changed since")
+            self.assertContains(page, "The release has changed since")
             tiers = dict((t, n) for t, n in results.open_result(mock.Mock(GET={}), key)[0].execute(
                 "SELECT tier, count(*) FROM v GROUP BY 1").fetchall())
             self.assertEqual({str(t): n for t, n in tiers.items()}, before["all"])
@@ -349,6 +350,12 @@ class PortalTest(SimpleTestCase):
         self.assertIn("2 by their Ssal_v3.1 rs position", items["Placed by rs ID (EVA release 9)"])
         self.assertTrue(items["Assembly check"].startswith("Ssal_v3.1 confirmed"))
         self.assertNotIn("Columns not kept", items)  # empty: left out
+        clean = {"rows_read": 3, "snps_kept": 3, "rejected": {}, "assembly": {"verdict": "ok"}, "ref_check": {"ok": 3}}
+        self.assertEqual(results.qc_line(clean), "3 rows read · 3 scored · 0 rejected · Ssal_v3.1 confirmed")
+        self.assertFalse(results.qc_problem(clean))  # the one-line QC stays closed
+        for problem in ({"snps_kept": 2}, {"rejected": {"bad_pos": 1}}, {"indels": 1}, {"rsid": {"moved_from_icsasg_v2": 1}},
+                        {"alias_warnings": [{"from": "x"}]}, {"assembly": {"verdict": "warning"}}, {"ref_check": {"ok": 2, "mismatch": 1}}):
+            self.assertTrue(results.qc_problem({**clean, **problem}), problem)  # ... and opens by itself on any problem
 
     def test_qc_warning_is_snpscores_verdict(self):
         counts = {"ok": 85, "mismatch": 15, "not_snp": 100}

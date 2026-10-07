@@ -120,6 +120,12 @@ class LocusTest(SimpleTestCase):
                       self.get(f"{reverse('snpportal:locus')}?r=ssa25:28.98-29.01Mb"))  # alias and Mb units: the same view
         self.assertIn("wider than 2 Mb", self.get(f"{reverse('snpportal:locus')}?r=25:20-29Mb"))
         self.assertIn("Unknown chromosome", self.get(f"{reverse('snpportal:locus')}?r=ssa99:1-100"))
+        self.assertIn("Chromosome 25: 28,985,000-29,010,000", self.get(reverse("snpportal:locus")))  # opens at vgll3
+        self.assertNotIn("tracks.yaml", re.sub(r"<svg .*?</svg>", "", page, flags=re.S))  # provenance stays in the SVG's <desc>
+        self.assertIn('<details class="sp-more mt-2"><summary>Display options</summary>', page)  # closed at the defaults
+        self.assertIn(f'{reverse("snpportal:state_palette")}?name=aquafaang', page)  # the palette toggle lives here
+        changed = self.get(f"{reverse('snpportal:locus')}?{VGLL3}&assay=H3K27ac")
+        self.assertIn('<details class="sp-more mt-2" open><summary>Display options (1 changed)</summary>', changed)
 
     def test_fragment_download_and_moves(self):
         url = f"{reverse('snpportal:locus_svg')}?{VGLL3}"
@@ -165,47 +171,61 @@ class LocusTest(SimpleTestCase):
     def test_card_and_variant_page(self):
         key = jobs.create_from_rows([("25", 28996360, "vgll3_Met54Thr", "C", "T"), ("26", 19138923, "bco1l", "A", "G"),
                                      ("25", 28964518, "mq", None, None)], "Card rows")
-        card = self.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain", HTTP_HX_REQUEST="true")
-        self.assertNotIn("sp-nav", card)
-        why = svg_of(card[card.index("Why this tier"):])
-        score = int(re.search(r"score (\d+) for <em>brain</em>", card).group(1))
-        self.assertEqual(sum(int(w) for w in re.findall(r": \+(\d+)</title>", why)), score)  # the bar sums to tier_score
-        grid = svg_of(card[card.index("Chromatin state per condition"):])
-        self.assertEqual(grid.count('rx="3" fill="none"'), 4)  # the 4 Brain conditions of the preset are outlined
-        self.assertIn("Expression per tissue", card)
-        self.assertIn("Published association", card)
+        card = self.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain")
+        self.assertIn("sp-caveat", card)  # the page's one caveat line
+        d = jobs.folder(key)
+        scores = dict(jobs.connect([d]).execute(f"SELECT file_row_number, tier_score__brain FROM read_parquet('{d / 'tiers.parquet'}')").fetchall())
+        line = re.search(r'class="sp-badge sp-tier-\d"[^>]*>Tier \d</span>\s*&middot;(.*?)</p>', card, re.S).group(1)
+        self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)", line)), scores[0])  # the tier line sums to tier_score
+        self.assertIn("CDS (amino-acid effect not computed) +3", line)
+        self.assertIn("No AQUA-FAANG peak in the 21 conditions sampled", card)  # one line instead of an empty grid
+        self.assertNotIn("Chromatin state per condition", card)
+        self.assertIn("Expression of the nearest gene (not necessarily the target)</summary>", card)  # closed
+        self.assertIn('aria-label="Published association"', card)
+        self.assertIn("effect allele T (alt) = early maturation (1SW)", card)  # said once, matched to the SNP's alleles
         self.assertIn('href="https://doi.org/10.1038/nature16062"', card)
-        self.assertIn("Also within the catalogue window", card)  # vgll3_Asn323Lys, 2 kb away
-        self.assertIn("sp-ev-missense", card)
-        self.assertIn("Not a molQTL lead SNP", card)
+        self.assertIn("Nearby: ", card)  # vgll3_Asn323Lys, 2 kb away
+        self.assertNotIn("molQTL", card)  # not a lead SNP: no section
         self.assertIn("https://salmobase.org/genes/id/ENSSSAG00000053708?assembly=Ssal_v3.1", card)
-        mq = self.get(reverse("snpportal:card", args=[key, 2]))
+        self.assertIn("VGLL3", card)
+        self.assertIn("Copy 25-28996360-C-T", card)
+        self.assertEqual(card.count("<h2"), 0)  # the page header is the only title
+        mq = self.get(reverse("snpportal:card", args=[key, 2]) + "?trait=brain")
         self.assertIn("caQTL (chromatin accessibility)", mq)  # the molQTL section (R4): the peak shown 1-based
         self.assertIn("25:28,963,214-28,965,045", mq)
         self.assertIn("no direction is implied", mq)
-        overview = self.get(reverse("snpportal:results", args=[key]))
-        self.assertIn("molQTL lead SNPs", overview)  # KPI
+        grid = svg_of(mq[mq.index('id="card-body"'):])
+        self.assertIn("Chromatin state per condition", grid)  # a peak somewhere: the grid
+        self.assertEqual(grid.count('rx="3" fill="none"'), 4)  # the 4 Brain conditions of the trait are outlined
+        swap = self.get(reverse("snpportal:card", args=[key, 2]) + "?trait=all", HTTP_HX_REQUEST="true", HTTP_HX_TARGET="card-body")
+        self.assertNotIn("sp-nav", swap)  # a trait change swaps only the card
+        self.assertIn('id="card-body"', swap)
         table = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&molqtl=1")
         self.assertIn("1&ndash;1 of 1 shown", table)
-        self.assertIn("VGLL3", card)
-        d = jobs.folder(key)
         columns = [c[0] for c in jobs.connect([d]).execute(f"DESCRIBE SELECT * FROM read_parquet('{d / 'result.parquet'}')").fetchall()]
-        self.assertEqual("Assay design" in card, any(c.startswith("assay_") for c in columns))  # only with assay columns
+        self.assertEqual("Assay: " in card, "assay_status" in columns)  # only with assay columns
         bare = locus.evidence({"chrom": "25", "pos": 1, "tier": 4, "tier_score": 0, "tier_terms": []}, jobs.weights(), "all")
-        self.assertEqual((bare["assay"], bare.get("grid"), bare.get("gene")), ([], None, None))
+        self.assertEqual((bare.get("assay"), bare.get("grid"), bare.get("gene"), bare["terms"]), (None, None, None, None))
+        two = locus.evidence({"chrom": "25", "pos": 1, "tier": 1, "tier_score": 6, "tier_evidence": "active: Brain; CDS",
+                              "tier_terms": [{"term": "active", "weight": 3}, {"term": "coding", "weight": 3}]}, jobs.weights(), "all")
+        self.assertEqual(two["terms"], [("active: Brain", 3), ("CDS (amino-acid effect not computed)", 3)])
+        why = svg_of(two["why"])  # the score bars only when two or more terms count
+        self.assertEqual(sum(int(w) for w in re.findall(r": \+(\d+)</title>", why)), 6)
         mini = re.search(r'hx-get="([^"]+locus.svg[^"]*)"', card).group(1)
         self.assertNotIn("28996360", mini)  # addressed by row: no coordinates in the URL
         self.assertNotIn("r=", mini)
         svg = self.get(mini.replace("&amp;", "&"))
         ET.fromstring(svg)
-        self.assertIn("ATAC signal", svg)
-        self.assertIn(SIGNAL_PATH, svg)  # synthetic ATAC rows for the brain preset
+        self.assertNotIn(SIGNAL_PATH, svg)  # slim: genes and the trait's chromatin rows, no live ATAC
+        self.assertEqual(len(re.findall(r">Brain</text>", svg)), 1)
+        self.assertNotIn(">Gonad</text>", svg)
 
         variant = self.get(reverse("snpportal:variant", args=["25-28996360-C-T"]))
         self.assertIn("vgll3_Met54Thr", variant)  # no upload: annotated on the fly
-        self.assertIn("Why this tier", variant)
-        self.assertIn("Chromatin state per condition", variant)
+        self.assertIn("sp-tier-", variant)
+        self.assertIn("conditions sampled", variant)
         self.assertIn("compact=1", variant)
+        self.assertIn("slim=1", variant)
         self.assertIn("25:28996360", self.get(reverse("snpportal:variant", args=["ssa25-28996360"])))
         self.assertEqual(self.client.get(reverse("snpportal:variant", args=["ssa99-1"])).status_code, 404)
         self.assertFalse([p for p in (Path(self.tmp.name) / "results").iterdir() if p.name.startswith(".")])

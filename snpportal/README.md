@@ -18,8 +18,8 @@ python manage.py runserver                            # http://127.0.0.1:8000/sn
 python manage.py test snpportal                       # builds a release from salmo-snpscore's fixture
 ```
 
-To try it, use the example buttons at the top of the Score page (the release's `demo/` inputs: known loci, 50K public
-sites from the AQUA-FAANG 12-fish VCF, the SYNTHETIC demo chip, and the SYNTHETIC maturation GWAS in the GWAS card), paste
+To try it, use the example buttons at the top of the Score page (the release's `demo/` inputs: known loci and 50K public
+sites from the AQUA-FAANG 12-fish VCF; the SYNTHETIC maturation GWAS is in the Score page's closed GWAS section), paste
 a few positions or rs IDs, upload
 `../salmo-snpscore/tests/fixture/snps.vcf`, or follow the guided tour (`/snp/tour/`). On a results page, the Panel tab's
 'Use the demo chip' button compares the list with the SYNTHETIC demo chip. For a chip-sized list, cut 50K public SNPs from the
@@ -65,7 +65,7 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 
 | URL | What |
 | --- | --- |
-| `results/<key>/?tab=overview\|table\|panel\|export&trait=` | the results tabs; Table filters (`tier`, `region`, `chrom/start/end`, `gene`, `min_maf`, `assay`, `known`, `active`, `term`, `hide_*`) carry over to the Export tab; GWAS jobs add an Association tab |
+| `results/<key>/?tab=overview\|table\|panel\|export&trait=` | the results tabs; Table filters (`tier`, `region`, `chrom/start/end`, `gene`, `min_maf`, `assay`, `known`, `active`, `term`, `hide_*`) carry over to the Export tab, and `&snp=<row>` opens the Table's evidence drawer; GWAS jobs have Association, Overview, Table and Export (no Panel) |
 | `results/<key>/?tab=panel&design=1&n=&spacing_kb=&spacing_cm=&cm_map=&backbone=&maf=&per_gene=&per_element=&assay_pass=1&exclude=&must=&gap_mb=` | panel designer (blank or invalid values fall back to weights.yaml `design`; `spacing_cm` and `cm_map` (mean, female, male) only with the `cm` columns) |
 | `results/<key>/chip/` (POST) | `chip` file, `demo=1` or `remove=1` |
 | `results/<key>/download/?format=tsv\|parquet\|bed\|illumina\|axiom\|kasp\|bundle&scope=all\|filtered\|panel-<hash>` | exports with provenance (`&plain=1` drops it, `&include_failed=1` keeps assay failures in vendor files); vendor files hold no comment lines, so `format=<vendor>.provenance` and `.lookup` give snpscore's sidecars; `format=rejects` gives the dropped rows |
@@ -74,7 +74,7 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 | `results/<key>/association/` (+ `<name>.svg`, `download/`, `region/`) | GWAS jobs: QC, Manhattan, QQ, loci, fine-mapping, regional plot |
 | `results/<key>/snp/<row>/`, `variant/<chrom>-<pos>[-ref-alt]/`, `locus/?r=[&key=]`, `gene/<id>/` | evidence card, variant page, locus browser (with a GWAS job's key it draws the association lane), gene page |
 | `score/`, `score/gwas/`, `candidates/`, `tour/`, `known-loci/`, `search/`, `about/data/`, `about/methods/`, `help/`, `run-locally/` | the other pages |
-| `colours/?name=portal\|aquafaang` | the footer's chromatin-colour toggle: sets the `snpportal_palette` cookie, back to the (same-site) referring page |
+| `colours/?name=portal\|aquafaang` | the locus browser's chromatin-colour toggle (Display options): sets the `snpportal_palette` cookie, back to the (same-site) referring page |
 
 Search (`search.py`): positions and regions, rs IDs (the catalogue's, else `snpscore.rsid` on the release's EVA release 9
 table, with the ICSASG_v2 position in the hit), ICSASG_v2 positions (`ICSASG_v2 25:28656101`, `v2 ssa25:...` or a v2
@@ -91,24 +91,24 @@ Public data on the pages (R1, R3-R8 of salmo-snpscore's ROADMAP 'Push 2'):
   from the catalogue's evidence and caveat text). The card lists the nearest row and every other row within the
   catalogue window; the locus browser draws them in a 'Published' lane (filled diamond = effect allele stated).
 - molQTL (`molqtl` columns): a card section (tissue, eQTL or caQTL, gene or peak, eigenMT-adjusted p, pi without a
-  direction, citation and licence note), a Table column and the 'molQTL lead SNPs' filter (`molqtl=1`), an Overview
-  KPI and a locus-browser lane (read from `molqtl.parquet`). Weight 0: never counted in tiers.
+  direction, citation and licence note), a Table column and the 'molQTL lead SNPs' filter (`molqtl=1`) and a
+  locus-browser lane (read from `molqtl.parquet`). Weight 0: never counted in tiers.
 - Genetic map: the card shows female and male cM, the Table a 'cM (F/M)' column, and the panel designer a 'Min spacing
   (cM)' field with the map to use (`snpscore.panel.design(min_spacing_cm=, cm_map=)`; a median cM spacing KPI), when the
   `cm` columns exist.
-- Vendor checks (`tools.vendor_checks` = `snpscore.panel.vendor_checks`): the Panel tab, the report's panel summary and
-  every Export-tab scope that vendor files can be written for show the Illumina Infinium bins (A/T, C/G, the rest) and
-  their error 111 / warning 604 minimums, and markers within 60 bp; alleles are the list's, else the assay flank's
-  (public) ones, as in the vendor files. The Export tab explains the `Ssa<chrom>p<pos>` locus names and the
+- Vendor checks (`tools.vendor_checks` = `snpscore.panel.vendor_checks`): each Export-tab vendor row shows its own
+  include count and checks (Illumina Infinium bins, markers within 60 bp, alleles unknown), and the zip adds
+  `vendor_checks.txt`; alleles are the list's, else the assay flank's (public) ones, as in the vendor files. Help
+  (`#exports`) explains the `Ssa<chrom>p<pos>` locus names, the bins' error 111 / warning 604 minimums and the
   `.provenance.txt` and `.lookup.tsv` sidecars.
 - Upload QC: chromosome-name warnings (e.g. `HG993277.1`, an older chromosome 18) as alerts; `.2` GenBank names are
-  accepted; the assay-reasons figure labels snpscore's reasons.
+  accepted; the Panel tab's Assay readiness card labels snpscore's reasons.
 - Data page: layer population and licence, the AQUA-FAANG samples (ENA projects, BodyMap fish) and a 'How to cite'
   block (wording PROVISIONAL). Gene pages, cards and the Known loci page link to SalmoBase gene pages.
 - State colours: `palette.STATE_PALETTES` has the portal palette and AQUA-FAANG's itemRgb colours;
   `SNPPORTAL_STATE_PALETTE = 'aquafaang'` makes AQUA-FAANG's the default for every page and figure (G to choose), and
-  the footer's 'Chromatin colours' links switch it per viewer (a cookie read on `request_started`, kept in a
-  `ContextVar` for that request; apps.py). Help shows both side by side.
+  the locus browser's Display options switch it per viewer (a cookie read on `request_started`, kept in a
+  `ContextVar` for that request; apps.py). Methods shows the colours in its chromatin-state table.
 
 Modules: `views.py` (score page, job status, results shell, downloads, delete), `results.py` (overview, table and
 filters, figures), `locus.py` (locus browser, evidence card, variant page; `locus_svg.py` draws them), `explore.py`
@@ -119,7 +119,10 @@ page, regional plot), `figures.py` (pure functions data -> SVG), `palette.py` (e
 `_figure`, `_badges` and `_footer`; styles are in `static/snpportal/portal.css`, small enhancements in `portal.js`.
 
 **Design rules.** Colours come only from `palette.py`: HTML gets CSS custom properties, SVGs embed literal hex (so
-saved files keep their colours). No colours or inline styles in templates (a test checks). Every SVG has `role="img"`,
+saved files keep their colours). No colours or inline styles in templates (a test checks). Pages that show tiers
+carry one caveat line (`_caveat.html`, starting 'SYNTHETIC data' on synthetic jobs) instead of PROVISIONAL or SYNTHETIC
+badges; figure cards show a title, an (i) and one download menu, with provenance only in the SVG's `<desc>` and the
+downloads. Every SVG has `role="img"`,
 `<title>` and `<desc>`; text colours pass WCAG AA (a test checks); focus is always visible.
 
 **Privacy.** Results pages (also their 404s) send `Cache-Control: no-store, private` and `Referrer-Policy: same-origin`;

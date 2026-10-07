@@ -90,10 +90,14 @@ class GwasTest(SimpleTestCase):
 
     def test_score_page_offers_the_synthetic_example(self):
         html = self.client.get(reverse("snpportal:upload")).content.decode()
-        form = html[html.index('id="gwas"'):]
-        self.assertIn(f'value="{STEM}"', form)
-        self.assertIn("SYNTHETIC", form[:form.index("</form>")])
+        section = html[html.index('id="gwas"'):]
+        section = section[:section.index("</details>")]  # the closed 'Have GWAS summary statistics?' section
+        self.assertIn(f'value="{STEM}"', section)
+        self.assertIn("(synthetic)", section)
+        self.assertIn('name="trait" value="maturation"', section)  # the example opens with trait=maturation
         self.assertEqual(html.count(f'value="{STEM}"'), 1)  # not offered as a SNP-list example too
+        error = self.client.post(reverse("snpportal:gwas_score"), {})  # errors re-show Score with the GWAS section open
+        self.assertContains(error, 'id="gwas" open', status_code=400)
 
     def test_example_job_and_association_page(self):
         job = jobs.read(self.key)
@@ -101,10 +105,14 @@ class GwasTest(SimpleTestCase):
         response = self.client.get(self.page)
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        self.assertIn("sp-badge-syn", html[:html.index("Summary statistics QC")])  # SYNTHETIC badge and banner on top
+        top = html[:html.index('id="fig-manhattan"')]  # answer first: one caveat line (SYNTHETIC on this job), one QC line
+        self.assertIn("SYNTHETIC data", top[top.index("sp-caveat"):])
+        self.assertEqual(html.count("SYNTHETIC data"), 1)  # one line, no badges
         report = jobs.read_json(jobs.folder(self.key) / "gwas.json")
         self.assertLess(abs(report["lambda_gc"] - self.lambda_gc), 0.01)
-        self.assertIn(f"{report['lambda_gc']}", html)
+        self.assertIn(f"{report['rows_read']:,} rows read, all kept · beta/se on all · λGC {report['lambda_gc']:.2f}", top)
+        self.assertIn(f"{report['lambda_gc']}", html)  # in the closed QC details
+        self.assertIn('<details class="sp-more mb-2"><summary>', top)  # closed: nothing went wrong
         figures = svgs(html)
         self.assertEqual(len(figures), 3)
         for svg in figures:
@@ -112,9 +120,19 @@ class GwasTest(SimpleTestCase):
             self.assertEqual(root.get("role"), "img")
             self.assertIn("SYNTHETIC", svg)  # watermark
         self.assertIn(self.truth["a_vgll3"]["id"], html)
-        results = self.client.get(reverse("snpportal:results", args=[self.key])).content.decode()
-        self.assertIn("sp-badge-syn", results)
-        self.assertIn(reverse("snpportal:association", args=[self.key]), results)  # the Association tab
+        loci = html[html.index('id="loci-h"'):html.index("</table>")]
+        self.assertIn("Top SNP by PIP", loci)
+        self.assertNotIn("Best functional candidate", loci)
+        self.assertLess(html.index('id="fig-manhattan"'), html.index('id="loci-h"'))
+        self.assertLess(html.index('id="loci-h"'), html.index('id="fig-pip"'))
+        self.assertIn('<details class="sp-more mt-3"><summary>QQ plot</summary>', html)  # closed
+        self.assertIn('<details class="sp-more"><summary>Fine-mapping settings</summary>', html)  # closed at the defaults
+        changed = self.client.get(self.page + "&sig=1e-10").content.decode()
+        self.assertIn('<details class="sp-more" open><summary>Fine-mapping settings (1 changed)</summary>', changed)
+        self.assertIn(f'{reverse("snpportal:results", args=[self.key])}?trait=maturation&amp;tab=export', html)  # one Export link
+        self.assertNotIn("format=loci", html)
+        results = self.client.get(reverse("snpportal:results", args=[self.key]))  # GWAS jobs open on Association
+        self.assertTrue(results.url.startswith(reverse("snpportal:association", args=[self.key])))
 
     def test_figures_loci_and_lambda(self):
         base = reverse("snpportal:association_figure", args=[self.key, "manhattan"])
@@ -147,8 +165,17 @@ class GwasTest(SimpleTestCase):
         causal = self.truth["a_vgll3"]["id"]
         mark = re.search(r'<(circle|path) [^>]*stroke-width="1.8"[^>]*><title>' + re.escape(causal) + r"[^<]*credible set", svg)
         self.assertIsNotNone(mark)  # the planted causal SNP, outlined as a credible-set member
-        self.assertLess(svg.index(causal), svg.index('fill-opacity="0.85"'))  # above the (synthetic) ATAC rows
-        self.assertIn("No LD is used", html)
+        self.assertLess(svg.index(causal), svg.index(">Genes</text>"))  # the association lane on top
+        self.assertNotIn('fill-opacity="0.85"', svg)  # no ATAC rows: they stay in the locus browser
+        self.assertNotIn(">Public variants</text>", svg)
+        self.assertIn("No LD used: colours are tiers, not r²", svg)
+        self.assertIn("SYNTHETIC data", html[:html.index('id="fig-region"')])  # the job's caveat line
+        credible = html[html.index('id="credible"'):]
+        self.assertIn(causal, credible)  # the credible-set SNPs under both priors, linked to their cards
+        card = re.search(rf'href="(/snp/results/{self.key}/snp/\d+/\?trait=maturation)">{re.escape(causal)}<', credible).group(1)
+        card = self.client.get(card).content.decode()
+        self.assertIn("GWAS: p ", card)  # the card's GWAS line, with its qualifier
+        self.assertIn("(one causal variant, no LD)", card)
         download = self.client.get(f"{url}?trait=maturation&locus=1&download=1")
         self.assertIn("attachment", download["Content-Disposition"])
         self.assertNotIn(b"<a ", download.content)

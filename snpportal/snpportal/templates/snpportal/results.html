@@ -12,32 +12,31 @@
     <p><a href="{% url 'snpportal:upload' %}">Score another list</a> · <a href="{% url 'snpportal:help' %}">Help with formats</a></p>
   </div>
 {% else %}
-  {% if release_changed %}<div class="sp-status sp-status-warn" role="status">&#9888; The annotation release or its tier rules have changed since
-    these results were made. They still use release {{ job.release }} as it was then; <a href="{% url 'snpportal:upload' %}">score the list again</a> to use the current one.</div>{% endif %}
-  {% if job.synthetic_input or job.synthetic_layers or synthetic_chip %}<div class="sp-status sp-status-warn" role="status">{% include 'snpportal/_badges.html' with kind='synthetic' %}
-    These results use synthetic test data{% if job.synthetic_layers %} (layers: {{ job.synthetic_layers|join:", " }}){% endif %}{% if synthetic_chip %} (the demo chip on the Panel tab){% endif %}: not real results.</div>{% endif %}
+  {% if release_changed %}<div class="sp-status sp-status-warn" role="status">&#9888; The release has changed since these results were made;
+    they still use release {{ job.release }} as it was. <a href="{% url 'snpportal:upload' %}">Score the list again</a> to update them.</div>{% endif %}
 
-  {% comment %}Links and forms that stay on this page (preset, tabs, table filters, sort, pages) are boosted: htmx swaps in
-     the new #results and the header actions (#sp-actions, so Download follows them). Only those: a boosted link to
-     another page or a file would swap in nothing. Everything also works without JavaScript.{% endcomment %}
+  {% comment %}Links and forms that stay on this page (trait, tabs, table filters, sort, pages, the drawer) swap in the new
+     #results and the header actions (#sp-actions, so Report follows the trait). Only those: a boosted link to another page
+     or a file would swap in nothing. The trait applies on change; everything also works without JavaScript.{% endcomment %}
   <div id="results" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-select-oob="#sp-actions">
-    <form method="get" class="d-flex flex-wrap align-items-center gap-2 mb-3 sp-small" hx-boost="true">
-      <input type="hidden" name="tab" value="{{ tab }}">
-      <label for="trait">Trait preset</label>
-      <select class="form-select form-select-sm w-auto" id="trait" name="trait">
-        {% for value, label in presets %}<option value="{{ value }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
-      </select>
-      <button class="btn btn-sm btn-outline-primary" type="submit">Apply</button>
-      <span class="sp-muted" hx-boost="false">Tiers are recomputed for the preset's tissues; rules are {% include 'snpportal/_badges.html' with kind='provisional' %}</span>
-    </form>
-
     <ul class="nav nav-tabs" hx-boost="true">
+      {% if gwas %}<li class="nav-item"><a class="nav-link" hx-boost="false" href="{% url 'snpportal:association' key %}?{{ query }}">Association</a></li>{% endif %}
       <li class="nav-item"><a class="nav-link{% if tab == 'overview' %} active{% endif %}"{% if tab == 'overview' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=overview">Overview</a></li>
       <li class="nav-item"><a class="nav-link{% if tab == 'table' %} active{% endif %}"{% if tab == 'table' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=table">Table</a></li>
-      <li class="nav-item"><a class="nav-link{% if tab == 'panel' %} active{% endif %}"{% if tab == 'panel' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=panel">Panel</a></li>
+      {% if not gwas %}<li class="nav-item"><a class="nav-link{% if tab == 'panel' %} active{% endif %}"{% if tab == 'panel' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=panel">Panel</a></li>{% endif %}
       <li class="nav-item"><a class="nav-link{% if tab == 'export' %} active{% endif %}"{% if tab == 'export' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=export">Export</a></li>
-      {% if job.input_kind == 'gwas' %}<li class="nav-item"><a class="nav-link" hx-boost="false" href="{% url 'snpportal:association' key %}?{{ query }}">Association</a></li>{% endif %}
+      <li class="ms-auto align-self-center" hx-boost="false">
+        <form method="get" class="d-flex align-items-center gap-2 sp-small" hx-get="{% url 'snpportal:results' key %}" hx-trigger="change" hx-push-url="true">
+          <input type="hidden" name="tab" value="{{ tab }}">
+          <label for="trait">Trait</label>
+          <select class="form-select form-select-sm w-auto" id="trait" name="trait" title="{{ trait_tip }}">
+            {% for value, label, tip in presets %}<option value="{{ value }}" title="{{ tip }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+          <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Apply</button></noscript>
+        </form>
+      </li>
     </ul>
+    {% include 'snpportal/_caveat.html' with synthetic=synthetic %}
 
     {% if tab == 'table' %}{% include 'snpportal/_table.html' %}
     {% elif tab == 'panel' %}{% include 'snpportal/_panel.html' %}

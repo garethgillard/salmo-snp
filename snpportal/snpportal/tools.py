@@ -13,6 +13,8 @@ import os
 import re
 import tempfile
 import uuid
+import zipfile
+from datetime import datetime
 from functools import wraps
 from urllib.parse import urlencode
 
@@ -35,31 +37,26 @@ EXPORTS = ("tsv", "parquet", "bed", "illumina", "axiom", "kasp", "bundle")  # ?f
 VENDORS = ("illumina", "axiom", "kasp")
 MAX_TARGET = 20_000  # largest panel the form designs
 MAX_MUST = 200  # must-include ids per panel
-LISTED = 500  # selected SNPs listed on the page (the downloads have all)
+SHOWN = 25  # selected SNPs listed on the page, then 'Show all' (up to LISTED; the exports have all)
+LISTED = 500
 BIN = 250_000  # bp per tick in the coverage strips (about one pixel of the longest chromosome)
-TOP_GAPS = 20  # chip gaps listed on the page (the figure's TSV has all)
+TOP_GAPS = 5  # chip gaps listed on the page (the figure's TSV has all)
 EXCLUDE = {  # panel exclusion checkbox = a result column -> label
     "blacklist": "blacklisted region", "lore": "LORe region", "strand_ambiguous": "A/T or C/G alleles",
     "flank_variants": "public variants within 35 bp", "near_chip": "near a chip marker (within W)"}
-REASONS = {"must_include": "must include", "backbone": "backbone (best per genome bin)",
-           "functional": "functional fill (tier 1–3)", "fill": "fill (tier 4)"}
+REASONS = {"must_include": ("must include", "One of your must-include ids"),  # selection_reason -> (label, tooltip)
+           "backbone": ("backbone", "The best SNP in its genome bin, so every chromosome is covered"),
+           "functional": ("functional", "Tier 1–3, by design score"), "fill": ("fill", "Tier 4, by design score")}
 BINDING = {"min_spacing": "the minimum spacing", "min_spacing_cm": "the minimum spacing in cM", "max_per_gene": "the per-gene cap",
            "max_per_element": "the per-element cap"}
 CM_MAPS = {"mean": "sex-averaged", "female": "female", "male": "male"}  # snpscore.panel.CM_MAPS
-SPACING = [(0, "<20k"), (20_000, "20k"), (50_000, "50k"), (100_000, "100k"), (200_000, "200k"), (500_000, "500k"),
-           (1_000_000, "1M"), (2_000_000, "2M"), (5_000_000, "5M"), (10_000_000, "10M+")]  # (lower edge bp, label)
-FORMATS = [  # (format, label, contents) for the Export tab
-    ("tsv", "TSV table", "Every annotation column, one row per SNP, after '#' provenance lines."),
-    ("parquet", "Parquet", "The same columns for DuckDB, R (arrow) or pandas; provenance in the file's key-value metadata."),
-    ("bed", "BED", "chrom, pos − 1, pos and the SNP name, for genome browsers and bedtools."),
-    ("illumina", "Illumina-style design file", "Locus_Name, Sequence (60 bp + [A/B] + 60 bp) with the TOP/BOT strand, "
-     "Chromosome, Coordinate, Genome_Build_Version and the other design-input columns."),
-    ("axiom", "Axiom-style probe file", "35 bp + [ref/alt] + 35 bp with public neighbours as IUPAC codes; A/T and C/G SNPs "
-     "flagged as needing two probes."),
-    ("kasp", "KASP / Agena file", "Name and 50 bp flanks in [A/G] notation."),
-    ("bundle", "Zip bundle", "TSV, BED and the three vendor files, with manifest.json, the weights.yaml snapshot, "
-     "methods.txt, provenance.txt, a README and the figures as SVG."),
+FORMATS = [  # (format, label, contents) of the Export tab's rows; vendor rows add their counts and checks
+    ("tsv", "Table (TSV)", "Every annotation column, one row per SNP."),
+    ("kasp", "KASP / Agena", ""), ("illumina", "Illumina", ""), ("axiom", "Axiom", ""),
+    ("bundle", "Everything (zip)", "The table, BED and vendor files, with methods, provenance and figures."),
 ]
+MORE_FORMATS = [("parquet", "Parquet", "the same columns; provenance in the file's metadata"),
+                ("bed", "BED", "chrom, pos − 1, pos and the SNP name, for genome browsers")]
 MIME = {"tsv": "text/tab-separated-values; charset=utf-8", "bed": "text/plain; charset=utf-8", "parquet": "application/vnd.apache.parquet",
         "bundle": "application/zip", **{v: "text/csv; charset=utf-8" for v in VENDORS}}
 CHIP_ERRORS = {  # ?chip_error= -> message (codes only: no file content or names in URLs)
@@ -262,59 +259,6 @@ def _fig_coverage(c, link, desc):
     return svg, ["panel_rank", "chrom", "pos", "id", "tier", "selection_reason"], tsv
 
 
-def _fig_tiers(c, link, desc):
-    counts = {t: n for t, n in c["panel"]["summary"].get("tiers", {}).items() if t.isdigit()}
-    if not counts:
-        return None
-    return figures.tier_bar(counts, f"Tier mix of the panel, {c['preset']} preset", desc, c["synthetic"]), \
-        ["tier", "markers"], sorted(counts.items())
-
-
-def _fig_composition(c, link, desc):
-    p = c["panel"]
-    found = {}
-    for reason, tier, n in c["con"].execute(f"SELECT selection_reason, tier, count(*) FROM {p['rel']} GROUP BY ALL").fetchall():
-        found.setdefault(reason, {})[str(tier)] = n
-    total = sum(sum(x.values()) for x in found.values())
-    rows = [{"label": REASONS.get(r, r), "note": f"{sum(found[r].values()):,} ({results.pct(sum(found[r].values()), total)})",
-             "segments": results._tier_segments(found[r], total, REASONS.get(r, r), None)}
-            for r in list(REASONS) + sorted(set(found) - set(REASONS)) if r in found]
-    if not rows:
-        return None
-    svg = figures.hbars(rows, f"Why each marker was chosen, {c['preset']} preset", desc, c["synthetic"],
-                        [(palette.TIERS[t][0], figures.TIER_NAMES[t]) for t in (1, 2, 3, 4)], unit="markers")
-    return svg, ["selection_reason", "tier", "markers"], [(r, t, n) for r in found for t, n in sorted(found[r].items())]
-
-
-def _fig_spacing(c, link, desc):
-    edges = [e for e, _ in SPACING] + [None]
-    sql = ", ".join(f"count(*) FILTER (WHERE d >= {lo}" + (f" AND d < {hi})" if hi else ")") for lo, hi in zip(edges, edges[1:]))
-    counts = c["con"].execute(f"""SELECT {sql} FROM (SELECT lead(pos) OVER (PARTITION BY chrom ORDER BY pos) - pos AS d
-                                  FROM {c['panel']['rel']}) WHERE d IS NOT NULL""").fetchone()
-    if not sum(counts):
-        return None
-    spacing = c["panel"]["params"]["min_spacing"]
-    bars = [(label, n, palette.ACCENT, f"{label}{'' if label.endswith('+') or label.startswith('<') else ' or more'}: {n:,} "
-             f"neighbouring pairs", None, None) for (_, label), n in zip(SPACING, counts)]
-    svg = figures.histogram(bars, "Spacing between neighbouring markers", desc, c["synthetic"],
-                            f"Distance to the next marker (bin lower edge, bp); min spacing {_bp(spacing)}")
-    return svg, ["from_bp", "to_bp", "pairs"], [(lo, hi or "", n) for (lo, hi), n in zip(zip(edges, edges[1:]), counts)]
-
-
-def _fig_gaps(c, link, desc):
-    gaps = c["panel"]["gaps"]
-    if not gaps:
-        return None
-    rows = []
-    for g in gaps:
-        chrom, a, b = g["chrom"], g["start"], g["end"]
-        tip = f"{chrom}:{a:,}–{b:,}: {_bp(b - a)} without a marker"
-        rows.append({"label": f"chr {chrom}: {a / 1e6:.1f}–{b / 1e6:.1f} Mb", "note": _bp(b - a),
-                     "segments": [(b - a, palette.ACCENT, tip, link(chrom=chrom, start=a, end=b) if link else None)]})
-    svg = figures.hbars(rows, "Largest gaps in the panel", desc, c["synthetic"], unit="bp")
-    return svg, ["chrom", "from", "to", "length"], [(g["chrom"], g["start"], g["end"], g["size"]) for g in gaps]
-
-
 def _fig_chip(c, link, desc):
     chip = c["chip"]
     res = chip["results"][c["trait"]]
@@ -343,19 +287,11 @@ def _fig_chip(c, link, desc):
 FIGURES = {  # name -> (card title, (i) definition, builder(context, link or None, desc) -> (svg, header, rows) or None)
     "panel-coverage": ("Panel markers along the genome", "Chromosomes to scale (Ssal_v3.1). A tick per marker (per 250 kb "
                        "when they are close), coloured by tier; the number on the right is the markers per chromosome. "
-                       "Highlighted: gaps longer than the threshold in the form. Click a gap to list the SNPs in it.",
-                       _fig_coverage),
-    "panel-tiers": ("Tier mix of the panel", "Markers per tier for the preset (tier rules PROVISIONAL).", _fig_tiers),
-    "panel-composition": ("Why each marker was chosen", "must include: your ids; backbone: the best SNP in each "
-                          "genome-length bin, so the panel spreads over every chromosome; functional fill: the rest by "
-                          "design score (tier score, assay status and MAF; PROVISIONAL weights).", _fig_composition),
-    "panel-spacing": ("Spacing between neighbouring markers", "Distances between consecutive markers on each chromosome. "
-                      "None is below the minimum spacing.", _fig_spacing),
-    "panel-gaps": ("Largest gaps in the panel", "The longest stretches without a marker (chromosome ends count). Click a "
-                   "bar to list the SNPs in the gap.", _fig_gaps),
-    "chip-coverage": ("Chip coverage and novel functional SNPs", "Top lane: the chip's markers per 1 Mb (darker = more). "
-                      "Ticks: your tier 1–2 SNPs with no chip marker within W (novel functional). Highlighted: chip "
-                      "gaps over 1 Mb (PROVISIONAL). Click a gap to list your SNPs in it.", _fig_chip),
+                       "Highlighted: gaps longer than the threshold under Advanced settings. Click a gap to list the SNPs "
+                       "in it.", _fig_coverage),
+    "chip-coverage": ("Chip coverage and new functional SNPs", "Top lane: the chip's markers per 1 Mb (darker = more). "
+                      "Ticks: your tier 1–2 SNPs with no chip marker nearby (novel functional). Highlighted: chip gaps "
+                      "over 1 Mb. Click a gap to list your SNPs in it.", _fig_chip),
 }
 
 
@@ -363,13 +299,8 @@ def figure_card(c, name, built):
     url = reverse("snpportal:tool_figure", args=[c["key"], name])
     query = urlencode({"trait": c["trait"], **({"panel": c["panel"]["hash"], "gap_mb": f"{c['panel']['gap_bp'] / 1e6:g}"}
                                                  if name.startswith("panel") else {})})
-    caption = " · ".join(x for x in [
-        f"Release {c['job'].get('release')}", f"preset {c['preset']}",
-        f"panel {c['panel']['hash']}" if name.startswith("panel") else None,
-        "tier rules and design defaults PROVISIONAL", f"job created {c['job'].get('created_utc')}",
-        "SYNTHETIC test data" if c["synthetic"] else None] if x)
     return {"name": name, "title": FIGURES[name][0], "info": FIGURES[name][1], "svg": mark_safe(built[0]),
-            "svg_url": f"{url}?{query}", "tsv_url": f"{url}?{query}&format=tsv", "caption": caption}
+            "svg_url": f"{url}?{query}", "tsv_url": f"{url}?{query}&format=tsv"}
 
 
 def _figures(c, names, link):
@@ -429,12 +360,20 @@ def _context(key, job, d, trait, con):
 # ---- the panel designer ----
 
 def _params(request, weights, types):
-    """(design parameters, form state) from the URL: blank or out-of-range values give the weights.yaml 'design'
-    default (PROVISIONAL). Before the form is first sent (no design=1) the default checkboxes are ticked."""
+    """(design parameters, form state) from the URL: blank or out-of-range values give the release's 'design' defaults.
+    Before the form is first sent (no design=1) the default checkboxes are ticked. The Assay select (?assay=, as on the
+    Table) sets require_assay_pass and the LORe exclusion; ?assay_pass=1 and ?exclude=lore of older links still work."""
     get, default = request.GET.get, snp_panel.settings(weights)
     sent = get("design") == "1"
     allowed = [f for f in EXCLUDE if f in types]
     ids = MUST.findall(get("must", "")[:20_000])
+    if sent:
+        choice = get("assay") if get("assay") in results.ASSAY_FILTERS else "pass" if get("assay_pass") == "1" else \
+            "ok_nolore" if "lore" in request.GET.getlist("exclude") else "ok"
+        flags = {f for f in request.GET.getlist("exclude") if f != "lore"} | ({"lore"} if choice == "ok_nolore" else set())
+    else:
+        flags = set(default["exclude_flags"])
+        choice = "pass" if default["require_assay_pass"] else "ok_nolore" if "lore" in flags else "ok"
     p = {
         "n_target": _number(get("n"), int, 1, MAX_TARGET, min(int(default["n_target"]), MAX_TARGET)),
         "min_spacing": round(1000 * _number(get("spacing_kb"), float, 0, 100_000, default["min_spacing"] / 1000)),
@@ -442,34 +381,41 @@ def _params(request, weights, types):
         "backbone_fraction": _number(get("backbone"), float, 0, 1, float(default["backbone_fraction"])),
         "max_per_gene": _number(get("per_gene"), int, 1, 100_000, int(default["max_per_gene"])),
         "max_per_element": _number(get("per_element"), int, 1, 100_000, int(default["max_per_element"])),
-        "require_assay_pass": get("assay_pass") == "1" if sent else bool(default["require_assay_pass"]),
-        "exclude_flags": sorted({f for f in (request.GET.getlist("exclude") if sent else default["exclude_flags"]) if f in allowed}),
+        "require_assay_pass": choice == "pass",
+        "exclude_flags": sorted(f for f in flags if f in allowed),
         "must_include": sorted(set(ids))[:MAX_MUST],
     }
     if {"cm_female", "cm_male"} <= set(types):  # R5: also keep markers this many cM apart (blank or 0: bp only)
         cm = _number(get("spacing_cm"), float, 0, 1000, None if sent else default.get("min_spacing_cm"))
         if cm:  # only then in the parameters, so bp-only panels keep their hash
             p.update(min_spacing_cm=cm, cm_map=get("cm_map") if get("cm_map") in CM_MAPS else default.get("cm_map") or "mean")
-    return p, {"too_many_ids": len(set(ids)) > MAX_MUST}
+    changed = sum([p["min_maf"] != float(default["min_maf"]), p["backbone_fraction"] != float(default["backbone_fraction"]),
+                   p["max_per_gene"] != int(default["max_per_gene"]), p["max_per_element"] != int(default["max_per_element"]),
+                   p.get("min_spacing_cm") != default.get("min_spacing_cm"), bool(get("gap_mb")),
+                   set(p["exclude_flags"]) - {"lore"} != set(default["exclude_flags"]) - {"lore"}])
+    return p, {"too_many_ids": len(set(ids)) > MAX_MUST, "assay": choice, "advanced": changed}
 
 
 def _fields(p, types, gap_mb):
-    """The form's number inputs: (name, label, value, min, max, step, help), gated on the columns they need."""
+    """The form's number inputs as (visible, under 'Advanced settings'): dicts of name, label, value, min, max, step,
+    help, gated on the columns they need."""
     maf = jobs.maf_sql(types)[0]
+    cm = {"cm_female", "cm_male"} <= set(types)
     fields = [
         ("n", "Markers", p["n_target"], 1, MAX_TARGET, 1, "Number of SNPs to choose"),
         ("spacing_kb", "Min spacing (kb)", f"{p['min_spacing'] / 1000:g}", 0, 100_000, "any", "No two markers closer than this"),
-        ("spacing_cm", "Min spacing (cM)", f"{p['min_spacing_cm']:g}" if p.get("min_spacing_cm") else "", 0, 1000, "any",
-         "Also no two markers closer than this on the Brekke et al. 2023 genetic map (blank: bp only); SNPs beyond a "
-         "chromosome's first or last map marker take that marker's cM") if {"cm_female", "cm_male"} <= set(types) else None,
         ("backbone", "Backbone share", f"{p['backbone_fraction']:g}", 0, 1, 0.05,
          "Share of the panel spread evenly over the genome (the best SNP per genome-length bin); the rest is chosen by design score"),
-        ("maf", "Min MAF", f"{p['min_maf']:g}", 0, 0.5, 0.01, "Your maf/af column, else the public MAF; SNPs with no MAF pass") if maf else None,
-        ("per_gene", "Max per gene", p["max_per_gene"], 1, 100_000, 1, "Nearest gene (gene_id)") if "gene_id" in types else None,
-        ("per_element", "Max per element", p["max_per_element"], 1, 100_000, 1, "AQUA-FAANG peak (chromatin_id)") if "chromatin_id" in types else None,
-        ("gap_mb", "Highlight gaps over (Mb)", f"{gap_mb:g}", 0.01, 1000, "any", "Display only: gaps this long are highlighted in the coverage figure"),
+        ("maf", "Min MAF", f"{p['min_maf']:g}", 0, 0.5, 0.01, "Your maf/af column, else the MAF of 504 public fish (pooled; "
+         "your strain can differ). SNPs with no MAF pass") if maf else None,
+        ("per_gene", "Max per gene", p["max_per_gene"], 1, 100_000, 1, "Per nearest gene") if "gene_id" in types else None,
+        ("per_element", "Max per element", p["max_per_element"], 1, 100_000, 1, "Per AQUA-FAANG peak") if "chromatin_id" in types else None,
+        ("spacing_cm", "Min spacing (cM)", f"{p['min_spacing_cm']:g}" if p.get("min_spacing_cm") else "", 0, 1000, "any",
+         "Also no two markers closer than this on the Brekke et al. 2023 genetic map (blank: bp only)") if cm else None,
+        ("gap_mb", "Highlight gaps over (Mb)", f"{gap_mb:g}", 0.01, 1000, "any", "Display only: gaps this long are highlighted in the figure"),
     ]
-    return [dict(zip(("name", "label", "value", "min", "max", "step", "help"), f)) for f in fields if f]
+    fields = [dict(zip(("name", "label", "value", "min", "max", "step", "help"), f)) for f in fields if f]
+    return fields[:2], fields[2:]
 
 
 def _saved(d, h):
@@ -534,61 +480,86 @@ def _short(s):
     if s["n_selected"] >= s["n_target"]:
         return None
     b = s.get("binding") or ""
-    return (f"Only {s['n_selected']:,} of the {s['n_target']:,} markers could be chosen: the binding constraint is "
-            f"{BINDING.get(b, b) or 'the filters'}.")
+    b = BINDING.get(b, b.replace("min_maf", "min MAF").replace("exclude_flags", "exclusions")) or "the filters"
+    return f"Only {s['n_selected']:,} of the {s['n_target']:,} markers could be chosen: the binding constraint is {b}."
 
 
-def _panel_kpis(s, assay):
+def panel_name(info, time=False):
+    """'28 markers · maturation · 6 Oct' (with the UTC time if `time`): a panel named by the markers actually chosen."""
+    when = info.get("created_utc") or ""
+    try:
+        when = datetime.strptime(when, "%Y-%m-%d %H:%M UTC")
+        when = f"{when.day} {when:%b}" + (f" {when:%H:%M}" if time else "")
+    except ValueError:
+        pass
+    return " · ".join(x for x in [f"{info['summary']['n_selected']:,} markers", (info.get("preset") or "all").replace("_", " "), when] if x)
+
+
+def panel_line(s):
+    """The panel's key numbers in one line: tier 1-2 and assay-pass shares, median spacing, largest gap."""
     n = s["n_selected"]
-    gaps = s.get("largest_gaps") or []
-    tiers = s.get("tiers", {})
-    out = [{"value": f"{n:,}", "label": "markers", "note": f"of {s['n_target']:,} wanted"},
-           {"value": f"{int(tiers.get('1', 0)) + int(tiers.get('2', 0)):,}", "label": "tier 1–2", "note": results.pct(
-               int(tiers.get("1", 0)) + int(tiers.get("2", 0)), n) + " of the panel", "provisional": True},
-           {"value": _bp((s.get("spacing") or {}).get("median")), "label": "median spacing",
-            "note": f"min {_bp((s.get('spacing') or {}).get('min'))}"},
-           *([{"value": _cm(s["spacing_cm"].get("median")), "label": "median spacing (cM)",
-               "note": f"min {_cm(s['spacing_cm'].get('min'))}, genetic map"}] if s.get("spacing_cm") else []),
-           {"value": _bp(gaps[0]["size"]) if gaps else "–", "label": "largest gap",
-            "note": f"chr {gaps[0]['chrom']}, chromosome ends count" if gaps else ""},
-           {"value": f"{s['n_candidates']:,}", "label": "candidates", "note": f"of {s['n_rows']:,} SNPs pass the filters"}]
+    tiers, assay, gaps = s.get("tiers", {}), s.get("assay_status") or {}, s.get("largest_gaps") or []
+    parts = [f"{results.pct(int(tiers.get('1', 0)) + int(tiers.get('2', 0)), n)} tier 1–2"]  # the heading names the markers
     if assay:
-        checked = n - assay.get("not_checked", 0) - assay.get("null", 0)
-        out.insert(4, {"value": results.pct(assay.get("pass", 0), checked), "label": "assay pass",
-                       "note": f"of {checked:,} checked", "provisional": True})
-    return out
+        parts.append(f"{results.pct(assay.get('pass', 0), n - assay.get('not_checked', 0) - assay.get('null', 0))} assay pass")
+    parts.append(f"median spacing {_bp((s.get('spacing') or {}).get('median'))}")
+    if s.get("spacing_cm"):
+        parts.append(f"median {_cm(s['spacing_cm'].get('median'))}")
+    if gaps:
+        parts.append(f"largest gap {_bp(gaps[0]['size'])} (chr {gaps[0]['chrom']})")
+    return " · ".join(parts)
 
 
-def _listed(con, info, d, trait, key):
-    """The first LISTED selected SNPs in rank order, display-ready."""
+def _listed(con, info, d, trait, key, limit):
+    """The first `limit` selected SNPs in rank order, display-ready."""
     rel = f"read_parquet({lit(d / 'panels' / (info['hash'] + '.parquet'))})"
     cols = _columns(con, rel)
     maf = jobs.maf_sql(cols)[0]
-    want = [c for c in ("source_row", "panel_rank", "selection_reason", "design_score", "chrom", "pos", "id", "ref", "alt", "tier",
-                        "gene_name", "gene_id", "gene_ortholog_human", "region_class", "assay_status", "assay_reasons", "on_chip")
-            if c in cols]
+    want = [c for c in ("source_row", "panel_rank", "selection_reason", "chrom", "pos", "id", "ref", "alt", "tier", "gene_name",
+                        "gene_id", "gene_ortholog_human", "region_class", "assay_status", "assay_reasons", "on_chip") if c in cols]
     cur = con.execute(f"SELECT {', '.join(map(jobs.ident, want))}{f', {maf} AS _maf' if maf else ''} FROM {rel} "
-                      f"ORDER BY panel_rank LIMIT {LISTED}")
+                      f"ORDER BY panel_rank LIMIT {int(limit)}")
     names = [x[0] for x in cur.description]
     q = urlencode({"trait": trait})
     out = []
     for r in (dict(zip(names, x)) for x in cur.fetchall()):
         g = r.get
         status = g("assay_status") or ("not_checked" if "assay_status" in r else None)
+        gene = results.gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human"))
         out.append({"rank": g("panel_rank"), "url": f"{reverse('snpportal:card', args=[key, g('source_row')])}?{q}",
                     "name": g("id") if g("id") not in (None, ".") else f"{g('chrom')}:{g('pos')}",
-                    "position": f"{g('chrom')}:{g('pos')}", "alleles": f"{g('ref')}>{g('alt')}" if g("ref") and g("alt") else "",
-                    "tier": g("tier"), "reason": REASONS.get(g("selection_reason"), g("selection_reason")),
-                    "gene": results.gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")),
+                    "alleles": f"{g('ref')}>{g('alt')}" if g("ref") and g("alt") else "", "tier": g("tier"),
+                    "reason": REASONS.get(g("selection_reason"), (g("selection_reason"), ""))[0],
+                    "reason_tip": REASONS.get(g("selection_reason"), ("", ""))[1],
+                    "gene": gene, "gene_tip": results.UNNAMED if gene.startswith("~") else g("gene_id") or "",
                     "region": results.CLASS_LABELS.get(g("region_class"), g("region_class")) or "intergenic",
-                    "maf": "" if g("_maf") is None else f"{g('_maf'):.2f}", "score": f"{g('design_score'):.3f}",
+                    "maf": "" if g("_maf") is None else f"{g('_maf'):.2f}",
                     "assay": (results.ASSAY.get(status, ("?", "not_checked")) + (status.replace("_", " "), g("assay_reasons") or ""))
                     if status else None, "on_chip": g("on_chip")})
     return out
 
 
+def assay_readiness(d, synthetic, link):
+    """The Panel tab's 'Assay readiness' card from summary.json: one bar of pass / warn / fail / not checked (each
+    links to those SNPs in the table) and the reasons SNPs warn or fail, each with a 'hide in table' link."""
+    s = results.summary_of(d)
+    counts = s.get("assay")
+    if not counts:
+        return None
+    n = sum(counts.values())
+    statuses = [st for st in ("pass", "warn", "fail", "not_checked") if st in counts or st != "not_checked"]
+    parts = [(st.replace("_", " "), counts.get(st, 0), palette.STATUS[results.ASSAY[st][1]][2], link(assay=st)) for st in statuses]
+    svg = figures.bar(parts, "Assay readiness", "SNPs per assay status of the probe-flank check", synthetic)
+    line = " · ".join(f"{counts.get(st, 0):,} {st.replace('_', ' ')}" + (f" ({results.pct(counts.get(st, 0), n)})" if st == "pass" else "")
+                      for st in statuses)
+    reasons = sorted(((results.REASONS.get(r, r), sum(by.values()), link(hide_reason=r)) for r, by in (s.get("assay_reasons") or {}).items()),
+                     key=lambda x: -x[1])
+    return {"svg": mark_safe(svg), "line": line, "reasons": reasons}
+
+
 def panel(request, key, job):
-    """Context for the Panel tab: the chip comparison and the panel designer (form, summary, figures, selected SNPs).
+    """Context for the Panel tab: the compact designer (Advanced settings open when any is changed), the panel's name,
+    shortfall alert, key numbers, coverage figure and first markers, the Assay readiness card and the chip comparison.
     The default panel is designed on the first visit; every parameter set is cached in the job folder."""
     d = jobs.folder(key)
     weights = jobs.weights(d)
@@ -603,28 +574,26 @@ def panel(request, key, job):
     pv = _panel_view(d, info, gap * 1e6 if gap else None)
     c.update(panel=pv, synthetic=_synthetic(job, info.get("chip_synthetic")))
     s = info["summary"]
-    q = {"trait": trait, "scope": f"panel-{pv['hash']}"}
-    cm = {"cm_female", "cm_male"} <= set(types)
-    url = reverse("snpportal:download", args=[key])
+    every = request.GET.get("show") == "all"
+    more = request.GET.copy()
+    more["show"] = "all"
+    visible, advanced = _fields(p, types, pv["gap_bp"] / 1e6)
     designer = {
-        "fields": _fields(p, types, pv["gap_bp"] / 1e6), "must": " ".join(p["must_include"]), "too_many_ids": notes["too_many_ids"],
-        "max_must": MAX_MUST, "assay": "assay_status" in types, "assay_pass": p["require_assay_pass"],
-        "cm_maps": [(k, label, k == p.get("cm_map", "mean")) for k, label in CM_MAPS.items()] if cm else [],
-        "vendor": vendor_checks(con, pv["rel"]),
-        "checks": [(f, EXCLUDE[f], f in p["exclude_flags"]) for f in EXCLUDE if f in types],
-        "window": _bp(snp_panel.settings(weights)["chip_window"]), "synthetic": c["synthetic"], "hash": pv["hash"],
-        "short": _short(s), "missing": s.get("missing_must_include") or [], "kpis": _panel_kpis(s, s.get("assay_status")),
-        "regions": [(results.CLASS_LABELS.get(k, k), n) for k, n in sorted((s.get("region_class") or {}).items(), key=lambda x: -x[1])],
-        "figs": _figures(c, [n for n in FIGURES if n.startswith("panel")], link),
-        "rows": _listed(con, info, d, trait, key), "listed": LISTED,
-        "downloads": [(label, f"{url}?{urlencode({**q, 'format': fmt})}") for fmt, label in (
-            ("tsv", "TSV"), ("illumina", "Illumina"), ("axiom", "Axiom"), ("kasp", "KASP"), ("bundle", "Zip bundle"))
-            if fmt not in VENDORS or jobs.manifest(d).get("genome")],
-        "export_link": "?" + urlencode({"tab": "export", **q}),
-        "report_url": f"{reverse('snpportal:report', args=[key])}?{urlencode({'trait': trait, 'panel': pv['hash']})}",
+        "fields": visible, "advanced": advanced, "n_advanced": notes["advanced"], "must": " ".join(p["must_include"]),
+        "too_many_ids": notes["too_many_ids"], "max_must": MAX_MUST,
+        "assay": [(k, label, k == notes["assay"]) for k, (label, _) in results.ASSAY_FILTERS.items()
+                  if k != "ok_nolore" or "lore" in types] if "assay_status" in types else [],
+        "cm_maps": [(k, label, k == p.get("cm_map", "mean")) for k, label in CM_MAPS.items()] if {"cm_female", "cm_male"} <= set(types) else [],
+        "checks": [(f, EXCLUDE[f], f in p["exclude_flags"]) for f in EXCLUDE if f in types and f != "lore"],
+        "name": panel_name(info), "short": _short(s), "missing": s.get("missing_must_include") or [], "line": panel_line(s),
+        "fig": _figures(c, ["panel-coverage"], link).get("coverage"),
+        "rows": _listed(con, info, d, trait, key, LISTED if every else SHOWN), "n_rows": s["n_selected"], "listed": LISTED,
+        "show_all": None if every or s["n_selected"] <= SHOWN else "?" + more.urlencode(),
+        "export_link": "?" + urlencode({"tab": "export", "trait": trait, "scope": f"panel-{pv['hash']}"}),
         "reset": "?" + urlencode({"tab": "panel", "trait": trait}),
     }
-    return {"designer": designer, "chip": _chip_context(request, key, job, d, trait, con, weights, chip, link)}
+    return {"designer": designer, "readiness": assay_readiness(d, _synthetic(job), link),
+            "chip": _chip_context(request, key, job, d, trait, con, weights, chip, link)}
 
 
 # ---- chip comparison ----
@@ -672,16 +641,16 @@ def _chip_context(request, key, job, d, trait, con, weights, chip, link):
         f = g["filler"]
         gaps.append({**g, "size_text": _bp(g["size"]), "table": link(chrom=g["chrom"], start=g["start"], end=g["end"]),
                      "card": f"{reverse('snpportal:card', args=[key, f['row']])}?{q}" if f and f.get("row") is not None else None})
-    out.update(info=chip, synthetic=c["synthetic"], gaps=gaps, n_gaps=len(res["gaps"]), top=TOP_GAPS,
-               rejected=[(k.replace("_", " "), n) for k, n in (chip.get("rejected") or {}).items()],
+    fig = _figures(c, ["chip-coverage"], link).get("coverage")
+    out.update(info=chip, synthetic=c["synthetic"], gaps=gaps, n_gaps=len(res["gaps"]), top=TOP_GAPS, gaps_tsv=fig and fig["tsv_url"],
+               heading=f"Compared with the {(chip.get('label') or 'chip').lower()}" + (" (synthetic)" if chip.get("synthetic") else ""),
                kpis=[{"value": f"{s['chip_snps']:,}", "label": "chip markers", "note": f"{sum(n for _, n in chip.get('rejected', {}).items()):,} "
                       "rows left out" if chip.get("rejected") else "all on chromosomes 1–29"},
                      {"value": f"{s['shared']:,}", "label": "shared", "note": f"{results.pct(s['shared'], s['total'])} of your SNPs are on the chip"},
-                     {"value": f"{s['novel_functional']:,}", "label": "novel functional", "provisional": True,
+                     {"value": f"{s['novel_functional']:,}", "label": "novel functional",
                       "note": f"tier 1–2, no chip marker within {_bp(s['window_bp'])}"},
                      {"value": f"{s['other']:,}", "label": "other", "note": "near the chip, or tier 3–4"},
-                     {"value": f"{s['gaps']:,}", "label": "chip gaps", "note": f"over {_bp(s['gap_bp'])}", "provisional": True}],
-               fig=_figures(c, ["chip-coverage"], link).get("coverage"))
+                     {"value": f"{s['gaps']:,}", "label": "chip gaps", "note": f"over {_bp(s['gap_bp'])}"}], fig=fig)
     return out
 
 
@@ -763,10 +732,23 @@ def _chip(request, key):
 
 # ---- the Export tab and downloads ----
 
-def _scope(request, d, con, view, types, weights, job):
+def credible_rows(request, key):
+    """Row numbers of a GWAS job's SNPs in a 95% credible set under either prior (association.analyse)."""
+    from . import association  # association imports views, which imports this module
+    a = association.analyse(request, key)
+    if not a["loci"]:
+        return []
+    return [r for r, in a["con"].execute("SELECT DISTINCT file_row_number FROM fm WHERE cs_uniform OR cs_functional ORDER BY 1").fetchall()]
+
+
+def _scope(request, key, d, con, view, types, weights, job):
     """(view to export, tag for the file name, filters {name: value}, panel hash, synthetic) for ?scope=: all,
-    filtered (the Table tab's filters in the URL) or panel-<hash>."""
+    filtered (the Table tab's filters in the URL), panel-<hash> or credible (a GWAS job's credible-set SNPs)."""
     scope = request.GET.get("scope", "all")
+    if scope == "credible" and job.get("input_kind") == "gwas":
+        rows = ", ".join(str(int(r)) for r in credible_rows(request, key)) or "NULL"
+        con.execute(f"CREATE OR REPLACE VIEW f AS SELECT * FROM {view} WHERE file_row_number IN ({rows})")
+        return "f", "credible", {"credible_set": "95%, either prior"}, None, _synthetic(job)
     if scope.startswith("panel-"):
         info = _saved(d, scope[6:])
         if info is None:
@@ -803,7 +785,7 @@ def export(request, key, job, fmt):
     weights = jobs.weights(d)
     trait = _trait(request, weights)
     con, view, types = _open(d, trait, weights)
-    table, tag, filters, panel_hash, synthetic = _scope(request, d, con, view, types, weights, job)
+    table, tag, filters, panel_hash, synthetic = _scope(request, key, d, con, view, types, weights, job)
     n = con.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
     cap = int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000))
     if fmt in VENDORS and n > cap:
@@ -824,6 +806,10 @@ def export(request, key, job, fmt):
         if fmt == "bundle":
             snp_export.bundle_zip(tmp, con, jobs.release(), trait, meta, formats, _bundle_svgs(key, job, d, trait, con, panel_hash, synthetic),
                                   request.GET.get("include_failed") == "1", table=table, manifest=manifest, weights=wfile)
+            if n <= cap and jobs.manifest(d).get("genome"):  # the Export tab's per-file checks travel with the files
+                notes = _vendor_notes(con, table, n)
+                with zipfile.ZipFile(tmp, "a") as z:
+                    z.writestr("vendor_checks.txt", "".join(f"{fmt}: {'; '.join(x for x in lines if x)}\n" for fmt, lines in notes.items()))
         else:
             snp_export.export(con, fmt, tmp, jobs.release(), trait, meta, request.GET.get("include_failed") == "1",
                               request.GET.get("plain") == "1", table=table, manifest=manifest, weights=wfile)
@@ -875,41 +861,87 @@ def _panels(d):
     return sorted((x for x in found if x), key=lambda x: x.get("created_utc", ""), reverse=True)
 
 
+def _vendor_notes(con, rel, n):
+    """{format: [text]} for the Export tab's vendor rows: how many of the n SNPs the file includes (assay fail, not
+    checked and unknown alleles are left out, as snpscore.export does) and that file's own checks of what it holds."""
+    ok = f"(SELECT * FROM {rel} WHERE coalesce(assay_status, '') NOT IN ('fail', 'not_checked'))" if "assay_status" in _columns(con, rel) else rel
+    left = n - con.execute(f"SELECT count(*) FROM {ok}").fetchone()[0]
+    c = vendor_checks(con, ok)
+    b, close = c["infinium_bins"], c["close_pairs"]
+    why = [x for x in [f"{left:,} assay fail or not checked" if left else "", f"{b['unknown']:,} alleles unknown" if b["unknown"] else ""] if x]
+    included = f"{n - left - b['unknown']:,} of {n:,} included" + (f" ({', '.join(why)})" if why else "")
+    within = f"{close:,} SNPs within 60 bp of another" if close else ""
+    bins = f"Infinium bins: A/T {b['A']:,}, C/G {b['B']:,}, other {b['C']:,}" + (" (below Illumina's minimums)" if any(
+        "Infinium" in w for w in c["warnings"]) else "")
+    return {"kasp": [included], "illumina": [included, bins, within], "axiom": [included, within]}
+
+
 def exports(request, key, job):
-    """Context for the Export tab: what to export (all, the filtered table, a saved panel), the formats and options."""
+    """Context for the Export tab: one scope choice (the filtered table when the Table has filters, else the latest
+    panel of this trait, else all SNPs), five download rows with each vendor file's counts and checks, and 'More
+    formats'. GWAS jobs lead with their association files and one KASP / Agena row for the credible-set SNPs."""
     d = jobs.folder(key)
     weights = jobs.weights(d)
     trait = _trait(request, weights)
     con, view, types = _open(d, trait, weights)
+    gwas = job.get("input_kind") == "gwas"
     conds = results.filters(request, types, weights)
     chosen = {k: v for params, _, _ in conds for k, v in params.items()}
-    total = con.execute("SELECT count(*) FROM r").fetchone()[0]
-    scopes = [("all", "All SNPs of the list", total, view)]  # (value, label, SNPs, relation)
-    if conds:
-        rel = f"(SELECT * FROM {view} WHERE {' AND '.join(f'({sql})' for _, _, sql in conds)})"
-        scopes.append(("filtered", "The filtered table: " + "; ".join(label for _, label, _ in conds),
-                       con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0], rel))
-    for info in _panels(d):
-        s, p = info["summary"], info["params"]
-        label = [f"Panel {info['hash']}: {s['n_selected']:,} markers", f"{info['preset'].replace('_', ' ')} preset",
-                 f"min spacing {_bp(p['min_spacing'])}" + (f" and {p['min_spacing_cm']:g} cM" if p.get("min_spacing_cm") else ""),
-                 "excluding " + ", ".join(EXCLUDE.get(f, f) for f in p["exclude_flags"])
-                 if p["exclude_flags"] else None, f"with the {info['chip'][0].lower() + info['chip'][1:]}" if info.get("chip") else None]
-        scopes.append((f"panel-{info['hash']}", ", ".join(x for x in label if x), s["n_selected"],
-                       f"read_parquet({lit(d / 'panels' / (info['hash'] + '.parquet'))})"))
-    wanted = request.GET.get("scope") or ("filtered" if conds else "all")
-    wanted = wanted if wanted in [s[0] for s in scopes] else "all"
     chip = chip_info(d)
+    scopes = []  # (value, label, SNPs, relation, a synthetic chip contributes)
+    if gwas:
+        rows = ", ".join(str(int(r)) for r in credible_rows(request, key)) or "NULL"
+        rel = f"(SELECT * FROM {view} WHERE file_row_number IN ({rows}))"
+        scopes.append(("credible", "Credible-set SNPs", con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0], rel, False))
+    else:
+        if conds:
+            rel = f"(SELECT * FROM {view} WHERE {' AND '.join(f'({sql})' for _, _, sql in conds)})"
+            scopes.append(("filtered", "Filtered table", con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0], rel,
+                           view == "vc" and chip.get("synthetic")))
+        panels = [x for x in _panels(d) if x.get("preset") == trait]
+        names = [panel_name(x) for x in panels]
+        for info in panels:  # two panels with the same name get their times
+            scopes.append((f"panel-{info['hash']}", panel_name(info, names.count(panel_name(info)) > 1), info["summary"]["n_selected"],
+                           f"read_parquet({lit(d / 'panels' / (info['hash'] + '.parquet'))})", info.get("chip_synthetic")))
+        scopes.append(("all", "All SNPs", con.execute("SELECT count(*) FROM r").fetchone()[0], view, view == "vc" and chip.get("synthetic")))
+    wanted = request.GET.get("scope")
+    value, label, n, rel, chip_synthetic = next((x for x in scopes if x[0] == wanted), scopes[0])
     cap = int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000))
-    genome = bool(jobs.manifest(d).get("genome"))  # vendor files need the genome; checks only where they can be written
+    genome = bool(jobs.manifest(d).get("genome"))  # vendor files need the genome
+    query = {"trait": trait, "scope": value, **chosen}
+    url = reverse("snpportal:download", args=[key])
+
+    def href(fmt, **extra):
+        return f"{url}?{urlencode({**query, 'format': fmt, **extra})}"
+    notes = _vendor_notes(con, rel, n) if genome and 0 < n <= cap else {}
+    vendor = [f for f in VENDORS if genome]
+    rows = []  # (label, [notes], download URL or None)
+    if gwas:
+        gwas_url = reverse("snpportal:association_download", args=[key])
+        rows = [("Fine-mapping (TSV)", ["Every SNP in a locus with tier score and PIP under both priors."], f"{gwas_url}?{urlencode({'trait': trait, 'format': 'finemap'})}" if n else None),
+                ("Loci (TSV)", ["One row per locus: lead SNP, p, credible-set sizes."], f"{gwas_url}?{urlencode({'trait': trait, 'format': 'loci'})}"),
+                ("Loci (BED)", ["The locus windows, for genome browsers."], f"{gwas_url}?{urlencode({'trait': trait, 'format': 'bed'})}"),
+                ("All SNPs (TSV)", ["Every annotation column, one row per SNP."], f"{url}?{urlencode({'trait': trait, 'scope': 'all', 'format': 'tsv'})}")]
+        if "kasp" in vendor:
+            rows.append((f"KASP / Agena: credible-set SNPs ({n:,})", [x for x in notes.get("kasp", []) if x] if n else
+                         ["No credible sets: no locus could be fine-mapped."], href("kasp") if notes else None))
+    else:
+        for fmt, name, about in FORMATS:
+            if fmt in VENDORS and fmt not in vendor:
+                continue
+            text = [x for x in notes.get(fmt, [about]) if x]
+            if fmt in VENDORS and n > cap:
+                text = [f"Vendor files hold at most {cap:,} SNPs: filter the table or design a panel."]
+            rows.append((name, text, None if fmt in VENDORS and not notes else href(fmt)))
+    more = [(name, about, href(fmt)) for fmt, name, about in MORE_FORMATS] + [("Table without # lines (TSV)", "for scripts", href("tsv", plain="1"))]
+    if notes:
+        more += [(f"{fmt.upper() if fmt == 'kasp' else fmt.capitalize()}: keep SNPs that fail the assay check or are not checked, flagged", "",
+                  href(fmt, include_failed="1")) for fmt in (("kasp",) if gwas else vendor)]
+        if "sidecars" in inspect.signature(snp_export.export).parameters:
+            more += [(f"{fmt.upper() if fmt == 'kasp' else fmt.capitalize()} {part} file", tip, href(f"{fmt}.{part}"))
+                     for fmt in (("kasp",) if gwas else vendor) for part, tip in (("provenance", "how it was made"), ("lookup", "your ids, TOP/BOT and assay status"))]
     return {"query": urlencode({"trait": trait, **chosen}), "exports": {
-        "url": reverse("snpportal:download", args=[key]), "trait": trait, "hidden": sorted(chosen.items()),
-        "scopes": [(value, label, n, value == wanted, vendor_checks(con, rel) if genome and 0 < n <= cap else None)
-                   for value, label, n, rel in scopes],
-        "formats": [f for f in FORMATS if f[0] not in VENDORS or genome],  # vendor files need the genome
-        "locus_name": snp_export.locus_name("25", 28996360, {"25"}),
-        "vendor_cap": cap, "chip": chip.get("label"),
-        "sidecars": VENDORS if "sidecars" in inspect.signature(snp_export.export).parameters else (),
-        "synthetic": _synthetic(job, chip.get("synthetic")), "layout_note": snp_export.LAYOUT_NOTE,
-        "panel_link": "?" + urlencode({"tab": "panel", "trait": trait}),
+        "scopes": [(v, f"{lab} ({k:,})" if v != "credible" else lab, v == value) for v, lab, k, _, _ in scopes], "gwas": gwas,
+        "trait": trait, "hidden": sorted(chosen.items()), "rows": rows, "more": more, "n": n,
+        "synthetic": bool(chip_synthetic) and not _synthetic(job), "panel_link": "?" + urlencode({"tab": "panel", "trait": trait}),
     }}

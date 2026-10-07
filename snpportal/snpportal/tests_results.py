@@ -76,21 +76,26 @@ class ResultsTest(SimpleTestCase):
             self.assertEqual(sum(sum(b[2:]) for b in s["bins"][preset]), n)
             self.assertEqual(sum(sum(t.values()) for t in s["region_tiers"][preset].values()), n)
             self.assertEqual(sum(sum(t.values()) for t in s["chrom_tiers"][preset].values()), n)
-            self.assertLessEqual(s["active"][preset], n)
         self.assertEqual(len(s["conditions"]), 21)
         self.assertEqual(sum(s["maf"]["bins"]) + s["maf"]["missing"], n)
-        self.assertEqual({c for c, _, _ in s["gaps"]}, set(jobs.manifest(self.d)["chrom_sizes"]))
         self.assertEqual(s["counts"]["known"], self.direct("known_locus IS NOT NULL"))
         if "assay_status" in self.columns:
             self.assertEqual(sum(s["assay"].values()), n)
 
     def test_overview_renders_every_panel_and_parses(self):
         page = self.client.get(self.url + "?trait=maturation").content.decode()
-        expected = ["tiers", "ideogram", "conditions", "regions", "terms", "maf", "gaps"] + (["assay"] * ("assay_status" in self.columns))
+        expected = ["tiers", "ideogram", "conditions", "regions", "terms", "maf"]
         for name in expected:
             self.assertIn(f'id="fig-{name}"', page)
-        for label in ("SNPs scored", "tier 1–2", "in an active element", "coding", "MAF ≥ 0.05", "near a known locus", "upload warnings"):
-            self.assertIn(label, page)
+        more = page[page.index("More charts (3)"):]  # analyst charts closed, after the three open ones
+        self.assertTrue(all(f'id="fig-{name}"' in more for name in ("regions", "terms", "maf")))
+        self.assertLess(page.index('id="top-h"'), page.index('id="fig-ideogram"'))  # answer first: the top SNPs
+        self.assertIn("Ordered by tier, then score.", page)
+        labels = re.findall(r'<b>[^<]*</b><span>([^<]*)</span>', page)
+        self.assertEqual(labels, ["SNPs scored", "tier 1–2", "near a known locus"] + ["assay pass"] * ("assay_status" in self.columns))
+        self.assertNotIn("PROVISIONAL", re.sub(r"<svg .*?</svg>", "", page, flags=re.S))  # no badges: one caveat line
+        self.assertEqual(page.count('class="sp-caveat'), 1)  # one caveat line
+        self.assertEqual('id="qc" open' in page, results.qc_problem(jobs.read_json(self.d / "validation.json")))  # one QC line
         found = svgs(page)
         self.assertGreaterEqual(len(found), len(expected))
         for root in found:
@@ -137,7 +142,9 @@ class ResultsTest(SimpleTestCase):
                    "?gene=ppm1", "?min_maf=0.2", "?max_maf=0.1", "?known=1", f"?active={cond}", "?term=constrained",
                    "?hide_blacklist=1", "?hide_lore=1", "?hide_ambiguous=1", "?hide_flank=1"]
         if "assay_status" in self.columns:
-            queries.append("?assay=pass")
+            queries += ["?assay=pass", "?assay=ok"]
+            self.assertLessEqual(self.count("?assay=ok_nolore"), self.count("?assay=ok"))
+            self.assertLessEqual(self.count("?assay=pass"), self.count("?assay=ok"))
         for query in queries:
             self.assertLess(self.count(query), total, query)
             self.assertGreater(self.count(query), 0, query)
@@ -154,9 +161,20 @@ class ResultsTest(SimpleTestCase):
         barcode = re.search(r'<span class="sp-bc".*?</span></span>', page, re.S).group(0)
         self.assertEqual(barcode.count("<i "), 21)
         self.assertEqual(len(re.findall(r'class="st-\w+ in"|class=" in"', barcode)), 4)  # the brain conditions are underlined
-        for group in ("Variant", "Priority", "Location", "Regulation", "Assay"):
-            self.assertIn(f'<th scope="colgroup" colspan="{len([k for k in results.DEFAULT_COLUMNS if results.COLUMNS[k][0] == group])}">{group}</th>', page)
+        headers = re.findall(r'<th scope="col" title="[^"]*"[^>]*>(?:<a [^>]*>)?([^<&]+)', page)
+        self.assertEqual([h.strip() for h in headers if h.strip() != "Position"],
+                         [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS])  # 9 default columns
         self.assertIn('aria-sort="ascending"', page)  # tier, the default
+        self.assertNotIn('id="drawer"', page)  # the evidence drawer opens only on a click
+        row = re.search(r'href="\?[^"]*snp=(\d+)"', page).group(1)
+        drawer = self.client.get(self.url + f"?tab=table&trait=brain&snp={row}").content.decode()
+        self.assertIn('id="drawer"', drawer)
+        self.assertIn(f"/snp/{row}/?trait=brain", drawer)  # 'Open full card'
+        self.assertIn("Tier ", drawer[drawer.index('id="drawer"'):])
+        self.assertIn('<details class="sp-more" open><summary>More filters (1 active)</summary>', page)  # Rows: 25
+        self.assertIn('<details class="sp-more"><summary>More filters</summary>', self.client.get(self.url + "?tab=table").content.decode())
+        more = self.client.get(self.url + "?tab=table&region=coding").content.decode()
+        self.assertIn('<details class="sp-more" open><summary>More filters (1 active)</summary>', more)
 
         by_maf = self.client.get(self.url + "?tab=table&sort=maf&desc=1").content.decode()
         first = float(re.search(r'<td class="sp-num">(0\.\d\d)</td>', by_maf).group(1))
@@ -213,14 +231,13 @@ class ResultsTest(SimpleTestCase):
             self.assertIn("× the public background", page)
             self.assertIn("Public background: 2.0% of SNPs", page)
             self.assertIn("public background 10.0%", page)
-            self.assertIn("background: release pool of 1,000 public sites", page)
             tsv = self.client.get(reverse("snpportal:figure", args=[self.key, "conditions"]) + "?format=tsv&plain=1").content.decode()
             self.assertIn("\t0.01000\t", tsv)
         finally:
             shutil.rmtree(pool)
 
     def test_helpers(self):
-        self.assertEqual(results.gene_label(None, "ENSSSAG1", "VGLL3"), "unnamed (human VGLL3)")
+        self.assertEqual(results.gene_label(None, "ENSSSAG1", "VGLL3,VGLL3B"), "~VGLL3")
         self.assertEqual(results.gene_label("vgll3a", "ENSSSAG1", "VGLL3"), "vgll3a")
         self.assertEqual(results.gene_label(None, "ENSSSAG1", None), "ENSSSAG1")
         self.assertEqual(results.pct(1, 20000), "<0.1%")

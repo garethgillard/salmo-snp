@@ -68,24 +68,29 @@ def mix(a, b, t):
     return "#" + "".join(f"{round(int(a[i:i + 2], 16) * (1 - t) + int(b[i:i + 2], 16) * t):02X}" for i in (1, 3, 5))
 
 
+def bar(parts, title, desc="", synthetic=False, marks=None):
+    """One horizontal bar split into parts [(label, n, fill, href)], with a legend of counts and shares; marks:
+    short text printed inside each wide enough part (e.g. the tier number)."""
+    total = sum(n for _, n, _, _ in parts) or 1
+    width, x, body = 640, 0.0, []
+    for i, (name, n, fill, href) in enumerate(parts):
+        w = width * n / total
+        label = f"{name}: {n:,} ({100 * n / total:.0f}%)"
+        body.append(_rect(x, 0, w, 28, fill, label, href, f' stroke="{palette.WHITE}"'))
+        if marks and w > 24:
+            body.append(_text(x + w / 2, 18.5, marks[i], "middle", fill=palette.text_on(fill), font_weight=600, pointer_events="none"))
+        body.append(f'<rect x="{i * 160}" y="40" width="12" height="12" fill="{fill}" stroke="{palette.GREY[500]}"/>'
+                    + _text(i * 160 + 18, 50.5, label))
+        x += w
+    return svg(width, 60, title, desc, "".join(body), synthetic)
+
+
 def tier_bar(counts, title="SNPs per tier", desc="", synthetic=False, links=None):
     """One horizontal bar split by tier (1 best to 4), with a legend of counts and shares. counts: {tier: n};
     links: {tier: href}."""
-    total = sum(counts.values()) or 1
-    width, x, parts = 640, 0.0, []
-    for i, tier in enumerate(sorted(counts, key=int)):
-        n = counts[tier]
-        fill, text = _tier_fill(tier)
-        w = width * n / total
-        label = f"Tier {tier}: {n:,} SNPs ({100 * n / total:.0f}%)"
-        href = (links or {}).get(str(tier))
-        parts.append(_rect(x, 0, w, 28, fill, label, href, f' stroke="{palette.WHITE}"'))
-        if w > 24:
-            parts.append(_text(x + w / 2, 18.5, int(tier), "middle", fill=text, font_weight=600, pointer_events="none"))
-        parts.append(f'<rect x="{i * 160}" y="40" width="12" height="12" fill="{fill}" stroke="{palette.GREY[500]}"/>'
-                     + _text(i * 160 + 18, 50.5, label.replace(" SNPs", "")))
-        x += w
-    return svg(width, 60, title, desc, "".join(parts), synthetic)
+    tiers = sorted(counts, key=int)
+    return bar([(f"Tier {t}", counts[t], _tier_fill(t)[0], (links or {}).get(str(t))) for t in tiers], title, desc, synthetic,
+               [str(int(t)) for t in tiers])
 
 
 def ideogram(chroms, bins, chrom_tiers, title, desc="", synthetic=False, link=None, chip=None, chip_label="chip"):

@@ -84,24 +84,26 @@ class TourTest(SimpleTestCase):
         return list(dict.fromkeys(u for u in Links(response.content.decode()).links if u.startswith(tour)))
 
     def example(self):
-        """Score the tour's example (step 4); returns (key, redirect URL)."""
-        response = self.client.post(reverse("snpportal:tour") + "?step=4&trait=maturation")
+        """Score the tour's example (step 3); returns (key, redirect URL: step 3 with the job)."""
+        response = self.client.post(reverse("snpportal:tour") + "?step=3&trait=maturation")
         self.assertEqual(response.status_code, 302)
-        self.assertIn("step=5", response.url)
+        self.assertIn("step=3", response.url)
         return re.search(r"key=([0-9a-f-]{36})", response.url).group(1), response.url
 
     def test_tour_steps_example_job_and_links(self):
         first = self.client.get(reverse("snpportal:tour"))
-        self.assertContains(first, "Step 1 of 8")
+        self.assertContains(first, "Step 1 of 5")
         self.assertContains(first, "ENSSSAG00000099564")  # the chr21 namesake of vgll3 (the caveat)
         self.assertEqual(first["Cache-Control"], "no-store, private")
         steps = self.steps(first)
-        self.assertEqual(len(steps), 8)
+        self.assertEqual(len(steps), 5)
         for i, url in enumerate(steps, 1):
             page = self.client.get(url)
-            self.assertContains(page, f"Step {i} of 8")
-            if i in (5, 6, 7):  # no example job yet: these offer to score it
+            self.assertContains(page, f"Step {i} of 5")
+            if i in (3, 4):  # no example job yet: these offer to score it
                 self.assertContains(page, "Score the example")
+            self.assertNotContains(page, "sp-badge-prov")
+        self.assertContains(page, "anyone with the link can see them")  # step 5: Score's privacy line
 
         key, url = self.example()
         job = jobs.read(key)
@@ -113,7 +115,7 @@ class TourTest(SimpleTestCase):
         self.assertContains(overview, 'id="fig-tiers"')
         self.assertContains(overview, f'href="/snp/results/{key}/?tab=table')  # figure and KPI links point at the results
         steps = self.steps(overview)
-        self.assertEqual(len(steps), 8)
+        self.assertEqual(len(steps), 5)
         self.assertTrue(all(f"key={key}" in u for u in steps))
 
         followed = set()
@@ -126,7 +128,6 @@ class TourTest(SimpleTestCase):
                     followed.add(link)
                     self.assertIn(self.client.get(link).status_code, (200, 302), link)
         self.assertTrue(any("tab=panel" in x for x in followed) and any("&known=1" in x for x in followed))
-        self.assertTrue(any(x.startswith(reverse("snpportal:report", args=[key])) for x in followed))
 
         locus_svg = next(x for x in followed if x.startswith(reverse("snpportal:locus_svg")))
         self.assertIn("trait=maturation", locus_svg)
@@ -146,20 +147,24 @@ class TourTest(SimpleTestCase):
         self.assertEqual(page["Cache-Control"], "no-store, private")
         html = page.content.decode()
         self.assertTrue(kpis(html))
-        self.assertEqual(kpis(html), kpis(overview.content.decode()))
-        for name in ("ideogram", "regions", "conditions"):
-            self.assertEqual(f'id="fig-{name}"' in html, f'id="fig-{name}"' in overview.content.decode(), name)
+        self.assertEqual(kpis(html), kpis(overview.content.decode()))  # the same 4 tiles
+        for name in ("tiers", "ideogram"):  # two figures
+            self.assertIn(f'id="fig-{name}"', html)
         for svg in re.findall(r"<svg .*?</svg>", html, re.S):
             ET.fromstring(svg)
         table = self.client.get(results, {"trait": "maturation", "tab": "table"}).content.decode()
-        self.assertEqual(card_rows(html, key), card_rows(table, key)[:20])
+        drawers = list(dict.fromkeys(re.findall(r"snp=(\d+)", table)))  # the table's rows, in order
+        self.assertEqual(card_rows(html, key), drawers[:20])
         self.assertEqual(len(card_rows(html, key)), 20)
-        self.assertIn("SNPs were annotated with snpscore", html)  # snpscore.export.methods_text
-        self.assertIn(jobs.read(key)["manifest_sha256"], html)  # provenance
-        self.assertIn("PROVISIONAL", html)
+        self.assertEqual(card_rows(overview.content.decode(), key), drawers[:10])  # the Overview's top 10, in the same order
+        self.assertIn("SNPs were annotated with snpscore", html)
+        self.assertIn(jobs.read(key)["manifest_sha256"][:12], html)  # provenance, 12-character hashes
+        self.assertNotIn(jobs.read(key)["manifest_sha256"], html)
+        self.assertIn("rules are provisional", html)
+        self.assertNotIn("DOI to add", html)
 
         filtered = self.client.get(report, {"trait": "maturation", "known": "1"}).content.decode()  # filters as the table
         known = self.client.get(results, {"trait": "maturation", "tab": "table", "known": "1"}).content.decode()
-        self.assertEqual(card_rows(filtered, key), card_rows(known, key)[:20])
+        self.assertEqual(card_rows(filtered, key), list(dict.fromkeys(re.findall(r"snp=(\d+)", known)))[:20])
         self.assertIn("known=1", filtered)
         self.assertEqual(self.client.get(reverse("snpportal:report", args=["00000000-0000-0000-0000-000000000000"])).status_code, 404)

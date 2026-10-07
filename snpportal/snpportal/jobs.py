@@ -43,8 +43,6 @@ MAX_QUEUED = 10
 SNAPSHOT = ("weights.yaml", "manifest.json")
 TIER_COLUMNS = ("tier", "tier_score", "tier_evidence", "tier_terms")
 PUBLIC_AF = "504-fish panel: mostly wild and farmed fish from Bertolotti et al. 2020 plus the 12 AQUA-FAANG fish"  # public_af (R1)
-FLAGS = {"blacklist": "blacklist", "lore": "lore", "strand_ambiguous": "strand_ambiguous",
-         "flank_variants": "flank_variants > 0"}  # summary.json flag counts: column -> condition
 
 _lock = threading.RLock()
 _queued, _running = set(), set()
@@ -397,11 +395,12 @@ def maf_sql(columns):
 
 def summarise(con, d, columns, w):
     """summary.json for a job: n_rows, and per preset: tier counts, region group x tier, chromosome x tier, 1 Mb bins
-    ([chrom, bin, n tier 1..4], bin = (pos - 1) // 1e6), evidence term x tier and SNPs active in a preset condition.
-    Preset-free: SNPs active per condition, region classes, flags, MAF histogram, assay status and reasons ({reason:
-    {status: n}}, with leading and trailing numbers stripped: 'GC 0.72' counts as 'GC'), known loci, molQTL leads and the largest gap per chromosome. Needs view `r` (result.parquet with file_row_number) and tiers.parquet."""
+    ([chrom, bin, n tier 1..4], bin = (pos - 1) // 1e6) and evidence term x tier. Preset-free: SNPs active per
+    condition, MAF histogram, assay status and reasons ({reason: {status: n}}, with leading and trailing numbers
+    stripped: 'GC 0.72' counts as 'GC'), known loci and molQTL leads. Needs view `r` (result.parquet with
+    file_row_number) and tiers.parquet."""
     n = con.execute("SELECT count(*) FROM r").fetchone()[0]
-    s = {"version": SUMMARY_VERSION, "n_rows": n, "tiers": {}, "region_class": {}, "flags": {}}
+    s = {"version": SUMMARY_VERSION, "n_rows": n, "tiers": {}}
     tiers = d / "tiers.parquet"
     stored = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet('{tiers}'))").fetchall()] if tiers.exists() else []
     presets = [p for p in (w or {}).get("presets", {}) if f"tier__{p}" in stored]
@@ -436,17 +435,13 @@ def summarise(con, d, columns, w):
                         f"FROM read_parquet('{tiers}') GROUP BY ALL)) GROUP BY ALL ORDER BY ALL").fetchall():
                     s["terms"][p].setdefault(term, {})[str(tier)] = k
 
-    # One pass over the result for the per-condition and per-preset activity, flags and known loci.
+    # One pass over the result for the per-condition activity, known loci and molQTL leads.
     counts = []  # (summary key, name, SQL condition)
     conditions = [c[len("chromatin_"):] for c in columns if c.startswith("chromatin_") and c not in snpscore.score.NOT_CONDITIONS]
     if w and conditions:
         active = ", ".join(lit(x) for x in w.get("active_states", [])) or "NULL"
         counts += [("conditions", c, f"{ident('chromatin_' + c)} IN ({active})") for c in conditions]
-        for p in presets:
-            chosen = snpscore.score.preset_conditions(w, columns, p)[0]
-            counts.append(("active", p, " OR ".join(f"{ident('chromatin_' + c)} IN ({active})" for c in chosen) or "false"))
         s["active_states"] = list(w.get("active_states", []))
-    counts += [("flags", name, cond) for name, cond in FLAGS.items() if name in columns]
     if "known_locus" in columns:
         counts.append(("counts", "known", "known_locus IS NOT NULL"))
     if "molqtl" in columns:
@@ -455,9 +450,6 @@ def summarise(con, d, columns, w):
         values = con.execute("SELECT " + ", ".join(f"count(*) FILTER (WHERE {cond})" for _, _, cond in counts) + " FROM r").fetchone()
         for (key, name, _), k in zip(counts, values):
             s.setdefault(key, {})[name] = k
-    if "region_class" in columns:
-        s["region_class"] = dict(con.execute(
-            "SELECT coalesce(region_class, 'intergenic'), count(*) FROM r GROUP BY 1 ORDER BY 2 DESC").fetchall())
     maf, source = maf_sql(columns)
     if maf:
         hist = dict(con.execute(f"SELECT least(floor(m / {MAF_BIN}), {round(0.5 / MAF_BIN) - 1})::INTEGER, count(*) "
@@ -473,7 +465,6 @@ def summarise(con, d, columns, w):
                     SELECT unnest(string_split(assay_reasons, '; ')) AS x, coalesce(assay_status, 'not_checked') AS status
                     FROM r WHERE assay_reasons IS NOT NULL AND coalesce(assay_status, '') <> 'pass') GROUP BY ALL ORDER BY ALL""").fetchall():
             s["assay_reasons"].setdefault(reason, {})[status] = k
-    s["gaps"] = gaps(con, manifest(d).get("chrom_sizes") or {})
     return s
 
 
@@ -485,16 +476,6 @@ def refresh_summary(d):
     s = summarise(con, d, columns, snpscore.load_weights(d))
     _write_json(d / "summary.json", s)
     return s
-
-
-def gaps(con, sizes):
-    """[[chrom, a, b]]: the largest stretch without a SNP on each chromosome, between SNPs at a and b; a = 0 or
-    b = the chromosome's length for the ends (whole chromosomes without SNPs too)."""
-    ends = " UNION ALL ".join(f"SELECT {lit(c)}, 0 UNION ALL SELECT {lit(c)}, {int(size)}" for c, size in sizes.items())
-    return [list(x) for x in con.execute(
-        f"SELECT chrom, arg_max(a, b - a), arg_max(b, b - a) FROM (SELECT chrom, lag(pos) OVER (PARTITION BY chrom ORDER BY pos) AS a, "
-        f"pos AS b FROM (SELECT chrom, pos FROM r {'UNION ALL ' + ends if ends else ''})) WHERE a IS NOT NULL "
-        "GROUP BY chrom ORDER BY TRY_CAST(chrom AS INTEGER), chrom").fetchall()]
 
 
 def scored_sql(table, w, columns, preset, d):
@@ -622,7 +603,7 @@ def provenance(job, trait=None, filters=None):
         f"weights sha256 {job.get('weights_sha256')}",
         f"snpscore {job.get('snpscore_version')}; duckdb {job.get('duckdb_version')}; job created {job.get('created_utc')}",
         f"preset {trait}; filters: {', '.join(f'{k}={v}' for k, v in (filters or {}).items()) or 'none'}",
-        "tier rules PROVISIONAL (prototype weights, pending decision by G)",
+        "tier rules PROVISIONAL (prototype weights, under review)",
     ]
     if job.get("synthetic_input") or job.get("synthetic_layers"):
         lines.append("SYNTHETIC: built from synthetic test data, not real results")

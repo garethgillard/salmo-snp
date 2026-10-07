@@ -1,72 +1,65 @@
-"""Data, methods, help and 'Run it locally' pages, generated from the current release (P5.4): every manifest layer
-with its source, checksum, synthetic flag and citation; the track registry; weights.yaml as tables with PROVISIONAL
-badges; the methods text and a benchmark plot; a glossary of ChromHMM states and tier terms (anchors #state-<name>,
-#term-<term>, #tiers, #g-<word>); input formats; and the commands to score a confidential list locally."""
+"""Data, Methods, Help and 'Run it locally' pages, generated from the current release (P5.4). Data: one table of
+layers (what, source, version) with the technical details (rows, files, sha256, tracks, samples, citations) closed.
+Methods: the tier rules from weights.yaml (evidence weights, tiers, chromatin states with their colours, presets), a
+glossary (anchors #term-<term>, #tiers, #state-<name>, #g-<word>), fine-mapping, all other settings closed, and the
+methods text for a paper. Help: quick start, questions, input formats, search syntax, exports and privacy, mostly as
+closed items. Run it locally: the commands to score a confidential list on your own computer."""
 from __future__ import annotations
 
 import csv
-import math
+import re
 from collections import Counter
-from html import escape
 
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.utils.safestring import mark_safe
 
 from snpscore import formats
 
-from . import explore, figures, jobs, palette
+from . import explore, jobs, palette, search
 
-# One-line definitions. PROVISIONAL wording (G to confirm); the states are AQUA-FAANG's ChromHMM labels.
+# One-line definitions; the states are AQUA-FAANG's ChromHMM labels.
 STATE_TEXT = {
-    "Active_TSS": "Active promoter: the transcription start site of an expressed gene (H3K4me3 with H3K27ac).",
+    "Active_TSS": "Active promoter: the start of an expressed gene (H3K4me3 with H3K27ac).",
     "Flanking_upstream": "Next to an active promoter, upstream of it.",
     "Flanking_downstream": "Next to an active promoter, downstream of it.",
     "Active_enhancer": "Active enhancer: distal element with H3K27ac and H3K4me1.",
-    "Primed_enhancer": "Primed enhancer: H3K4me1 without H3K27ac, ready but not active in this condition.",
-    "Poised_enhancer_1": "Poised enhancer: H3K4me1 with the repressive mark H3K27me3.",
+    "Primed_enhancer": "Primed enhancer: H3K4me1 without H3K27ac.",
+    "Poised_enhancer_1": "Poised enhancer: H3K4me1 with the repressive H3K27me3.",
     "Poised_enhancer_2": "Poised enhancer, second state of the model.",
-    "Accessible_chromatin": "Open chromatin (ATAC) without the active histone marks.",
-    "Bivalent": "Both the active H3K4me3 and the repressive H3K27me3 mark.",
+    "Accessible_chromatin": "Open chromatin (ATAC) without active histone marks.",
+    "Bivalent": "Both active H3K4me3 and repressive H3K27me3.",
     "Repressed_polycomb": "Repressed by Polycomb (H3K27me3).",
-    "ZNF_genes_and_repeats": "The state found at zinc-finger gene clusters and repeats.",
+    "ZNF_genes_and_repeats": "Zinc-finger gene clusters and repeats.",
     "Quiescent": "No marks: inactive or unmarked.",
     "Unknown_1": "A state the model did not label.",
 }
 TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.scored)
-    "active": "An active state (the active_states below) in at least one condition of the preset.",
-    "active_elsewhere": "An active state only in conditions outside the preset.",
-    "weak": "A weak state (weak_states below) in a preset condition, and no active state there.",
-    "coding": "Inside a coding sequence (CDS); the amino-acid effect is not computed yet.",
+    "active": "An active state in at least one condition of the trait.",
+    "active_elsewhere": "An active state only in conditions outside the trait.",
+    "weak": "A weak state in a condition of the trait, and no active state there.",
+    "coding": "Inside a coding sequence (CDS); amino-acid effect not computed.",
     "splice": "In a splice region.",
     "utr": "In a 5' or 3' UTR.",
-    "constrained": "Inside a GERP constrained element of the Ensembl 65-fish alignment.",
-    "regbuild": "Inside an Ensembl regulatory feature that has no AQUA-FAANG peak.",
+    "constrained": "Inside a GERP constrained element (65 fish).",
+    "regbuild": "Inside an Ensembl regulatory feature with no AQUA-FAANG peak.",
+    "molqtl": "A molQTL lead SNP: shown, not scored.",
 }
 GLOSSARY = [  # (anchor, term, definition)
-    ("preset", "Trait preset", "The conditions (tissues and stages) that count as relevant for a trait; tiers are computed per preset."),
-    ("peak", "Robust ATAC peak", "An AQUA-FAANG open-chromatin peak reproduced across samples; its ChromHMM state is given per condition. States are only shown inside these peaks."),
-    ("blacklist", "Blacklisted", "A region where peaks can't be called reliably: no peak there means 'can't tell', not 'inactive'."),
-    ("lore", "LORe", "Late-rediploidized region: the two Ss4R copies are near-identical, so genotyping probes may cross-hybridise."),
-    ("strand_ambiguous", "A/T or C/G SNP", "Reads the same on both strands, which some genotyping assays can't tell apart."),
-    ("flank_variants", "Flank variants", "Other public variants within 35 bp either side: they can disturb a genotyping probe."),
-    ("public_af", "Public AF and MAF", "Alternative and minor allele frequency in the 504-fish reference panel of nf-RASQUAL "
-     "(Beagle-phased; mostly the wild and farmed fish of Bertolotti et al. 2020, of European and North American descent, plus "
-     "the 12 AQUA-FAANG fish and 13 others). Pooled over populations, so it hides population structure."),
-    ("aquafaang12", "AQUA-FAANG 12 fish AF, DR2", "Alternative allele frequency in the 12 AQUA-FAANG BodyMap fish (whose "
-     "chromatin and molQTL data the portal shows) and its imputation quality DR2 (0 to 1). Shown apart from the 504-fish AF."),
-    ("molqtl", "molQTL lead SNP", "The SNP with the strongest association to a gene's expression (eQTL) or a peak's "
-     "accessibility (caQTL) in the nf-RASQUAL analysis of the 12 AQUA-FAANG fish, when its eigenMT-adjusted p is below 0.1 "
-     "(PROVISIONAL). Only lead SNPs are published, so it is not fine-mapping; display only, weight 0."),
-    ("cm", "cM (genetic map)", "Position on the Brekke et al. 2023 linkage map (AquaGen breeding population), female and "
-     "male, interpolated between markers; empty beyond a chromosome's first and last marker."),
-    ("rsid", "rs ID", "A dbSNP/EVA reference SNP id. The portal knows EVA release 9's rs IDs on Ssal_v3.1 and their ICSASG_v2 "
-     "positions, so rs IDs can be searched and uploaded."),
-    ("known_locus", "Known locus", "A published SNP from the catalogue within the catalogue window; the effect allele is matched to your ref and alt."),
-    ("ohnolog", "Ss4R ohnolog", "The second copy of a gene from the salmonid genome duplication; it often has the same name or human ortholog."),
-    ("provisional", "PROVISIONAL", "A rule or threshold chosen so the prototype works, pending a decision by G."),
-    ("synthetic", "SYNTHETIC", "Built from synthetic test data: not real results, and never counted in tiers."),
+    ("peak", "Robust ATAC peak", "An AQUA-FAANG open-chromatin peak reproduced across samples. States are only known inside these peaks."),
+    ("blacklist", "Blacklisted", "A region where peaks can't be called: no peak there means 'can't tell', not 'inactive'."),
+    ("lore", "LORe", "Region where the duplicated chromosomes still pair; genotyping probes may cross-hybridise."),
+    ("strand_ambiguous", "A/T or C/G SNP", "Reads the same on both strands; needs care on arrays."),
+    ("flank_variants", "Flank variants", "Other public variants within 35 bp: they can disturb a genotyping probe."),
+    ("public_af", "MAF", "Minor allele frequency in 504 public fish, wild and farmed, pooled; your strain can differ."),
+    ("molqtl", "molQTL lead SNP", "The SNP most associated with a gene's expression (eQTL) or a peak's accessibility (caQTL) "
+     "in 12 AQUA-FAANG fish. Lead SNPs only, not fine-mapped; display only."),
+    ("cm", "cM", "Position on the Brekke et al. 2023 linkage map (AquaGen), interpolated between markers."),
+    ("known_locus", "Known locus", "A published SNP from the catalogue within {window:,} bp of yours."),
+    ("ohnolog", "Ss4R ohnolog", "The second copy of a gene from the salmonid genome duplication."),
+    ("coordinates", "Coordinates", "Ssal_v3.1, chromosomes 1–29. Layers use BED intervals; a SNP at 1-based pos is inside "
+     "one when start < pos ≤ end."),
+    ("synthetic", "Synthetic", "Built from synthetic test data: not real results, never counted in tiers."),
 ]
 FORMATS = [  # (anchor, format, what is read, example built from the published vgll3 SNP)
     ("vcf", "VCF (.vcf, .vcf.gz)", "CHROM, POS, ID, REF and ALT only: genotype columns are never read or stored.",
@@ -85,17 +78,36 @@ FORMATS = [  # (anchor, format, what is read, example built from the published v
     ("rsid", "rs IDs only (.txt, .tsv)", "One rs ID per line, optionally under an id header (or a table whose id column holds rs IDs "
      "and that has no chromosome and position columns). Each is placed at its Ssal_v3.1 position from EVA release 9 (the "
      "results' position_source column says rsid). rs IDs that are not in the release's table, or sit on several Ssal_v3.1 "
-     "positions, are rejected as unknown_rsid and listed in the upload QC. A table with rs IDs and ICSASG_v2 positions is "
-     "moved to Ssal_v3.1 the same way (see 'My positions are on ICSASG_v2' below).", "id\nrs863754587\nrs863785818"),
+     "positions, are rejected as unknown_rsid and listed in the upload QC.", "id\nrs863754587\nrs863785818"),
+    ("gwas", "GWAS summary statistics", "GCTA-fastGWA, PLINK2 .glm, regenie, BOLT-LMM or GEMMA output, or a table with chrom, "
+     "pos and p (optionally alleles, beta, se, af and n). Alleles are turned to the Ssal_v3.1 reference (alt = effect allele) "
+     "using the genome, else the 504-fish panel sites; p values are read as text, so p = 1e-400 stays 400 on the -log10 scale.",
+     "CHR\tPOS\tA1\tA2\tBETA\tSE\tP\n25\t28996360\tT\tC\t0.44\t0.039\t2.6e-30"),
 ]
 STANDARD = ("provisional", "active_states", "weak_states", "weights", "tiers", "presets")  # weights.yaml blocks shown as tables
+LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall back to their manifest description
+    "chromatin": ("Chromatin state in 21 tissues and stages, inside robust ATAC peaks", "AQUA-FAANG"),
+    "region": ("Genic region: CDS, splice region, UTR, exon or intron", "Ensembl"),
+    "regbuild": ("Regulatory build: promoters, enhancers, open chromatin", "Ensembl"),
+    "gerp": ("Constrained elements in a 65-fish alignment (GERP)", "Ensembl Compara"),
+    "blacklist": ("Regions where ATAC peaks can't be called", "AQUA-FAANG"),
+    "lore": ("Late-rediploidized (LORe) regions", "AQUA-FAANG"),
+    "gene": ("Nearest gene", "Ensembl"),
+    "transcripts": ("Transcript models, for drawing genes", "Ensembl"),
+    "gene_ortholog": ("Human and zebrafish orthologs", "Ensembl Compara"),
+    "flank_variants": ("Public variants within 35 bp (probe flanks)", "504-fish panel"),
+    "public_af": ("Allele frequencies in 504 public fish, pooled", "504-fish panel"),
+    "molqtl": ("molQTL lead SNPs in 12 fish (display only)", "nf-RASQUAL"),
+    "cm": ("Genetic map position (cM)", "Brekke et al."),
+    "expression": ("Expression of the nearest gene per tissue", "nf-RASQUAL RNA-seq"),
+}
 ENA = "https://www.ebi.ac.uk/ena/browser/view/{}"
 AQUAFAANG_PROJECTS = [  # (atlas, assay, ENA project); RESEARCH.md section 6
     ("BodyMap", "RNA-seq", "PRJEB47409"), ("BodyMap", "ATAC-seq", "PRJEB47408"), ("BodyMap", "ChIP-seq", "PRJEB55063"),
     ("DevMap", "RNA-seq", "PRJEB51855"), ("DevMap", "ATAC-seq", "PRJEB51854"), ("DevMap", "ChIP-seq", "PRJEB53399")]
 BODYMAP_FISH = [("Immature female", "J8, J9, J10"), ("Immature male", "J15, J16, J18"), ("Mature female", "A14, A15, A24"),
                 ("Mature male", "A19, A20, A22")]
-CITATIONS = [  # (what, reference, DOI or URL): wording PROVISIONAL (G to confirm the author lists)
+CITATIONS = [  # (what, reference, DOI or URL): wording provisional (author lists to confirm)
     ("AQUA-FAANG chromatin states, ATAC peaks and signal", "Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, "
      "Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv 2025 (v2, "
      "2025-12-23; not yet peer reviewed).", "https://doi.org/10.64898/2025.12.18.695160"),
@@ -111,9 +123,37 @@ CITATIONS = [  # (what, reference, DOI or URL): wording PROVISIONAL (G to confir
 ]
 
 
+def _version(layer):
+    """'Ensembl 116' for Ensembl layers, else the year of its citation, else ''."""
+    text = f"{layer.get('citation', '')} {layer.get('url', '')}"
+    release = re.search(r"release[- ](\d+)", text)
+    if release and "nsembl" in text:
+        return f"Ensembl {release.group(1)}"
+    year = re.search(r"\b(?:19|20)\d\d\b", layer.get("citation", ""))
+    return year.group(0) if year else ""
+
+
+def release_facts(m):
+    """One line of release statistics from the manifest."""
+    layers = {x["name"]: x for x in m.get("layers", [])}
+    conditions = [c for c in layers.get("chromatin", {}).get("columns", []) if c != "summary"]
+    facts = [f"{len(layers)} layers"] + ([f"{len(conditions)} chromatin conditions"] if conditions else [])
+    for name, label in [("chromatin", "ATAC peaks"), ("gene", "genes"), ("public_af", "public variants")]:
+        if layers.get(name, {}).get("rows"):
+            facts.append(f"{layers[name]['rows']:,} {label}")
+    if (m.get("catalog") or {}).get("rows"):
+        facts.append(f"{m['catalog']['rows']} known loci")
+    return ", ".join(facts + [f"{len(jobs.presets())} trait presets"])
+
+
 def data(request):
-    """/snp/about/data/: the release's layers and other files from manifest.json, and the track registry."""
+    """/snp/about/data/: what each layer is, its source and version; rows, files, checksums, signal tracks, samples
+    and citations under closed details."""
     info, m = jobs.release_info(), jobs.manifest()
+    layers = []
+    for x in m.get("layers", []):
+        what, source = LAYERS.get(x["name"], (x.get("description", "").split(";")[0].split(" (")[0], (x.get("citation") or "").split(",")[0]))
+        layers.append(dict(x, what=what, source=source, version=_version(x), link=x.get("url") or (x.get("urls") or [None])[0]))
     files = []
     if m.get("alias"):
         a = m["alias"]
@@ -134,16 +174,17 @@ def data(request):
     if (jobs.release() / "pool" / "pool.parquet").exists():
         files.append(("pool/pool.parquet", "Public variants annotated with this release (gene pages, candidate lists)", None, None, None, None))
     return render(request, "snpportal/about_data.html", {
-        "nav": "about", "title": "Data", "release": info, "layers": m.get("layers", []), "files": files,
+        "nav": "about", "title": "Data", "release": info, "layers": layers, "files": files, "facts": release_facts(m),
+        "built": f"Release {info['version']} ({info['assembly']})" + (f", built {info['created']}" if info.get("created") else ""),
         "genome": m.get("genome", {}).get("url"), "chromosomes": len(m.get("chrom_sizes") or {}),
-        "tracks": track_summary(), "provisional": m.get("provisional") or [], "citations": CITATIONS,
+        "tracks": track_summary(), "citations": CITATIONS,
         "projects": [(atlas, assay, acc, ENA.format(acc)) for atlas, assay, acc in AQUAFAANG_PROJECTS], "fish": BODYMAP_FISH,
-        "population": next((x.get("population") for x in m.get("layers", []) if x["name"] == "public_af"), None),
-        "meta": f"Release {info['version']} ({info['assembly']})" + (f", built {info['created']}" if info.get("created") else "")})
+        "population": next((x.get("population") for x in m.get("layers", []) if x["name"] == "public_af"), None)})
 
 
 def track_summary():
-    """Track registry counts {tissues, rows: [(assay, [n per tissue], total)], n, chromhmm, replicates, defaults}, or None."""
+    """Track registry counts {tissues, rows: [(assay, [n per tissue], total)], n, assays, chromhmm, replicates, defaults},
+    or None."""
     try:
         from snpscore import tracks
         cfg = tracks.load_tracks(jobs.release())
@@ -155,17 +196,9 @@ def track_summary():
     tissues = sorted({t["tissue"] for t in rows}, key=lambda t: (order.index(t) if t in order else len(order), t))
     assays = sorted({t["assay"] for t in rows}, key=lambda a: (a not in ("ATAC", "RNA"), a == "Input", a))
     return {"tissues": tissues, "rows": [(a, [counts.get((a, t), 0) for t in tissues], sum(counts[(a, t)] for t in tissues)) for a in assays],
-            "n": len(rows), "chromhmm": len(cfg.get("chromhmm", [])), "replicates": sorted(Counter(t.get("replicate") for t in rows if t.get("replicate")).items()),
+            "n": len(rows), "kinds": sorted({"ChIP" if a not in ("ATAC", "RNA") else a for a in assays}, key=("ATAC", "RNA", "ChIP").index),
+            "chromhmm": len(cfg.get("chromhmm", [])), "replicates": sorted(Counter(t.get("replicate") for t in rows if t.get("replicate")).items()),
             "defaults": cfg.get("defaults") or {}, "generated": cfg.get("generated"), "hosts": cfg.get("hosts") or []}
-
-
-def wilson(share, n, z=1.96):
-    """95% Wilson interval of a proportion."""
-    if not n:
-        return 0.0, 1.0
-    d = 1 + z * z / n
-    centre, half = (share + z * z / (2 * n)) / d, z * math.sqrt(share * (1 - share) / n + z * z / (4 * n * n)) / d
-    return max(0.0, centre - half), min(1.0, centre + half)
 
 
 def benchmark_rows():
@@ -177,67 +210,33 @@ def benchmark_rows():
     return [r for r in rows if r.get("share_pos") not in (None, "") and r.get("positives")]
 
 
-def benchmark_svg(rows, note=""):
-    """Dot plot: share of positives (known loci, filled) and of matched controls (open) per feature, with 95% Wilson
-    intervals."""
-    left, span, step, top = 230, 380, 22, 34
-    x = lambda v: left + span * v
-    parts = [f'<circle cx="{left}" cy="10" r="5" fill="{palette.ACCENT}"/><text x="{left + 10}" y="14">known loci</text>'
-             f'<circle cx="{left + 110}" cy="10" r="5" fill="{palette.WHITE}" stroke="{palette.GREY[700]}" stroke-width="1.5"/>'
-             f'<text x="{left + 120}" y="14">matched controls</text>']
-    height = top + step * len(rows) + 24
-    for v in (0, 0.25, 0.5, 0.75, 1):
-        parts.append(f'<line x1="{x(v):.1f}" y1="{top - 6}" x2="{x(v):.1f}" y2="{height - 22}" stroke="{palette.GREY[200]}"/>'
-                     f'<text x="{x(v):.1f}" y="{height - 8}" text-anchor="middle" fill="{palette.GREY[700]}">{v:g}</text>')
-    for i, r in enumerate(rows):
-        y = top + i * step + 6
-        parts.append(f'<text x="{left - 10}" y="{y + 4}" text-anchor="end">{escape(r["feature"])}</text>')
-        for share, n, dy, fill in [(r["share_pos"], r["positives"], -4, palette.ACCENT), (r["share_ctrl"], r["controls"], 4, palette.WHITE)]:
-            share, n = float(share or 0), int(n or 0)
-            lo, hi = wilson(share, n)
-            label = f"{r['feature']}: {share:.2f} of {n} ({lo:.2f} to {hi:.2f})"
-            parts.append(f'<line x1="{x(lo):.1f}" y1="{y + dy}" x2="{x(hi):.1f}" y2="{y + dy}" stroke="{palette.GREY[500]}"/>'
-                         f'<circle cx="{x(share):.1f}" cy="{y + dy}" r="4" fill="{fill}" stroke="{palette.GREY[700] if fill == palette.WHITE else fill}" '
-                         f'stroke-width="1.5"><title>{escape(label)}</title></circle>')
-    n = rows[0]["positives"] if rows else 0
-    desc = f"Share of the {n} known loci and of matched public controls with each feature, with 95% Wilson intervals. {note}"
-    return figures.svg(left + span + 30, height, "Benchmark: known loci vs matched controls", desc, "".join(parts))
-
-
 def methods(request):
-    """/snp/about/methods/: weights.yaml as tables (PROVISIONAL blocks badged), coordinates, the methods text with
-    citations, and the benchmark plot (?download=benchmark.svg|benchmark.tsv)."""
+    """/snp/about/methods/: the tier rules from weights.yaml (weights, tiers, chromatin states with their colours,
+    presets with their conditions), a glossary, fine-mapping, the other settings (closed), the benchmark as one line
+    (?download=benchmark.tsv) and the methods text for a paper."""
     w, m = jobs.weights() or {}, jobs.manifest()
     rows = benchmark_rows()
-    what = request.GET.get("download")
-    if what in ("benchmark.svg", "benchmark.tsv") and rows:
+    if request.GET.get("download") == "benchmark.tsv" and rows:
         header = explore.provenance("benchmark of the known loci (n = %s, smoke test only)" % rows[0]["positives"])
-        if what == "benchmark.svg":
-            return explore.download(benchmark_svg(rows, " ".join(line[2:] for line in header)), "benchmark.svg", request, [])
         return explore.download((jobs.release() / "benchmark.tsv").read_text(), "benchmark.tsv", request, header)
-    provisional = set(w.get("provisional") or []) | set(m.get("provisional") or [])
     conditions = [c for c in explore.layer("chromatin").get("columns", []) if c != "summary"]
-    presets = [(name, prefixes or [], [c for c in conditions if not prefixes or c.startswith(tuple(prefixes))])
+    presets = [(name, ", ".join(prefixes or []), len([c for c in conditions if not prefixes or c.startswith(tuple(prefixes))]))
                for name, prefixes in (w.get("presets") or {}).items()]
     cuts = list(w.get("tiers") or [])
-    tiers = [(i + 1, f"{c} or more" if i == 0 else f"{c} to {cuts[i - 1] - 1}") for i, c in enumerate(cuts)]
+    tiers = [(i + 1, f"tier_score {c} or more" if i == 0 else f"tier_score {c} to {cuts[i - 1] - 1}") for i, c in enumerate(cuts)]
     if cuts:
-        tiers.append((len(cuts) + 1, f"below {cuts[-1]}"))
+        tiers.append((len(cuts) + 1, f"tier_score below {cuts[-1]}: no evidence found (not evidence of no effect)"))
+    active, weak = w.get("active_states") or [], w.get("weak_states") or []
+    states = [(name, palette.state(name)[2], STATE_TEXT.get(name, ""), "active" if name in active else "weak" if name in weak else "")
+              for name in palette.STATES]
     blocks = [(name, [(k, _flat(v)) for k, v in (value.items() if isinstance(value, dict) else [("value", value)])])
               for name, value in w.items() if name not in STANDARD]
-    fig = None
-    if rows:
-        fig = {"name": "benchmark", "title": "Benchmark: known loci vs matched controls", "svg": mark_safe(benchmark_svg(rows)),
-               "info": "Share of the published known loci (filled) and of public sites matched to them (open) that have each "
-                       "feature, with 95% Wilson intervals. With so few loci this only checks that the layers work.",
-               "svg_url": "?download=benchmark.svg", "tsv_url": "?download=benchmark.tsv",
-               "caption": f"n = {rows[0]['positives']}, smoke test only. snpscore benchmark on release {m.get('version')}."}
     return render(request, "snpportal/methods.html", {
-        "nav": "about", "title": "Methods", "provisional": provisional,
+        "nav": "about", "title": "Methods", "states": states, "presets": presets, "tiers": tiers, "blocks": blocks,
         "weights": [(name, value, TERM_TEXT.get(name, "")) for name, value in sorted((w.get("weights") or {}).items(), key=lambda kv: -kv[1])],
-        "tiers": tiers, "presets": presets, "active": w.get("active_states") or [], "weak": w.get("weak_states") or [],
-        "blocks": blocks, "text": methods_text(m, w), "citations": citations(m), "figure": fig,
-        "window": (m.get("catalog") or {}).get("window")})
+        "finemap": w.get("finemap") or {},
+        "glossary": [(a, t, text.format(window=(m.get("catalog") or {}).get("window") or 50_000)) for a, t, text in GLOSSARY],
+        "benchmark": rows[0]["positives"] if rows else None, "text": methods_text(m, w), "citations": citations(m)})
 
 
 def _flat(value):
@@ -283,24 +282,21 @@ def citations(m):
 
 
 def help_page(request):
-    """/snp/help/: quick start, input formats with examples, chromosome aliases, assembly check, privacy, glossary,
-    colour key and how to cite."""
-    w = jobs.weights() or {}
-    cuts = list(w.get("tiers") or [])
-    tiers = [(t, f"tier_score {cuts[t - 1]} or more" if t <= len(cuts) else "none of the above") for t in palette.TIERS]
+    """/snp/help/: quick start, questions, input formats with examples, search syntax, exports and vendor files, and
+    privacy; the details are closed items that a link to their #id opens."""
+    from snpscore import export, panel
     try:
         from snpscore.annotate import ASSEMBLY_WARNING
     except ImportError:
         ASSEMBLY_WARNING = 0.10
     return render(request, "snpportal/help.html", {
-        "nav": "help", "title": "Help", "tiers": tiers, "tissues": list(palette.TISSUES),
-        "states": [(name, palette.state(name)[2], STATE_TEXT.get(name, "")) for name in palette.STATES],
-        "palettes": [(key, label, key == palette.states_name()) for key, label in palette.STATE_PALETTE_NAMES.items()],
-        "terms": [(name, value, TERM_TEXT.get(name, "")) for name, value in (w.get("weights") or {}).items()],
-        "active": w.get("active_states") or [], "weak": w.get("weak_states") or [], "glossary": GLOSSARY,
-        "formats": FORMATS, "aliases": [(name, ", ".join(names)) for name, names in formats.ALIASES.items()],
+        "nav": "help", "title": "Help", "formats": FORMATS,
+        "aliases": [(name, ", ".join(names)) for name, names in formats.ALIASES.items()],
         "chrom_aliases": chrom_aliases("25"), "assembly_share": f"{ASSEMBLY_WARNING:.0%}",
-        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}"})
+        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "searches": search.EXAMPLES,
+        "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}", "max_snps": int(jobs.setting("SNPPORTAL_MAX_SNPS", 3_000_000)),
+        "vendor_cap": int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000)), "locus_name": export.locus_name("25", 28996360, {"25"}),
+        "bins": (panel.INFINIUM_I_MIN, panel.INFINIUM_I_POLYPLOID, panel.INFINIUM_II_MIN), "close_bp": panel.CLOSE_BP})
 
 
 def chrom_aliases(chrom):

@@ -21,16 +21,17 @@ No Docker, Apache, server, deployment or hosting work until the prototype works 
 
 ## Design system
 - Every colour lives in `palette.py`; templates and `portal.css` use classes and `var(--sp-*)` only (tested). SVGs embed literal hex.
-- New pages extend `base_portal.html`; figures use the `_figure.html` card (definition, SVG/PNG/TSV downloads, provenance caption).
+- New pages extend `base_portal.html`; figures use the `_figure.html` card (title, (i) definition, one SVG/PNG/TSV download menu; provenance only in the SVG `<desc>` and downloads).
+- Pages that show tiers include `_caveat.html` once (SYNTHETIC prefix on synthetic jobs): no PROVISIONAL or SYNTHETIC badges elsewhere.
 - Panels, filters, card sections and export columns render only when their column exists in the result.
 - `hx-boost` only on links and forms that stay on the same page (a boosted file or other-page link swaps in nothing; tested).
-- Results tabs: Overview | Table | Panel | Export, plus Association for GWAS jobs. View state lives in whitelisted GET
+- Results tabs: Overview | Table | Panel | Export; GWAS jobs: Association | Overview | Table | Export. View state lives in whitelisted GET
   parameters; derived files are cached in the job folder by a hash of their parameters (`panels/<hash>.parquet`), so the
   same URL gives the same file.
 
 ## Provisional (G to confirm)
 Thresholds and defaults live in the release's weights.yaml (`assay`, `design`, `finemap` blocks, copied into each job),
-in tracks.yaml `defaults`, or in a named constant; the UI labels them PROVISIONAL. Portal-side ones:
+in tracks.yaml `defaults`, or in a named constant; the UI's caveat line and every download say they are provisional. Portal-side ones:
 `SNPPORTAL_MAX_VENDOR_SNPS` (50,000 per vendor file), the panel gap highlight (3x the mean spacing, rounded), the
 candidate and tour flank (50 kb around a gene), the Manhattan thinning (p > 0.01 thinned to the top SNP per 50 kb) and
 the regional plot window (lead +- credible set + 20 kb, 50-250 kb).

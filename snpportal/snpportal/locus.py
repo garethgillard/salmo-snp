@@ -1,7 +1,8 @@
 """Locus browser (P4.3a/b), evidence card and variant page (P4.4a).
 
 - /snp/locus/?r=25:28980000-29010000[&trait=][&assay=ATAC|H3K27ac|H3K4me3][&hmm=1][&scale=track][&key=<job>[&row=]]
-  draws the release's lanes, the job's SNPs (tier lollipops, only with key=) and live salmobase signal rows.
+  draws the release's lanes, the job's SNPs (tier lollipops, only with key=) and live salmobase signal rows; without a
+  region it opens at vgll3. &slim=1 draws the card's mini view (genes and the trait's chromatin rows).
   htmx swaps #locus-view from /snp/locus/svg/ (same parameters); without htmx that URL is the SVG file.
 - Signal and ChromHMM come from tracks.yaml through snpscore.locus on a fixed public tile grid, cached in the Django
   cache 'snpportal_tiles' (if configured) or a LocMemCache of 5,000 entries. Cache keys never hold a user's position.
@@ -33,6 +34,10 @@ from . import explore, figures, jobs, locus_svg, results
 from .views import finished, private
 
 DEFAULT_WIDTH = 10_000  # a single position opens this wide
+DEFAULT_REGION = "25:28985000-29010000"  # the locus browser opens here (vgll3) when no region is given
+FULL = {"published", "molqtl", "regbuild", "gerp", "variants", "signal", "snps"}  # the locus browser's optional lanes
+REGION_LANES = {"published", "gerp"}  # the regional association plot (its association lane is drawn on top)
+CARD_LANES = set()  # the card's mini view: genes and the trait's chromatin rows (and a GWAS job's association lane)
 CARD_FLANK = 5_000  # mini locus: the SNP +- this
 ASSAYS = ("ATAC", "H3K27ac", "H3K4me3")
 MAX_SNPS = 5_000  # user SNPs drawn per view
@@ -94,7 +99,7 @@ def view_state(request):
     presets = dict(jobs.presets())
     s = {"trait": g.get("trait") if g.get("trait") in presets else "all", "assay": g.get("assay") if g.get("assay") in ASSAYS else "ATAC",
          "hmm": g.get("hmm") == "1", "scale": "track" if g.get("scale") == "track" else "shared", "key": None, "row": None,
-         "chrom": None, "error": None, "too_wide": False, "compact": g.get("compact") == "1",
+         "chrom": None, "error": None, "too_wide": False, "compact": g.get("compact") == "1", "slim": g.get("slim") == "1",
          "mark": int(g["mark"]) if g.get("mark", "").isdecimal() else None}
     if g.get("key"):
         try:
@@ -115,7 +120,7 @@ def view_state(request):
             chrom, start, end = hit[0], hit[1] - 1, hit[1]
             s["mark"] = hit[1]
         else:
-            return s
+            chrom, start, end = sl.parse_region(DEFAULT_REGION, jobs.release())
     except ValueError as e:
         s["error"] = str(e)
         return s
@@ -169,14 +174,6 @@ def user_snps(request, s, link=True):
     return out
 
 
-def scope():
-    """Who the public data describe, from the manifest (public_af's population), for the evidence card."""
-    population = explore.layer("public_af").get("population")
-    text = f"Public allele frequencies: {population[0].lower()}{population[1:]}." if population else ""
-    return (text + " AQUA-FAANG chromatin states and the molQTL come from 12 AquaGen commercial (domesticated) fish and "
-            "embryo pools; other populations can differ.").strip()
-
-
 def molqtl_rows(chrom, start, end):
     """molQTL leads (molqtl.parquet) in a window, BED coordinates: [{pos, tissues, kinds, best_bf, title}]."""
     path = jobs.release() / "molqtl.parquet"
@@ -199,29 +196,34 @@ def lanes(chrom, start, end):
     return data
 
 
-def draw(request, s, download=False):
-    """(svg, notes, synthetic) for the view s."""
+def draw(request, s, download=False, show=FULL):
+    """(svg, notes, synthetic) for the view s. `show`: the optional lanes (FULL, REGION_LANES or CARD_LANES); outside
+    the locus browser only the trait's chromatin rows are drawn (all 21 for 'all'). On screen the figure carries no
+    title or provenance lines (the page has them; a download keeps them)."""
     info = jobs.release_info()
     data = lanes(s["chrom"], s["start"], s["end"])
     weights = jobs.weights()
     chosen = set(preset_conditions(weights, [f"chromatin_{c}" for c in data["conditions"]], s["trait"])[0]) if weights else set()
+    if show is not FULL and chosen:
+        data["conditions"] = [c for c in data["conditions"] if c in chosen]
     notes, synthetic = [], bool(info.get("synthetic"))
     cfg, width = registry(), s["end"] - s["start"]
     signal = hmm = None
     deadline = float(jobs.setting("SNPPORTAL_SIGNAL_DEADLINE", 4.0))
     prefix = f"snpportal:{(info.get('sha256') or 'release')[:12]}"
-    if cfg is None:
-        notes.append("This release has no track registry (tracks.yaml), so no signal rows are shown.")
-    elif width > sl.MAX_SIGNAL:
+    live = "signal" in show  # live salmobase rows: the locus browser only
+    if live and cfg is None:
+        notes.append("This release lists no signal tracks, so no signal rows are shown.")
+    elif live and width > sl.MAX_SIGNAL:
         signal = {"title": f"{s['assay']} signal", "rows": [], "note": f"Zoom in to {sl.MAX_SIGNAL // 1000} kb or less to see signal"}
-    else:
+    elif live:
         picked, t0 = pick_tracks(cfg, s["trait"], s["assay"]), time.monotonic()
         read = sl.signal(picked, s["chrom"], s["start"], s["end"], tile_cache(), prefix, deadline)
         rows = [{"track": t, "values": v, "label": " ".join(locus_svg.condition_label(t["condition"])) + f" {t.get('replicate') or ''}"
                  + (" SYNTHETIC" if synthetic_track(t) else "")} for t, v in zip(picked, read["values"])]
         signal = {"title": f"{s['assay']} signal", "subtitle": "salmobase, live", "rows": rows, "start": read["start"],
                   "rung": read["rung"], "scale": s["scale"],
-                  "note": "" if picked else f"No {s['assay']} tracks for this preset in tracks.yaml"}
+                  "note": "" if picked else f"No {s['assay']} tracks for this trait"}
         synthetic = synthetic or any(synthetic_track(t) for t in picked)
         failed = sum(r["values"] is None for r in rows)
         if failed:
@@ -236,7 +238,7 @@ def draw(request, s, download=False):
             synthetic = synthetic or any(synthetic_track(t) for t in have)
             if any(r["segments"] is None for r in hmm):
                 notes.append("ChromHMM segmentation is unavailable for some conditions (hatched rows).")
-    if s["hmm"] and width > sl.MAX_SIGNAL:
+    if live and s["hmm"] and width > sl.MAX_SIGNAL:
         notes.append(f"ChromHMM segmentation is read in windows up to {sl.MAX_SIGNAL // 1000} kb; showing states in peaks.")
     gwas = None
     if s["key"]:
@@ -244,15 +246,15 @@ def draw(request, s, download=False):
         job = jobs.read(s["key"])
         synthetic = synthetic or bool(job.get("synthetic_input") or job.get("synthetic_layers"))
         gwas = association.browser_lane(request, s["key"], s["chrom"], s["start"], s["end"], link=not download)
-    snps = [] if gwas else user_snps(request, s, link=not download)
+    snps = [] if gwas or "snps" not in show else user_snps(request, s, link=not download)
     caption = provenance(info, cfg)
     title = f"Chromosome {s['chrom']}: {s['start'] + 1:,}-{s['end']:,} ({locus_svg.fmt_bp(width)})"
     svg = locus_svg.locus(
-        data, title=title, caption=caption, desc=f"{title}. {caption}", snps=snps,
+        data, title=title, caption=caption if download else "", desc=f"{title}. {caption}", snps=snps,
         snp_note=f"tiers: {s['trait'].replace('_', ' ')}" if snps else "", signal=signal, hmm=hmm, chosen=chosen, mark=s["mark"],
         gene_url=None if download else (lambda gid: reverse("snpportal:gene", args=[gid])), compact=s["compact"],
         width=760 if s["compact"] else locus_svg.WIDTH, gutter=118 if s["compact"] else locus_svg.GUTTER, synthetic=synthetic,
-        gwas=gwas)
+        gwas=gwas, lanes=None if show is FULL else show, heading=download)
     return svg, notes, synthetic
 
 
@@ -266,11 +268,9 @@ def provenance(info, cfg):
 
 
 def page(request, s, layout="snpportal/base_portal.html"):
-    """Context for locus.html."""
+    """Context for locus.html. `changed` counts the display options away from their defaults (they open by themselves)."""
     ctx = {"nav": "explore", "title": "Locus browser", "layout": layout, "s": s, "presets": jobs.presets(), "assays": ASSAYS,
-           "crumbs": [("Explore", reverse("snpportal:locus")), ("Locus", None)], "examples": [
-               ("vgll3 (maturation)", "25:28,980,000-29,010,000"), ("six6", "9:23,820,000-23,860,000"),
-               ("bco1l (flesh colour)", "26:19,120,000-19,150,000")]}
+           "changed": (s["assay"] != "ATAC") + s["hmm"] + (s["scale"] == "track")}
     if s["chrom"]:
         ctx["region_text"] = region_text(s["chrom"], s["start"], s["end"], commas=True)
         if s["too_wide"]:
@@ -302,7 +302,7 @@ def locus_svg_view(request):
     if not s["chrom"] or s["too_wide"]:
         message = s["error"] or ("Zoom in: the window is wider than 2 Mb" if s["too_wide"] else "Choose a region, e.g. 25:28,980,000-29,010,000")
         return HttpResponse(figures.placeholder(900, 120, "Locus browser", message), content_type="image/svg+xml")
-    svg = draw(request, s, download=bool(request.GET.get("download")))[0]
+    svg = draw(request, s, download=bool(request.GET.get("download")), show=CARD_LANES if s["slim"] else FULL)[0]
     response = HttpResponse(svg, content_type="image/svg+xml")
     if request.GET.get("download"):
         response["Content-Disposition"] = f'attachment; filename="locus_{s["chrom"]}_{s["start"] + 1}_{s["end"]}.svg"'
@@ -311,91 +311,99 @@ def locus_svg_view(request):
 
 # ---- evidence card and variant page ----
 
+CDS = "CDS (amino-acid effect not computed)"
+TIPS = {"LORe region": "region where the duplicated chromosomes still pair; probes may cross-hybridise",
+        "A/T or C/G SNP": "strand-ambiguous; needs care on arrays"}
+
+
 def evidence(snp, weights, trait, synthetic=False):
-    """Sections of the evidence card for one annotated row (a dict of its columns), each only when its columns exist.
-    Shared by the job card and the variant page (and later the API)."""
+    """The evidence card for one annotated row (a dict of its columns), each part only when its columns exist: the tier
+    line, the known association, chromatin (grid, or one line when no condition has a peak), the assay and population
+    lines, then the closed parts (expression, the user's own columns, details). Shared by the job card and the variant
+    page."""
     chrom, pos = snp.get("chrom"), snp.get("pos")
     ref, alt = snp.get("ref"), snp.get("alt")
     spec = f"{chrom}-{pos}" + (f"-{ref}-{alt}" if ref and alt else "")
-    ev = {"snp": snp, "trait": trait, "title": snp.get("id") or f"{chrom}:{pos:,}", "position": f"{chrom}:{pos}",
-          "alleles": f"{ref}>{alt}" if ref and alt else "", "spec": spec, "synthetic": synthetic, "scope": scope(),
-          "tier": snp.get("tier"), "score": snp.get("tier_score"), "tier_evidence": snp.get("tier_evidence")}
-    shown = {"id", "chrom", "pos", "ref", "alt", "file_row_number", "chromatin", "region", "tier", "tier_score",
-             "tier_evidence", "tier_terms"}
-    if weights and "tier_terms" in snp:
-        ev["why"] = mark_safe(locus_svg.tier_contribution(snp["tier_terms"] or [], snp.get("tier_score") or 0,
-                                                          snp.get("tier") or 4, weights["tiers"], synthetic))
+    ev = {"trait": trait, "title": snp.get("id") or f"{chrom}:{pos:,}", "position": f"{chrom}:{pos}",
+          "alleles": f"{ref}>{alt}" if ref and alt else "", "spec": spec, "synthetic": synthetic, "tier": snp.get("tier")}
+    terms = [(text, t["weight"]) for text, t in zip((snp.get("tier_evidence") or "").split("; "), snp.get("tier_terms") or [])
+             if t["weight"]]  # tier_evidence and tier_terms list the fired terms in the same order
+    ev["terms"] = [(CDS if text == "CDS" else text, w) for text, w in terms] or None
+    if weights and len(terms) > 1:
+        ev["why"] = mark_safe(locus_svg.tier_contribution(snp["tier_terms"], snp.get("tier_score") or 0, snp.get("tier") or 4,
+                                                          weights["tiers"], synthetic))
     states = {c[len("chromatin_"):]: snp[c] for c in snp if c.startswith("chromatin_") and c not in NOT_CONDITIONS}
     if states:
         chosen = set(preset_conditions(weights, list(snp), trait)[0]) if weights else set()
-        ev["grid"] = mark_safe(locus_svg.chromatin_grid(states, chosen, bool(snp.get("blacklist")), synthetic))
-        shown |= {f"chromatin_{c}" for c in states}
+        if any(states.values()):
+            ev["grid"] = mark_safe(locus_svg.chromatin_grid(states, chosen, bool(snp.get("blacklist")), synthetic))
+        else:
+            tissues = sorted({c.split("_")[0].lower() for c in states if "_" in c})
+            stages = sum("_" not in c for c in states)
+            ev["no_peak"] = (f"No AQUA-FAANG peak in the {len(states)} conditions sampled ({', '.join(tissues)}, {stages} embryo "
+                             "stages; 12 AquaGen fish). No immune tissue, gill or skin.")
+        ev["blacklisted"] = bool(snp.get("blacklist"))
     if snp.get("gene_id"):
         ev["gene"] = gene_context(snp)
-        shown |= {c for c in snp if c.startswith("gene_")}
     expression = {c[len("expression_"):]: snp[c] for c in snp if c.startswith("expression_")}
-    shown |= {f"expression_{t}" for t in expression}
     if any(v is not None for v in expression.values()):
         ev["expression"] = mark_safe(locus_svg.expression_bars(expression, synthetic))
-    region = []
-    if "region_class" in snp:
-        region.append(("Genic region", snp["region_class"] or "intergenic"))
-    if "regbuild" in snp:
-        region.append(("Ensembl regulatory", " ".join(str(x) for x in (snp.get("regbuild_type"), snp.get("regbuild_id")) if x)
-                       + (f" (promoter of {snp['regbuild_gene_id']})" if snp.get("regbuild_gene_id") else "") or "none"))
-    if "gerp" in snp:
-        region.append(("GERP constrained element", f"score {snp['gerp_score']}" if snp.get("gerp") else "none"))
-    if "public_af" in snp:
-        region.append(("Public variant (504-fish panel)", public_af_text(snp) if snp.get("public_af") else "not a site of the 504-fish panel"))
-        if snp.get("public_af_aquafaang12_af") is not None:
-            region.append(("AQUA-FAANG 12 fish", f"alt AF {_fmt(snp['public_af_aquafaang12_af'])}, imputation DR2 "
-                           f"{_fmt(snp.get('public_af_aquafaang12_dr2'))} (the 12 fish of the chromatin and molQTL data)"))
-    if "cm" in snp:
-        region.append(("Genetic map (Brekke 2023)", f"{_fmt(snp.get('cm_female'))} cM female, {_fmt(snp.get('cm_male'))} cM male"
-                       if snp.get("cm") else "outside the map's first and last marker on this chromosome"))
-    if snp.get("position_source"):
-        region.append(("Position from", "its rs ID (EVA release 9)" if snp["position_source"] == "rsid"
-                       else f"its ICSASG_v2 position {snp['position_source'].split(' ', 1)[-1]}, moved to Ssal_v3.1 by its rs ID (EVA release 9)"))
-    if "flank_variants" in snp:
-        region.append(("Variants within 35 bp", snp["flank_variants"]))
-    if "ref_check" in snp:
-        region.append(("Reference base", f"{snp.get('genome_base') or '?'} ({snp['ref_check']})"
-                       + (f", flank GC {snp['flank_gc']}, repeat {snp['flank_repeat']}" if snp.get("flank_gc") is not None else "")))
-    ev["region"] = region
-    shown |= {c for c in snp if c.split("_")[0] in ("region", "regbuild", "gerp", "public", "flank", "genome", "cm")} | {
-        "ref_check", "position_source"}
     if snp.get("known_locus"):
         ev["known"] = known(snp)
-    shown |= {c for c in snp if c.startswith("known_")}
-    if "molqtl" in snp:
+    if snp.get("molqtl"):
         ev["molqtl"] = molqtl(snp)
-        shown |= {c for c in snp if c.startswith("molqtl")}
-    ev["assay"] = [(c[len("assay_"):].replace("_", " "), snp[c]) for c in snp if c.startswith("assay_")]
-    shown |= {c for c in snp if c.startswith("assay_")}
-    flags = []
-    if snp.get("blacklist"):
-        flags.append(("blacklisted", 'no peak here means "cannot tell", not "no function"'))
-    if snp.get("lore"):
-        flags.append(("LORe", f"region {snp.get('lore_label') or ''}: near-identical Ss4R ohnolog, probes may cross-hybridise"))
-    if snp.get("strand_ambiguous"):
-        flags.append(("A/T or C/G", "reads the same on both strands"))
-    if (snp.get("flank_variants") or 0) > 0:
-        flags.append(("flank variants", f"{snp['flank_variants']} known variants within 35 bp"))
-    if snp.get("ref_check") in ("mismatch", "strand_flip", "swapped"):
-        flags.append(("reference", f"alleles vs genome: {snp['ref_check']}"))
-    ev["flags"] = flags
-    shown |= {"blacklist", "lore", "lore_label", "strand_ambiguous"}
+    if snp.get("assay_status"):
+        reasons = [r for r in (snp.get("assay_reasons") or "").split("; ") if r]
+        reasons += [label for flag, label in (("lore", "LORe region"), ("strand_ambiguous", "A/T or C/G SNP"))
+                    if snp.get(flag) and not any(r.startswith(label[:5]) for r in reasons)]
+        ev["assay"] = {"status": snp["assay_status"].replace("_", " "), "reasons": "; ".join(reasons), "flank": snp.get("assay_flank"),
+                       "tip": "; ".join(f"{k}: {v}" for k, v in TIPS.items() if any(r.startswith(k[:5]) for r in reasons))}
+    if snp.get("public_af"):
+        ev["maf"] = {"value": _fmt(snp.get("public_af_maf")), "fish": snp.get("public_af_ns") or 504,
+                     "tip": explore.layer("public_af").get("population") or ""}
+    elif "public_af" in snp:
+        ev["maf"] = {"value": None}
+    ev["details"] = details(snp)
+    ev["yours"] = [(c[3:], v) for c, v in snp.items() if c.startswith("in_")]  # the user's own columns, original names
     a, b = max(1, pos - 100), pos + 100
     ev["links"] = [("Ensembl", ENSEMBL.format(chrom=chrom, start=a, end=b)),
                    ("salmobase JBrowse", JBROWSE.format(chrom=chrom, start=max(1, pos - 1000), end=pos + 1000))]
     ev["permalink"] = reverse("snpportal:variant", args=[spec])
-    ev["other"] = [(c, v) for c, v in snp.items() if c not in shown]
     return ev
+
+
+def details(snp):
+    """[(label, value)] for the card's closed Details: the genic region, Ensembl regulatory build, GERP, the public
+    site, genetic map, where the position came from, flank variants and the reference base."""
+    out = []
+    if "region_class" in snp:
+        out.append(("Genic region", snp["region_class"] or "intergenic"))
+    if "regbuild" in snp:
+        out.append(("Ensembl regulatory", " ".join(str(x) for x in (snp.get("regbuild_type"), snp.get("regbuild_id")) if x)
+                    + (f" (promoter of {snp['regbuild_gene_id']})" if snp.get("regbuild_gene_id") else "") or "none"))
+    if "gerp" in snp:
+        out.append(("GERP constrained element", f"score {snp['gerp_score']}" if snp.get("gerp") else "none"))
+    if "public_af" in snp:
+        out.append(("Public variant (504-fish panel)", public_af_text(snp) if snp.get("public_af") else "not a site of the 504-fish panel"))
+        if snp.get("public_af_aquafaang12_af") is not None:
+            out.append(("AQUA-FAANG 12 fish", f"alt AF {_fmt(snp['public_af_aquafaang12_af'])}, imputation DR2 "
+                        f"{_fmt(snp.get('public_af_aquafaang12_dr2'))}"))
+    if "cm" in snp:
+        out.append(("Genetic map (Brekke 2023)", f"{_fmt(snp.get('cm_female'))} cM female, {_fmt(snp.get('cm_male'))} cM male"
+                    if snp.get("cm") else "outside the map's first and last marker on this chromosome"))
+    if snp.get("position_source"):
+        out.append(("Position from", "its rs ID (EVA release 9)" if snp["position_source"] == "rsid"
+                    else f"its ICSASG_v2 position {snp['position_source'].split(' ', 1)[-1]}, moved to Ssal_v3.1 by its rs ID (EVA release 9)"))
+    if "flank_variants" in snp:
+        out.append(("Variants within 35 bp", snp["flank_variants"]))
+    if "ref_check" in snp:
+        out.append(("Reference base", f"{snp.get('genome_base') or '?'} ({snp['ref_check']})"))
+    return out
 
 
 def gene_context(snp):
     """Nearest gene: label (ortholog fallback), ids, where the SNP is relative to it, orthologs and description."""
-    where = "inside the gene" + (f" ({snp['region_class'].replace('_', ' ')})" if snp.get("region_class") else "")
+    where = "inside the gene" + (f", {snp['region_class'].replace('_', ' ')}" if snp.get("region_class") else "")
     path = jobs.release() / "gene.parquet"
     if snp.get("gene_distance") and path.exists():
         hit = jobs.connect([jobs.release()]).execute(f"SELECT start, \"end\", strand FROM read_parquet('{path}') WHERE id = ?",
@@ -406,26 +414,35 @@ def gene_context(snp):
             where = f"{locus_svg.fmt_bp(snp['gene_distance'])} {'upstream of the TSS' if upstream else 'downstream of the gene end'}"
     return {"id": snp["gene_id"], "label": sl.gene_label(snp.get("gene_name"), snp.get("gene_ortholog_human"),
                                                          snp.get("gene_ortholog_zebrafish"), snp["gene_id"]),
-            "named": bool(snp.get("gene_name")), "biotype": snp.get("gene_biotype"), "strand": snp.get("gene_strand"),
+            "named": bool(snp.get("gene_name")), "tip": "" if snp.get("gene_name") else explore.UNNAMED_TIP,
+            "biotype": snp.get("gene_biotype"), "strand": snp.get("gene_strand"),
             "description": snp.get("gene_description"), "human": snp.get("gene_ortholog_human"),
             "zebrafish": snp.get("gene_ortholog_zebrafish"), "where": where, "url": reverse("snpportal:gene", args=[snp["gene_id"]]),
             "salmobase": explore.SALMOBASE_GENE.format(snp["gene_id"])}
 
 
 def known(snp):
-    """Published-associations callout: the nearest catalogue SNP (annotate's known_locus, with the effect allele matched
-    to the SNP's alleles) and every other catalogue row within the catalogue window, each with badges and DOIs."""
+    """The known association, said once: the nearest catalogue SNP (annotate's known_locus; at its position the effect
+    allele is matched to the SNP's alleles), its evidence kind, effect, caveat, rs ID and DOIs, and every other
+    catalogue row within the catalogue window."""
     rows = explore.nearby(snp["chrom"], snp["pos"])
     row = next((r for r in rows if r.get("id") == snp["known_locus"]), {})
-    return {"id": snp["known_locus"], "dist": snp.get("known_locus_dist"), "allele": snp.get("known_effect_allele"),
-            "note": snp.get("known_effect_note"), "locus": row.get("locus"), "trait": (row.get("trait") or "").replace("_", " "),
-            "effect": row.get("effect"), "direction": row.get("effect_direction"), "dois": row.get("dois", []),
-            "badges": row.get("badges", []), "caveat": row.get("caveat"), "rsid": row.get("rsid"),
-            "others": [r for r in rows if r.get("id") != snp["known_locus"]]}
+    kind = (row.get("badges") or [("", "", "")])[0]
+    effect, allele, note = (row.get("effect") or "").rstrip("."), snp.get("known_effect_allele"), snp.get("known_effect_note")
+    if allele and note:  # 'T (Met54) = early maturation (1SW)' -> 'effect allele T (alt) = early maturation (1SW)'
+        effect = (f"effect allele {allele} ({note}) = {effect.split(' = ', 1)[1]}" if effect.startswith(allele + " ") and " = " in effect
+                  else f"effect allele {allele} ({note})" + (f"; {effect}" if effect else ""))
+    dist = snp.get("known_locus_dist")
+    return {"id": snp["known_locus"], "trait": (row.get("trait") or "").replace("_", " "),
+            "where": f"{locus_svg.fmt_bp(dist)} away" if dist else "at this position", "kind": kind[1][:1].upper() + kind[1][1:],
+            "kind_tip": kind[2], "effect": effect, "rsid": row.get("rsid"), "dois": row.get("dois", []),
+            "flags": [b for b in row.get("badges", []) if b[0] == "caveat"], "caveat": row.get("caveat"),
+            "others": [{"id": r["id"], "url": reverse("snpportal:variant", args=[f"{r['chrom']}-{r['pos']}"]),
+                        "dist": locus_svg.fmt_bp(r["dist"])} for r in rows if r.get("id") != snp["known_locus"]]}
 
 
 def molqtl(snp):
-    """molQTL section of the card: {lead, features: [{tissue, kind, feature, url, bf, pi}], citation, licence}."""
+    """molQTL section of the card (lead SNPs only): {features: [{tissue, kind, feature, url, bf, pi}], citation, licence}."""
     features = []
     for part in (snp.get("molqtl_features") or "").split("; "):
         m = MOLQTL.match(part.strip())
@@ -440,8 +457,8 @@ def molqtl(snp):
             url = reverse("snpportal:locus") + "?" + urlencode({"r": f"{chrom}:{max(1, int(a) + 1 - 2000)}-{int(b) + 2000}"})
         features.append({"tissue": tissue, "kind": MOLQTL_KINDS.get(kind, kind), "feature": feature, "url": url, "bf": bf, "pi": pi})
     layer = explore.layer("molqtl")
-    return {"lead": bool(snp.get("molqtl")), "features": features, "alleles": snp.get("molqtl_alleles"),
-            "citation": layer.get("citation"), "licence": layer.get("licence"), "max_bf": layer.get("max_bf")}
+    return {"features": features, "alleles": snp.get("molqtl_alleles"), "citation": layer.get("citation"),
+            "licence": layer.get("licence"), "max_bf": layer.get("max_bf")}
 
 
 def public_af_text(snp):
@@ -464,25 +481,30 @@ def card_context(request, ev, presets, switch_url, mini_url, locus_url):
 
 @private
 def card(request, key, row):
-    """Evidence card for one SNP of a job: an htmx fragment, or a page of its own."""
+    """Evidence card for one SNP of a job, a page of its own (htmx swaps only the card when the trait changes). A GWAS
+    job's card adds the SNP's p, beta and fine-mapping (association.snp_line)."""
+    from . import association
     job = finished(key)
     con, types, _, chosen = results.open_result(request, key)
     hit = con.execute(results.CARD_SQL, [row]).fetchone()
     if hit is None:
         raise Http404("No such SNP")
     d = jobs.folder(key)
-    ev = evidence(dict(zip(types, hit)), jobs.weights(d), chosen["trait"], bool(job.get("synthetic_input") or job.get("synthetic_layers")))
+    synthetic = bool(job.get("synthetic_input") or job.get("synthetic_layers"))
+    ev = evidence(dict(zip(types, hit)), jobs.weights(d), chosen["trait"], synthetic)
+    ev["gwas"] = association.snp_line(request, key, row, job)
     q = urlencode({"trait": chosen["trait"]})
     ctx = card_context(request, ev, jobs.presets(d), reverse("snpportal:card", args=[key, row]),
                        f"{reverse('snpportal:card_locus', args=[key, row])}?{q}",
                        f"{reverse('snpportal:locus')}?{urlencode({'key': key, 'row': row, 'trait': chosen['trait']})}")
-    ctx.update(job=job, crumbs=[("Results", f"{reverse('snpportal:results', args=[key])}?{q}"), ("SNP", None)])
+    ctx.update(job=job, synthetic=synthetic, crumbs=[("Results", f"{reverse('snpportal:results', args=[key])}?{q}"), ("SNP", None)])
     return render(request, "snpportal/card.html" if ctx["hx"] else "snpportal/card_page.html", ctx)
 
 
 @private
 def card_locus(request, key, row):
-    """Mini locus (SNP +- 5 kb) for the card, addressed by row, with ATAC rows for the preset."""
+    """Mini locus (SNP +- 5 kb) for the card, addressed by row: genes and the trait's chromatin rows, plus the
+    association lane of a GWAS job."""
     finished(key)
     con = results.open_result(request, key)[0]
     hit = con.execute("SELECT chrom, pos FROM v WHERE file_row_number = ?", [row]).fetchone()
@@ -490,7 +512,7 @@ def card_locus(request, key, row):
         raise Http404("No such SNP")
     s = mini_state(request, hit[0], hit[1])
     s["key"] = str(key)
-    return HttpResponse(draw(request, s)[0], content_type="image/svg+xml")
+    return HttpResponse(draw(request, s, show=CARD_LANES)[0], content_type="image/svg+xml")
 
 
 def mini_state(request, chrom, pos):
@@ -521,10 +543,8 @@ def variant(request, spec):
     snp["id"] = snp.get("id") or next((r["id"] for r in sl.catalog(jobs.release()) if r.get("chrom") == chrom and r.get("pos") == str(pos)), None)
     info = jobs.release_info()
     ev = evidence(snp, jobs.weights(), trait, bool(info.get("synthetic")))
-    ctx = card_context(request, ev, presets, reverse("snpportal:variant", args=[spec]),
-                       f"{reverse('snpportal:locus_svg')}?{urlencode({'r': region_text(chrom, max(0, pos - 1 - CARD_FLANK), pos + CARD_FLANK), 'trait': trait, 'mark': pos, 'compact': 1})}",
+    mini = {"r": region_text(chrom, max(0, pos - 1 - CARD_FLANK), pos + CARD_FLANK), "trait": trait, "mark": pos, "compact": 1, "slim": 1}
+    ctx = card_context(request, ev, presets, reverse("snpportal:variant", args=[spec]), f"{reverse('snpportal:locus_svg')}?{urlencode(mini)}",
                        f"{reverse('snpportal:locus')}?{urlencode({'r': region_text(chrom, max(0, pos - 1 - 10_000), pos + 10_000), 'trait': trait})}")
-    ctx.update(nav="explore", title=f"{chrom}:{pos:,}" + (f" {ref}>{alt}" if ref and alt else ""),
-               crumbs=[("Explore", reverse("snpportal:locus")), ("Variant", None)],
-               meta=f"Annotated on the fly against release {info['version']} ({info['assembly']}); no upload needed.")
-    return render(request, "snpportal/variant.html", ctx)
+    ctx.update(nav="explore", title=ev["title"], synthetic=ev["synthetic"], crumbs=[("Locus browser", reverse("snpportal:locus")), ("Variant", None)])
+    return render(request, "snpportal/card.html" if ctx["hx"] else "snpportal/variant.html", ctx)

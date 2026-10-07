@@ -28,21 +28,12 @@ from . import jobs, results as result_views, tools
 SUFFIXES = (".vcf.gz", ".vcf", ".tsv.gz", ".tsv", ".csv.gz", ".csv", ".txt.gz", ".txt", ".bim", ".map")
 PASTE_LINES = 10_000
 TABS = ("overview", "table", "panel", "export")
-EXAMPLES = {  # demo file name (without extension) -> button label ({n}: its rows); files come from the release's demo/ folder
-    "known_loci": "Known loci: {n} published SNPs and loci",
-    "public_50k": "50,000 public sites (AQUA-FAANG 12-fish VCF)",
-    "chip_demo_SYNTHETIC": "Demo chip",
+EXAMPLES = {  # demo file name (without extension) -> label ({n}: its rows); files come from the release's demo/ folder
+    "known_loci": "{n} known salmon loci",
+    "public_50k": "50,000 public sites",
+    "chip_demo_SYNTHETIC": "Demo chip (synthetic)",
 }
-FORMATS = [  # (format, extensions, what is read) for the accepted-formats table
-    ("VCF", ".vcf, .vcf.gz", "CHROM, POS, ID, REF and ALT only. Genotype columns are never read or stored."),
-    ("SNP table", ".tsv, .csv, .txt (or gzipped)", "A header row with chrom and pos (aliases such as CHR, BP, Position, "
-     "MapInfo); optional id, ref, alt. Other columns are kept."),
-    ("PLINK", ".bim, .map", "Chromosome, SNP id and base-pair position."),
-    ("Chip manifest", ".csv", "Illumina manifests ([Assay] section) and Axiom annotation files. Their positions are often "
-     "ICSASG_v2: watch for the assembly warning."),
-    ("rs IDs", ".txt, .tsv", "One rs ID per line, with or without an id header: placed on Ssal_v3.1 through EVA release 9. "
-     "A table whose id column holds rs IDs and whose positions are ICSASG_v2 is moved to Ssal_v3.1 the same way."),
-]
+INPUTS = {"file": "Upload file", "paste": "Paste positions", "regions": "Genes or regions"}  # the Score page's tabs (?input=)
 
 
 class PrivateReports(SafeExceptionReporterFilter):
@@ -132,12 +123,17 @@ def _rows(path):
         return sum(1 for line in f if line.strip() and not line.startswith("#")) - 1
 
 
-def score_page(request, error=None, status=200):
-    max_mb = float(jobs.setting("SNPPORTAL_MAX_UPLOAD_MB", 300))
+def score_page(request, error=None, status=200, tab=None, targets=""):
+    """The Score page: examples, one card with the tabs Upload file | Paste positions | Genes or regions (?input=, or
+    `tab` after an error) and a closed GWAS section, open when the error came from the GWAS form."""
+    from .explore import FLANK, FLANKS  # the gene/region flank choices (explore.candidate_job reads them)
+    tab = tab if tab in INPUTS else request.GET.get("input") if request.GET.get("input") in INPUTS else "file"
     return render(request, "snpportal/score.html", {
-        "nav": "score", "title": "Score SNPs", "error": error, "presets": jobs.presets(), "examples": examples(),
-        "formats": FORMATS, "max_mb": f"{max_mb:g}", "max_snps": int(jobs.setting("SNPPORTAL_MAX_SNPS", 3_000_000)),
-        "paste_lines": PASTE_LINES, "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}",
+        "nav": "score", "title": "Score SNPs", "error": error, "examples": examples(), "tabs": INPUTS.items(), "tab": tab,
+        "targets": targets, "flanks": FLANKS, "flank": FLANK, "paste_lines": PASTE_LINES,
+        "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}",
+        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}",
+        "gwas_open": request.path == reverse("snpportal:gwas_score"),
     }, status=status)
 
 
@@ -169,12 +165,13 @@ def score(request):
 @csrf_protect
 @sensitive_post_parameters()
 def _score(request):
+    tab = "paste" if request.POST.get("paste") else "file"
     try:
         key, preset = start_job(request)
     except jobs.InputError as e:
-        return score_page(request, str(e), 400)
+        return score_page(request, str(e), 400, tab)
     except jobs.QueueFull:
-        response = score_page(request, "The portal is busy scoring other lists. Please try again in a minute.", 503)
+        response = score_page(request, "The portal is busy scoring other lists. Please try again in a minute.", 503, tab)
         response["Retry-After"] = "60"
         return response
     url = reverse("snpportal:results", args=[key])
@@ -196,7 +193,7 @@ def start_job(request):
         suffix = accepted_suffix(upload.name)
         if suffix is None:
             raise jobs.InputError("This file type isn't accepted. Upload a VCF (.vcf or .vcf.gz), a table (.tsv, .csv or "
-                                  ".txt, optionally gzipped) or a PLINK .bim/.map file: see 'Accepted formats' below.")
+                                  ".txt, optionally gzipped) or a PLINK .bim/.map file: see Format help.")
         if not upload.size:
             raise jobs.InputError("The uploaded file is empty.")
         return jobs.create(Path(upload.path), suffix, "snps", preset, "Uploaded list"), preset
@@ -231,38 +228,38 @@ def results(request, key):
     job = jobs.status(key)
     if job is None:
         return render(request, "snpportal/expired.html", {"nav": "score", "title": "Results expired or deleted"}, status=404)
+    gwas = job.get("input_kind") == "gwas"  # GWAS jobs: Association first (its own page), no Panel tab
+    if gwas and job["state"] == "done" and "tab" not in request.GET:
+        return redirect(f"{reverse('snpportal:association', args=[key])}?{urlencode({'trait': request.GET.get('trait', 'all')})}")
     tab = request.GET.get("tab", "overview")
-    tab = tab if tab in TABS else "overview"
-    context = {"nav": "score", "job": job, "key": key, "tab": tab, "title": "Results",
+    tab = tab if tab in TABS and not (gwas and tab == "panel") else "overview"
+    context = {"nav": "score", "job": job, "key": key, "tab": tab, "gwas": gwas,
+               "title": " · ".join(x for x in [job.get("label") or "Results",
+                                               f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None] if x),
                "crumbs": [("Score SNPs", reverse("snpportal:upload")), ("Results", None)],
-               "expires": jobs.utc(jobs.expires(key))}
+               "meta": f"Deleted after {jobs.utc(jobs.expires(key))}",
+               "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers"))}
     if job["state"] == "done":
         d = jobs.folder(key)
         presets = jobs.presets(d)
         trait = request.GET.get("trait", "all")
         trait = trait if trait in dict(presets) else "all"
-        validation = jobs.read_json(d / "validation.json")
-        rejected = sum(v for v in (validation.get("rejected") or {}).values() if isinstance(v, int))
-        context.update(presets=presets, trait=trait, query=urlencode({"trait": trait}), validation=validation,
-                       rejects=(d / "rejects.tsv").exists() and (rejected or not validation), release_changed=jobs.release_changed(job))
+        weights = jobs.weights(d)
+        context.update(trait=trait, query=urlencode({"trait": trait}), release_changed=jobs.release_changed(job),
+                       presets=[(value, label, result_views.trait_tip(weights, value)) for value, label in presets],
+                       trait_tip=result_views.trait_tip(weights, trait))
         if tab == "table":
-            context.update(result_views.table(request, key))
+            context.update(result_views.table(request, key, job))
         elif tab == "overview":
             context.update(result_views.overview(request, key, job))
-        elif tab == "panel":  # AGENT breeder (stage 3): Panel and Export tabs
+        elif tab == "panel":
             context.update(tools.panel(request, key, job))
         else:
             context.update(tools.exports(request, key, job))
-        context["synthetic_chip"] = tools.chip_info(d).get("synthetic")
-        context["actions"] = [
-            {"label": "Download TSV", "url": f"{reverse('snpportal:download', args=[key])}?{context['query']}", "style": "btn-outline-primary"},
-            {"label": "Printable report", "url": f"{reverse('snpportal:report', args=[key])}?{context['query']}"},  # AGENT tour (stage 3)
-            {"label": "Score another list", "url": reverse("snpportal:upload")}]
-    context["meta"] = " · ".join(x for x in [
-        job.get("label"), f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None,
-        f"release {job.get('release')}", f"deleted after {context['expires']}"] if x)
+        context["actions"] = [{"label": "Report", "url": f"{reverse('snpportal:report', args=[key])}?{context['query']}"},
+                              {"label": "Score another list", "url": reverse("snpportal:upload")}]
     context.setdefault("actions", []).append(
-        {"label": "Delete now", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",
+        {"label": "Delete", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",
          "confirm": "Delete these results now? This can't be undone."})
     return render(request, "snpportal/results.html", context)
 

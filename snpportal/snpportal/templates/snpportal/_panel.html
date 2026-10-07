@@ -1,74 +1,76 @@
 {% load snpportal_tags %}
-{% comment %}Panel tab (P6.3, P6.6): compare with a chip, then design a panel. The designer is a GET form that stays on this
-   page (boosted); each parameter set is saved once as panels/<hash>.parquet in the job folder, so the same URL gives the
-   same panel. Card, download and figure links leave the page and are not boosted.{% endcomment %}
+{% comment %}Panel tab: a compact designer (the rest under 'Advanced settings', open when any is changed), the panel with
+   its key numbers, figure and first markers, the Assay readiness card and a closed chip comparison. The designer is a
+   GET form that stays on this page; each parameter set is saved once in the job folder, so the same URL gives the same
+   panel. Card, file and figure links leave the page and are not boosted.{% endcomment %}
 <div class="sp-stack">
-  {% include 'snpportal/_chip.html' %}
-
   <section class="sp-card" id="designer" aria-labelledby="designer-h">
-    <div class="sp-card-head"><h2 id="designer-h">Panel designer</h2> {% include 'snpportal/_badges.html' with kind='provisional' %}
-      {% if designer.synthetic %}{% include 'snpportal/_badges.html' with kind='synthetic' %}{% endif %}</div>
-    <p class="sp-small sp-muted">Chooses SNPs of this list for a genotyping panel: your must-include ids first, then a backbone
-      (the best SNP in each genome-length bin, so every chromosome is covered), then the rest by design score (tier score, assay
-      status and MAF), never closer than the minimum spacing and within the per-gene and per-element caps. Defaults come from
-      the release's weights.yaml (PROVISIONAL: pending decision by G and the breeding partners).</p>
-    <form method="get" class="sp-filters sp-small" hx-boost="true" aria-label="Panel parameters">
+    <h2 id="designer-h" class="visually-hidden">Panel designer</h2>
+    <form method="get" class="sp-small" hx-boost="true" aria-label="Panel parameters">
       <input type="hidden" name="tab" value="panel"><input type="hidden" name="trait" value="{{ trait }}"><input type="hidden" name="design" value="1">
-      {% for f in designer.fields %}<label title="{{ f.help }}">{{ f.label }} <input class="form-control form-control-sm sp-pos" type="number"
-        name="{{ f.name }}" value="{{ f.value }}" min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step }}"></label>{% endfor %}
-      {% if designer.cm_maps %}<label title="Genetic map for the cM spacing (Brekke et al. 2023). The male map misses crossovers on chromosomes 2, 8 and 17">cM map <select class="form-select form-select-sm d-inline-block w-auto" name="cm_map">
-        {% for value, label, selected in designer.cm_maps %}<option value="{{ value }}"{% if selected %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>{% endif %}
-      {% if designer.assay %}<label class="text-nowrap" title="Off: only SNPs that fail the assay check are dropped"><input class="form-check-input" type="checkbox" name="assay_pass" value="1"{% if designer.assay_pass %} checked{% endif %}> assay pass only</label>{% endif %}
-      {% for name, label, checked in designer.checks %}<label class="text-nowrap"><input class="form-check-input" type="checkbox" name="exclude" value="{{ name }}"{% if checked %} checked{% endif %}> exclude {{ label }}</label>{% endfor %}
-      <label>Must include <input class="form-control form-control-sm sp-gene" type="text" name="must" value="{{ designer.must }}" placeholder="SNP ids" title="SNP ids from the id column, separated by spaces or commas (up to {{ designer.max_must }})"></label>
-      <button class="btn btn-sm btn-primary" type="submit">Design panel</button>
-      <a href="{{ designer.reset }}">Defaults</a>
+      <div class="sp-filters">
+        {% for f in designer.fields %}<label title="{{ f.help }}">{{ f.label }} <input class="form-control form-control-sm sp-pos" type="number"
+          name="{{ f.name }}" value="{{ f.value }}" min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step }}"></label>{% endfor %}
+        {% if designer.assay %}<label title="Panels never take SNPs that fail the assay check; SNPs not checked are kept unless Pass only">Assay
+          <select class="form-select form-select-sm" name="assay">{% for value, label, selected in designer.assay %}<option value="{{ value }}"{% if selected %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>{% endif %}
+        <label>Must include <input class="form-control form-control-sm sp-gene" type="text" name="must" value="{{ designer.must }}" placeholder="SNP ids" title="SNP ids, separated by spaces or commas (up to {{ designer.max_must }})"></label>
+        <button class="btn btn-sm btn-primary" type="submit">Design panel</button>
+      </div>
+      <p class="sp-muted mb-1">Picks the best-scoring SNPs that pass the assay filter, spread over every chromosome.</p>
+      <details class="sp-more"{% if designer.n_advanced %} open{% endif %}><summary>Advanced settings{% if designer.n_advanced %} ({{ designer.n_advanced }} active){% endif %}</summary>
+        <div class="sp-filters">
+          {% for f in designer.advanced %}<label title="{{ f.help }}">{{ f.label }} <input class="form-control form-control-sm sp-pos" type="number"
+            name="{{ f.name }}" value="{{ f.value }}" min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step }}"></label>{% endfor %}
+          {% if designer.cm_maps %}<label title="Genetic map for the cM spacing (Brekke et al. 2023). The male map misses crossovers on chromosomes 2, 8 and 17">cM map <select class="form-select form-select-sm d-inline-block w-auto" name="cm_map">
+            {% for value, label, selected in designer.cm_maps %}<option value="{{ value }}"{% if selected %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>{% endif %}
+          {% for name, label, checked in designer.checks %}<label class="text-nowrap"><input class="form-check-input" type="checkbox" name="exclude" value="{{ name }}"{% if checked %} checked{% endif %}> exclude {{ label }}</label>{% endfor %}
+          <a href="{{ designer.reset }}">Defaults</a>
+        </div>
+      </details>
     </form>
-    {% if designer.too_many_ids %}<div class="sp-status sp-status-warn" role="status">&#9888; Only the first {{ designer.max_must }} must-include ids (sorted) were used.</div>{% endif %}
+    {% if designer.too_many_ids %}<div class="sp-status sp-status-warn mt-2" role="status">&#9888; Only the first {{ designer.max_must }} must-include ids (sorted) were used.</div>{% endif %}
   </section>
 
   <section class="sp-card" aria-labelledby="panel-h">
-    <div class="sp-card-head"><h2 id="panel-h">Panel <span class="sp-mono">{{ designer.hash }}</span></h2>
-      <div class="sp-downloads" aria-label="Download this panel">{% for label, url in designer.downloads %}<a href="{{ url }}" download>{{ label }}</a>{% endfor %}
-        <a href="{{ designer.export_link }}" hx-boost="true">More formats</a> <a href="{{ designer.report_url }}">Printable report</a></div>
-    </div>
+    <div class="sp-card-head"><h2 id="panel-h">{{ designer.name }}</h2>
+      <a class="ms-auto sp-small" href="{{ designer.export_link }}" hx-boost="true">Export this panel &rarr;</a></div>
     {% if designer.short %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ designer.short }}</div>{% endif %}
     {% if designer.missing %}<div class="sp-status sp-status-warn" role="status">&#9888; Must-include ids not in this list: {{ designer.missing|join:", " }}</div>{% endif %}
-    <div class="sp-kpis" aria-label="Panel summary">
-      {% for k in designer.kpis %}<div class="sp-kpi"><b>{{ k.value }}</b><span>{{ k.label }}{% if k.provisional %} <abbr class="sp-prov-mark" title="Rules are PROVISIONAL, pending decision by G">P</abbr>{% endif %}</span>{% if k.note %}<small>{{ k.note }}</small>{% endif %}</div>{% endfor %}
-    </div>
-    {% if designer.regions %}<p class="sp-small sp-muted mt-2 mb-0">Genic region: {% for name, n in designer.regions %}{{ name }} {{ n|thousands }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
-    {% if designer.vendor %}<p class="sp-small sp-muted mt-1 mb-0" id="vendor-checks">Vendor checks: {{ designer.vendor.bins }}{% if not designer.vendor.warnings %}; no Illumina bin or spacing warnings{% endif %}
-      (<a href="{{ designer.export_link }}#locus-names" hx-boost="true">rules</a>).</p>
-    {% if designer.vendor.warnings %}{% include 'snpportal/_vendor_warnings.html' with warnings=designer.vendor.warnings open=1 %}{% endif %}{% endif %}
+    <p class="sp-small mb-0">{{ designer.line }}</p>
   </section>
 
-  <div class="row g-3">
-    {% if designer.figs.coverage %}<div class="col-xl-7">{% include 'snpportal/_figure.html' with fig=designer.figs.coverage %}</div>{% endif %}
-    <div class="col-xl-5 sp-stack">
-      {% if designer.figs.tiers %}{% include 'snpportal/_figure.html' with fig=designer.figs.tiers %}{% endif %}
-      {% if designer.figs.composition %}{% include 'snpportal/_figure.html' with fig=designer.figs.composition %}{% endif %}
-      {% if designer.figs.spacing %}{% include 'snpportal/_figure.html' with fig=designer.figs.spacing %}{% endif %}
-    </div>
-  </div>
-  {% if designer.figs.gaps %}{% include 'snpportal/_figure.html' with fig=designer.figs.gaps %}{% endif %}
+  {% if designer.fig %}{% include 'snpportal/_figure.html' with fig=designer.fig %}{% endif %}
 
   {% if designer.rows %}<section class="sp-card" aria-labelledby="selected-h">
-    <h2 id="selected-h">Selected SNPs</h2>
-    <p class="sp-small sp-muted">In the order they were chosen{% if designer.rows|length == designer.listed %}; the first {{ designer.listed }} are listed, the downloads have all{% endif %}. Click a SNP for its evidence card.</p>
-    <div class="sp-scroll">
+    <h2 id="selected-h">Markers</h2>
+    <div class="sp-scroll mt-2">
       <table class="table table-sm sp-table mb-0">
-        <thead><tr><th scope="col" class="sp-num">Rank</th><th scope="col">SNP</th><th scope="col">Position</th><th scope="col">Alleles</th>
-          <th scope="col">Tier</th><th scope="col">Reason</th><th scope="col">Gene</th><th scope="col">Region</th><th scope="col" class="sp-num">MAF</th>
-          <th scope="col">Assay</th>{% if designer.rows.0.on_chip is not None %}<th scope="col">On chip</th>{% endif %}<th scope="col" class="sp-num" title="PROVISIONAL weights">Design score</th></tr></thead>
+        <thead><tr><th scope="col" class="sp-num">Rank</th><th scope="col">SNP</th><th scope="col">Tier</th><th scope="col">Reason</th>
+          <th scope="col">Gene</th><th scope="col">Region</th><th scope="col" class="sp-num" title="Pooled; your strain can differ">MAF</th>
+          <th scope="col">Assay</th>{% if designer.rows.0.on_chip is not None %}<th scope="col">On chip</th>{% endif %}</tr></thead>
         <tbody>{% for r in designer.rows %}<tr>
-          <td class="sp-num">{{ r.rank }}</td><td><a href="{{ r.url }}">{{ r.name }}</a></td><td class="sp-mono">{{ r.position }}</td>
-          <td class="sp-mono">{{ r.alleles }}</td><td>{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
-          <td>{{ r.reason }}</td><td>{{ r.gene }}</td><td>{{ r.region }}</td><td class="sp-num">{{ r.maf }}</td>
+          <td class="sp-num">{{ r.rank }}</td><td><a href="{{ r.url }}">{{ r.name }}</a>{% if r.alleles %} <span class="sp-muted">&middot; {{ r.alleles }}</span>{% endif %}</td>
+          <td>{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
+          <td title="{{ r.reason_tip }}">{{ r.reason }}</td><td title="{{ r.gene_tip }}">{{ r.gene }}</td><td>{{ r.region }}</td><td class="sp-num">{{ r.maf }}</td>
           <td>{% if r.assay %}<span class="sp-as sp-as-{{ r.assay.1 }}" title="{{ r.assay.3|default:r.assay.2 }}">{{ r.assay.0 }} {{ r.assay.2 }}</span>{% endif %}</td>
-          {% if designer.rows.0.on_chip is not None %}<td>{% if r.on_chip %}yes{% endif %}</td>{% endif %}<td class="sp-num">{{ r.score }}</td>
+          {% if designer.rows.0.on_chip is not None %}<td>{% if r.on_chip %}yes{% endif %}</td>{% endif %}
         </tr>{% endfor %}</tbody>
       </table>
     </div>
+    <p class="sp-small mt-2 mb-0">{% if designer.show_all %}<a href="{{ designer.show_all }}" hx-boost="true">Show all {{ designer.n_rows|thousands }}</a>
+      {% elif designer.n_rows > designer.listed %}The first {{ designer.listed|thousands }} of {{ designer.n_rows|thousands }}; <a href="{{ designer.export_link }}" hx-boost="true">export the panel</a> for all.{% endif %}</p>
   </section>{% endif %}
+
+  {% if readiness %}<section class="sp-card sp-figure" aria-labelledby="ready-h">
+    <h2 id="ready-h">Assay readiness</h2>
+    <p class="sp-small mb-1">{{ readiness.line }}</p>
+    {{ readiness.svg }}
+    {% if readiness.reasons %}<div class="table-responsive"><table class="table table-sm mt-2 mb-0">
+      <thead><tr><th scope="col">Why SNPs warn or fail</th><th scope="col" class="sp-num">SNPs</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead>
+      <tbody>{% for label, n, hide in readiness.reasons %}<tr><td>{{ label }}</td><td class="sp-num">{{ n|thousands }}</td>
+        <td><a href="{{ hide }}" hx-boost="true">hide in table</a></td></tr>{% endfor %}</tbody>
+    </table></div>{% endif %}
+  </section>{% endif %}
+
+  {% include 'snpportal/_chip.html' %}
 </div>

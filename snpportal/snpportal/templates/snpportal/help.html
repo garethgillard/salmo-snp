@@ -1,119 +1,87 @@
 {% extends 'snpportal/base_portal.html' %}
 {% load snpportal_tags %}
 {% block main %}
-<div class="row g-3">
-  <div class="col-lg-7 sp-stack">
-    <section class="sp-card" id="quick-start"><h2>Quick start</h2>
-      <ol class="sp-small mb-0">
-        <li><a href="{% url 'snpportal:upload' %}">Score SNPs</a>: upload a VCF, SNP table, PLINK file or chip manifest, paste positions, or try an example.
-          Or <a href="{% url 'snpportal:landing' %}#candidates">score the public variants of genes or intervals</a>.</li>
-        <li>Pick the trait preset (the tissues and stages that matter for your trait); you can switch it on the results page.</li>
-        <li>Read the overview, filter the table, open a SNP's evidence card, and download the table as TSV.</li>
-        <li>Without a list: <a href="{% url 'snpportal:landing' %}">search</a> a gene (Ensembl name or id, NCBI LOC symbol,
-          ortholog), an rs ID, a position or region, or browse the
-          <a href="{% url 'snpportal:known_loci' %}">known loci</a>.</li>
-      </ol></section>
+<div class="sp-narrow sp-stack">
+  <section class="sp-card" id="quick-start"><h2>Quick start</h2>
+    <ol class="sp-small mb-0 mt-2">
+      <li><a href="{% url 'snpportal:upload' %}">Score</a> a file, pasted positions, genes or regions, or try an example.</li>
+      <li>Pick the trait on the results page.</li>
+      <li>Read the overview, filter the table and open a SNP's evidence.</li>
+      <li>Design a panel, or export vendor files.</li>
+      <li>No list? <a href="#search">Search</a> a gene, rs ID or region, or browse the <a href="{% url 'snpportal:known_loci' %}">known loci</a>.</li>
+    </ol></section>
 
-    <section class="sp-card" id="formats"><h2>Input formats</h2>
-      <p class="sp-small">The format is detected from the file name and its first lines; gzip is detected by content. Only
-        chromosomes 1&ndash;29 are annotated: SNPs on unplaced scaffolds are listed as rejected.</p>
-      {% for anchor, name, text, example in formats %}<h3 id="format-{{ anchor }}">{{ name }}</h3>
-      <p class="sp-small mb-1">{{ text }}</p>
-      <pre class="sp-mono sp-small mb-2">{{ example }}</pre>{% endfor %}
-      <h3 id="header-aliases">Header aliases</h3>
-      <p class="sp-small mb-1">Column names are read case-insensitively, with spaces and punctuation ignored:</p>
-      <table class="table table-sm sp-small mb-0"><tbody>{% for name, names in aliases %}<tr><th scope="row" class="fw-normal sp-mono">{{ name }}</th><td>{{ names }}</td></tr>{% endfor %}</tbody></table>
-    </section>
-
-    <section class="sp-card" id="faq"><h2>Questions</h2>
-      <h3 id="aliases">Chromosome names</h3>
-      <p class="sp-small">Use 1&ndash;29 as in Ensembl and AQUA-FAANG. Uploads and search also accept the aliases in the release's
-        alias table{% if chrom_aliases %}, e.g. for chromosome 25: {{ chrom_aliases|join:", " }} (any case){% endif %}.
-        The validation report lists every alias it applied.</p>
-      <h3 id="liftover">My positions are on ICSASG_v2</h3>
-      <p class="sp-small">Older chips and papers use ICSASG_v2. The portal needs Ssal_v3.1. Rows with an rs ID in their id column
-        are moved for you: when a row's position is its rs ID's ICSASG_v2 position in EVA release 9, it gets the rs ID's Ssal_v3.1
-        position (alleles complemented where the strands differ; the results show <code>position_source</code>). Other positions:
-        convert offline with <code>prep/lift_icsasg_v2.py</code> in salmo-snpscore. Every upload is checked: when more than {{ assembly_share }} of the
-        SNPs checked against the genome have a reference mismatch or look strand-flipped, the upload QC warns that the list is
-        probably on ICSASG_v2 or the other strand.</p>
-      <h3 id="rsid">rs IDs and LOC symbols</h3>
+  <section class="sp-card sp-faq" id="faq"><h2>Questions</h2>
+    <details id="liftover"><summary>My positions are on ICSASG_v2</summary>
+      <p class="sp-small">The portal needs Ssal_v3.1. Rows with an rs ID in their id column are moved for you: when a row's
+        position is its rs ID's ICSASG_v2 position in EVA release 9, it gets the rs ID's Ssal_v3.1 position (alleles
+        complemented where the strands differ; the results show <code>position_source</code>). Convert other positions offline
+        with <code>prep/lift_icsasg_v2.py</code> in salmo-snpscore. When more than {{ assembly_share }} of the SNPs checked
+        against the genome have a reference mismatch or look strand-flipped, the upload QC warns that the list is probably on
+        ICSASG_v2 or the other strand.</p></details>
+    <details id="aliases"><summary>Which chromosome names work?</summary>
+      <p class="sp-small">1&ndash;29, as in Ensembl and AQUA-FAANG, plus the aliases in the release's alias table{% if chrom_aliases %},
+        e.g. for chromosome 25: {{ chrom_aliases|join:", " }} (any case){% endif %}. The upload QC lists every alias it applied.
+        SNPs on unplaced scaffolds are listed as rejected.</p></details>
+    <details id="rsid"><summary>rs IDs and LOC symbols</summary>
       <p class="sp-small">Search finds rs IDs from EVA release 9 (rs IDs on several Ssal_v3.1 positions are left out) and opens
-        their variant page, which also gives the rs ID&rsquo;s ICSASG_v2 position. Search also takes an ICSASG_v2 position, e.g.
-        <a href="{% url 'snpportal:search' %}?q=ICSASG_v2+25%3A28656101">ICSASG_v2 25:28656101</a> or CM003303.1:28656101, and opens
-        the Ssal_v3.1 variant of the rs ID there (Ssal_v3.1 positions in EVA are EVA&rsquo;s remaps). A file of rs IDs can be
-        scored like any list (<a href="#format-rsid">format</a>). NCBI LOC symbols (LOC + the NCBI gene id) are found
-        only for genes whose Ensembl description cites the NCBI gene, so many LOC genes still need their name, ortholog or position.</p>
-      <h3 id="chips">Chip manifests</h3>
+        their variant page, which also gives the ICSASG_v2 position. A file of rs IDs can be scored like any list
+        (<a href="#format-rsid">format</a>). NCBI LOC symbols are found only for genes whose Ensembl description cites the
+        NCBI gene; otherwise use the gene's name, ortholog or position.</p></details>
+    <details id="chips"><summary>Chip manifests</summary>
       <p class="sp-small">Illumina manifests and Axiom annotation files are read as they are, but their positions are often on
-        ICSASG_v2 and their alleles on the TOP/BOT or probe strand: watch the assembly warning and the ref_check column.</p>
-      <h3 id="blacklist">Blacklisted</h3>
-      <p class="sp-small">ATAC peaks can't be called in blacklisted regions, so &ldquo;no peak&rdquo; there means &ldquo;can't tell&rdquo;, not &ldquo;inactive&rdquo;.</p>
-      <h3 id="lore">LORe</h3>
-      <p class="sp-small">Late-rediploidized regions have a near-identical ohnolog copy, so genotyping probes may cross-hybridise.</p>
-      <h3 id="ambiguous">A/T and C/G SNPs</h3>
-      <p class="sp-small mb-0">These read the same on both strands, which some genotyping assays can't tell apart.</p></section>
+        ICSASG_v2 and their alleles on the TOP/BOT or probe strand: watch the assembly warning and the ref_check column.</p></details>
+    <details id="states"><summary>What do tiers, evidence terms and chromatin colours mean?</summary>
+      <p class="sp-small"><a href="{% url 'snpportal:methods' %}">Methods</a> defines the tiers, the evidence weights, the
+        chromatin states with their colours, and a glossary.</p></details>
+  </section>
 
-    <section class="sp-card" id="privacy"><h2>Privacy</h2>
-      <p class="sp-small mb-0">Uploaded files are deleted as soon as they have been scored. From a VCF only CHROM, POS, ID, REF and
-        ALT are read, so genotypes are never stored; other columns of a SNP table are kept with the results.
-        Results are kept for {{ keep_hours }} hours and can be deleted sooner with <em>Delete now</em>; only people with the link can see them.
-        The server never logs SNPs or file names. The only cookies are the form-protection (CSRF) cookie and, if you switch the
-        chromatin colours, your choice of palette. For confidential lists, <a href="{% url 'snpportal:run_locally' %}">run it locally</a>.
-        {% include 'snpportal/_badges.html' with kind='provisional' %}</p></section>
+  <section class="sp-card sp-faq" id="formats"><h2>Input formats</h2>
+    <p class="sp-small mt-2">The format is detected from the file name and its first lines; gzip by content. Uploads take up to
+      {{ max_mb }} MB and {{ max_snps|thousands }} SNPs.</p>
+    {% for anchor, name, text, example in formats %}<details id="format-{{ anchor }}"><summary>{{ name }}</summary>
+      <p class="sp-small mb-1">{{ text }}</p>
+      <pre class="sp-mono sp-small mb-1">{{ example }}</pre></details>{% endfor %}
+    <details id="header-aliases"><summary>Header aliases</summary>
+      <p class="sp-small mb-1">Column names are read case-insensitively, with spaces and punctuation ignored:</p>
+      <table class="table table-sm sp-small mb-0"><tbody>{% for name, names in aliases %}<tr><th scope="row" class="fw-normal sp-mono">{{ name }}</th><td>{{ names }}</td></tr>{% endfor %}</tbody></table></details>
+  </section>
 
-    <section class="sp-card" id="glossary"><h2>Glossary</h2>
-      <h3 id="states">Chromatin states (ChromHMM)</h3>
-      <p class="sp-small sp-muted">AQUA-FAANG's states from ATAC and histone-mark ChIP, given per condition inside robust ATAC peaks.
-        Definitions {% include 'snpportal/_badges.html' with kind='provisional' %}</p>
-      <table class="table table-sm sp-small">
-        <thead><tr><th scope="col">State</th><th scope="col">Name</th><th scope="col">Meaning</th><th scope="col">Counts as</th></tr></thead>
-        <tbody>{% for name, abbr, text in states %}<tr id="state-{{ name }}"><td><span class="sp-state st-{{ name }}">{{ abbr }}</span></td>
-          <td class="sp-mono">{{ name }}</td><td>{{ text }}</td>
-          <td>{% if name in active %}active{% elif name in weak %}weak{% else %}<span class="sp-muted">nothing</span>{% endif %}</td></tr>{% endfor %}
-          <tr id="state-none"><td><span class="sp-state"></span></td><td class="sp-mono">no peak</td><td>No AQUA-FAANG peak in that condition.</td><td><span class="sp-muted">nothing</span></td></tr></tbody>
-      </table>
-      <h3 id="terms">Tier evidence terms</h3>
-      <table class="table table-sm sp-small">
-        <thead><tr><th scope="col">Term</th><th scope="col" class="sp-num">Weight</th><th scope="col">Fires when</th></tr></thead>
-        <tbody>{% for name, value, text in terms %}<tr id="term-{{ name }}"><td class="sp-mono">{{ name }}</td><td class="sp-num">{{ value }}</td><td>{{ text }}</td></tr>{% endfor %}</tbody>
-      </table>
-      <h3 id="tiers">Tiers</h3>
-      <p class="sp-small">{% for t, rule in tiers %}{% include 'snpportal/_badges.html' with kind='tier' value=t %} {{ rule }}{% if not forloop.last %} &middot; {% endif %}{% endfor %}.
-        1 = strongest functional evidence for the preset, 4 = none. <a href="{% url 'snpportal:methods' %}">Rules</a> {% include 'snpportal/_badges.html' with kind='provisional' %}</p>
-      <h3 id="other-terms">Other terms</h3>
-      <dl class="sp-dl sp-small mb-0">{% for anchor, term, text in glossary %}<dt id="g-{{ anchor }}">{{ term }}</dt><dd>{{ text }}</dd>{% endfor %}</dl>
-    </section>
-  </div>
+  <section class="sp-card" id="search"><h2>Search</h2>
+    <p class="sp-small mt-2 mb-0">Gene names and Ensembl ids, NCBI LOC symbols, human or zebrafish ortholog names, known-locus
+      names, rs IDs, a position or a region, also on ICSASG_v2. Chromosomes can be written 25, chr25, ssa25 or NC_059466.1, and
+      regions in bp, kb or Mb. For example: {% for q in searches %}<a href="{% url 'snpportal:search' %}?q={{ q|urlencode }}">{{ q }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.</p>
+  </section>
 
-  <div class="col-lg-5 sp-stack">
-    <section class="sp-card" id="colours"><h2>Colour key</h2>
-      <h3>Tiers</h3>
-      <p>{% for t, rule in tiers %}{% include 'snpportal/_badges.html' with kind='tier' value=t %} {% endfor %}</p>
-      <h3>Chromatin states</h3>
-      <p class="sp-small">{% for name, abbr, text in states %}<a class="me-1 text-decoration-none" href="#state-{{ name }}" title="{{ name }}"><span class="sp-state st-{{ name }} mb-1">{{ abbr }}</span></a>{% endfor %}</p>
-      <h3 id="palettes">State palettes</h3>
-      <p class="sp-small mb-1">Two palettes for the chromatin states: the portal&rsquo;s, and AQUA-FAANG&rsquo;s own colours (the
-        itemRgb of its BED files), which give flanking up- and downstream the same red and Quiescent white, so the abbreviation
-        is always printed. The server setting <code>SNPPORTAL_STATE_PALETTE</code> picks the default
-        {% include 'snpportal/_badges.html' with kind='provisional' %}; the <em>Chromatin colours</em> links at the foot of
-        every page switch it for you (pages, figures and downloads), remembered in a cookie.</p>
-      <table class="table table-sm sp-small">
-        <thead><tr><th scope="col">State</th>{% for key, label, used in palettes %}<th scope="col">{{ label }}{% if used %} (in use){% endif %}</th>{% endfor %}</tr></thead>
-        <tbody>{% for name, abbr, text in states %}<tr><td class="sp-mono">{{ name }}</td>
-          {% for key, label, used in palettes %}<td><span class="sp-state stp-{{ key }}-{{ name }}">{{ abbr }}</span></td>{% endfor %}</tr>{% endfor %}</tbody>
-      </table>
-      <h3>Tissues</h3>
-      <p class="sp-small">{% for t in tissues %}<span class="me-2 text-nowrap"><span class="sp-tissue-{{ t }}" aria-hidden="true">&#9679;</span> {{ t }}</span>{% endfor %}</p>
-      <h3>Badges</h3>
-      <p class="sp-small mb-0">{% include 'snpportal/_badges.html' with kind='provisional' %} rules not yet agreed &middot;
-        {% include 'snpportal/_badges.html' with kind='synthetic' %} built from synthetic test data, not real results</p>
-    </section>
-    <section class="sp-card" id="cite"><h2>How to cite</h2>
-      <p class="sp-small mb-0">Contact details will be added before the portal goes online. Meanwhile please cite the
-        data sources listed under <a href="{% url 'snpportal:about_data' %}#cite">How to cite the data</a> and paste the
-        <a href="{% url 'snpportal:methods' %}#methods-text">methods text</a>, with the release and weights sha256 from your download.</p>
-    </section>
-  </div>
+  <section class="sp-card sp-faq" id="exports"><h2>Exports and vendor files</h2>
+    <details id="locus-names"><summary>Locus names and the lookup file</summary>
+      <p class="sp-small">Vendor files name each SNP <span class="sp-mono">Ssa&lt;chromosome&gt;p&lt;position&gt;</span>, e.g.
+        <span class="sp-mono">{{ locus_name }}</span> (letters and digits only, unique; chromosome 0 = not on 1&ndash;29), because
+        your ids may break vendor naming rules. The lookup file maps each name back to your id, position, alleles, TOP/BOT strand,
+        Infinium bin, assay status and export notes.</p></details>
+    <details id="left-out"><summary>Why some SNPs are left out of vendor files</summary>
+      <p class="sp-small">SNPs that fail the assay check, are not checked or have no genome sequence are left out, unless you keep
+        them, flagged, under <em>More formats</em>. A vendor file holds at most {{ vendor_cap|thousands }} SNPs, with flanks from the
+        Ssal_v3.1 genome and alleles on its forward strand. Assay thresholds are provisional: confirm the layout and the
+        designs with your vendor.</p></details>
+    <details id="infinium"><summary>Illumina Infinium bins (error 111, warning 604)</summary>
+      <p class="sp-small">A/T SNPs go to Infinium I bin A, C/G SNPs to bin B and the others to Infinium II bin C. A used bin A or B
+        needs at least {{ bins.0 }} SNPs and bin C at least {{ bins.2|thousands }} (error 111); {{ bins.1 }} are recommended in A
+        and B for polyploids such as salmon (warning 604).</p></details>
+    <details id="spacing"><summary>SNPs within {{ close_bp }} bp of another (warning 340)</summary>
+      <p class="sp-small">Neighbouring markers can interfere with each other's probes (Illumina warning 340; Thermo Fisher:
+        interfering SNPs can be as close as 10 bases).</p></details>
+    <details id="provenance"><summary>Provenance</summary>
+      <p class="sp-small">Every download says which release, rules and data produced it: '#' lines at the top of TSV and BED
+        files, and a provenance file next to vendor files (the zip bundle holds both).</p></details>
+  </section>
+
+  <section class="sp-card" id="privacy"><h2>Privacy</h2>
+    <p class="sp-small mt-2 mb-0">Uploaded files are deleted as soon as they have been scored. From a VCF only CHROM, POS, ID, REF
+      and ALT are read, so genotypes are never stored. Other columns of a SNP table, and GWAS summary statistics, are kept with
+      the results for {{ keep_hours }} hours; anyone with the results link can see them. <em>Delete now</em> removes them sooner.
+      The server never logs SNPs or file names. The only cookies are the form-protection cookie and, if you switch chromatin
+      colours, your choice. For confidential lists, <a href="{% url 'snpportal:run_locally' %}">run it locally</a>.</p>
+  </section>
 </div>
 {% endblock main %}

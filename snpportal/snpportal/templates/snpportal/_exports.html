@@ -1,48 +1,29 @@
 {% load snpportal_tags %}
-{% comment %}Export tab (P6.4): one GET form to the download URL (a file: never boosted). The scope is the whole list, the
-   Table tab's filters (carried in this page's URL) or a saved panel; each Download button sends its format.{% endcomment %}
-<section class="sp-card" aria-labelledby="export-h">
-  <div class="sp-card-head"><h2 id="export-h">Export</h2> {% include 'snpportal/_badges.html' with kind='provisional' %}
-    {% if exports.synthetic %}{% include 'snpportal/_badges.html' with kind='synthetic' %}{% endif %}</div>
-  {% if exports.synthetic %}<div class="sp-status sp-status-warn" role="status">&#9888; {% include 'snpportal/_badges.html' with kind='synthetic' %}
-    Synthetic test data contributes to these exports{% if exports.chip %} ({{ exports.chip }}){% endif %}: every file says so in its provenance lines or README.</div>{% endif %}
-  <form method="get" action="{{ exports.url }}" hx-boost="false">
-    <input type="hidden" name="trait" value="{{ exports.trait }}">
+{% comment %}Export tab: one scope choice (applied on change; the filtered table, this trait's panels or all SNPs) and a
+   download row per file, each vendor row with its own counts and checks. Downloads are files: never boosted.{% endcomment %}
+<section class="sp-card sp-small" aria-labelledby="export-h">
+  <h2 id="export-h" class="visually-hidden">Export</h2>
+  {% if not exports.gwas %}<form method="get" hx-get="{% url 'snpportal:results' key %}" hx-trigger="change" hx-push-url="true" class="mb-2">
+    <input type="hidden" name="tab" value="export"><input type="hidden" name="trait" value="{{ exports.trait }}">
     {% for name, value in exports.hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
-    <fieldset class="mb-3">
-      <legend class="h6 mb-1">What to export</legend>
-      {% for value, label, n, checked, vendor in exports.scopes %}<div class="form-check sp-small">
-        <input class="form-check-input" type="radio" name="scope" id="scope-{{ forloop.counter }}" value="{{ value }}"{% if checked %} checked{% endif %}>
-        <label class="form-check-label" for="scope-{{ forloop.counter }}">{{ label }} <span class="sp-muted">({{ n|thousands }} SNPs)</span></label>
-        {% if vendor %}<div class="sp-muted">Vendor checks: {{ vendor.bins }}{% if not vendor.warnings %}; no warnings{% endif %}.</div>
-        {% if vendor.warnings %}{% include 'snpportal/_vendor_warnings.html' with warnings=vendor.warnings open=checked %}{% endif %}
-        {% elif n > exports.vendor_cap %}<div class="sp-muted">Vendor files hold at most {{ exports.vendor_cap|thousands }} SNPs: filter the table or design a panel.</div>{% endif %}
-      </div>{% endfor %}
-      <p class="sp-small sp-muted mb-0 mt-1">To export a subset, filter the Table tab and come back here, or <a href="{{ exports.panel_link }}" hx-boost="true">design a panel</a>.{% if exports.chip %} Exports of the list include the chip columns (on_chip, dist_to_chip, near_chip, novel_functional).{% endif %}</p>
+    <fieldset class="d-flex flex-wrap align-items-center gap-3"><legend class="visually-hidden">What to export</legend>
+      <span class="fw-semibold">Export</span>
+      {% for value, label, checked in exports.scopes %}<label class="form-check-label text-nowrap"><input class="form-check-input" type="radio" name="scope" value="{{ value }}"{% if checked %} checked{% endif %}> {{ label }}</label>{% endfor %}
+      <a href="{{ exports.panel_link }}" hx-boost="true">Design a panel</a>
+      <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Apply</button></noscript>
     </fieldset>
-    <div class="d-flex flex-wrap gap-3 sp-small mb-2">
-      <label class="text-nowrap"><input class="form-check-input" type="checkbox" name="include_failed" value="1"> vendor files: keep SNPs that fail the assay check or are not checked, flagged</label>
-      <label class="text-nowrap"><input class="form-check-input" type="checkbox" name="plain" value="1"> no '#' provenance lines (TSV, BED)</label>
-    </div>
-    <table class="table table-sm sp-table mb-2">
-      <thead><tr><th scope="col">Format</th><th scope="col">Contents</th><th scope="col"><span class="visually-hidden">Download</span></th></tr></thead>
-      <tbody>{% for fmt, label, about in exports.formats %}<tr>
-        <th scope="row" class="fw-normal">{{ label }}</th><td class="sp-small">{{ about }}</td>
-        <td class="text-nowrap"><button class="btn btn-sm btn-outline-primary" type="submit" name="format" value="{{ fmt }}">Download</button>
-          {% if fmt in exports.sidecars %}<button class="btn btn-sm btn-link" type="submit" name="format" value="{{ fmt }}.provenance" title="How this file was made: release, rules, data">provenance</button><button class="btn btn-sm btn-link" type="submit" name="format" value="{{ fmt }}.lookup" title="Your ids, TOP/BOT and assay status per row">lookup</button>{% endif %}</td>
-      </tr>{% endfor %}</tbody>
-    </table>
-  </form>
-  <p class="sp-small sp-muted mb-0">Vendor files (Illumina, Axiom, KASP): {{ exports.layout_note }}. They hold at most {{ exports.vendor_cap|thousands }} SNPs,
-    with flanks read from the Ssal_v3.1 genome and the alleles on its forward strand; SNPs that fail the assay check, are not checked or
-    have no genome sequence are left out unless kept above (the bundle's README counts them). Assay thresholds are PROVISIONAL, to confirm with the genotyping lab.
-    File names carry the release and preset; every file says which release, rules and data produced it (vendor files hold no
-    comment lines, so theirs is in the <em>provenance</em> sidecar; the zip bundle has both sidecars).</p>
-  <p class="sp-small sp-muted mt-2 mb-0" id="locus-names">Locus names: vendor files name each SNP
-    <span class="sp-mono">Ssa&lt;chromosome&gt;p&lt;position&gt;</span>, e.g. <span class="sp-mono">{{ exports.locus_name }}</span>
-    (letters and digits only, unique, accepted by Illumina, Axiom and KASP; chromosome 0 = not on chromosomes 1&ndash;29),
-    because your ids may break their naming rules. The <em>lookup</em> sidecar (<span class="sp-mono">&lt;file&gt;.lookup.tsv</span>)
-    maps each locus name back to your id, position, alleles, TOP/BOT strand, Infinium bin alleles, assay status and export notes.
-    Vendor checks (Illumina): every Infinium I bin used (A/T or C/G SNPs) needs at least 100 SNPs and the Infinium II bin at least
-    1,000 (error 111; 200 recommended for polyploids such as salmon, warning 604), and markers within 60 bp interfere (warning 340).</p>
+  </form>{% endif %}
+  {% if exports.synthetic %}<div class="sp-status sp-status-warn" role="status">&#9888; The demo chip (synthetic) contributes to these files; each says so.</div>{% endif %}
+  <div class="table-responsive"><table class="table table-sm align-middle mb-2">
+    <tbody>{% for label, notes, href in exports.rows %}<tr>
+      <th scope="row" class="fw-normal">{{ label }}</th>
+      <td>{{ notes|join:" · " }}</td>
+      <td class="text-end">{% if href %}<a class="btn btn-sm btn-outline-primary" href="{{ href }}" download>Download</a>{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  <details class="sp-more"><summary>More formats</summary>
+    <ul class="list-unstyled mb-2">{% for label, about, href in exports.more %}<li><a href="{{ href }}" download>{{ label }}</a>{% if about %} <span class="sp-muted">({{ about }})</span>{% endif %}</li>{% endfor %}</ul>
+  </details>
+  <p class="sp-muted mb-0">Vendor files use names like Ssa25p28996360; the lookup file maps them back to your ids. Confirm the
+    layout with your vendor. <a href="{% url 'snpportal:help' %}#exports">Details &rarr;</a></p>
 </section>

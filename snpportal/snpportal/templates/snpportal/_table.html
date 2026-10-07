@@ -1,28 +1,35 @@
 {% load snpportal_tags %}
-{% comment %}Table tab. Filters, chips, sort links and pages stay on this page and are boosted (htmx swaps #results); the
-   SNP links load the evidence card into #card. Every control is a plain link or GET form, so it all works without JS.{% endcomment %}
-<form method="get" class="sp-filters sp-small" hx-boost="true" aria-label="Filter the SNPs">
+{% comment %}Table tab. One row of filters (the rest under 'More filters', open when any is set) applied on change; chips,
+   sort links and pages stay on this page (htmx swaps #results). A click on a row opens its evidence drawer (?snp=); every
+   control is a plain link or GET form, so it all works without JavaScript.{% endcomment %}
+<form method="get" class="sp-small" hx-get="{% url 'snpportal:results' key %}" hx-trigger="change, submit" hx-push-url="true" aria-label="Filter the SNPs">
   <input type="hidden" name="tab" value="table"><input type="hidden" name="trait" value="{{ chosen.trait }}">
   {% for name, value in hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
-  {% for name, label, options, current in selects %}{% if name != 'size' %}
-  <label>{{ label }} <select class="form-select form-select-sm" name="{{ name }}">
-    {% for value, text in options %}<option value="{{ value }}"{% if value == current %} selected{% endif %}>{{ text }}</option>{% endfor %}
-  </select></label>{% if name == 'chrom' %}
-  <label><span class="visually-hidden">From position</span><input class="form-control form-control-sm sp-pos" type="text" inputmode="numeric" name="start" value="{{ start }}" placeholder="from" aria-label="From position (exclusive)"></label>
-  <label><span class="visually-hidden">To position</span><input class="form-control form-control-sm sp-pos" type="text" inputmode="numeric" name="end" value="{{ end }}" placeholder="to" aria-label="To position"></label>{% endif %}
-  {% endif %}{% endfor %}
-  {% if gene is not None %}<label>Gene <input class="form-control form-control-sm sp-gene" type="search" name="gene" value="{{ gene }}" maxlength="40" placeholder="name, id or ortholog"></label>{% endif %}
-  {% for name, label, checked in checks %}<label class="text-nowrap"><input class="form-check-input" type="checkbox" name="{{ name }}" value="1"{% if checked %} checked{% endif %}> {{ label }}</label>{% endfor %}
-  <details class="sp-cols"><summary>Columns</summary>
-    <fieldset><legend class="visually-hidden">Columns to show</legend><input type="hidden" name="cols" value="1">
-      {% for key, label, checked in columns %}<label><input class="form-check-input" type="checkbox" name="col" value="{{ key }}"{% if checked %} checked{% endif %}> {{ label }}</label>{% endfor %}
-    </fieldset>
+  <div class="sp-filters">
+    {% for name, label, options, current, tip in selects %}
+    <label{% if tip %} title="{{ tip }}"{% endif %}>{{ label }} <select class="form-select form-select-sm" name="{{ name }}">
+      {% for value, text in options %}<option value="{{ value }}"{% if value == current %} selected{% endif %}>{{ text }}</option>{% endfor %}
+    </select></label>{% if name == 'chrom' %}
+    <label><span class="visually-hidden">From position</span><input class="form-control form-control-sm sp-pos" type="text" inputmode="numeric" name="start" value="{{ start }}" placeholder="from" aria-label="From position (exclusive)"></label>
+    <label><span class="visually-hidden">To position</span><input class="form-control form-control-sm sp-pos" type="text" inputmode="numeric" name="end" value="{{ end }}" placeholder="to" aria-label="To position"></label>{% endif %}
+    {% if forloop.first and gene is not None %}<label>Gene <input class="form-control form-control-sm sp-gene" type="search" name="gene" value="{{ gene }}" maxlength="40" placeholder="name, id or ortholog"></label>{% endif %}
+    {% endfor %}
+    <noscript><button class="btn btn-sm btn-primary" type="submit">Apply</button></noscript>
+  </div>
+  <details class="sp-more"{% if n_more %} open{% endif %}><summary>More filters{% if n_more %} ({{ n_more }} active){% endif %}</summary>
+    <div class="sp-filters">
+      {% for name, label, options, current, tip in more %}
+      <label>{{ label }} <select class="form-select form-select-sm" name="{{ name }}">
+        {% for value, text in options %}<option value="{{ value }}"{% if value == current %} selected{% endif %}>{{ text }}</option>{% endfor %}
+      </select></label>{% endfor %}
+      {% for name, label, checked in checks %}<label class="text-nowrap"><input class="form-check-input" type="checkbox" name="{{ name }}" value="1"{% if checked %} checked{% endif %}> {{ label }}</label>{% endfor %}
+      <details class="sp-cols"><summary>Columns</summary>
+        <fieldset><legend class="visually-hidden">Columns to show</legend><input type="hidden" name="cols" value="1">
+          {% for key, label, checked in columns %}<label><input class="form-check-input" type="checkbox" name="col" value="{{ key }}"{% if checked %} checked{% endif %}> {{ label }}</label>{% endfor %}
+        </fieldset>
+      </details>
+    </div>
   </details>
-  {% for name, label, options, current in selects %}{% if name == 'size' %}
-  <label>{{ label }} <select class="form-select form-select-sm" name="size">
-    {% for value, text in options %}<option value="{{ value }}"{% if value == current %} selected{% endif %}>{{ text }}</option>{% endfor %}
-  </select></label>{% endif %}{% endfor %}
-  <button class="btn btn-sm btn-primary" type="submit">Apply</button>
 </form>
 
 {% if chips %}<div class="sp-chiprow sp-small" hx-boost="true" aria-label="Active filters">
@@ -32,9 +39,9 @@
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2 sp-small">
   <span role="status">{% if matching == total %}Showing {{ first|thousands }}&ndash;{{ last|thousands }} of {{ total|thousands }} SNPs{% else %}{% if matching %}{{ first|thousands }}&ndash;{{ last|thousands }} of {{ matching|thousands }} shown{% else %}None shown{% endif %} (filtered from {{ total|thousands }} SNPs){% endif %}</span>
-  {% for tier, n in tiers %}<span class="sp-badge sp-tier-{{ tier }}" title="All SNPs of the list, this preset">Tier {{ tier }}: {{ n|thousands }}</span>{% endfor %}
-  {% if matching %}<a class="btn btn-sm btn-outline-primary ms-auto" href="{% url 'snpportal:download' key %}?{{ query }}">
-    Download {% if matching != total %}these {{ matching|thousands }}{% else %}all{% endif %} (TSV)</a>{% endif %}
+  {% for tier, n in tiers %}<span class="sp-badge sp-tier-{{ tier }}" title="All SNPs of the list, this trait">Tier {{ tier }}: {{ n|thousands }}</span>{% endfor %}
+  {% if download and matching %}<span class="ms-auto">
+    <a href="{{ download }}">Download these {{ matching|thousands }} (TSV)</a>{% if vendor %} · <a href="{{ vendor }}" hx-boost="true">Vendor files for these {{ matching|thousands }} &rarr;</a>{% endif %}</span>{% endif %}
 </div>
 
 {% if not matching %}<div class="sp-status sp-status-not_checked" role="status">
@@ -42,52 +49,61 @@
   {% if suggest %}<p hx-boost="true"><a class="btn btn-sm btn-outline-secondary" href="{{ suggest.2 }}">Remove &ldquo;{{ suggest.0 }}&rdquo;</a></p>{% elif clear %}<p hx-boost="true"><a href="{{ clear }}">Clear all filters</a></p>{% endif %}
 </div>{% endif %}
 
-{% if matching %}<div class="row g-3">
-  <div class="col-xxl-9">
-    <div class="sp-scroll">
-      <table class="table table-sm table-hover sp-table sp-results mb-0">
-        <thead hx-boost="true">
-          <tr class="sp-groups">{% for group, span in groups %}<th scope="colgroup" colspan="{{ span }}">{{ group }}</th>{% endfor %}</tr>
-          <tr>{% for key, label, tip, url, order in headers %}<th scope="col" title="{{ tip }}"{% if order %} aria-sort="{{ order }}"{% endif %}>{% if url %}<a href="{{ url }}">{{ label }}{% if order == 'ascending' %} &#9650;{% elif order %} &#9660;{% endif %}</a>{% else %}{{ label }}{% endif %}</th>{% endfor %}</tr>
-        </thead>
-        <tbody>
-          {% for r in rows %}<tr data-card>
-            {% for col in shown %}{% if col == 'id' %}
-            <td><a href="{% url 'snpportal:card' key r.n %}?{{ query }}" hx-get="{% url 'snpportal:card' key r.n %}?{{ query }}"
-                   hx-target="#card" hx-select="#card-body" hx-swap="innerHTML" hx-push-url="false">{% if r.id %}{{ r.id }}{% else %}{{ r.chrom }}:{{ r.pos }}{% endif %}</a></td>
-            {% elif col == 'position' %}<td class="sp-mono">{{ r.chrom }}:{{ r.pos }}</td>
-            {% elif col == 'alleles' %}<td class="sp-mono">{{ r.alleles }}</td>
-            {% elif col == 'tier' %}<td title="{{ r.evidence|default:'no evidence' }}">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
-            {% elif col == 'score' %}<td class="sp-num">{{ r.score|default_if_none:"" }}</td>
-            {% elif col == 'evidence' %}<td title="{{ r.evidence }}">{{ r.evidence }}</td>
-            {% elif col == 'known' %}<td>{% if r.known %}<span class="sp-known" title="{% if r.known_dist == 0 %}At{% else %}{{ r.known_dist|thousands }} bp from{% endif %} the published SNP {{ r.known }}">&#9733; {{ r.known }}</span>{% endif %}</td>
-            {% elif col == 'gene' %}<td title="{{ r.gene_id }}">{{ r.gene }}</td>
-            {% elif col == 'region' %}<td>{{ r.region }}</td>
-            {% elif col == 'distance' %}<td class="sp-num">{{ r.distance }}</td>
-            {% elif col == 'chromatin' %}<td>{% if r.barcode %}<span class="sp-bc" role="img" aria-label="{{ r.barcode_label }}">{% for cells in r.barcode %}<span>{% for cls, title in cells %}<i class="{{ cls }}" title="{{ title }}"></i>{% endfor %}</span>{% endfor %}</span>{% endif %}</td>
-            {% elif col == 'molqtl' %}<td title="{{ r.molqtl.1 }}">{{ r.molqtl.0 }}</td>
-            {% elif col == 'cm' %}<td class="sp-num">{{ r.cm }}</td>
-            {% elif col == 'gerp' %}<td class="sp-num">{{ r.gerp }}</td>
-            {% elif col == 'regbuild' %}<td>{{ r.regbuild }}</td>
-            {% elif col == 'maf' %}<td class="sp-num">{{ r.maf }}</td>
-            {% elif col == 'assay' %}<td>{% if r.assay %}<span class="sp-as sp-as-{{ r.assay.1 }}" title="{{ r.assay.3|default:r.assay.2 }}"><span aria-hidden="true">{{ r.assay.0 }}</span> {{ r.assay.2 }}</span>{% endif %}</td>
-            {% elif col == 'flags' %}<td>{% for icon, text, tip in r.flags %}<span class="sp-badge sp-badge-flag" title="{{ tip }}"><span aria-hidden="true">{{ icon }}</span> {{ text }}</span> {% endfor %}</td>
-            {% elif col == 'ref_check' %}<td>{{ r.ref_check }}</td>
-            {% endif %}{% endfor %}
-          </tr>{% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <nav class="d-flex flex-wrap gap-2 align-items-center mt-2" aria-label="Pages" hx-boost="true">
-      {% if prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ prev }}">Previous</a>{% endif %}
-      <span class="sp-small">Page {{ page|thousands }} of {{ pages|thousands }}</span>
-      {% if next %}<a class="btn btn-sm btn-outline-secondary" href="{{ next }}">Next</a>{% endif %}
-      <span class="sp-small sp-muted ms-auto">Keys: j / k move between SNPs, Enter opens one</span>
-    </nav>
+{% if matching %}
+<div class="sp-scroll">
+  <table class="table table-sm table-hover sp-table sp-results mb-0">
+    <thead hx-boost="true">
+      <tr>{% for key, label, tip, url, order in headers %}<th scope="col" title="{{ tip }}"{% if order %} aria-sort="{{ order }}"{% endif %}>{% if url %}<a href="{{ url }}">{{ label }}{% if order == 'ascending' %} &#9650;{% elif order %} &#9660;{% endif %}</a>{% else %}{{ label }}{% endif %}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}<tr data-card{% if r.n == snp %} class="sp-selected"{% endif %}>
+        {% for col in shown %}{% if col == 'id' %}
+        <td><a href="{{ r.href }}" hx-get="{{ r.href }}">{% if r.id %}{{ r.id }}{% else %}{{ r.chrom }}:{{ r.pos }}{% endif %}</a>{% if r.alleles %} <span class="sp-muted">&middot; {{ r.alleles }}</span>{% endif %}</td>
+        {% elif col == 'position' %}<td class="sp-mono">{{ r.chrom }}:{{ r.pos }}</td>
+        {% elif col == 'alleles' %}<td class="sp-mono">{{ r.alleles }}</td>
+        {% elif col == 'p' %}<td class="sp-num">{{ r.p }}</td>
+        {% elif col == 'beta' %}<td class="sp-num">{{ r.beta }}</td>
+        {% elif col == 'pip' %}<td class="sp-num">{{ r.pip }}</td>
+        {% elif col == 'tier' %}<td title="{{ r.evidence|default:'no evidence found' }}">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
+        {% elif col == 'score' %}<td class="sp-num">{{ r.score|default_if_none:"" }}</td>
+        {% elif col == 'evidence' %}<td title="{{ r.evidence }}">{{ r.evidence }}</td>
+        {% elif col == 'known' %}<td>{% if r.known %}<span class="sp-known" title="{% if r.known_dist == 0 %}At{% else %}{{ r.known_dist|thousands }} bp from{% endif %} the published SNP {{ r.known }}{% if r.caveat %}; caveat: {{ r.caveat }}{% endif %}">&#9733; {{ r.known }}{% if r.caveat %} ({{ r.caveat }}){% endif %}</span>{% endif %}</td>
+        {% elif col == 'gene' %}<td title="{{ r.gene_tip }}">{{ r.gene }}</td>
+        {% elif col == 'region' %}<td>{{ r.region }}</td>
+        {% elif col == 'distance' %}<td class="sp-num">{{ r.distance }}</td>
+        {% elif col == 'chromatin' %}<td>{% if r.barcode %}<span class="sp-bc" role="img" aria-label="{{ r.barcode_label }}">{% for cells in r.barcode %}<span>{% for cls, title in cells %}<i class="{{ cls }}" title="{{ title }}"></i>{% endfor %}</span>{% endfor %}</span>{% endif %}</td>
+        {% elif col == 'molqtl' %}<td title="{{ r.molqtl.1 }}">{{ r.molqtl.0 }}</td>
+        {% elif col == 'cm' %}<td class="sp-num">{{ r.cm }}</td>
+        {% elif col == 'gerp' %}<td class="sp-num">{{ r.gerp }}</td>
+        {% elif col == 'regbuild' %}<td>{{ r.regbuild }}</td>
+        {% elif col == 'maf' %}<td class="sp-num">{{ r.maf }}</td>
+        {% elif col == 'assay' %}<td>{% if r.assay %}<span class="sp-as sp-as-{{ r.assay.1 }}" title="{{ r.assay.3|default:r.assay.2 }}"><span aria-hidden="true">{{ r.assay.0 }}</span> {{ r.assay.2 }}</span>{% endif %}</td>
+        {% elif col == 'flags' %}<td>{% for icon, text, tip in r.flags %}<span class="sp-badge sp-badge-flag" title="{{ tip }}"><span aria-hidden="true">{{ icon }}</span> {{ text }}</span> {% endfor %}</td>
+        {% elif col == 'ref_check' %}<td>{{ r.ref_check }}</td>
+        {% endif %}{% endfor %}
+      </tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+<nav class="d-flex flex-wrap gap-2 align-items-center mt-2" aria-label="Pages" hx-boost="true">
+  {% if prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ prev }}">Previous</a>{% endif %}
+  <span class="sp-small">Page {{ page|thousands }} of {{ pages|thousands }}</span>
+  {% if next %}<a class="btn btn-sm btn-outline-secondary" href="{{ next }}">Next</a>{% endif %}
+</nav>
+{% endif %}
+
+{% if drawer %}<aside class="fixed-top ms-auto col-12 col-md-6 col-xl-3 h-100 overflow-auto sp-card shadow sp-small" id="drawer" aria-labelledby="drawer-h">
+  <div class="d-flex align-items-start gap-2 mb-2">
+    <h2 class="h6 mb-0 me-auto" id="drawer-h">{{ drawer.name }}{% if drawer.alleles %} &middot; {{ drawer.alleles }}{% endif %}</h2>
+    <a class="btn-close" href="{{ drawer.close }}" hx-get="{{ drawer.close }}" aria-label="Close"></a>
   </div>
-  <div class="col-xxl-3">
-    <div id="card" class="position-sticky sp-card-slot" aria-live="polite">
-      <p class="sp-muted sp-small">Click a SNP to see its evidence.</p>
-    </div>
+  <div class="sp-stack">
+    <p class="sp-muted mb-0">{{ drawer.position }}{% if drawer.gene %} &middot; {{ drawer.gene }}{% endif %}</p>
+    {% if drawer.tier_line %}<p class="mb-0">{% if drawer.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=drawer.tier short=1 %} {% endif %}{{ drawer.tier_line }}</p>{% endif %}
+    {% if drawer.known %}<p class="mb-0">&#9733; {{ drawer.known.name }}, {{ drawer.known.where }}{% if drawer.known.note %}; {{ drawer.known.note }}{% endif %}
+      {% if drawer.known.caveat %}{% include 'snpportal/_badges.html' with kind='evidence' cls='caveat' value=drawer.known.caveat %}{% endif %}</p>{% endif %}
+    {% if drawer.chromatin %}<p class="mb-0">{{ drawer.chromatin }}</p>{% endif %}
+    {% if drawer.assay %}<p class="mb-0">{{ drawer.assay }}</p>{% endif %}
+    <p class="mb-0"><a class="btn btn-sm btn-outline-primary" href="{{ drawer.card }}">Open full card &rarr;</a></p>
   </div>
-</div>{% endif %}
+</aside>{% endif %}

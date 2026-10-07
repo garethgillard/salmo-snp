@@ -1,2 +1,3 @@
 {% extends 'snpportal/base_portal.html' %}
-{% block main %}<div class="sp-narrow">{% include 'snpportal/card.html' %}</div>{% endblock main %}
+{% comment %}The evidence card of a job's SNP as a page of its own, under the job's caveat line.{% endcomment %}
+{% block main %}<div class="sp-narrow">{% include 'snpportal/_caveat.html' with synthetic=synthetic %}{% include 'snpportal/card.html' %}</div>{% endblock main %}

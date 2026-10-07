@@ -84,9 +84,11 @@ class ToolsTest(SimpleTestCase):
         self.assertContains(page, "Panel designer")
         self.assertEqual(page["Cache-Control"], "no-store, private")
         self.assertTrue(all(ET.fromstring(s) is not None for s in SVG.findall(html)))  # every figure is valid XML
-        for name in ("Panel markers along the genome", "Tier mix of the panel", "Why each marker was chosen",
-                     "Spacing between neighbouring markers", "Largest gaps in the panel"):
-            self.assertContains(page, name)
+        self.assertContains(page, "Panel markers along the genome")  # one figure
+        self.assertEqual(html.count("<figure "), 1)
+        self.assertContains(page, '<details class="sp-more"><summary>Advanced settings</summary>')  # closed: all at their defaults
+        changed = self.client.get(url.replace("per_gene=2", "per_gene=3"))
+        self.assertContains(changed, '<details class="sp-more" open><summary>Advanced settings (1 active)</summary>')
         self.assertEqual(boosted_links(html), {"?"})  # boosted links stay on this page
         h = re.search(r'scope=panel-([0-9a-f]{16})', html).group(1)
         path = self.d / "panels" / f"{h}.parquet"
@@ -114,8 +116,9 @@ class ToolsTest(SimpleTestCase):
         self.client.get(url)  # designed again: identical bytes
         self.assertEqual(sha(path), first)
         report = self.client.get(reverse("snpportal:report", args=[self.key]), {"trait": "maturation", "panel": h}).content.decode()
-        self.assertIn(f"Panel <span class=\"sp-mono\">{h}</span>", report)  # the printable report's panel summary
-        self.assertIn(f"<b>{info['summary']['n_selected']:,}</b><span>markers", report)
+        self.assertIn(f"Panel: {tools.panel_name(info)}", report)  # the printable report's panel summary
+        self.assertIn(tools.panel_line(info["summary"]), report)
+        self.assertNotIn(h, html.split("scope=panel-")[0])  # named by its markers, never by a hash
 
     def test_panel_parameters(self):
         con = jobs.connect([self.d])
@@ -136,7 +139,7 @@ class ToolsTest(SimpleTestCase):
                                                               "WHERE coalesce(assay_status, '') <> 'fail' LIMIT 30").fetchall())
         bare = self.client.post(reverse("snpportal:upload"), {"snps": SimpleUploadedFile("SYNTHETIC_bare.tsv", ("chrom\tpos\n" + lines).encode())})
         url = bare.url.split("?")[0]
-        self.assertContains(self.client.get(url + "?tab=panel"), "Selected SNPs")
+        self.assertContains(self.client.get(url + "?tab=panel"), 'id="selected-h"')
         self.assertEqual(self.client.get(reverse("snpportal:download", args=[url.split("/")[-2]]), {"scope": "all", "format": "kasp"}).status_code, 200)
 
     def test_cm_spacing_and_vendor_checks(self):  # R5 and the Push 2 vendor checks
@@ -144,9 +147,7 @@ class ToolsTest(SimpleTestCase):
                                           "cm_map": "female"})
         self.assertContains(page, 'name="spacing_cm" value="0.5"')
         self.assertContains(page, '<option value="female" selected>')
-        self.assertContains(page, "median spacing (cM)")
-        self.assertContains(page, "Vendor checks: Infinium I bin A (A/T)")
-        self.assertContains(page, "error 111")  # a 20-SNP panel is far below the Infinium bin minimums
+        self.assertRegex(page.content.decode(), r"median [\d.]+ cM")
         h = re.search(r'scope=panel-([0-9a-f]{16})', page.content.decode()).group(1)
         info = jobs.read_json(self.d / "panels" / f"{h}.json")
         self.assertEqual((info["params"]["min_spacing_cm"], info["params"]["cm_map"]), (0.5, "female"))
@@ -161,12 +162,13 @@ class ToolsTest(SimpleTestCase):
         h2 = re.search(r'scope=panel-([0-9a-f]{16})', plain.content.decode()).group(1)
         self.assertNotIn("min_spacing_cm", jobs.read_json(self.d / "panels" / f"{h2}.json")["params"])  # bp only: hash as before
         export = self.client.get(self.url, {"tab": "export", "scope": f"panel-{h}"})
-        self.assertContains(export, "min spacing 0 bp and 0.5 cM")
-        self.assertContains(export, "Vendor checks: Infinium I bin A (A/T)")
+        self.assertContains(export, 'checked> ' + tools.panel_name(info))  # the panel is the chosen scope
+        self.assertContains(export, "Infinium bins: A/T")  # each vendor file with its own checks
+        self.assertContains(export, "below Illumina")  # a 20-SNP panel is far below the Infinium bin minimums
         self.assertContains(export, "Ssa25p28996360")  # locus names and the lookup sidecar explained
-        self.assertContains(export, "lookup.tsv")
+        self.assertContains(export, "format=illumina.lookup")
         report = self.client.get(reverse("snpportal:report", args=[self.key]), {"panel": h})
-        self.assertContains(report, "error 111")
+        self.assertContains(report, tools.panel_name(info))
         con = jobs.connect([self.d])  # lists without alleles: the assay flank's (public) alleles, as in vendor files
         con.execute(f"CREATE VIEW x AS SELECT chrom, pos, assay_flank FROM read_parquet('{self.d / 'result.parquet'}') "
                     "WHERE assay_flank LIKE '%[A/T]%' LIMIT 3")
@@ -220,7 +222,8 @@ class ToolsTest(SimpleTestCase):
         filtered = body(self.client.get(download, {"scope": "filtered", "format": "tsv", "tier": "1-2", "plain": "1"})).decode()
         self.assertEqual(len(filtered.splitlines()) - 1, n)
         page = self.client.get(self.url, {"tab": "export", "tier": "1-2"})
-        self.assertContains(page, f"The filtered table: Tier 1–2 <span class=\"sp-muted\">({n:,} SNPs)")
+        self.assertContains(page, f'value="filtered" checked> Filtered table ({n:,})')  # the default when the Table has filters
+        self.assertContains(page, f"of {n:,} included")
         self.assertEqual(boosted_links(page.content.decode()), {"?"})
         # A panel, Parquet with its provenance, and the bundle
         html = self.client.get(self.url + "?tab=panel").content.decode()
@@ -236,7 +239,8 @@ class ToolsTest(SimpleTestCase):
         z = zipfile.ZipFile(io.BytesIO(body(self.client.get(download, {"scope": f"panel-{h}", "format": "bundle"}))))
         names = set(z.namelist())
         self.assertTrue({"manifest.json", "weights.yaml", "methods.txt", "provenance.txt", "README.txt",
-                         "figures/panel-coverage.svg"} <= names, names)
+                         "figures/panel-coverage.svg", "vendor_checks.txt"} <= names, names)  # the Export tab's checks travel too
+        self.assertIn("kasp: ", z.read("vendor_checks.txt").decode())
         self.assertTrue(any(name.endswith("_illumina.csv") for name in names))
         self.assertEqual(self.client.get(download, {"scope": "panel-0123456789abcdef", "format": "tsv"}).status_code, 404)
         with override_settings(SNPPORTAL_MAX_VENDOR_SNPS=10):
@@ -252,9 +256,9 @@ class ToolsTest(SimpleTestCase):
         self.assertRedirects(response, f"{url}?tab=panel&trait=all#chip", fetch_redirect_response=False)
         self.assertTrue((d / "chip.parquet").exists())
         page = self.client.get(url + "?tab=panel")
-        self.assertContains(page, "sp-badge-syn")
+        self.assertContains(page, "Compared with the demo chip (synthetic)")
         self.assertContains(page, "novel functional")
-        self.assertContains(page, "Chip gaps over 1 Mb")
+        self.assertContains(page, "Largest chip gaps")
         s = jobs.read_json(d / "chip.json")["results"]["all"]["summary"]
         self.assertEqual(s["shared"] + s["novel_functional"] + s["other"], s["total"])
         self.assertGreater(s["shared"], 0)
@@ -262,8 +266,9 @@ class ToolsTest(SimpleTestCase):
         svg = re.search(r'<svg .*?</svg>', page.content.decode().split('id="fig-chip-coverage"')[1], re.S).group(0)
         self.assertIn(">SYNTHETIC</text>", svg)  # the watermark
         overview = self.client.get(url).content.decode()
-        self.assertIn("the demo chip on the Panel tab", overview)  # every tab says SYNTHETIC
+        self.assertNotIn("SYNTHETIC data", overview)  # only the chip is synthetic: no page line, but the figure says so
         self.assertIn("demo chip markers", overview)  # chip ticks on the ideogram
+        self.assertIn(">SYNTHETIC</text>", overview.split('id="fig-ideogram"')[1])
         # The Table tab's 'not near the chip' filter keeps fewer SNPs
         table = self.client.get(url, {"tab": "table", "hide_near_chip": "1"}).content.decode()
         self.assertIn("filtered from", table)
@@ -271,7 +276,8 @@ class ToolsTest(SimpleTestCase):
         # The 'not near the chip' exclusion leaves fewer candidates
         base = self.client.get(url, {"tab": "panel", "design": "1"}).content.decode()
         near = self.client.get(url, {"tab": "panel", "design": "1", "exclude": "near_chip"}).content.decode()
-        candidates = [int(re.search(r"<b>([\d,]+)</b><span>candidates", x).group(1).replace(",", "")) for x in (base, near)]
+        candidates = [jobs.read_json(d / "panels" / f"{re.search(r'scope=panel-([0-9a-f]{16})', x).group(1)}.json")["summary"]["n_candidates"]
+                      for x in (base, near)]
         self.assertLess(candidates[1], candidates[0])
         # Exports of the list gain the chip columns and the SYNTHETIC line
         text = body(self.client.get(reverse("snpportal:download", args=[key]), {"scope": "all", "format": "tsv"})).decode()
@@ -279,7 +285,7 @@ class ToolsTest(SimpleTestCase):
         self.assertIn("novel_functional", next(line for line in text.splitlines() if not line.startswith("#")))
         self.client.post(chip, {"remove": "1"})
         self.assertFalse((d / "chip.parquet").exists())
-        self.assertNotContains(self.client.get(url), "the demo chip on the Panel tab")
+        self.assertNotContains(self.client.get(url), "demo chip markers")
         # An uploaded chip (a SYNTHETIC PLINK .bim from fixture positions), a wrong type and an unreadable file
         positions = duckdb.sql(f"SELECT chrom, pos FROM read_parquet('{d / 'result.parquet'}') ORDER BY chrom, pos LIMIT 40").fetchall()
         bim = "".join(f"{c}\tm{i}\t0\t{p}\tA\tG\n" for i, (c, p) in enumerate(positions))
@@ -287,7 +293,7 @@ class ToolsTest(SimpleTestCase):
         info = jobs.read_json(d / "chip.json")
         self.assertEqual(info["kept"], 40)
         self.assertTrue(info["synthetic"])  # SYNTHETIC in its name
-        self.assertContains(self.client.get(url + "?tab=panel"), "Uploaded chip: 40 markers")
+        self.assertContains(self.client.get(url + "?tab=panel"), "Compared with the uploaded chip (synthetic)")  # SYNTHETIC in its name
         wrong = self.client.post(chip, {"chip": SimpleUploadedFile("chip.pdf", b"%PDF")})
         self.assertIn("chip_error=type", wrong.url)
         junk = self.client.post(chip, {"chip": SimpleUploadedFile("chip.tsv", b"hello\tworld\n1\t2\n")})

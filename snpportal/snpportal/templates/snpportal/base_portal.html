@@ -15,12 +15,16 @@
     <div class="sp-wrap">
       <a class="sp-brand" href="{% url 'snpportal:landing' %}">Functional SNP portal</a>
       <ul>
-        <li><a href="{% url 'snpportal:landing' %}"{% if nav == 'home' %} aria-current="page"{% endif %}>Home</a></li>
-        <li><a href="{% url 'snpportal:upload' %}"{% if nav == 'score' %} aria-current="page"{% endif %}>Score SNPs</a></li>
-        <li><a href="{% url 'snpportal:locus' %}"{% if nav == 'explore' %} aria-current="page"{% endif %}>Explore</a></li>
+        <li><a href="{% url 'snpportal:upload' %}"{% if nav == 'score' %} aria-current="page"{% endif %}>Score</a></li>
         <li><a href="{% url 'snpportal:known_loci' %}"{% if nav == 'known' %} aria-current="page"{% endif %}>Known loci</a></li>
-        <li><a href="{% url 'snpportal:about_data' %}"{% if nav == 'about' %} aria-current="page"{% endif %}>Data &amp; methods</a></li>
-        <li><a href="{% url 'snpportal:help' %}"{% if nav == 'help' %} aria-current="page"{% endif %}>Help</a></li>
+        <li><a href="{% url 'snpportal:locus' %}?r=25:28985000-29010000"{% if nav == 'explore' %} aria-current="page"{% endif %}>Locus browser</a></li>
+        <li><details class="sp-menu"><summary{% if nav == 'help' or nav == 'about' %} aria-current="page"{% endif %}>Help</summary>
+          <ul>
+            <li><a href="{% url 'snpportal:help' %}">Help</a></li>
+            <li><a href="{% url 'snpportal:about_data' %}">Data</a></li>
+            <li><a href="{% url 'snpportal:methods' %}">Methods</a></li>
+            <li><a href="{% url 'snpportal:run_locally' %}">Run locally</a></li>
+          </ul></details></li>
       </ul>
       <span class="sp-release" title="Annotation release and genome assembly">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</span>
     </div>
