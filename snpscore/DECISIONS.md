@@ -46,7 +46,7 @@ caQTL leads (n = 1,057) give 3-4x, but they are called on the same ATAC data, so
 | 15 | Public SNP list for the background pool, demos and default panels: the 12-fish VCF has 70 sites on chr10 and stops near 105 Mb on chr1 | 12-fish VCF | Switch to the 504-fish panel sites (7.57M, frequencies only) |
 | 16 | Known-loci catalogue: vet the 37 rows and effect alleles | 37 rows, 12 with an effect allele; bco1l A (+ strand) = red flesh | Vet; add QTL intervals for IPN and sea lice |
 | 17 | Fine-mapping defaults | prior SD 0.2, functional lambda 0.5, 95% sets, 5e-8 / 1e-5, 1 Mb clumping | Keep as labelled defaults; add the LD reference (#19) before using credible sets for decisions |
-| 18 | Chromatin colours | portal palette by default, AQUA-FAANG itemRgb as a viewer option | Make itemRgb the default (matches the papers and JBrowse) |
+| 18 | Chromatin colours | portal palette by default, AQUA-FAANG itemRgb as a viewer option | Make itemRgb the default (matches the papers and JBrowse), but note: with deuteranopia its Bivalent (counted) and Repressed_polycomb (not counted) look alike (CIEDE2000 5.4); cells carry 'Biv'/'Pc' text, browser lanes rely on colour and tooltips |
 | 19 | LD reference: may we derive packed haplotypes or r2 from the 504-fish phased VCF? | none | Yes if permitted; it fixes the biggest fine-mapping caveat |
 | 20 | Portal name, how to cite, contact, privacy statement, footer credit for AQUA-FAANG and salmobase | placeholders marked 'under review' | Write once with the AQUA-FAANG consortium |
 | 21 | Gene labels for genes unnamed in Ensembl | '~VGLL3' (human ortholog) | As is, or NCBI RefSeq names as a second source |
