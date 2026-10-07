@@ -19,7 +19,7 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 
 ## Step 2: benchmark harness
 - [x] Known loci positive set: `benchmark/known_loci.tsv` (vgll3 missense x2, six6 lead x2, bco1l lead x2; published ICSASG_v2 SNPs lifted to Ssal_v3.1)
-- [ ] Positive set: nf-rasqual caQTL/eQTL lead SNPs (result tables needed from G)
+- [ ] Positive set: nf-rasqual caQTL/eQTL lead SNPs (tables are public now, see R4; not yet used by the benchmark)
 - [x] `snpscore benchmark`: share of positives vs controls matched on gene-distance bins, per layer, region class and tier; output goes in the release folder
 
 ## Step 3: remaining layers (one change each)
@@ -29,11 +29,13 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - [x] GERP constrained elements (Ensembl 116 65-fish alignment; `fetch` decodes the bigBed)
 - [ ] Enhancer-CNEs
 - [ ] Ohnolog pairs and element duplication class (shared / alignable-only / exclusive)
-- [ ] molQTL (nf-rasqual) and ImmunoMap response regions
+- [x] molQTL from the public nf-RASQUAL lead-SNP tables (Push 2 R4, weight 0)
+- [ ] ImmunoMap response regions (source needed from G)
 - [ ] TF motif disruption
 - [ ] DeepFARM scores (agree redistribution first)
 - [x] Assay axis, part 1: variants within 35 bp (public 12-fish VCF), A/T-C/G flag
-- [ ] Assay axis, part 2: probe-flank uniqueness, GC (need the genome sequence)
+- [x] Assay axis, part 2a: GC, repeat share, homopolymers, N, TOP/BOT from the genome (P6.2, R2)
+- [ ] Assay axis, part 2b: probe-flank uniqueness / paralog cross-hybridisation (P6.8; needs an aligner or k-mer index)
 
 ## Step 4: tiers and release v0.1
 - [ ] G decides: which states count as active; trait presets (trait -> conditions). Provisional choices in CLAUDE.md
@@ -47,9 +49,10 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 
 ## Step 6: evidence card, genome view, filters, vendor export
 - [x] Evidence card per SNP (21-condition state strip, gene, flags)
-- [ ] Genome view using salmobase's jbrowse_react bundle (for now the card links to Ensembl)
+- [x] Genome view: server-rendered locus browser with live salmobase tracks, plus deep links to salmobase JBrowse and Ensembl
+- [ ] Optional: embed salmobase's jbrowse_react bundle once merged into salmobase
 - [x] Filters (tier, trait preset, region class, flags)
-- [ ] Axiom/Illumina flank export (needs the genome sequence)
+- [x] Axiom/Illumina/KASP flank export with TOP/BOT, sidecar provenance and vendor rules (P6.4, R2)
 
 ## Step 7: going online (later, once the prototype works)
 - [ ] Decide where the repos live: GitLab elixir-nmbu (like salmobase) or GitHub
@@ -95,10 +98,10 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [x] P4.2 Gene-model features layer and gene descriptions (S, must, **now**)
 - [x] P4.3a Server-rendered SVG locus browser: local annotation lanes (no network) (M, must, **now**)
 - [x] P4.3b Live AQUA-FAANG ATAC signal lanes from salmobase (M, must, **now**) (live salmobase ATAC: 1.4 s cold, 0.1 s warm)
-- [ ] P4.3c Per-condition ChromHMM lanes (genome-wide segmentation) and ChIP/RNA rows (M, should)
+- [x] P4.3c Per-condition ChromHMM lanes (genome-wide segmentation) and ChIP/RNA rows (M, should) (ChromHMM toggle + H3K27ac/H3K4me3 rows; RNA rows not shown)
 - [x] P4.4a Evidence card core and permanent variant page (M, must, **now**)
 - [ ] P4.5 Coding consequence (VEP-lite) from the canonical CDS and the genome (M, should)
-- [ ] P4.6 molQTL evidence contract (minimal, synthetic until nf-rasqual tables arrive) (S, could)
+- [x] P4.6 molQTL evidence contract (minimal, synthetic until nf-rasqual tables arrive) (S, could) (real public tables instead: R4)
 - [ ] P4.7 Condition x assay signal matrix at the SNP (M, should)
 - [ ] P4.8 Genome-wide ChromHMM state layer (not only inside robust peaks) (M, should)
 - [ ] P4.9 Build-time per-peak signal layer (M, should)
@@ -119,7 +122,7 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [ ] P5.9 TF motif disruption (ref vs alt) (M, should)
 - [x] P5.10 Ortholog names for unnamed salmon genes (S, should, **now**)
 - [x] P5.11 Guided 'vgll3 and maturation' tour (S, should, **now**)
-- [ ] P5.12 rsID support (S, could)
+- [x] P5.12 rsID support (S, could) (EVA rs bridge: R6)
 
 ### M6 Breeding toolkit: assayable markers, panels, chip comparison and exports
 - [x] P6.1 Public allele frequency 'point' layer and peak ids (Wave A) (S, must, **now**)
@@ -130,7 +133,7 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [x] P6.6 Compare with an existing chip (overlap, gaps, new functional coverage) (S, should, **now**)
 - [ ] P6.7 Saved, versioned panels with diff (opt-in retention) (M, could)
 - [ ] P6.8 Ohnolog cross-hybridisation risk for probes (L, could)
-- [ ] P6.9 Genetic map (cM) layer and cM-based spacing (M, should)
+- [x] P6.9 Genetic map (cM) layer and cM-based spacing (M, should) (Brekke 2023: R5)
 - [ ] P6.10 Multi-population allele frequencies (M, could)
 
 ### M7 GWAS summary statistics and functional fine-mapping (next push, Wave D)
