@@ -152,6 +152,10 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-kpi span { font-size: .8rem; color: var(--sp-grey-700); }
 
 /* score page */
+.sp-try { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .5rem; }
+.sp .sp-try .btn { width: 100%; height: 100%; text-align: left; font-weight: 600; }
+.sp-try .btn small { display: block; font-weight: 400; }
+@media (max-width: 575.98px) { .sp-try { grid-template-columns: 1fr; } .sp-try .btn small { display: inline; } }
 .sp-drop { border: 2px dashed var(--sp-grey-300); border-radius: .375rem; padding: 1.25rem; text-align: center; background: var(--sp-grey-50); }
 .sp-drop.over { border-color: var(--sp-accent); background: var(--sp-white); }
 .sp textarea.sp-paste { font-family: var(--sp-mono); font-size: .8125rem; }

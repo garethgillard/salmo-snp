@@ -61,7 +61,7 @@
   document.addEventListener("click", function (e) { closeMenus(e.target.closest && e.target.closest("details.sp-menu, details.sp-dlmenu")); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeMenus(null); });
 
-  // A link to #id opens the closed <details> that is, or holds, that id (Help questions, the GWAS form on Score).
+  // A link to #id opens the closed <details> that is, or holds, that id (Help questions).
   function openTarget() {
     var id = decodeURIComponent(location.hash.slice(1)), el = id && document.getElementById(id);
     for (var d = el; d; d = d.parentElement) if (d.tagName === "DETAILS") d.open = true;
@@ -69,6 +69,14 @@
   }
   window.addEventListener("hashchange", openTarget);
   openTarget();
+
+  // Score: '#gwas' (older links to its GWAS section), '#paste' or '#regions' selects that tab, as ?input= does.
+  function showTab() {
+    var tab = document.getElementById("tab-" + location.hash.slice(1));
+    if (tab && tab.getAttribute("data-bs-toggle") === "tab" && window.bootstrap) bootstrap.Tab.getOrCreateInstance(tab).show();
+  }
+  window.addEventListener("hashchange", showTab);
+  showTab();
 
   // Drag-and-drop onto <div class="sp-drop" data-drop-for="file input id">; shows the chosen file's name.
   document.querySelectorAll("[data-drop-for]").forEach(function (zone) {
