@@ -94,7 +94,7 @@ def provenance(manifest, weights, meta=None):
         + (f"; job created {meta['created_utc']}" if meta.get("created_utc") else "")
         + (f"; input sha256 {meta['input_sha256']}" if meta.get("input_sha256") else ""),
         f"preset {preset} ({conditions}); filters: {filters}" + (f"; panel {meta['panel']}" if meta.get("panel") else ""),
-        "PROVISIONAL rules (prototype values pending decision by G): " + ", ".join(manifest.get("provisional") or ["tiers"]),
+        "PROVISIONAL rules (prototype values, under review): " + ", ".join(manifest.get("provisional") or ["tiers"]),
     ]
     if meta.get("vendor"):
         lines.append(f"{meta['vendor']} submission file: {LAYOUT_NOTE}")
@@ -402,7 +402,7 @@ def bundle_zip(out, source, release_dir, preset="all", meta=None, formats=("tsv"
             "says how each was made, and <file>.lookup.tsv maps its locus names (Ssa<chromosome>p<position>) to your "
             "ids, alleles, TOP/BOT strand and assay status.",
             *[f"Warning: {x}" for x in warnings],
-            "Tier rules, assay thresholds and panel defaults are PROVISIONAL (prototype values pending decision by G).",
+            "Tier rules, assay thresholds and panel defaults are PROVISIONAL (prototype values, under review).",
         ]
         if synthetic:
             readme += ["", "SYNTHETIC: these files were built from synthetic test data and are not real results."]
