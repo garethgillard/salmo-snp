@@ -4,16 +4,23 @@ SNPs whose region_class is CDS or splice_region (all SNPs when the release has n
 
 - One transcript per SNP: of the transcripts whose CDS holds it, the gene's canonical one (Ensembl_canonical tag), else
   the one with the longest CDS (then the lower transcript id). The CDS parts are joined in transcript order, so codons
-  can span exons and minus-strand genes are read on the minus strand. A CDS whose first part has GFF3 phase p > 0 (an
-  incomplete 5' end) starts with (3 - p) % 3 N bases, as Ensembl pads it, so residues keep Ensembl's numbering.
+  can span exons and minus-strand genes are read on the minus strand. A CDS whose first part has GFF3 phase p > 0
+  starts with (3 - p) % 3 N bases, as Ensembl pads it (defensive only: no Ensembl 116 salmon transcript needs it; its
+  5'-incomplete models have phase 0 and a non-ATG first codon).
+- Codon 1: any amino-acid change is start_lost, as VEP calls it also where the first codon is not ATG (stop_gained
+  wins); a synonymous change there is start_lost too when the transcript has a 5' UTR (VEP's rule).
 - Alleles: the SNP's ref/alt, turned to the genome's forward strand where ref_check says swapped or strand_flip; the
-  first alt of several; no alt: the 504-fish panel's alt where the panel has a site with the SNP's ref there. Unknown
-  alleles, indels and a ref matching neither the genome nor its complement give coding_sequence_variant.
+  first alt of several; no alt: the 504-fish panel's alt where the panel has a site with the SNP's ref there; no ref
+  and no alt (a position): the panel site's ref and alt. Unknown alleles, indels and a ref matching neither the genome
+  nor its complement give coding_sequence_variant.
 - SNPs in no CDS: splice_donor_variant / splice_acceptor_variant for the 2 intronic bases at an internal exon end
-  (strand-aware), with the same choice of transcript among those with an exon there.
+  (strand-aware), with the same choice of transcript among those with an exon there. A CDS hit on any transcript wins
+  over a splice site of another (VEP's canonical transcript may then say splice donor/acceptor: 0.06% of public CDS SNPs).
 Standard genetic code; selenocysteine and other recoded codons are not handled. stop_lost is written p.Ter357ArgextTer?
-(VEP reads the 3' UTR for the new stop: extTer14). Not yet compared with Ensembl VEP genome-wide (spot checks:
-tests/test_coding.py)."""
+(VEP reads the 3' UTR for the new stop: extTer14); an incomplete terminal codon has no hgvsp (VEP: p.TerN=).
+Checked against Ensembl VEP REST 116 on the same transcripts (2026-10-07): 200/200 random public CDS/splice SNPs
+identical; with an enriched sample (stop/start/splice, codons spanning exons, both strands, all 194 public codon-1 SNPs
+of non-ATG starts) and synthetic allele probes, 585/585 terms agree; hgvsp differs only as written above."""
 from __future__ import annotations
 
 from .fasta import Fasta
@@ -70,7 +77,8 @@ def consequences(con, location, transcripts, public_af=None, table="snps", pos="
            OR (t.part = 'exon' AND s.pos IN (t.start - 1, t.start, t."end" + 1, t."end" + 2))""")
     con.execute(f"""CREATE OR REPLACE TEMP TABLE _tx AS
         SELECT chrom, start, "end", transcript_id, part, strand, phase, coalesce(canonical, false) AS canonical
-        FROM {tx} WHERE part IN ('CDS', 'exon') AND transcript_id IN (SELECT DISTINCT transcript_id FROM _near)""")
+        FROM {tx} WHERE part IN ('CDS', 'exon', 'five_prime_UTR')
+        AND transcript_id IN (SELECT DISTINCT transcript_id FROM _near)""")
     con.execute("CREATE OR REPLACE TEMP TABLE _hit AS SELECT idx, transcript_id FROM _near WHERE part = 'CDS'")
     # Every CDS part of the hit transcripts in transcript order, with the CDS bases before it, the CDS length and the
     # 5' padding
@@ -85,6 +93,7 @@ def consequences(con, location, transcripts, public_af=None, table="snps", pos="
     # The chosen transcript per SNP, the SNP's offset o in the padded CDS, and the genome positions of its codon
     con.execute("""CREATE OR REPLACE TEMP TABLE _codon AS
         WITH p AS (SELECT c.idx, c.chrom, c.pos, g.transcript_id, g.strand, g.pad + g.cds_len AS len,
+                          g.transcript_id IN (SELECT transcript_id FROM _tx WHERE part = 'five_prime_UTR') AS utr5,
                           g.pad + g.before + CASE WHEN g.strand = '-' THEN g."end" - c.pos ELSE c.pos - 1 - g.start END AS o
                    FROM _cs c JOIN _hit h USING (idx)
                    JOIN _seg g ON g.transcript_id = h.transcript_id AND c.pos > g.start AND c.pos <= g."end"
@@ -104,14 +113,17 @@ def consequences(con, location, transcripts, public_af=None, table="snps", pos="
     con.execute("""CREATE OR REPLACE TEMP TABLE _bases AS SELECT split_part(x, '\t', 1)::BIGINT AS idx,
                    split_part(x, '\t', 2) AS bases FROM (SELECT unnest(string_split(?, '\n')) AS x) WHERE x <> ''""", [text])
     code = ", ".join(f"({lit(k)}, {lit(v)})" for k, v in CODE.items())
-    public = public_af and con.execute("SELECT count(*) FROM _cs WHERE ref IS NOT NULL AND coalesce(alt, '.') = '.'").fetchone()[0]
-    panel = (f"""LEFT JOIN (SELECT chrom, "end" AS pos, ref, min(alt) AS public_alt FROM read_parquet({lit(public_af)})
-                            WHERE "end" IN (SELECT pos FROM _cs) GROUP BY ALL) l USING (chrom, pos, ref)"""
+    public = public_af and con.execute("SELECT count(*) FROM _cs WHERE coalesce(alt, '.') = '.'").fetchone()[0]
+    panel = (f"""LEFT JOIN (SELECT chrom, "end" AS pos, ref AS public_ref, min(alt) AS public_alt,
+                                   count(*) OVER (PARTITION BY chrom, "end") AS n FROM read_parquet({lit(public_af)})
+                            WHERE "end" IN (SELECT pos FROM _cs) GROUP BY chrom, "end", ref) l
+                 ON l.chrom = s.chrom AND l.pos = s.pos
+                AND (l.public_ref = s.ref OR (s.ref IS NULL AND coalesce(s.alt, '.') = '.' AND l.n = 1))"""
              if public else "")
     comp = "translate({}, 'ACGT', 'TGCA')"
     con.execute(f"""CREATE OR REPLACE TEMP TABLE _coding AS
         WITH a AS (SELECT c.*, b.bases, o % 3 AS k, o // 3 + 1 AS aa_pos, o - o % 3 + 3 > len AS incomplete,
-                          s.ref, nullif(s.alt, '.') AS alt0, coalesce(split_part(nullif(s.alt, '.'), ',', 1),
+                          {'coalesce(s.ref, l.public_ref)' if public else 's.ref'} AS ref, s.ref AS ref0, nullif(s.alt, '.') AS alt0, coalesce(split_part(nullif(s.alt, '.'), ',', 1),
                           {'l.public_alt' if public else 'NULL'}) AS alt1, substr(b.bases, o % 3 + 1, 1) AS gb
                    FROM _codon c JOIN _bases b USING (idx) JOIN _cs s USING (idx, chrom, pos) {panel}),
         f AS (SELECT *, CASE WHEN length(ref) <> 1 OR length(alt1) <> 1 OR alt1 NOT IN ('A', 'C', 'G', 'T') THEN NULL
@@ -125,18 +137,18 @@ def consequences(con, location, transcripts, public_af=None, table="snps", pos="
               LEFT JOIN (VALUES {code}) r(codon, aa) ON r.codon = x.rc LEFT JOIN (VALUES {code}) v(codon, aa) ON v.codon = x.ac),
         e AS (SELECT *, CASE WHEN incomplete THEN 'incomplete_terminal_codon_variant'
                              WHEN alt_fwd IS NULL OR ref_aa IS NULL OR alt_aa IS NULL THEN 'coding_sequence_variant'
-                             WHEN aa_pos = 1 AND ref_aa = 'Met' AND alt_aa <> 'Met' THEN 'start_lost'
                              WHEN ref_aa = 'Ter' AND alt_aa = 'Ter' THEN 'stop_retained_variant'
                              WHEN ref_aa = 'Ter' THEN 'stop_lost' WHEN alt_aa = 'Ter' THEN 'stop_gained'
+                             WHEN aa_pos = 1 AND (ref_aa <> alt_aa OR utr5) THEN 'start_lost'
                              WHEN ref_aa = alt_aa THEN 'synonymous_variant' ELSE 'missense_variant' END AS consequence
               FROM t)
         SELECT idx, consequence AS coding_consequence,
-               CASE consequence WHEN 'missense_variant' THEN 'p.' || ref_aa || aa_pos || alt_aa
+               CASE WHEN aa_pos = 1 AND consequence IN ('start_lost', 'stop_gained') THEN 'p.' || ref_aa || '1?'
+                    ELSE CASE consequence WHEN 'missense_variant' THEN 'p.' || ref_aa || aa_pos || alt_aa
                                 WHEN 'stop_gained' THEN 'p.' || ref_aa || aa_pos || 'Ter'
                                 WHEN 'synonymous_variant' THEN 'p.' || ref_aa || aa_pos || '='
                                 WHEN 'stop_retained_variant' THEN 'p.Ter' || aa_pos || '='
-                                WHEN 'stop_lost' THEN 'p.Ter' || aa_pos || alt_aa || 'extTer?'
-                                WHEN 'start_lost' THEN 'p.Met1?' END AS coding_hgvsp,
+                                WHEN 'stop_lost' THEN 'p.Ter' || aa_pos || alt_aa || 'extTer?' END END AS coding_hgvsp,
                aa_pos AS coding_aa_pos,
                CASE WHEN alt_fwd IS NOT NULL THEN replace(lower(substr(rc, 1, k)) || substr(rc, k + 1, 1) || lower(substr(rc, k + 2))
                     || '/' || lower(substr(ac, 1, k)) || substr(ac, k + 1, 1) || lower(substr(ac, k + 2)), '.', '') END AS coding_codons,
@@ -146,6 +158,7 @@ def consequences(con, location, transcripts, public_af=None, table="snps", pos="
                     WHEN length(ref) <> 1 OR length(alt1) <> 1 THEN 'not a SNP'
                     WHEN alt_fwd IS NULL THEN 'alleles do not match the genome'
                     WHEN contains(alt0, ',') THEN 'first of several alt alleles'
+                    WHEN ref0 IS NULL THEN 'alleles from the public panel'
                     WHEN alt0 IS NULL THEN 'alt allele from the public panel' END AS coding_note
         FROM e""")
     add_splice(con)

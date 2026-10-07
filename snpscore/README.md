@@ -187,13 +187,17 @@ order, then:
   `missense_variant`, `synonymous_variant`, `stop_gained`, `stop_lost`, `start_lost`, `stop_retained_variant`,
   `incomplete_terminal_codon_variant`, `coding_sequence_variant` (effect unknown), `splice_donor_variant`,
   `splice_acceptor_variant`; NULL outside CDS and splice sites), `coding_hgvsp` (3-letter: `p.Thr46Met`, `p.Thr46=`,
-  `p.Lys352Ter`, `p.Met1?`, `p.Ter357ArgextTer?`), `coding_aa_pos` (Ensembl residue number), `coding_codons` (VEP style,
-  `aCg/aTg`), `coding_transcript` (canonical, else longest CDS, else lowest id) and `coding_note` (`first of several
-  alt alleles`, `alt allele from the public panel`, `alleles unknown`, `alleles do not match the genome`, `not a SNP`,
-  `genome base unknown`). Only SNPs whose `region_class` is CDS or splice_region are looked up; codons can span
+  `p.Lys352Ter`, `p.Met1?`, `p.Pro1?`, `p.Ter357ArgextTer?`), `coding_aa_pos` (Ensembl residue number),
+  `coding_codons` (VEP style, `aCg/aTg`), `coding_transcript` (canonical, else longest CDS, else lowest id) and
+  `coding_note` (`first of several alt alleles`, `alt allele from the public panel`, `alleles from the public panel` (a
+  position only), `alleles unknown`, `alleles do not match the genome`, `not a SNP`, `genome base unknown`). Only SNPs whose `region_class` is CDS or splice_region are looked up; codons can span
   introns; swapped or strand-flipped alleles are turned to the reference first; splice donor/acceptor = the 2 intronic
-  bases at internal exon ends, for SNPs in no CDS. Checked against Ensembl VEP REST (release 116) on 233 stratified
-  SNPs with 0 differences. Ensembl numbers vgll3 Met54Thr as Thr46Met (published residue numbers are Ensembl's + 8).
+  bases at internal exon ends, for SNPs in no CDS (a CDS hit on another transcript wins); any change to codon 1 is
+  `start_lost`, also where the first codon is not ATG (as VEP). Checked against Ensembl VEP REST (release 116, same
+  transcripts and canonical flags): 200/200 random public CDS/splice SNPs identical; 585/585 terms on an enriched sample
+  (stop/start/splice, codons spanning exons, both strands, codon 1 of non-ATG starts, synthetic allele probes). VEP
+  writes `extTerN` for stop_lost and `p.TerN=` for an incomplete terminal codon (here NULL). Ensembl numbers vgll3
+  Met54Thr as Thr46Met (published residue numbers are Ensembl's + 8).
 - `strand_ambiguous` (A/T or C/G; if the input has `ref` and `alt`)
 - `tier` (1 best to 4), `tier_score`, `tier_evidence`, and `tier_terms`
   (`LIST(STRUCT(term VARCHAR, weight INTEGER))`: the weights.yaml terms that fired) for the `--trait` preset (default

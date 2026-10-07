@@ -15,6 +15,8 @@ from snpscore.coding import COLUMNS
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "tests" / "fixture"
 VGLL3, BCO1L = "ENSSSAT00000230965", "ENSSSAT00000139328"  # canonical transcripts of vgll3 (+) and bco1l (-)
+# First codon not ATG (no other CDS there): TAC with a 5' UTR (+), AAG without one (-, a 5'-incomplete model)
+TAC, AAG = "ENSSSAT00000230643", "ENSSSAT00000139339"
 # Published vgll3 Met54Thr (Ayllon 2015) is Thr46Met on the Ensembl 116 canonical transcript: the published residue
 # numbers are 8 ahead (Asn323Lys = Asn315Lys too; the catalogue note records it)
 VGLL3_PUBLISHED_OFFSET = 8
@@ -32,6 +34,11 @@ CASES = [  # id, chrom, pos, ref, alt, consequence, hgvsp, codons, transcript
     ("splice_acceptor", "25", 28996318, "A", "G", "splice_acceptor_variant", None, None, VGLL3),
     ("minus_splice_donor", "26", 19140142, "A", "G", "splice_donor_variant", None, None, BCO1L),
     ("minus_splice_acceptor", "26", 19140415, "T", "G", "splice_acceptor_variant", None, None, BCO1L),
+    ("codon1_missense", "9", 23852226, "T", "C", "start_lost", "p.Tyr1?", "Tac/Cac", TAC),  # VEP: any change of codon 1
+    ("codon1_stop", "9", 23852228, "C", "A", "stop_gained", "p.Tyr1?", "taC/taA", TAC),  # VEP: stop_gained,start_lost
+    ("codon1_synonymous_utr", "9", 23852228, "C", "T", "start_lost", "p.Tyr1?", "taC/taT", TAC),
+    ("minus_codon1_missense", "26", 19142225, "T", "C", "start_lost", "p.Lys1?", "Aag/Gag", AAG),
+    ("minus_codon1_synonymous", "26", 19142223, "C", "T", "synonymous_variant", "p.Lys1=", "aaG/aaA", AAG),  # no 5' UTR
 ]
 
 
@@ -72,11 +79,12 @@ def test_alleles(release, tmp_path):
                    "swapped": ("missense_variant", "p.Thr46Met", None),  # HGVS is always relative to the reference
                    "two_alts": ("missense_variant", "p.Thr46Met", "first of several alt alleles"),
                    "mismatch": ("coding_sequence_variant", None, "alleles do not match the genome")}
-    rows, _ = run(release, tmp_path, [("25", 28996360, "position_only")], header="chrom\tpos\tid")
-    r = rows["position_only"]
-    assert (r["coding_consequence"], r["coding_aa_pos"], r["coding_transcript"], r["coding_note"]) == \
-        ("coding_sequence_variant", 46, VGLL3, "alleles unknown")
-    assert r["tier_evidence"].startswith("CDS")
+    rows, _ = run(release, tmp_path, [("25", 28996360, "position_only"), ("25", 28996365, "no_panel_site")],
+                  header="chrom\tpos\tid")
+    got = {k: (r["coding_consequence"], r["coding_hgvsp"], r["coding_aa_pos"], r["coding_note"]) for k, r in rows.items()}
+    assert got == {"position_only": ("missense_variant", "p.Thr46Met", 46, "alleles from the public panel"),  # its C/T
+                   "no_panel_site": ("coding_sequence_variant", None, 48, "alleles unknown")}
+    assert rows["no_panel_site"]["tier_evidence"].startswith("CDS")
 
 
 def test_tiers_unchanged(release, tmp_path):
@@ -92,4 +100,5 @@ def test_tiers_unchanged(release, tmp_path):
     assert {"term": "synonymous", "weight": weights["weights"]["coding"]} in rows["synonymous"]["tier_terms"]
     lower = {**weights, "weights": {**weights["weights"], "synonymous": 0}}
     new = dict(con.execute(f"SELECT id, tier_score FROM ({scored('a', lower, columns, 'all')})").fetchall())
-    assert {k for k, r in rows.items() if new[k] != r["tier_score"]} == {"synonymous", "minus_synonymous"}
+    assert {k for k, r in rows.items() if new[k] != r["tier_score"]} == {"synonymous", "minus_synonymous",
+                                                                         "minus_codon1_synonymous"}

@@ -25,7 +25,7 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 ## Step 3: remaining layers (one change each)
 - [x] Ensembl 116 regulatory build (counts towards tiers only where AQUA-FAANG has no peak)
 - [x] Stand-in: genic region class from Ensembl 116 GFF3 (CDS, splice region, UTR, non-coding exon, intron)
-- [x] Coding consequences, VEP-lite (P4.5): missense/synonymous/stop/start/splice donor-acceptor from the canonical CDS and the genome; 0 differences from Ensembl VEP REST on 233 stratified SNPs
+- [x] Coding consequences, VEP-lite (P4.5): missense/synonymous/stop/start/splice donor-acceptor from the canonical CDS and the genome; matches Ensembl VEP REST 116 (200/200 random public CDS/splice SNPs; 585/585 terms on an enriched sample incl. codon 1 of non-ATG starts)
 - [ ] SIFT4G (or another missense deleteriousness score)
 - [x] GERP constrained elements (Ensembl 116 65-fish alignment; `fetch` decodes the bigBed)
 - [ ] Enhancer-CNEs
