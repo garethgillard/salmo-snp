@@ -38,7 +38,7 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - [ ] Assay axis, part 2b: probe-flank uniqueness / paralog cross-hybridisation (P6.8; needs an aligner or k-mer index)
 
 ## Step 4: tiers and release v0.1
-- [ ] G decides: which states count as active; trait presets (trait -> conditions). Provisional choices in CLAUDE.md
+- [ ] G decides: which states count as active; trait presets (trait -> conditions). Brief with options: DECISIONS.md
 - [x] Tier rules and weights in `weights.yaml`, applied by `snpscore annotate --trait` (values provisional)
 - [ ] Genome-wide release v0.1; benchmark passes thresholds set in advance
 

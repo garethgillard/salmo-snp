@@ -56,7 +56,7 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   - Locus browser: up to 8 signal rows (R1), ATAC/H3K27ac/H3K4me3, signal and ChromHMM up to 500 kb, lanes up to 2 Mb, 4 s deadline.
   - Vendor layouts (Illumina 60 bp TOP/BOT, Axiom 35 bp, KASP 50 bp) are 'to confirm against the vendor template' (see RESEARCH.md 5).
 
-Open (ask G):
+Open (ask G; all collected with options and recommendations in DECISIONS.md):
 - Everything under Provisional.
 - nf-rasqual tables: found public at github.com/datngu/nf-RASQUAL_paper (lead SNP per feature only; no licence on the repo):
   may we redistribute derived rows, which significance rule (paper: eigenMT BF < 0.1), which allele does pi refer to?
