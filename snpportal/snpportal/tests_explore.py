@@ -67,6 +67,8 @@ class ExploreTest(SimpleTestCase):
         self.assertContains(page, reverse("snpportal:gene", args=[VGLL3]))
         self.assertContains(page, reverse("snpportal:gene", args=[VGLL3_CHR21]))
         self.assertLess(page.content.decode().index(VGLL3), page.content.decode().index(VGLL3_CHR21))  # catalogue copy first
+        self.assertContains(page, "Ss4R duplicate vgll3 (chr21)")  # which namesake is which
+        self.assertContains(page, "Ss4R duplicate vgll3 (chr25)")
         both = self.client.get(reverse("snpportal:suggest"), {"q": "VGLL3"})  # human ortholog symbol: both salmon copies
         self.assertContains(both, VGLL3)
         self.assertContains(both, VGLL3_CHR21)

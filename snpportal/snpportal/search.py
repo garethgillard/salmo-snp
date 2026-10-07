@@ -168,9 +168,13 @@ def resolve(query, limit=10):
         return [{"kind": "locus", "label": f"{chrom}:{a:,}-{b:,}", "detail": f"region of {b - a + 1:,} bp",
                  "url": locus_url(chrom, a, b)}]
     hits = rs_hits(query) if RSID.match(query) else []
-    for g in genes(query, limit):
+    found = genes(query, limit)
+    dups = explore.ss4r([g["id"] for g in found])  # 'Ss4R duplicate vgll3 (chr21)': which of two namesakes is which
+    for g in found:
+        copies = ", ".join(f"{c['label']} (chr{c['chrom']})" for c in (dups.get(g["id"]) or {}).get("copies", []))
         extra = [f"human {g['human']}" if g["human"] else None, f"known locus {g['alias']}" if g["alias"] else None,
-                 f"Ensembl name {g['name']}" if g["name"] and g["name"] != g["label"] else None]
+                 f"Ensembl name {g['name']}" if g["name"] and g["name"] != g["label"] else None,
+                 f"Ss4R duplicate {copies}" if copies else None]
         hits.append({"kind": "gene", "label": g["label"], "url": reverse("snpportal:gene", args=[g["id"]]),
                      "detail": " · ".join(x for x in [g["id"], f"{g['chrom']}:{g['start'] + 1:,}-{g['end']:,} ({g['strand']})",
                                                        g["biotype"], *extra, f"matched {g['matched']}"] if x)})

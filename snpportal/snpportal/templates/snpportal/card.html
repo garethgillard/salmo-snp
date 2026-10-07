@@ -2,7 +2,8 @@
 {% comment %}Evidence card for one SNP (context: ev from locus.evidence, presets, switch_url, hx, mini_url, locus_url, keep:
    other parameters the trait form keeps), the body of card_page.html and variant.html (their H1 is the title); an htmx
    swap also brings the breadcrumb, whose links carry the trait. Parts render only when their columns exist;
-   expression, the user's own columns and details are closed.{% endcomment %}
+   expression, the user's own columns and details are closed. On wide pages (.sp-wide-card) the figures
+   (.sp-card-side) sit to the right of the text; narrower, everything stacks in this order.{% endcomment %}
 {% if hx and crumbs %}{% include 'snpportal/_crumbs.html' with oob=1 %}{% endif %}
 <div id="card-body" class="sp-card sp-small">
   <div class="d-flex flex-wrap align-items-start gap-2 mb-2">
@@ -20,6 +21,7 @@
     </form>
   </div>
 
+  <div class="sp-card-top">
   {% if ev.tier %}<p class="mb-2">{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %} &middot;
     {% for text, w in ev.terms %}{{ text }}{% if w is not None %} +{{ w }}{% endif %}{% if not forloop.last %} &middot; {% endif %}{% empty %}no evidence found (not evidence of no effect){% endfor %}</p>{% endif %}
   {% if ev.why %}<div class="sp-figure mb-2">{{ ev.why }}</div>{% endif %}
@@ -37,6 +39,8 @@
       {% if ev.known.others %}Nearby: {% for r in ev.known.others %}<a href="{{ r.url }}">{{ r.id }}</a> ({{ r.dist }}){% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}</p>
   </section>{% endif %}
 
+  </div>
+  <div class="sp-card-side">
   {% if ev.grid %}<div class="sp-figure mb-1">{{ ev.grid }}</div>
   {% elif ev.no_peak %}<p class="mb-1">{{ ev.no_peak }}</p>{% endif %}
   {% if ev.blacklisted %}<p class="mb-1">Blacklisted region: no peak here means can&rsquo;t tell, not inactive.</p>{% endif %}
@@ -47,6 +51,8 @@
   </div>
   <p class="mb-2"><a href="{{ locus_url }}">Open in the locus browser</a></p>{% endif %}
 
+  </div>
+  <div class="sp-card-rest">
   {% if ev.assay %}<p class="mb-1"{% if ev.assay.tip %} title="{{ ev.assay.tip }}"{% endif %}>Assay: {{ ev.assay.status }}{% if ev.assay.reasons %} ({{ ev.assay.reasons }}){% endif %}</p>
   {% if ev.assay.flank %}<details class="sp-more"><summary>Probe flank</summary>
     <p class="sp-mono text-break mb-1">{{ ev.assay.flank }}</p>
@@ -83,4 +89,5 @@
       {% if ev.gene %}<a href="{{ ev.gene.salmobase }}" rel="noreferrer noopener" target="_blank">SalmoBase gene</a> ·
       <a href="{{ ev.gene.url }}">Gene page</a> · {% endif %}<a href="{{ ev.permalink }}">Permalink</a></p>
   </details>
+  </div>
 </div>

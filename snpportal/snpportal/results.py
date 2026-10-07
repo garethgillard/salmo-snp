@@ -120,7 +120,7 @@ COLUMNS = {
 DEFAULT_COLUMNS = ("id", "gene", "region", "tier", "evidence", "chromatin", "known", "maf", "assay")
 GWAS_COLUMNS = ("id", "p", "beta", "tier", "pip", "gene", "region", "chromatin")
 EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tier_evidence", "tier_terms"), "known": ("known_locus_dist",),
-         "evidence": ("tier_terms",),
+         "evidence": ("tier_terms", "coding_hgvsp", "known_locus", "known_locus_dist"),
          "gene": ("gene_ortholog_human",), "region": ("gene_distance", "coding_consequence", "coding_hgvsp", "coding_transcript", "coding_note"), "beta": ("se",), "pip": ("pip_functional",),
          "assay": ("assay_reasons", "blacklist", "lore", "strand_ambiguous", "flank_variants"),
          "molqtl": ("molqtl_tissues", "molqtl_kinds", "molqtl_features"), "cm": ("cm_male",)}  # also fetched
@@ -550,7 +550,8 @@ def _row(r, groups, in_preset, active_states, caveats):
     g = r.get
     distance = g("gene_distance")
     out = {"n": r["file_row_number"], "id": g("id") if g("id") not in (None, ".") else None, "chrom": g("chrom"), "pos": g("pos"),
-           "alleles": _alleles(g), "tier": g("tier"), "score": g("tier_score"), "evidence": evidence_text(g("tier_evidence"), g("tier_terms")),
+           "alleles": _alleles(g), "tier": g("tier"), "score": g("tier_score"),
+           "evidence": with_published(evidence_text(g("tier_evidence"), g("tier_terms")), g),
            "known": g("known_locus"), "known_dist": g("known_locus_dist"), "caveat": caveats.get(g("known_locus")),
            "gene": gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")), "gene_id": g("gene_id") or "",
            "region": region_text(g), "region_tip": coding_tip(g),
@@ -618,6 +619,14 @@ def published_as(known_id, hgvsp):
     ref, pos, alt = AA.get(m.group(1), m.group(1)), int(m.group(2)), AA.get(m.group(3), m.group(3))
     computed = h.group(1) if h.group(3) == "=" else h.group(3)
     return None if (ref, pos) == (h.group(1), int(h.group(2))) and computed in (alt, "?") else m.group(0).lstrip("_")
+
+
+def with_published(evidence, g):
+    """Evidence text with the catalogue's label after a computed amino-acid change that differs from it, for a SNP at
+    the published position: 'missense p.Thr46Met (published Met54Thr)'."""
+    hgvsp = g("coding_hgvsp")
+    published = published_as(g("known_locus"), hgvsp) if hgvsp and g("known_locus_dist") == 0 else None
+    return evidence.replace(hgvsp, f"{hgvsp} (published {published})", 1) if published and hgvsp in evidence else evidence
 
 
 def coding_label(g, known_id=None, known_dist=None):
@@ -711,7 +720,7 @@ def top(request, key, job, n=TOP):
     con, types, where, chosen = open_result(request, key)
     gwas = job.get("input_kind") == "gwas" and "neglog10p" in types
     maf, _ = jobs.maf_sql(types)
-    cols = [c for c in ("chrom", "pos", "id", "ref", "alt", "tier", "tier_score", "tier_evidence", "tier_terms", "gene_name", "gene_id",
+    cols = [c for c in ("chrom", "pos", "id", "ref", "alt", "tier", "tier_score", "tier_evidence", "tier_terms", "coding_hgvsp", "gene_name", "gene_id",
                         "gene_ortholog_human", "known_locus", "known_locus_dist", "assay_status",
                         "assay_reasons", "neglog10p", "lore", "blacklist", "strand_ambiguous", "flank_variants") if c in types]
     order = "neglog10p DESC NULLS LAST, " if gwas else \
@@ -728,7 +737,7 @@ def top(request, key, job, n=TOP):
         rows.append({
             "url": f"{reverse('snpportal:card', args=[key, r['file_row_number']])}?{q}", "n": r["file_row_number"],
             "snp": _snp_name(g), "position": f"{g('chrom')}:{g('pos'):,}", "alleles": _alleles(g),
-            "tier": g("tier"), "score": g("tier_score"), "evidence": evidence_text(g("tier_evidence"), g("tier_terms")),
+            "tier": g("tier"), "score": g("tier_score"), "evidence": with_published(evidence_text(g("tier_evidence"), g("tier_terms")), g),
             "gene": gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")),
             "known": g("known_locus") or "", "known_dist": g("known_locus_dist"), "caveat": caveats.get(g("known_locus")),
             "maf": "" if g("_maf") is None else f"{g('_maf'):.2f}", "p": "",

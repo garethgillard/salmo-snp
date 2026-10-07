@@ -125,6 +125,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-figure { margin: 0; }
 .sp-stack > * + .sp-figure { margin-top: 1rem; }  /* the reset above would otherwise drop the stack's gap (Panel tab) */
 .sp-figure svg { display: block; max-width: 100%; height: auto; }
+@media (max-width: 575.98px) { .sp-figure svg .sp-lg { font-size: 22px; } }  /* figures.bar text, drawn at ~half size on phones */
 .sp-caption { font-size: .75rem; color: var(--sp-grey-700); margin-top: .5rem; }
 .sp-downloads { margin-left: auto; display: flex; gap: .35rem; font-size: .8rem; }
 .sp-downloads a, .sp-downloads button { padding: .05rem .4rem; border: 1px solid var(--sp-grey-300); border-radius: .25rem;
@@ -199,6 +200,16 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 }
 .sp-card-slot { top: 1rem; }
 .sp-narrow { max-width: 44rem; }
+/* the evidence card as a page: figures to the right of the text from 1200 px (card.html) */
+@media (min-width: 1200px) {
+  .sp-narrow.sp-wide-card { max-width: none; }
+  .sp-wide-card #card-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); column-gap: 1.5rem;
+    grid-template-areas: "head head" "top side" "rest side"; grid-template-rows: auto auto 1fr; }
+  .sp-wide-card #card-body > :first-child { grid-area: head; }
+  .sp-wide-card .sp-card-top { grid-area: top; }
+  .sp-wide-card .sp-card-side { grid-area: side; }
+  .sp-wide-card .sp-card-rest { grid-area: rest; align-self: start; }
+}
 
 /* results: overview KPI links, figure links, table filters, chips, sticky grouped header, barcode, assay status */
 .sp a.sp-kpi { display: block; text-decoration: none; color: var(--sp-grey-900); }

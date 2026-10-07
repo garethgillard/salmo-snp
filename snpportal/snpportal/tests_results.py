@@ -250,6 +250,11 @@ class ResultsTest(SimpleTestCase):
                                                                   ("gig1like3_G78D", "p.Gly78Asp"), ("akap11_Val214Met", "p.Met214Val"))}
         self.assertEqual(published, {"vgll3_Met54Thr": "Met54Thr", "cdh1_S167P": "S167P", "gig1like3_G78D": None,
                                      "akap11_Val214Met": "Val214Met"})  # residue or direction differs, 1- or 3-letter
+        at = {"coding_hgvsp": "p.Thr46Met", "known_locus": "vgll3_Met54Thr", "known_locus_dist": 0}.get
+        self.assertEqual(results.with_published("active: Brain; missense p.Thr46Met", at),
+                         "active: Brain; missense p.Thr46Met (published Met54Thr)")  # tables say it too, not only the card
+        near = {"coding_hgvsp": "p.Thr46Met", "known_locus": "vgll3_Met54Thr", "known_locus_dist": 120}.get
+        self.assertEqual(results.with_published("missense p.Thr46Met", near), "missense p.Thr46Met")
         groups = results.condition_groups(results.conditions_of(["chromatin_" + c for c in self.summary["conditions"]]))
         self.assertEqual([g for g, _ in groups], ["Brain", "Gonad", "Liver", "Muscle", "Embryo"])
         self.assertEqual([label for label, _ in groups[0][1]], ["Imm F", "Imm M", "Mat F", "Mat M"])

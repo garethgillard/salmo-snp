@@ -1,4 +1,6 @@
 """Template helpers: the palette as CSS, the current release, number formatting."""
+import time
+
 from django import template
 from django.utils.safestring import mark_safe
 
@@ -31,6 +33,15 @@ def portal_release():
 def thousands(value):
     """1234567 -> 1,234,567; anything else unchanged."""
     return f"{value:,}" if isinstance(value, int) and not isinstance(value, bool) else value
+
+
+@register.filter
+def elapsed(started):
+    """'1:05' (minutes:seconds) since a job's start (epoch seconds); '' before it starts."""
+    if not isinstance(started, (int, float)):
+        return ""
+    s = max(0, int(time.time() - started))
+    return f"{s // 60}:{s % 60:02d}"
 
 
 @register.filter

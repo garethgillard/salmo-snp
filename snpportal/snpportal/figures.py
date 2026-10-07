@@ -82,8 +82,9 @@ def mix(a, b, t):
 
 
 def bar(parts, title, desc="", synthetic=False, marks=None):
-    """One horizontal bar split into parts [(label, n, fill, href)], with a legend of counts and shares; marks:
-    short text printed inside each wide enough part (e.g. the tier number)."""
+    """One horizontal bar split into parts [(label, n, fill, href)], with a legend of counts and shares in two columns;
+    marks: short text printed inside each wide enough part (e.g. the tier number). Text has class sp-lg, which
+    portal.css enlarges on phones, where the 640-wide figure is drawn at about half size."""
     total = sum(n for _, n, _, _ in parts) or 1
     width, x, body = 640, 0.0, []
     for i, (name, n, fill, href) in enumerate(parts):
@@ -91,11 +92,13 @@ def bar(parts, title, desc="", synthetic=False, marks=None):
         label = f"{name}: {n:,} ({share_label(n, total)})"
         body.append(_rect(x, 0, w, 28, fill, label, href, f' stroke="{palette.WHITE}"'))
         if marks and w > 24:
-            body.append(_text(x + w / 2, 18.5, marks[i], "middle", fill=palette.text_on(fill), font_weight=600, pointer_events="none"))
-        body.append(f'<rect x="{i * 160}" y="40" width="12" height="12" fill="{fill}" stroke="{palette.GREY[500]}"/>'
-                    + _text(i * 160 + 18, 50.5, label))
+            body.append(_text(x + w / 2, 18.5, marks[i], "middle", fill=palette.text_on(fill), font_weight=600,
+                              pointer_events="none", **{"class": "sp-lg"}))
+        lx, ly = (i % 2) * 320, 40 + (i // 2) * 24
+        body.append(f'<rect x="{lx}" y="{ly}" width="12" height="12" fill="{fill}" stroke="{palette.GREY[500]}"/>'
+                    + _text(lx + 18, ly + 10.5, label, **{"class": "sp-lg"}))
         x += w
-    return svg(width, 60, title, desc, "".join(body), synthetic)
+    return svg(width, 40 + (len(parts) + 1) // 2 * 24, title, desc, "".join(body), synthetic)
 
 
 def tier_bar(counts, title="SNPs per tier", desc="", synthetic=False, links=None):

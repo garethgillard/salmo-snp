@@ -259,11 +259,11 @@ def _edge(fill):
 def _published(body, ax, known, y, lane_label, legend):
     """The published-associations lane: a diamond per catalogue row (dict with pos, id, locus, trait, evidence,
     effect, effect_allele, caveat, kind), filled by evidence kind when the effect allele is stated, hollow when not;
-    the id as a label where it fits. Returns the new y."""
+    the id as a label beside the marker where it fits, else centred under it, else only in the tooltip. Returns the new y."""
     lane_label("Published", y + 11, "known loci")
     known = sorted(known, key=lambda k: int(k["pos"]))
     xs = [ax.x(int(k["pos"]) - 0.5) for k in known]
-    free = 0  # a label that would cover the next marker or the previous label is left to the tooltip
+    free, under = 0, ax.x0  # where the next label beside, or under, the markers may start
     for i, (k, x) in enumerate(zip(known, xs)):
         fill = EVIDENCE.get(k.get("kind"), EVIDENCE["gwas"])[0]
         allele = bool(k.get("effect_allele"))
@@ -278,11 +278,14 @@ def _published(body, ax, known, y, lane_label, legend):
         if a >= free and not any(a - 5 < other < b + 5 for j, other in enumerate(xs) if j != i):
             body.append(_t(b if left else a, y + 12, k.get("id", ""), 10.5, G[900], "end" if left else "start"))
             free = b + 6
+        elif under <= x - w / 2 and x + w / 2 <= ax.x1:  # e.g. vgll3_Met54Thr, 2 kb from vgll3_Asn323Lys
+            body.append(_t(x, y + 25, k.get("id", ""), 10.5, G[900], "middle"))
+            under = x + w / 2 + 6
     kinds = sorted({k.get("kind") if k.get("kind") in EVIDENCE else "gwas" for k in known}, key=list(EVIDENCE).index)
     legend["Published"] = [(f'<path d="M6 0 l5 6 l-5 6 l-5 -6z" fill="{EVIDENCE[kind][0]}"/>', EVIDENCE[kind][1]) for kind in kinds] + (
         [(f'<path d="M6 0 l5 6 l-5 6 l-5 -6z" fill="{palette.WHITE}" stroke="{G[700]}" stroke-width="1.4"/>', "effect allele not stated")]
         if not all(k.get("effect_allele") for k in known) else [])
-    return y + 26
+    return y + (40 if under > ax.x0 else 26)
 
 
 def _swatch(fill, round_=False):

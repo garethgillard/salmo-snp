@@ -449,7 +449,7 @@ def gene(request, gene_id):
     for r in shown:
         r["url"] = search.variant_url(r["chrom"], r["pos"])
         r["gene_label"] = display_name(r.get("gene_name"), aliases().get(r.get("gene_id")), r.get("gene_ortholog_human"), r.get("gene_id"))
-        r["tier_evidence"] = results.evidence_text(r.get("tier_evidence"), r.get("tier_terms"))
+        r["tier_evidence"] = results.with_published(results.evidence_text(r.get("tier_evidence"), r.get("tier_terms")), r.get)
     known = {r.get("known_locus") for r in rows}  # one known locus for every row: said once, above the table
     known = known.pop() if len(known) == 1 and None not in known and "known_locus" in names else None
     plain_ids = all((r.get("id") or "").startswith(f"{r['chrom']}_{r['pos']}_") or not r.get("id") for r in rows)  # no id column
