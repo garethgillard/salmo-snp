@@ -16,6 +16,17 @@ Evidence sources: RESEARCH.md (section numbers below), the review of 2026-10-07 
 | 6 | Should molQTL lead SNPs score? | weight 0 (shown, not scored) | 0; 1-2 once significance and permission are settled | 0 until #12 and #13 are answered |
 | 7 | Top-N tie-break when SNPs share a score | tier, score, then known locus, assay pass, MAF; ties are counted on the page | as is; MAF first; GERP first | As is |
 
+**Benchmark evidence for #1-#5** (`snpscore benchmark --positives molqtl --by-tissue`, release/dev, 10 controls per positive matched on gene distance and MAF, 95% intervals):
+eQTL lead SNPs (n = 1,606, the fair test) are enriched in tier 1-2 1.48x (1.27-1.72), active state 1.40x (1.15-1.71), 3'UTR 2.03x, CDS 1.62x and
+GERP constrained 2.29x (1.19-4.40); tier 1 alone is not significant (1.35x, 0.70-2.61). Gonad eQTLs show no active-state enrichment (0.99x).
+caQTL leads (n = 1,057) give 3-4x, but they are called on the same ATAC data, so this is partly circular. Known loci (n = 37) are biased by selection.
+
+| # | Question | Now | Recommendation |
+|---|---|---|---|
+| 4a | Use eQTL-lead enrichment (gene distance + MAF matched) to calibrate weights? | not used | Yes, with caQTLs reported but not used for calibration |
+| 4b | The v0.1 'benchmark passes thresholds set in advance': which threshold? | none | Lower 95% bound > 1 for tier <= 2 on eQTL leads (met today: 1.27) |
+| 4c | Score a one-tissue molQTL set with that tissue's preset, or always 'all'? | the tissue's preset | Tissue preset |
+
 ## Assay and panel design (changes what goes on a chip)
 
 | # | Question | Now (provisional) | Options | Recommendation |
