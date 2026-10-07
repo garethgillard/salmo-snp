@@ -242,12 +242,12 @@ def hero():
 
 
 def landing(request):
-    """/snp/: what the portal does, 'Score your SNPs' and 'Take the tour', one search box with example chips, the vgll3
-    thumbnail and one line to the known loci."""
+    """/snp/: what the portal does, 'Score your SNPs' and 'Take the tour', a quick search box with example chips and the
+    vgll3 thumbnail."""
     figure = hero()
     return render(request, "snpportal/landing.html", {
         "nav": "home", "title": "Functional SNP portal", "hero": mark_safe(figure) if figure else None,
-        "examples": EXAMPLES, "counts": catalogue_counts()})
+        "examples": EXAMPLES})
 
 
 def known_loci(request):

@@ -10,6 +10,7 @@
       <a class="btn btn-outline-primary" href="{% url 'snpportal:tour' %}">Take the tour</a>
     </div>
     <form class="sp-card" method="get" action="{% url 'snpportal:search' %}" role="search">
+      <h2 class="mb-2">Quick search <span class="sp-small sp-muted fw-normal">one gene, SNP or region</span></h2>
       <label class="visually-hidden" for="q">Search</label>
       <div class="d-flex gap-2">
         <input class="form-control" id="q" name="q" type="search" autocomplete="off" aria-controls="suggest"
@@ -22,7 +23,6 @@
         {% for q in examples %}<a href="{% url 'snpportal:search' %}?q={{ q|urlencode }}">{{ q }}</a>{% endfor %}
         <a class="sp-small ms-auto border-0" href="{% url 'snpportal:help' %}#search">What can I search?</a></div>
     </form>
-    {% if counts.entries %}<p class="mt-3 mb-0" id="known-loci"><a href="{% url 'snpportal:known_loci' %}">Known loci: {{ counts.entries }} published entries for {{ counts.traits }} traits &rarr;</a></p>{% endif %}
   </div>
   {% if hero %}<div class="col-lg-6">
     <a class="sp-card sp-hero" href="{% url 'snpportal:tour' %}" aria-label="vgll3, a known maturation locus: open the guided tour">

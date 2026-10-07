@@ -102,7 +102,8 @@ class ExploreTest(SimpleTestCase):
     def test_landing_and_known_loci(self):
         landing = self.client.get(reverse("snpportal:landing"))
         counts = explore.catalogue_counts()  # the one count helper: landing, Known loci header and intro agree
-        self.assertContains(landing, f"Known loci: {counts['entries']} published entries for {counts['traits']} traits")
+        self.assertContains(landing, "Quick search")
+        self.assertNotContains(landing, "published entries")  # known loci: top nav and Score's example, not the landing page
         self.assertContains(landing, f'href="{reverse("snpportal:upload")}"')  # 'Score your SNPs'
         self.assertContains(landing, 'class="sp-card sp-hero"')  # the vgll3 thumbnail
         self.assertContains(landing, "?q=rs863754587")  # search chips
