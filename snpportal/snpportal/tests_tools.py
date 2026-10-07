@@ -151,6 +151,20 @@ class ToolsTest(SimpleTestCase):
         self.assertContains(self.client.get(url + "?tab=panel"), 'id="selected-h"')
         self.assertEqual(self.client.get(reverse("snpportal:download", args=[url.split("/")[-2]]), {"scope": "all", "format": "kasp"}).status_code, 200)
 
+    def test_export_lists_recent_panels(self):
+        """The Export tab lists the newest panel of each parameter set, newest first, at most 3, plus one asked for."""
+        url, key = self.job()
+        made = []
+        for n in ("5", "6", "7", "8", "5"):  # the last one is cached: the first panel's file
+            html = self.client.get(url, {"tab": "panel", "design": "1", "n": n}).content.decode()
+            made.append(re.search(r'scope=panel-([0-9a-f]{16})', html).group(1))
+        self.assertEqual(made[0], made[4])
+        radios = re.compile(r'type="radio" name="scope" value="panel-([0-9a-f]{16})"')
+        self.assertEqual(radios.findall(self.client.get(url, {"tab": "export"}).content.decode()), made[3:0:-1])
+        old = self.client.get(url, {"tab": "export", "scope": f"panel-{made[0]}"}).content.decode()
+        self.assertEqual(radios.findall(old), made[3:0:-1] + [made[0]])  # the Panel tab's export link still finds it
+        self.assertIn(f'value="panel-{made[0]}" checked', old)
+
     def test_cm_spacing_and_vendor_checks(self):  # R5 and the Push 2 vendor checks
         page = self.client.get(self.url, {"tab": "panel", "design": "1", "n": "20", "spacing_kb": "0", "spacing_cm": "0.5",
                                           "cm_map": "female"})
@@ -308,6 +322,11 @@ class ToolsTest(SimpleTestCase):
         self.assertContains(self.client.get(url + "?tab=panel"), "Compared with the uploaded chip (synthetic)")  # SYNTHETIC in its name
         wrong = self.client.post(chip, {"chip": SimpleUploadedFile("chip.pdf", b"%PDF")})
         self.assertIn("chip_error=type", wrong.url)
+        with override_settings(SNPPORTAL_MAX_CHIP_SNPS=39):  # longer chips are refused with the cap in the message
+            big = self.client.post(chip, {"chip": SimpleUploadedFile("chip_SYNTHETIC.bim", bim.encode())})
+            self.assertIn("chip_error=rows", big.url)
+            self.assertContains(self.client.get(big.url), "The chip file has more than 39 markers.")
+        self.assertEqual(jobs.read_json(d / "chip.json")["kept"], 40)  # the chip already attached stays
         junk = self.client.post(chip, {"chip": SimpleUploadedFile("chip.tsv", b"hello\tworld\n1\t2\n")})
         self.assertIn("chip_error=", junk.url)
         self.assertContains(self.client.get(junk.url), "sp-status-fail")

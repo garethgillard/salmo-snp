@@ -375,7 +375,8 @@ class PortalTest(SimpleTestCase):
 @skipUnless(os.environ.get("SNPSCORE_DEV") and (SNPSCORE / "release" / "dev").exists(), "SNPSCORE_DEV=1 with release/dev")
 class DevLoadTest(SimpleTestCase):
     def test_public_vcf_scores_in_the_background(self):
-        """P1.3: the 1.6M-site public VCF: the POST returns at once and the job finishes on the pool (timings printed)."""
+        """P1.3: the 1.6M-site public VCF: the POST returns at once and the job finishes on the pool; then the heavy
+        pages (a deep sort, the panel, a whole-list export) at the 2 GB DuckDB limit (timings printed)."""
         with tempfile.TemporaryDirectory() as tmp, override_settings(
                 SNPSCORE_RELEASE=str(SNPSCORE / "release" / "dev"), SNPPORTAL_RESULTS_DIR=tmp, SNPPORTAL_WORKERS=1):
             t0 = time.time()
@@ -395,6 +396,16 @@ class DevLoadTest(SimpleTestCase):
                 t = time.time()
                 self.assertEqual(self.client.get(f"{response.url}?tab={tab}&trait=liver").status_code, 200)
                 pages[tab] = round(time.time() - t, 3)
+            download = reverse("snpportal:download", args=[key])
+            for name, url in (("table by gene, last page", f"{response.url}?tab=table&trait=liver&sort=gene&page=999999"),
+                              ("panel (designed)", f"{response.url}?tab=panel&trait=liver"),
+                              ("TSV of all SNPs", f"{download}?trait=liver&scope=all&format=tsv")):
+                t = time.time()
+                page = self.client.get(url)
+                self.assertEqual(page.status_code, 200, name)
+                for _ in page.streaming_content if page.streaming else ():  # stream it, as a browser would
+                    pass
+                pages[name] = round(time.time() - t, 3)
             print(f"\ndev load: {job['n_rows']:,} SNPs; POST {posted:.1f} s; job {finished:.0f} s; "
                   f"stages {job['timings']}; warm pages {pages}")
 

@@ -12,7 +12,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 
-from . import jobs, results, tools
+from . import association, jobs, results, tools
 from .views import finished, private
 
 TOP = 20
@@ -35,14 +35,15 @@ def overview(request, key, job):
     return ov
 
 
-def methods(job, d, trait):
-    """(paragraphs, references) of snpscore's methods text for the job's release snapshot; ([], []) when this
-    snpscore has none. The known-loci DOIs come from the current release while it is the job's."""
+def methods(job, d, trait, finemap=None):
+    """(paragraphs, references) of snpscore's methods text for the job's release snapshot (with `finemap`, a GWAS
+    job's fine-mapping settings: its paragraph and Wakefield 2009); ([], []) when this snpscore has none. The
+    known-loci DOIs come from the current release while it is the job's."""
     try:
         from snpscore.export import methods_text
         weights = d / "weights.yaml"
         text = methods_text(d / "manifest.json", weights if weights.exists() else None, trait,
-                            None if jobs.release_changed(job) else jobs.release())
+                            None if jobs.release_changed(job) else jobs.release(), **({"finemap": finemap} if finemap else {}))
     except (ImportError, OSError, KeyError, TypeError, ValueError):
         return [], []
     body, _, refs = text.partition("\n\nReferences\n")
@@ -81,7 +82,10 @@ def report(request, key):
     trait = ov["trait"]
     best = results.top(request, key, job, TOP)
     filters = {k: v for k, v in best["chosen"].items() if k != "trait"}
-    _, refs = methods(job, d, trait)
+    finemap = None
+    if job.get("input_kind") == "gwas" and (d / "gwas.parquet").exists():  # the Association page's settings (kept in its links)
+        finemap = association.finemap_used(association.analyse(request, key))
+    _, refs = methods(job, d, trait, finemap)
     base = reverse("snpportal:results", args=[key])
     label = dict(jobs.presets(d)).get(trait, trait)
     m = jobs.manifest(d)

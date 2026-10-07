@@ -15,11 +15,8 @@ and a gene region across 8 traits, with evidence badges) and a guided vgll3 tour
 pip install -r requirements.txt                       # also installs ../salmo-snpscore (editable)
 cd ../salmo-snpscore
 snpscore fetch                                        # the public inputs, into data/raw
-mkdir -p data/demo                                    # the examples (layers.yaml 'demo'): 50K public sites of the 12-fish VCF,
-gzip -dc data/raw/12_samples_genotype_filtered_on_504.vcf.gz | awk -F'\t' -v OFS='\t' \
-  '/^#CHROM/ || (!/^#/ && NR % 32 == 0) {print $1,$2,$3,$4,$5,$6,$7,$8}' > data/demo/public_50k.vcf
-python prep/make_synthetic.py chip                    # the SYNTHETIC demo chip
-python prep/make_synthetic.py gwas                    # and the SYNTHETIC maturation GWAS
+bash prep/make_demo.sh                                # the examples (layers.yaml 'demo'): 50K public sites, the
+                                                      # SYNTHETIC demo chip and the SYNTHETIC maturation GWAS
 snpscore build --out release/dev                      # copies the examples that exist into release/dev/demo/
 cd ../salmo-snpportal
 python manage.py runserver                            # http://127.0.0.1:8000/snp/
@@ -136,8 +133,8 @@ error reports from them and from the Score page (also its 'Genes or regions' lis
 names, local variables or DuckDB message text; outbound links use `rel="noreferrer"`. Must-include ids are POSTed, never
 put in a URL. The locus browser opened from a job (`key=`) only reads the tile cache, so the cache (kept for days) never
 records where a job's SNPs are. 'Delete now' on a running job removes its job.json at once and the folder when the
-worker's DuckDB connection has closed (the folder is its spill directory); request-time connections spill into
-`results/.spill-<uuid>`, removed when they close. Failed jobs are locked down (0600) like finished ones. Log lines carry an event
+worker's DuckDB connection has closed (the folder is its spill directory); the portal's own connections (read-only
+ones too) spill into `results/.spill-<uuid>`, removed when they close. Failed jobs are locked down (0600) like finished ones. Log lines carry an event
 name, `job_ref` (a hash of the key), counts and timings: never SNPs or file names. Exports are written to a temp file
 in the job folder that is removed as soon as it is opened. Every export carries provenance (release, manifest and
 weights sha256, preset, filters, panel hash, PROVISIONAL rules, SYNTHETIC inputs or chip, the equivalent `snpscore`
@@ -153,7 +150,8 @@ Vendor files say 'layout to confirm against the vendor's current template'.
    before the body is read), `SNPPORTAL_MAX_SNPS` (3,000,000), `SNPPORTAL_DUCKDB_THREADS` (2), `SNPPORTAL_DUCKDB_MEMORY` (2GB),
    `SNPPORTAL_TRACKS` (a tracks.yaml overriding the release's), `SNPPORTAL_STATE_PALETTE` (`portal`, or `aquafaang`
    for AQUA-FAANG's own state colours; viewers can switch), `SNPPORTAL_SIGNAL_DEADLINE` (4.0 s for live signal
-   rows), `SNPPORTAL_MAX_VENDOR_SNPS` (50,000 SNPs per Illumina/Axiom/KASP file or bundle; larger requests get a 400) and a `CACHES['snpportal_tiles']` entry for the locus browser's public tiles (else a per-process LocMemCache;
+   rows), `SNPPORTAL_MAX_VENDOR_SNPS` (50,000 SNPs per Illumina/Axiom/KASP file or bundle; larger requests get a 400),
+   `SNPPORTAL_MAX_CHIP_SNPS` (1,000,000 chip markers, at most `SNPPORTAL_MAX_SNPS`; longer chips are refused) and a `CACHES['snpportal_tiles']` entry for the locus browser's public tiles (else a per-process LocMemCache;
    `sandbox/settings.py` shows a FileBasedCache).
 3. `urls.py`: `path('snp/', include('snpportal.urls'))`. Run `collectstatic` for `snpportal/portal.css` and `portal.js`.
 4. `requirements.txt`: add `duckdb` and `snpscore @ git+<salmo-snpscore repo URL>`.

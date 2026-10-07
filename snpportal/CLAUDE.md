@@ -33,7 +33,7 @@ No Docker, Apache, server, deployment or hosting work until the prototype works 
 ## Provisional (G to confirm)
 Thresholds and defaults live in the release's weights.yaml (`assay`, `design`, `finemap` blocks, copied into each job),
 in tracks.yaml `defaults`, or in a named constant; the UI's caveat line and every download say they are provisional. Portal-side ones:
-`SNPPORTAL_MAX_VENDOR_SNPS` (50,000 per vendor file), the panel gap highlight (3x the mean spacing, rounded), the
+`SNPPORTAL_MAX_VENDOR_SNPS` (50,000 per vendor file), `SNPPORTAL_MAX_CHIP_SNPS` (1,000,000 chip markers), the panel gap highlight (3x the mean spacing, rounded), the
 candidate and tour flank (50 kb around a gene), the Manhattan thinning (p > 0.01 thinned to the top SNP per 50 kb),
 the regional plot window (lead +- credible set + 20 kb, 50-250 kb), the GWAS loci cap (`association.MAX_LOCI`: the 200
 strongest loci are listed and fine-mapped) and the settings form's suggestive-p ceiling (0.01).

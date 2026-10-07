@@ -58,7 +58,7 @@
       <p class="sp-small">Vendor files name each SNP <span class="sp-mono">Ssa&lt;chromosome&gt;p&lt;position&gt;</span>, e.g.
         <span class="sp-mono">{{ locus_name }}</span> (letters and digits only, unique; chromosome 0 = not on 1&ndash;29), because
         your ids may break vendor naming rules. The lookup file maps each name back to your id, position, alleles, TOP/BOT strand,
-        Infinium bin, assay status and export notes.</p></details>
+        Illumina A/B alleles, whether it needs two probes (A/T or C/G: Infinium I), assay status and export notes.</p></details>
     <details id="left-out"><summary>Why some SNPs are left out of vendor files</summary>
       <p class="sp-small">SNPs that fail the assay check, are not checked or have no genome sequence are left out, unless you keep
         them, flagged, under <em>More formats</em>. A vendor file holds at most {{ vendor_cap|thousands }} SNPs, with flanks from the

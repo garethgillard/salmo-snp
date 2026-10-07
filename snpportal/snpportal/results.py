@@ -142,7 +142,8 @@ def chip_view(con, d, rel, weights):
 def _open(request, key, write=False, chip=False):
     """(connection with views r and v, column types, filters, chosen settings, weights) for a finished job: v is the
     result with the tiers of ?trait= (a GWAS job's p, beta and se; with `chip`, the chip columns when the Panel tab
-    has a chip). The connection reads only the job folder (and writes there if `write`)."""
+    has a chip). The connection reads only the job folder (and writes there if `write`); like every
+    jobs.connect() it can spill, so a sort of a 1.6M-row result does not run out of memory."""
     d = jobs.folder(key)
     if not (d / "result.parquet").exists():
         raise Http404("Result not found or expired")

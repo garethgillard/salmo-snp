@@ -1,6 +1,7 @@
 """GWAS summary statistics in the portal (P7.1-P7.4), offline, on a release built from salmo-snpscore's fixture and
 the SYNTHETIC fixture-scale GWAS of prep/make_synthetic.py (generated into tmp and offered as the release's example).
 ATAC rows of the regional plot come from SYNTHETIC bigWigs served by salmo-snpscore's tests/range_server.py."""
+import io
 import logging
 import os
 import re
@@ -8,6 +9,7 @@ import shutil
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 from unittest import mock, skipUnless
 
@@ -136,6 +138,26 @@ class GwasTest(SimpleTestCase):
         self.assertNotIn("format=loci", html)
         results = self.client.get(reverse("snpportal:results", args=[self.key]))  # GWAS jobs open on Association
         self.assertTrue(results.url.startswith(reverse("snpportal:association", args=[self.key])))
+
+    def test_trait_sd_check_and_methods_text(self):
+        """The trait SD defaults to the one se, N and af imply (as snpscore gwas); one far from it is flagged in the QC
+        line, and the report's references and the bundle's methods.txt carry the fine-mapping (Wakefield 2009)."""
+        est = jobs.read_json(jobs.folder(self.key) / "gwas.json")["trait_sd_estimate"]
+        html = self.client.get(self.page).content.decode()
+        self.assertIn(f'name="trait_sd" value="{est:g}"', html)
+        self.assertNotIn("PIPs unreliable", html)
+        far = self.client.get(self.page + "&trait_sd=20").content.decode()
+        self.assertIn(f"trait SD 20 but se, N and af imply {est:.3g}: PIPs unreliable", far)
+        self.assertIn('<details class="sp-more mb-2" open><summary>', far)  # a problem opens the QC details
+        report = self.client.get(reverse("snpportal:report", args=[self.key]), {"trait": "maturation"}).content.decode()
+        self.assertIn("Wakefield", report)
+        bundle = self.client.get(reverse("snpportal:download", args=[self.key]), {"trait": "maturation", "format": "bundle", "trait_sd": "20"})
+        methods = zipfile.ZipFile(io.BytesIO(b"".join(bundle.streaming_content))).read("methods.txt").decode()
+        self.assertIn("Wakefield", methods)
+        self.assertIn("trait SD 20 (given)", methods)
+        shown = self.client.get(reverse("snpportal:download", args=[self.key]), {"trait": "maturation", "format": "bundle", "trait_sd": f"{est:g}"})
+        methods = zipfile.ZipFile(io.BytesIO(b"".join(shown.streaming_content))).read("methods.txt").decode()
+        self.assertIn(f"trait SD {est:g} (estimated from se, N and allele frequency)", methods)  # the form's default, resubmitted
 
     def test_figures_loci_and_lambda(self):
         base = reverse("snpportal:association_figure", args=[self.key, "manhattan"])

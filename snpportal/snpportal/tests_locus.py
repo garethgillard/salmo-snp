@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest import mock, skipUnless
 
+from django.template.loader import render_to_string
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 
@@ -209,6 +210,11 @@ class LocusTest(SimpleTestCase):
         two = locus.evidence({"chrom": "25", "pos": 1, "tier": 1, "tier_score": 6, "tier_evidence": "active: Brain; CDS",
                               "tier_terms": [{"term": "active", "weight": 3}, {"term": "coding", "weight": 3}]}, jobs.weights(), "all")
         self.assertEqual(two["terms"], [("active: Brain", 3), ("CDS (amino-acid effect not computed)", 3)])
+        other = locus.evidence({"chrom": "25", "pos": 1, "ref": "C", "alt": "T", "public_af": False, "public_af_alleles": "other",
+                                "public_af_maf": None}, jobs.weights(), "all")  # the panel has another variant here: no MAF
+        self.assertTrue(other["maf"]["other"])
+        self.assertIn(("Public variant (504-fish panel)", "a different variant at this position"), other["details"])
+        self.assertIn("a different variant at this position", render_to_string("snpportal/card.html", {"ev": other}))
         why = svg_of(two["why"])  # the score bars only when two or more terms count
         self.assertEqual(sum(int(w) for w in re.findall(r": \+(\d+)</title>", why)), 6)
         mini = re.search(r'hx-get="([^"]+locus.svg[^"]*)"', card).group(1)

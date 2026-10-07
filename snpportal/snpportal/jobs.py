@@ -37,6 +37,7 @@ from django.conf import settings
 import snpscore
 from snpscore.annotate import user_message
 from snpscore.formats import lit
+from snpscore.pool import maf_bin_sql
 
 log = logging.getLogger("snpportal")
 STALE = 300  # seconds without a heartbeat before a queued or running job is given up (server restarted)
@@ -99,10 +100,11 @@ def limits():
 def connect(read=(), write=None):
     """DuckDB connection for portal queries that may read files only under `read` (and write under `write`), with
     SNPPORTAL_DUCKDB_THREADS (2) and SNPPORTAL_DUCKDB_MEMORY (2GB). Uses snpscore.connect() (the sandbox) when this
-    snpscore has it. A connection that writes spills into results/.spill-<uuid>, which DuckDB makes when needed and
-    removes on close: never into the job folder, which 'Delete now' or cleanup() may remove while a request runs."""
+    snpscore has it. Every connection, also a read-only one (a sort or export of a 1.6M-row result needs more than
+    2GB), spills into results/.spill-<uuid>, which DuckDB makes when needed and removes on close: never into the job
+    folder, which 'Delete now' or cleanup() may remove while a request runs."""
     if hasattr(snpscore, "connect"):
-        spill = results_dir() / f".spill-{uuid.uuid4().hex}" if write else None
+        spill = results_dir() / f".spill-{uuid.uuid4().hex}"
         return snpscore.connect(read_dirs=[*read, *([write] if write else [])], write_dir=spill, **limits())
     return duckdb.connect(config=limits())
 
@@ -468,9 +470,8 @@ def summarise(con, d, columns, w):
             s.setdefault(key, {})[name] = k
     maf, source = maf_sql(columns)
     if maf:
-        # round(m, 9) * 20, not m / 0.05: 0.15 lands in [0.15, 0.2), as for the bar's Table filter (m >= 0.15) and the pool
-        hist = dict(con.execute(f"SELECT least(floor(round(m, 9) * {round(1 / MAF_BIN)}), {round(0.5 / MAF_BIN) - 1})::INTEGER, count(*) "
-                                f"FROM (SELECT {maf} AS m FROM r) GROUP BY 1").fetchall())
+        # the pool's bins (snpscore.pool.maf_bin_sql): each holds exactly the rows its bar's Table filter (m >= 0.15) keeps
+        hist = dict(con.execute(f"SELECT {maf_bin_sql('m')}, count(*) FROM (SELECT {maf} AS m FROM r) GROUP BY 1").fetchall())
         s["maf"] = {"source": source, "width": MAF_BIN, "missing": hist.pop(None, 0),
                     "bins": [hist.get(i, 0) for i in range(round(0.5 / MAF_BIN))]}
     if "assay_status" in columns:

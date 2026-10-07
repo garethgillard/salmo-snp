@@ -9,6 +9,7 @@ Design defaults, the chip window W and the assay rules come from the job's weigh
 from __future__ import annotations
 
 import inspect
+import json
 import math
 import os
 import re
@@ -68,7 +69,10 @@ CHIP_ERRORS = {  # ?chip_error= -> message (codes only: no file content or names
     "format": "The chip file could not be read. It needs chromosome and position columns (e.g. Chr/MapInfo, CHROM/POS) or "
               "a VCF, PLINK or Illumina/Axiom manifest layout: see Help for the accepted formats.",
     "empty": "None of the chip's positions are on Ssal_v3.1 chromosomes 1–29. Are they on another assembly (ICSASG_v2)?",
+    "rows": "The chip file has more than {cap} markers. Keep only the markers you need, or compare it on your own "
+            "computer with snpscore compare (see Run it locally).",
 }
+MAX_CHIP = 1_000_000  # chip markers read in the request (SNPPORTAL_MAX_CHIP_SNPS, at most SNPPORTAL_MAX_SNPS)
 MUST = re.compile(r"[\w.:-]{1,60}")
 
 
@@ -650,7 +654,8 @@ def _compared(con, d, trait, weights, chip):
 def _chip_context(request, key, job, d, trait, con, weights, chip, link):
     """Context for _chip.html: the upload form, or the comparison (KPIs, figure, gaps table)."""
     demo = jobs.release() / "demo" / "chip_demo_SYNTHETIC.tsv"
-    out = {"url": reverse("snpportal:chip", args=[key]), "demo": demo.is_file(), "error": CHIP_ERRORS.get(request.GET.get("chip_error")),
+    error = CHIP_ERRORS.get(request.GET.get("chip_error"), "").format(cap=f"{chip_cap():,}")
+    out = {"url": reverse("snpportal:chip", args=[key]), "demo": demo.is_file(), "error": error or None,
            "window": _bp(snp_panel.settings(weights)["chip_window"]), "info": chip}
     if not chip:
         return out
@@ -676,6 +681,12 @@ def _chip_context(request, key, job, d, trait, con, weights, chip, link):
                      {"value": f"{s['other']:,}", "label": "other", "note": "near the chip, or tier 3–4"},
                      {"value": f"{s['gaps']:,}", "label": "chip gaps", "note": f"over {_bp(s['gap_bp'])}"}], fig=fig)
     return out
+
+
+def chip_cap():
+    """Most chip markers read: SNPPORTAL_MAX_CHIP_SNPS (MAX_CHIP), never more than SNPPORTAL_MAX_SNPS. Reading 1M rows
+    takes about a second, so the chip is read in the request; longer lists are refused (a small .gz can hold billions)."""
+    return min(int(jobs.setting("SNPPORTAL_MAX_CHIP_SNPS", MAX_CHIP)), int(jobs.setting("SNPPORTAL_MAX_SNPS", 3_000_000)))
 
 
 def _chip_redirect(key, trait, error=None):
@@ -730,11 +741,13 @@ def _chip(request, key):
         os.replace(upload.path, src)
     else:
         return _chip_redirect(key, trait, "missing")
-    new = d / ".chip-new.parquet"
+    new, cap = d / ".chip-new.parquet", chip_cap()
     try:
-        report = snp_panel.read_chip(src, jobs.release(), new)
-    except (snpscore.InputError, duckdb.Error):
-        return _chip_redirect(key, trait, "format")
+        report = snp_panel.read_chip(src, jobs.release(), new, max_snps=cap)
+    except (snpscore.InputError, duckdb.Error) as e:
+        new.unlink(missing_ok=True)
+        many = getattr(snpscore, "TooMany", None)  # over max_snps (an older snpscore: an InputError that says so)
+        return _chip_redirect(key, trait, "rows" if (isinstance(e, many) if many else f"more than {cap:,}" in str(e)) else "format")
     finally:
         if src != demo:
             src.unlink(missing_ok=True)
@@ -821,6 +834,9 @@ def export(request, key, job, fmt):
     formats = ["tsv", "bed"] + (list(VENDORS) if n <= cap else [])
     notes = {"vendor_files": f"left out above {cap:,} SNPs"} if fmt == "bundle" and n > cap else {}
     meta = _meta(job, trait, synthetic, {**filters, **notes}, panel_hash, _command(job, trait, tag))
+    if fmt == "bundle" and job.get("input_kind") == "gwas":  # methods.txt gains the fine-mapping paragraph and Wakefield 2009
+        from . import association  # association imports views, which imports this module
+        meta["finemap"] = association.finemap_used(association.analyse(request, key))
     manifest, wfile = d / "manifest.json", d / "weights.yaml"
     wfile = wfile if wfile.exists() else None
     name = snp_export.filename(fmt, job.get("release") or "release", trait, tag,
@@ -882,9 +898,22 @@ def _bundle_svgs(key, job, d, trait, con, panel_hash, synthetic):
 
 
 def _panels(d):
-    """The job's saved panels, newest first: [info]."""
-    found = [jobs.read_json(p.with_suffix(".json")) for p in (d / "panels").glob("*.parquet")] if (d / "panels").is_dir() else []
-    return sorted((x for x in found if x), key=lambda x: x.get("created_utc", ""), reverse=True)
+    """The job's saved panels, newest first (when their .json was written; created_utc is to the minute): [info]."""
+    found = [p for p in (d / "panels").glob("*.json") if p.with_suffix(".parquet").exists()] if (d / "panels").is_dir() else []
+    found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return [x for x in map(jobs.read_json, found) if x]
+
+
+def recent_panels(d, trait, keep=None, n=3):
+    """The Export tab's panels of `trait`: the newest of each distinct parameter set (another chip or weights.yaml gives
+    another hash for the same parameters), newest first, at most n, plus the panel `keep` (a hash) when not among them."""
+    found, out, seen = [x for x in _panels(d) if x.get("preset") == trait], [], set()
+    for info in found:
+        params = json.dumps(info.get("params"), sort_keys=True)
+        if params not in seen:
+            seen.add(params)
+            out.append(info)
+    return out[:n] + [x for x in found if x["hash"] == keep and x not in out[:n]]
 
 
 def _vendor_notes(con, rel, n):
@@ -929,7 +958,7 @@ def exports(request, key, job):
             rel = f"(SELECT * FROM {view} WHERE {' AND '.join(f'({sql})' for _, _, sql in conds)})"
             scopes.append(("filtered", "Filtered table", con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0], rel,
                            view == "vc" and chip.get("synthetic")))
-        panels = [x for x in _panels(d) if x.get("preset") == trait]
+        panels = recent_panels(d, trait, (wanted or "")[6:] if (wanted or "").startswith("panel-") else None)
         names = [panel_name(x) for x in panels]
         for info in panels:  # two panels with the same name get their times
             scopes.append((f"panel-{info['hash']}", panel_name(info, names.count(panel_name(info)) > 1), info["summary"]["n_selected"],

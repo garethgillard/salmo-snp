@@ -386,8 +386,8 @@ def evidence(snp, weights, trait, synthetic=False):
     if snp.get("public_af"):
         ev["maf"] = {"value": _fmt(snp.get("public_af_maf")), "fish": snp.get("public_af_ns") or 504,
                      "tip": explore.layer("public_af").get("population") or ""}
-    elif "public_af" in snp:
-        ev["maf"] = {"value": None}
+    elif "public_af" in snp:  # 'other': the panel has a different variant at this position (no MAF for these alleles)
+        ev["maf"] = {"value": None, "other": snp.get("public_af_alleles") == "other"}
     ev["details"] = details(snp)
     ev["yours"] = [(c[3:], v) for c, v in snp.items() if c.startswith("in_")]  # the user's own columns, original names
     a, b = max(1, pos - 100), pos + 100
@@ -409,7 +409,8 @@ def details(snp):
     if "gerp" in snp:
         out.append(("GERP constrained element", f"score {snp['gerp_score']}" if snp.get("gerp") else "none"))
     if "public_af" in snp:
-        out.append(("Public variant (504-fish panel)", public_af_text(snp) if snp.get("public_af") else "not a site of the 504-fish panel"))
+        out.append(("Public variant (504-fish panel)", public_af_text(snp) if snp.get("public_af") else
+                    "a different variant at this position" if snp.get("public_af_alleles") == "other" else "not a site of the 504-fish panel"))
         if snp.get("public_af_aquafaang12_af") is not None:
             out.append(("AQUA-FAANG 12 fish", f"alt AF {_fmt(snp['public_af_aquafaang12_af'])}, imputation DR2 "
                         f"{_fmt(snp.get('public_af_aquafaang12_dr2'))}"))

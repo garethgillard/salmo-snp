@@ -53,7 +53,7 @@
     <button type="button" class="btn btn-link btn-sm p-0" data-copy="{{ ev.assay.flank }}">Copy</button></details>{% endif %}{% endif %}
 
   {% if ev.maf %}<p class="mb-2">{% if ev.maf.value %}MAF {{ ev.maf.value }} from <span title="{{ ev.maf.tip }}">{{ ev.maf.fish }} public fish</span>, wild and farmed,
-    pooled; your strain can differ.{% else %}Not a site of the 504-fish public panel.{% endif %} Chromatin: {{ ev.samples }}.
+    pooled; your strain can differ.{% elif ev.maf.other %}No MAF: the 504-fish public panel has a different variant at this position.{% else %}Not a site of the 504-fish public panel.{% endif %} Chromatin: {{ ev.samples }}.
     <a href="{% url 'snpportal:about_data' %}">About the data &rarr;</a></p>{% endif %}
 
   {% if ev.molqtl %}<h3 class="h6 mt-3">molQTL lead SNP (nf-RASQUAL)</h3>

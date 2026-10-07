@@ -46,7 +46,8 @@ FIELDS = {  # URL parameter -> (finemap setting, lowest, highest); the window is
 LABELS = {"sig": ("Significant p", ""), "sugg": ("Suggestive p", ""), "window": ("Window ± kb", ""),  # the closed settings form
           "prior_sd": ("Prior effect SD", "W = SD squared, on the standardised scale"),
           "lam": ("Functional λ", "prior proportional to exp(λ × tier score); 0 = uniform"),
-          "trait_sd": ("Trait SD", "betas are divided by this; 1 = a standardised trait")}
+          "trait_sd": ("Trait SD", "betas are divided by this; default: the SD that se, N and allele frequency imply, else 1 "
+                                   "(a standardised trait)")}
 CAP = 60  # -log10 p drawn at most this high; stronger points are triangles at the top
 DROPS = {"missing_chrom": "no chromosome", "bad_pos": "position not a whole number",
          "unknown_chrom": "not on chromosomes 1-29 (e.g. unplaced scaffolds)", "other_test": "not the additive test (TEST is not ADD)",
@@ -135,19 +136,32 @@ def _score(request):
 
 # ---- settings, data and analysis for one request ----
 
-def settings(request, weights):
-    """Fine-mapping and loci settings: weights.yaml 'finemap' (provisional) with the request's whitelisted overrides."""
-    changes = {}
+def settings(request, weights, report=None):
+    """Fine-mapping and loci settings: weights.yaml 'finemap' (provisional), the trait SD the statistics imply (gwas.json
+    `report`, as snpscore gwas does), then the request's whitelisted overrides. A value as the form shows the default
+    (e.g. the implied trait SD to 6 digits) is the default, so the trait SD stays 'estimated', not 'given'."""
+    changes, shown = {}, form_values(sg.settings(weights, report)) if request else {}
     for param, (name, low, high) in FIELDS.items():
+        given = request.GET.get(param, "").strip() if request else ""
         try:
-            value = float(request.GET.get(param, "") if request else "")
+            value = float(given)
         except ValueError:
             continue
-        if math.isfinite(value) and low <= value <= high:
+        if given != shown.get(param) and math.isfinite(value) and low <= value <= high:
             changes[name] = int(value * 1000) if name == "window" else value
-    cfg = sg.settings(weights, **changes)
+    cfg = sg.settings(weights, report, **changes)
     cfg["suggestive"] = max(cfg["suggestive"], cfg["significant"])
     return cfg
+
+
+def finemap_used(a):
+    """The settings used, as snpscore gwas records them in gwas.json 'finemap' (the DEFAULTS keys and trait_sd_source),
+    for snpscore.export.methods_text(finemap=). An snpscore whose settings() has no trait_sd_source: worked out here."""
+    cfg = a["cfg"]
+    source = cfg.get("trait_sd_source") or (
+        "given" if cfg["trait_sd"] != a["defaults"]["trait_sd"] else "estimated from se, N and allele frequency"
+        if a["report"].get("trait_sd_estimate") else "weights.yaml (1 = a standardised trait)")
+    return {**{k: cfg[k] for k in sg.DEFAULTS}, "trait_sd_source": source}
 
 
 def form_values(cfg):
@@ -177,12 +191,13 @@ def gwas_job(key):
 def analyse(request, key):
     """{con (view g: gwas.parquet with the trait's tiers, genes (the catalogue's names for genes Ensembl leaves
     unnamed), region and LORe; view fm: the fine-mapping), cfg, defaults (cfg without the request's settings), loci
-    (the MAX_LOCI strongest), total (all loci), fm (locus -> summary), trait, d, n, query (the request's settings)}.
-    Clumping and fine-mapping run once per trait and settings; later requests read loci/<hash>.json and .parquet."""
+    (the MAX_LOCI strongest), total (all loci), fm (locus -> summary), trait, d, n, query (the request's settings),
+    report (gwas.json)}. Clumping and fine-mapping run once per trait and settings; later requests read
+    loci/<hash>.json and .parquet."""
     con, types, _, chosen = results.open_result(request, key, write=True)
     trait, d = chosen["trait"], jobs.folder(key)
-    w = jobs.weights(d)
-    cfg = settings(request, w)
+    w, report = jobs.weights(d), jobs.read_json(d / "gwas.json") or {}
+    cfg = settings(request, w, report)
     keep = [c for c in ("tier", "tier_score", "tier_evidence", "region_class", "gene_name", "gene_ortholog_human",
                         "gene_id", "lore", "known_locus") if c in types]
     names = explore.aliases() if {"gene_name", "gene_id"} <= set(keep) else {}
@@ -208,8 +223,8 @@ def analyse(request, key):
     elif saved["loci"]:
         con.execute(f"CREATE VIEW fm AS SELECT * FROM read_parquet({lit(folder / f'{h}.parquet')})")
     loci, total, n, fm = saved["loci"], saved["total"], saved["n"], {int(k): v for k, v in saved["fm"].items()}
-    return {"con": con, "cfg": cfg, "defaults": settings(None, w), "loci": loci, "total": total, "fm": fm, "trait": trait, "d": d,
-            "n": n, "types": types, "query": query_of(request)}
+    return {"con": con, "cfg": cfg, "defaults": settings(None, w, report), "loci": loci, "total": total, "fm": fm, "trait": trait,
+            "d": d, "n": n, "types": types, "query": query_of(request), "report": report}
 
 
 def lines_of(cfg, n):
@@ -230,7 +245,8 @@ def provenance(job, a):
     lines = [x for x in jobs.provenance(job, a["trait"]) if not x.startswith("# equivalent command")]
     lines.append(f"# GWAS settings (PROVISIONAL defaults, weights.yaml finemap): significant {cfg['significant']:g}, suggestive "
                  f"{cfg['suggestive']:g}, window {int(cfg['window']):,} bp, prior_sd {cfg['prior_sd']:g} (W {cfg['prior_sd'] ** 2:g}), "
-                 f"functional lambda {cfg['functional_lambda']:g}, trait_sd {cfg['trait_sd']:g}, coverage {cfg['coverage']:g}")
+                 f"functional lambda {cfg['functional_lambda']:g}, trait_sd {cfg['trait_sd']:g} ({finemap_used(a)['trait_sd_source']}), "
+                 f"coverage {cfg['coverage']:g}")
     lines.append("# " + ASSUMPTIONS)
     lines.append(f"# equivalent command: snpscore gwas <your summary statistics> --release <release {job.get('release')}> "
                  f"--trait {a['trait']}")
@@ -497,23 +513,27 @@ def loci_rows(a, key):
     return out
 
 
-def qc_items(report):
+def qc_items(report, cfg):
     """(label, value) rows of the GWAS upload QC details."""
     items = [("Format detected", report.get("format")), ("Rows read", report.get("rows_read")), ("Rows kept", report.get("kept"))]
     items += [(f"Dropped: {DROPS.get(k, k)}", v) for k, v in (report.get("dropped") or {}).items()]
     items += [("Rows with beta and se", f"{100 * (report.get('with_beta_se') or 0):.1f}%"),
               ("Rows with z recovered from p", report.get("z_from_p")), ("Rows with N and allele frequency", report.get("with_af_n")),
               ("λGC = median(z²)/0.4549", report.get("lambda_gc")), ("Smallest p", report.get("min_p")),
-              ("Rows at p < 5e-8", report.get("n_significant"))]
+              ("Rows at p < 5e-8", report.get("n_significant")),
+              ("Trait SD used (betas are divided by it)", f"{cfg['trait_sd']:.3g}"),
+              ("Trait SD implied by se, N and af", f"{report['trait_sd_estimate']:.3g}" if report.get("trait_sd_estimate")
+               else "n/a (needs N and allele frequency)")]
     items += [(f"Alleles: {HARMONISED.get(k, k)}", v) for k, v in (report.get("harmonised") or {}).items()]
     if report.get("unknown_chromosomes"):
         items.append(("Most common dropped chromosome names", ", ".join(f"{u['name']} ({u['rows']:,})" for u in report["unknown_chromosomes"][:5])))
     return items
 
 
-def qc_line(report):
+def qc_line(report, cfg):
     """(the QC in one line, problem). A problem opens the QC details by itself: dropped rows or unknown chromosomes,
-    beta/se missing, z recovered from p, or alleles not checked or not matching the genome."""
+    beta/se missing, z recovered from p, alleles not checked or not matching the genome, or a trait SD far from the
+    one se, N and af imply (snpscore.gwas.trait_sd_implied: betas on another scale than the trait SD used)."""
     read, kept, beta = report.get("rows_read") or 0, report.get("kept") or 0, report.get("with_beta_se") or 0
     odd = sum(n for k, n in (report.get("harmonised") or {}).items() if k not in OK_ALLELES)
     lam = report.get("lambda_gc")
@@ -521,7 +541,11 @@ def qc_line(report):
              "beta/se on " + ("all" if beta >= 1 else f"{100 * beta:.0f}%"), f"λGC {lam:.2f}" if lam is not None else "λGC n/a",
              f"{report.get('n_significant') or 0:,} SNPs at p < 5e-8", f"smallest p {report.get('min_p')}",
              f"alleles of {odd:,} rows not checked or not matching" if odd else "alleles on Ssal_v3.1"]
-    problem = kept < read or beta < 1 or bool(report.get("z_from_p") or report.get("unknown_chromosomes")) or odd > 0
+    implied = (sg.trait_sd_implied(report, cfg) if hasattr(sg, "trait_sd_implied")  # an older snpscore: only the sentence
+               else report.get("trait_sd_estimate") if sg.trait_sd_warning(report, cfg) else None)
+    if implied:  # e.g. betas in phenotype units with trait SD 1: every Bayes factor is about 1 and the prior alone ranks SNPs
+        parts.append(f"trait SD {cfg['trait_sd']:.3g} but se, N and af imply {implied:.3g}: PIPs unreliable")
+    problem = kept < read or beta < 1 or bool(report.get("z_from_p") or report.get("unknown_chromosomes")) or odd > 0 or bool(implied)
     return " · ".join(parts), problem
 
 
@@ -541,13 +565,13 @@ def association(request, key):
         a = analyse(request, key)
         d, query = a["d"], urlencode({"trait": a["trait"], **a["query"]})
         values, defaults = form_values(a["cfg"]), form_values(a["defaults"])
-        weights, report = jobs.weights(d), jobs.read_json(d / "gwas.json")
+        weights, report = jobs.weights(d), a["report"]
         ctx.update(trait=a["trait"], query=query, loci=loci_rows(a, key), release_changed=jobs.release_changed(job),
                    presets=[(v, label, results.trait_tip(weights, v)) for v, label in jobs.presets(d)],
                    figs={name: figure_card(a, name, figure_data(a, name, job, key)[0], key) for name in FIGURES},
                    fields=[(k, LABELS[k][0], values[k], LABELS[k][1]) for k in FIELDS], values=values,
                    changed=sum(values[k] != defaults[k] for k in FIELDS), settings=a["query"].items(),
-                   qc=qc_items(report), qc_line=qc_line(report), finemapped=any(s.get("n") for s in a["fm"].values()),
+                   qc=qc_items(report, a["cfg"]), qc_line=qc_line(report, a["cfg"]), finemapped=any(s.get("n") for s in a["fm"].values()),
                    total=a["total"], max_loci=MAX_LOCI)
         ctx["actions"] = [{"label": "Export", "url": f"{reverse('snpportal:results', args=[key])}?{query}&tab=export"},
                           {"label": "Report", "url": f"{reverse('snpportal:report', args=[key])}?{query}"},
