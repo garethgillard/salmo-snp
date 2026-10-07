@@ -49,7 +49,8 @@ GLOSSARY = [  # (anchor, term, definition)
      "in 12 AQUA-FAANG fish. Lead SNPs only, not fine-mapped; display only."),
     ("cm", "cM", "Position on the Brekke et al. 2023 linkage map (AquaGen), interpolated between markers."),
     ("known_locus", "Known locus", "A published SNP from the catalogue within {window:,} bp of yours."),
-    ("ohnolog", "Ss4R ohnolog", "The second copy of a gene from the salmonid genome duplication."),
+    ("ohnolog", "Ss4R duplicate", "The other copy of a gene from the salmonid genome duplication (Ss4R), from the "
+     "AQUA-FAANG salmon-trout clades; also called its ohnolog."),
     ("coordinates", "Coordinates", "Ssal_v3.1, chromosomes 1–29. Layers use BED intervals; a SNP at 1-based pos is inside "
      "one when start < pos ≤ end."),
     ("synthetic", "Synthetic", "Built from synthetic test data: not real results, never counted in tiers."),

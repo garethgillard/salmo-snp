@@ -157,7 +157,8 @@ class ExploreTest(SimpleTestCase):
         self.assertContains(self.client.get(url, {"all": "1"}), reverse("snpportal:variant", args=["25-28996360"]))  # Met54Thr is public
         self.assertEqual(page.content.decode().count('class="text-nowrap" title='), 21)  # 21 condition columns, in a closed section
         self.assertContains(page, '<details class="sp-more" id="elements">', html=False)
-        self.assertContains(page, 'id="ohnolog"')
+        self.assertContains(page, 'id="ohnolog"')  # its Ss4R duplicate, from the ss4r layer
+        self.assertContains(page, f'href="{reverse("snpportal:gene", args=[VGLL3_CHR21])}" title="{VGLL3_CHR21}">vgll3</a> (chr21)', html=False)
         self.assertNotContains(page, "Score an interval")
         self.assertNotContains(page, "come later")
         self.assertContains(page, "hx-get=\"" + reverse("snpportal:locus_svg"))

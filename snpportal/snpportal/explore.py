@@ -201,25 +201,6 @@ def gene_rows(ids):
     return rows
 
 
-def namesakes(g, limit=10):
-    """Other genes with the same name or catalogue name as gene row `g`, or sharing a human ortholog: often its Ss4R
-    ohnolog (a hint until P5.8 adds the curated ohnolog table)."""
-    path, ortho = _file("gene"), _file("gene_ortholog")
-    names = sorted({n.lower() for n in (g.get("name"), g.get("alias")) if n})
-    humans = [h for h in (g.get("human") or "").split(",") if h] if ortho else []
-    if path is None or not (names or humans):
-        return []
-    join = f"LEFT JOIN read_parquet({lit(ortho)}) o ON o.gene_id = g.id" if ortho else "LEFT JOIN (SELECT NULL AS human) o ON false"
-    same = " OR ".join(x for x in ["list_contains($names, lower(g.name))" if names else "",
-                                   "len(list_intersect(string_split(o.human, ','), $humans)) > 0" if humans else ""] if x)
-    rows = jobs.connect([jobs.release()]).execute(f"""
-        SELECT g.id, g.name, g.chrom, g.start, g."end", o.human FROM read_parquet({lit(path)}) g {join}
-        WHERE g.id <> $id AND ({same}) ORDER BY try_cast(g.chrom AS INTEGER), g.start LIMIT {int(limit)}""",
-                                                  {"id": g["id"], **({"names": names} if names else {}),
-                                                   **({"humans": humans} if humans else {})}).fetchall()
-    return [dict(zip(["id", "name", "chrom", "start", "end", "human"], r)) for r in rows]
-
-
 def hero():
     """A small locus figure of vgll3 (genes, published associations, molQTL leads, chromatin states, public variants;
     no live signal) for the landing page, drawn once per release and state palette. None without a chromatin layer."""
@@ -487,7 +468,7 @@ def gene(request, gene_id):
     return render(request, "snpportal/gene.html", {
         "nav": "explore", "title": g["label"], "gene": g, "synthetic": bool(info["synthetic"]),
         "meta": f"{g['id']} · chromosome {g['chrom']}:{g['start'] + 1:,}-{g['end']:,} ({g['strand']}) · {g['biotype']}",
-        "loci": loci, "namesakes": namesakes(g), "unnamed_tip": UNNAMED_TIP,
+        "loci": loci, "ss4r": ss4r([gene_id]).get(gene_id), "unnamed_tip": UNNAMED_TIP,
         "ensembl": ENSEMBL_GENE.format(gene_id), "salmobase": SALMOBASE_GENE.format(gene_id), "jbrowse": JBROWSE.format(*locus),
         "locus_url": search.locus_url(*locus),
         "locus_svg": reverse("snpportal:locus_svg") + "?" + urlencode({"r": "{}:{}-{}".format(*locus), "trait": trait}),

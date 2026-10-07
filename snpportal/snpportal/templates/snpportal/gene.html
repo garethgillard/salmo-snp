@@ -23,9 +23,8 @@
       {% for r in loci %}<p class="sp-status sp-status-ok sp-small mt-2 mb-0">&#9733; <strong>{{ r.id }}</strong> ({{ r.trait_text }}),
         <a href="{% url 'snpportal:variant' r.chrom|add:'-'|add:r.pos %}">{{ r.chrom }}:{{ r.pos }}</a>{% if r.effect %}: {{ r.effect }}{% endif %}.
         {% for cls, text, tip in r.flags %}{% include 'snpportal/_badges.html' with kind='evidence' value=text cls=cls tip=tip %} {% endfor %}{% if r.caveat %}<em>{{ r.caveat }}</em>{% endif %}</p>{% endfor %}
-      {% if namesakes %}<p class="sp-small sp-muted mt-2 mb-0" id="ohnolog">Same name or human ortholog:
-        {% for o in namesakes %}<a href="{% url 'snpportal:gene' o.id %}">{{ o.name|default:o.id }}</a> (chr{{ o.chrom }}){% if not forloop.last %}, {% endif %}{% endfor %}:
-        often the copy from the salmonid genome duplication (Ss4R).</p>{% endif %}
+      {% if ss4r.copies %}<p class="sp-small sp-muted mt-2 mb-0" id="ohnolog"><abbr title="The gene's other copy from the salmonid whole-genome duplication (AQUA-FAANG salmon-trout clades)">Ss4R duplicate</abbr>:
+        {% for o in ss4r.copies %}<a href="{% url 'snpportal:gene' o.id %}" title="{{ o.id }}">{{ o.label }}</a> (chr{{ o.chrom }}){% if not forloop.last %}, {% endif %}{% endfor %}{% if ss4r.class == 'LORe' %}; late rediploidised, so the copies are nearly identical{% endif %}.</p>{% endif %}
     </section>
   </div>
   <div class="col-lg-7">
