@@ -16,6 +16,7 @@ from django.utils.safestring import mark_safe
 
 import snpscore
 from snpscore import panel as snp_panel
+from snpscore.coding import AA
 from snpscore.formats import lit
 
 from . import figures, jobs, palette
@@ -34,7 +35,7 @@ CONSEQUENCES = {"missense_variant": "missense", "synonymous_variant": "synonymou
                 "incomplete_terminal_codon_variant": "incomplete last codon", "coding_sequence_variant": "CDS",
                 "splice_donor_variant": "splice donor", "splice_acceptor_variant": "splice acceptor"}  # snpscore.coding
 CODING_FILTERS = {  # Region filter values that need coding_consequence -> (label, SQL)
-    "missense": ("missense/nonsense", "coding_consequence IN ('missense_variant', 'stop_gained', 'stop_lost', 'start_lost')"),
+    "missense": ("protein-changing", "coding_consequence IN ('missense_variant', 'stop_gained', 'stop_lost', 'start_lost')"),
     "synonymous": ("synonymous", "coding_consequence IN ('synonymous_variant', 'stop_retained_variant')")}
 HIDE = {  # checkbox -> (label, column it needs, SQL condition a SNP must meet to stay); hide_lore: older links (now in Assay)
     "hide_blacklist": ("blacklisted", "blacklist", "NOT blacklist"),
@@ -55,7 +56,7 @@ MAFS = ("0.01", "0.05", "0.1", "0.2")
 MAF_TIP = "Minor allele frequency in 504 public fish, pooled; your strain can differ"
 UNNAMED = "Unnamed in Ensembl; named by its human ortholog"
 TERMS = {"active": "active in the trait's conditions", "active_elsewhere": "active elsewhere only",
-         "weak": "weak state in the trait's conditions", "coding": "CDS (not synonymous)", "synonymous": "CDS (synonymous)",
+         "weak": "weak state in the trait's conditions", "coding": "CDS (protein change or unknown)", "synonymous": "CDS (synonymous)",
          "splice": "splice region", "utr": "UTR",
          "constrained": "GERP constrained", "regbuild": "Ensembl regulatory", "molqtl": "molQTL lead (display only)"}
 QUIET = ("unknown_chromosomes", "aliases_applied", "alias_warnings", "columns_renamed", "columns_dropped",
@@ -120,7 +121,7 @@ DEFAULT_COLUMNS = ("id", "gene", "region", "tier", "evidence", "chromatin", "kno
 GWAS_COLUMNS = ("id", "p", "beta", "tier", "pip", "gene", "region", "chromatin")
 EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tier_evidence", "tier_terms"), "known": ("known_locus_dist",),
          "evidence": ("tier_terms",),
-         "gene": ("gene_ortholog_human",), "region": ("gene_distance", "coding_consequence", "coding_hgvsp", "coding_transcript"), "beta": ("se",), "pip": ("pip_functional",),
+         "gene": ("gene_ortholog_human",), "region": ("gene_distance", "coding_consequence", "coding_hgvsp", "coding_transcript", "coding_note"), "beta": ("se",), "pip": ("pip_functional",),
          "assay": ("assay_reasons", "blacklist", "lore", "strand_ambiguous", "flank_variants"),
          "molqtl": ("molqtl_tissues", "molqtl_kinds", "molqtl_features"), "cm": ("cm_male",)}  # also fetched
 MORE = ("region", "active", "term", "known", "molqtl", "hide_blacklist", "hide_ambiguous", "hide_flank", "hide_near_chip",
@@ -484,7 +485,7 @@ def table(request, key, job=None):
         select(selects, "assay", "Assay", [(k, label) for k, (label, _) in ASSAY_FILTERS.items() if k != "ok_nolore" or "lore" in types],
                any_label="All", tip="LORe: region where the duplicated chromosomes still pair; probes may cross-hybridise")
     if "region_class" in types:
-        regions = [(r, REGION_LABELS[r]) for r in REGIONS]  # coding, then its missense/nonsense and synonymous parts
+        regions = [(r, REGION_LABELS[r]) for r in REGIONS]  # coding, then its protein-changing and synonymous parts
         coding = [(k, label) for k, (label, _) in CODING_FILTERS.items()] if "coding_consequence" in types else []
         select(more, "region", "Region", regions[:1] + coding + regions[1:])
     if weights and conditions:
@@ -598,40 +599,70 @@ def region_text(g):
 
 
 def coding_tip(g):
-    """'p.Thr46Met · ENSSSAT00000230965' for the Region cell's tooltip, or ''."""
-    return " · ".join(x for x in (g("coding_hgvsp"), g("coding_transcript")) if x)
+    """'p.Thr46Met · ENSSSAT00000230965' for the Region cell's tooltip; 'amino-acid effect not computed: alleles
+    unknown · ENSSSAT…' for a CDS SNP without one; or ''."""
+    unknown = g("coding_consequence") == "coding_sequence_variant" or (g("region_class") == "CDS" and not g("coding_consequence"))
+    why = ("amino-acid effect not computed" + (f": {g('coding_note')}" if g("coding_note") else "")) if unknown else None
+    return " · ".join(x for x in (why, g("coding_hgvsp"), g("coding_transcript")) if x)
+
+
+PUBLISHED = re.compile(r"(?:^|_)([A-Z][a-z]{2}|[ACDEFGHIKLMNPQRSTVWY])(\d+)([A-Z][a-z]{2}|[ACDEFGHIKLMNPQRSTVWY*])(?=_|$)")
+
+
+def published_as(known_id, hgvsp):
+    """The catalogue id's amino-acid label ('Met54Thr' of vgll3_Met54Thr, 'S167P' of cdh1_S167P) when its residue or
+    its direction differs from the computed hgvsp ('p.Thr46Met'), else None."""
+    m, h = PUBLISHED.search(known_id or ""), re.match(r"p\.([A-Z][a-z]{2})(\d+)([A-Z][a-z]{2}|=|\?)", hgvsp or "")
+    if not m or not h:
+        return None
+    ref, pos, alt = AA.get(m.group(1), m.group(1)), int(m.group(2)), AA.get(m.group(3), m.group(3))
+    computed = h.group(1) if h.group(3) == "=" else h.group(3)
+    return None if (ref, pos) == (h.group(1), int(h.group(2))) and computed in (alt, "?") else m.group(0).lstrip("_")
 
 
 def coding_label(g, known_id=None, known_dist=None):
     """'Missense p.Thr46Met (ENSSSAT00000230965; published as Met54Thr)' for the card, None without a consequence.
-    The published label is the catalogue id's (e.g. vgll3_Met54Thr) at this exact position, when its residue differs."""
+    The published label is the catalogue id's at this exact position, when it differs (published_as)."""
     consequence = g("coding_consequence")
     if not consequence:
         return None
     if consequence == "coding_sequence_variant":
         return f"CDS (amino-acid effect not computed: {g('coding_note') or 'alleles unknown'})"
     notes = [x for x in (g("coding_transcript"),) if x]
-    published = re.search(r"([A-Z][a-z]{2})(\d+)([A-Z][a-z]{2})", known_id or "") if known_dist == 0 else None
-    if published and g("coding_aa_pos") and int(published.group(2)) != g("coding_aa_pos"):
-        notes.append(f"published as {published.group(0)}")
+    published = published_as(known_id, g("coding_hgvsp")) if known_dist == 0 else None
+    if published:
+        notes.append(f"published as {published}")
     if g("coding_note"):
         notes.append(g("coding_note"))
     text = CONSEQUENCES.get(consequence, consequence).capitalize() + (f" {g('coding_hgvsp')}" if g("coding_hgvsp") else "")
     return text + (f" ({'; '.join(notes)})" if notes else "")
 
 
-def tier_line(tier, evidence, terms):
-    """'Tier 2 · CDS (amino-acid effect not computed) +3': the tier and the evidence terms that fired, with weights."""
+CDS_TEXT = "CDS (amino-acid effect not computed)"
+CODING_TERMS = ("coding", "synonymous", "splice")  # tier terms whose text the coding consequence replaces
+
+
+def tier_parts(g):
+    """[(text, weight)] of the evidence terms that count, as the card and the drawer show them: the coding consequence
+    in words for the coding terms (coding_label), condition lists spelled out, a bare CDS with its qualifier; weight
+    None for results whose tier_terms don't match tier_evidence."""
+    parts = [x for x in (g("tier_evidence") or "").split("; ") if x]
+    terms = g("tier_terms") or []
+    terms = terms if len(terms) == len(parts) else [None] * len(parts)
+    coding = coding_label(g, g("known_locus"), g("known_locus_dist"))
+    return [(coding if coding and t and t["term"] in CODING_TERMS else re.sub(r"^CDS\b", CDS_TEXT, evidence_text(p)),
+             t["weight"] if t else None) for p, t in zip(parts, terms) if not t or t["weight"]]
+
+
+def tier_line(g):
+    """'Tier 2 · Missense p.Thr46Met (ENSSSAT00000230965) +3': the tier and the evidence that counts (tier_parts)."""
+    tier = g("tier")
     if tier is None:
         return ""
-    counted = [t for t in terms or [] if t["weight"]]
-    evidence = evidence_text(evidence, terms)
-    if tier == 4 or not evidence:
+    parts = tier_parts(g)
+    if tier == 4 or not parts:
         return f"Tier {tier} · no evidence found (not evidence of no effect)"
-    parts = evidence.split("; ")
-    if len(counted) == len(parts):
-        parts = [f"{p} +{t['weight']}" for p, t in zip(parts, counted)]
-    return f"Tier {tier} · " + " · ".join(re.sub(r"^CDS\b", "CDS (amino-acid effect not computed)", p) for p in parts)
+    return f"Tier {tier} · " + " · ".join(text + (f" +{w}" if w is not None else "") for text, w in parts)
 
 
 def _drawer(con, view, row, types, weights, trait, key, conditions, in_preset, close, settings=None):
@@ -665,7 +696,7 @@ def _drawer(con, view, row, types, weights, trait, key, conditions, in_preset, c
                  if g("known_effect_allele") else "", "caveat": _known_caveats().get(g("known_locus"))}
     status = g("assay_status") or ("not_checked" if "assay_status" in types else None)
     return {"name": _snp_name(g), "alleles": _alleles(g), "position": f"{g('chrom')}:{g('pos'):,}", "tier": g("tier"),
-            "tier_line": tier_line(g("tier"), g("tier_evidence"), g("tier_terms")),
+            "tier_line": tier_line(g),
             "gene": gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")), "known": known, "chromatin": chromatin,
             "assay": status and f"Assay: {status.replace('_', ' ')}" + (f" ({_assay_tip(g)})" if _assay_tip(g) else ""),
             "card": f"{reverse('snpportal:card', args=[key, row])}?{urlencode({'trait': trait, **(settings or {})})}", "close": close}
@@ -681,7 +712,7 @@ def top(request, key, job, n=TOP):
     gwas = job.get("input_kind") == "gwas" and "neglog10p" in types
     maf, _ = jobs.maf_sql(types)
     cols = [c for c in ("chrom", "pos", "id", "ref", "alt", "tier", "tier_score", "tier_evidence", "tier_terms", "gene_name", "gene_id",
-                        "gene_ortholog_human", "region_class", "coding_consequence", "coding_hgvsp", "coding_transcript", "known_locus", "known_locus_dist", "assay_status",
+                        "gene_ortholog_human", "known_locus", "known_locus_dist", "assay_status",
                         "assay_reasons", "neglog10p", "lore", "blacklist", "strand_ambiguous", "flank_variants") if c in types]
     order = "neglog10p DESC NULLS LAST, " if gwas else \
         "tier ASC NULLS LAST, tier_score DESC NULLS LAST, " if {"tier", "tier_score"} <= set(types) else ""
@@ -699,7 +730,6 @@ def top(request, key, job, n=TOP):
             "snp": _snp_name(g), "position": f"{g('chrom')}:{g('pos'):,}", "alleles": _alleles(g),
             "tier": g("tier"), "score": g("tier_score"), "evidence": evidence_text(g("tier_evidence"), g("tier_terms")),
             "gene": gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")),
-            "region": region_text(g), "region_tip": coding_tip(g),
             "known": g("known_locus") or "", "known_dist": g("known_locus_dist"), "caveat": caveats.get(g("known_locus")),
             "maf": "" if g("_maf") is None else f"{g('_maf'):.2f}", "p": "",
             "assay": (ASSAY.get(status, ("?", "not_checked")) + (status.replace("_", " "), _assay_tip(g))) if status else None})

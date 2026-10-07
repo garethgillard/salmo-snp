@@ -337,8 +337,6 @@ def locus_svg_view(request):
 
 # ---- evidence card and variant page ----
 
-CDS = "CDS (amino-acid effect not computed)"
-CODING_TERMS = ("coding", "synonymous", "splice")  # tier terms whose text the coding consequence replaces on the card
 TIPS = {"LORe region": "region where the duplicated chromosomes still pair; probes may cross-hybridise",
         "A/T or C/G SNP": "strand-ambiguous; needs care on arrays"}
 
@@ -354,14 +352,11 @@ def evidence(snp, weights, trait, synthetic=False):
     ev = {"trait": trait, "title": snp.get("id") or f"{chrom}:{pos:,}", "position": f"{chrom}:{pos}",
           "alleles": f"{ref}>{alt}" if ref and alt else "", "spec": spec, "synthetic": synthetic, "tier": snp.get("tier"),
           "samples": results.SAMPLES}
-    terms = [(text, t["weight"], t["term"]) for text, t in zip((snp.get("tier_evidence") or "").split("; "), snp.get("tier_terms") or [])
-             if t["weight"]]  # tier_evidence and tier_terms list the fired terms in the same order
-    coding = results.coding_label(snp.get, snp.get("known_locus"), snp.get("known_locus_dist"))  # 'Missense p.Thr46Met (...)'
-    ev["terms"] = [(coding if coding and term in CODING_TERMS else CDS if text == "CDS" else text, w)
-                   for text, w, term in terms] or None
-    if weights and len(terms) > 1:
+    ev["terms"] = results.tier_parts(snp.get) or None  # 'Missense p.Thr46Met (...)', 3; the same as the table's drawer
+    if weights and len([t for t in snp.get("tier_terms") or [] if t["weight"]]) > 1:
+        named = {t: results.region_text(snp.get) for t in results.CODING_TERMS} if snp.get("coding_consequence") else {}
         ev["why"] = mark_safe(locus_svg.tier_contribution(snp["tier_terms"], snp.get("tier_score") or 0, snp.get("tier") or 4,
-                                                          weights["tiers"], synthetic))
+                                                          weights["tiers"], synthetic, labels=named))
     states = {c[len("chromatin_"):]: snp[c] for c in snp if c.startswith("chromatin_") and c not in NOT_CONDITIONS}
     if states:
         chosen = set(preset_conditions(weights, list(snp), trait)[0]) if weights else set()
@@ -407,8 +402,8 @@ def details(snp):
     if "region_class" in snp:
         out.append(("Genic region", snp["region_class"] or "intergenic"))
     if snp.get("coding_consequence"):
-        out.append(("Coding consequence", ", ".join(x for x in (results.coding_label(snp.get, snp.get("known_locus"), snp.get("known_locus_dist")),
-                                                                 snp.get("coding_codons") and f"codons {snp['coding_codons']}") if x)))
+        out.append(("Transcript", ", ".join(x for x in (snp.get("coding_transcript"),  # the consequence is in the tier line
+                                                         snp.get("coding_codons") and f"codons {snp['coding_codons']}") if x)))
     if "regbuild" in snp:
         out.append(("Ensembl regulatory", " ".join(str(x) for x in (snp.get("regbuild_type"), snp.get("regbuild_id")) if x)
                     + (f" (promoter of {snp['regbuild_gene_id']})" if snp.get("regbuild_gene_id") else "") or "none"))

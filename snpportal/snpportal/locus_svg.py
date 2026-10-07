@@ -483,8 +483,10 @@ def _signal(body, ax, signal, y, gutter, uid, lane_label, compact):
 
 # ---- evidence card figures ----
 
-def tier_contribution(terms, score, tier, cutoffs, synthetic=False, uid="tc"):
-    """'Why this tier': the tier_terms weights as one stacked bar (they sum to tier_score), with the tier cut-offs."""
+def tier_contribution(terms, score, tier, cutoffs, synthetic=False, uid="tc", labels=None):
+    """'Why this tier': the tier_terms weights as one stacked bar (they sum to tier_score), with the tier cut-offs.
+    labels: {term: label} in place of TERMS' (the card names the coding consequence: 'missense')."""
+    labels = {k: (TERMS.get(k, (G[500], k))[0], v) for k, v in (labels or {}).items()}
     width, x0, x1 = 560, 12, 548
     top = max([cutoffs[0] + 1, score or 0] + [1])
     sx = lambda v: x0 + (x1 - x0) * v / top
@@ -493,7 +495,7 @@ def tier_contribution(terms, score, tier, cutoffs, synthetic=False, uid="tc"):
         w = t["weight"] or 0
         if w <= 0:
             continue
-        colour, label = TERMS.get(t["term"], (G[500], t["term"]))
+        colour, label = labels.get(t["term"]) or TERMS.get(t["term"], (G[500], t["term"]))
         colour = _colour(colour)
         a, b = sx(x), sx(x + w)
         parts.append(f'<rect x="{a:.1f}" y="22" width="{b - a:.1f}" height="22" fill="{colour}" stroke="{palette.WHITE}">'
@@ -512,7 +514,7 @@ def tier_contribution(terms, score, tier, cutoffs, synthetic=False, uid="tc"):
                      + _t(sx(c) + 2, 12, f"tier {i + 1} ≥ {c}", 9, G[900]))
     if not terms:
         parts.append(_t(x0 + 4, 37, "no evidence counted for this trait: tier 4", 10, G[700]))
-    legend = "; ".join(f"{TERMS.get(t['term'], (0, t['term']))[1]} +{t['weight']}" for t in terms or [] if t["weight"])
+    legend = "; ".join(f"{(labels.get(t['term']) or TERMS.get(t['term'], (0, t['term'])))[1]} +{t['weight']}" for t in terms or [] if t["weight"])
     desc = f"tier_score {score} = {legend or 'nothing'}; tier {tier}. Weights and cut-offs are provisional."
     parts.append(_t(x0, 74, f"score {score} → tier {tier}", 9.5, G[700]))
     return figures.svg(width, 82, "Why this tier", desc, "".join(parts), synthetic)

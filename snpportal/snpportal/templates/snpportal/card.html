@@ -21,7 +21,7 @@
   </div>
 
   {% if ev.tier %}<p class="mb-2">{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %} &middot;
-    {% for text, w in ev.terms %}{{ text }} +{{ w }}{% if not forloop.last %} &middot; {% endif %}{% empty %}no evidence found (not evidence of no effect){% endfor %}</p>{% endif %}
+    {% for text, w in ev.terms %}{{ text }}{% if w is not None %} +{{ w }}{% endif %}{% if not forloop.last %} &middot; {% endif %}{% empty %}no evidence found (not evidence of no effect){% endfor %}</p>{% endif %}
   {% if ev.why %}<div class="sp-figure mb-2">{{ ev.why }}</div>{% endif %}
 
   {% if ev.gwas %}<p class="mb-2">GWAS: p {{ ev.gwas.p }}{% if ev.gwas.beta is not None %} &middot; beta {{ ev.gwas.beta|floatformat:3 }}{% if ev.gwas.se is not None %} ({{ ev.gwas.se|floatformat:3 }}){% endif %}{% endif %}

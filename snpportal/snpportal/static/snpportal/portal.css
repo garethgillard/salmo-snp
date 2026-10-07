@@ -171,7 +171,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 /* Tablet portrait and narrower: figures drawn 1120-1200 px wide (locus browser, gene locus and regional plot at
    locus_svg.WIDTH, PIP shifts) keep 80% of their drawn size, as at 1024 px, so 8.5 px labels stay readable; they scroll
    sideways inside their card, whose title and download menu stay put. */
-@media (max-width: 991.98px) {
+@media screen and (max-width: 991.98px) {
   .sp-figure:has(> svg[width="1200"]), #fig-pip { overflow-x: auto; }
   .sp-figure > svg[width="1200"], #fig-pip > svg { min-width: 60rem; }
   .sp-figure > .sp-card-head { position: sticky; left: 0; }

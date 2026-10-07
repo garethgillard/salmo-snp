@@ -246,6 +246,10 @@ class ResultsTest(SimpleTestCase):
         self.assertEqual(results.gene_label("vgll3a", "ENSSSAG1", "VGLL3"), "vgll3a")
         self.assertEqual(results.gene_label(None, "ENSSSAG1", None), "ENSSSAG1")
         self.assertEqual(results.pct(1, 20000), "<0.1%")
+        published = {k: results.published_as(k, h) for k, h in (("vgll3_Met54Thr", "p.Thr46Met"), ("cdh1_S167P", "p.Pro167Ser"),
+                                                                  ("gig1like3_G78D", "p.Gly78Asp"), ("akap11_Val214Met", "p.Met214Val"))}
+        self.assertEqual(published, {"vgll3_Met54Thr": "Met54Thr", "cdh1_S167P": "S167P", "gig1like3_G78D": None,
+                                     "akap11_Val214Met": "Val214Met"})  # residue or direction differs, 1- or 3-letter
         groups = results.condition_groups(results.conditions_of(["chromatin_" + c for c in self.summary["conditions"]]))
         self.assertEqual([g for g, _ in groups], ["Brain", "Gonad", "Liver", "Muscle", "Embryo"])
         self.assertEqual([label for label, _ in groups[0][1]], ["Imm F", "Imm M", "Mat F", "Mat M"])

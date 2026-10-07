@@ -51,7 +51,7 @@
         <tbody>{% for r in designer.rows %}<tr>
           <td class="sp-num">{{ r.rank }}</td><td><a href="{{ r.url }}">{{ r.name }}</a>{% if r.alleles %} <span class="sp-muted">&middot; {{ r.alleles }}</span>{% endif %}</td>
           <td>{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
-          <td title="{{ r.reason_tip }}">{{ r.reason }}</td><td title="{{ r.gene_tip }}">{{ r.gene }}</td><td>{{ r.region }}</td><td class="sp-num">{{ r.maf }}</td>
+          <td title="{{ r.reason_tip }}">{{ r.reason }}</td><td title="{{ r.gene_tip }}">{{ r.gene }}</td><td{% if r.region_tip %} title="{{ r.region_tip }}"{% endif %}>{{ r.region }}</td><td class="sp-num">{{ r.maf }}</td>
           <td>{% if r.assay %}<span class="sp-as sp-as-{{ r.assay.1 }}" title="{{ r.assay.3|default:r.assay.2 }}">{{ r.assay.0 }} {{ r.assay.2 }}</span>{% endif %}</td>
           {% if designer.rows.0.on_chip is not None %}<td>{% if r.on_chip %}yes{% endif %}</td>{% endif %}
         </tr>{% endfor %}</tbody>

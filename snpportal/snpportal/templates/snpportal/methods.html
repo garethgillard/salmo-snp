@@ -14,9 +14,8 @@
         <tbody>{% for name, value, text in weights %}<tr id="term-{{ name }}"><th scope="row" class="fw-normal sp-mono">{{ name }}</th>
           <td class="sp-num">{{ value }}</td><td>{{ text }}</td></tr>{% endfor %}</tbody>
       </table>
-      <p class="sp-small sp-muted mt-1 mb-0" id="coding">Coding consequences (missense, synonymous, stop, start, splice donor or
-        acceptor) are read from the Ensembl 116 canonical transcript, else the longest CDS, and the Ssal_v3.1 genome, with
-        Ensembl VEP's terms and residue numbers.</p>
+      <p class="sp-small sp-muted mt-1 mb-0" id="coding">Coding consequences use Ensembl VEP terms on the canonical (else
+        longest) Ensembl 116 transcript.</p>
     </section>
     <section class="sp-card" id="tiers" aria-labelledby="t-h">
       <h2 id="t-h">Tiers</h2>
@@ -27,8 +26,8 @@
         <a href="?download=benchmark.tsv" download>Benchmark data</a></p>{% endif %}
     </section>
     {% if benchmark_fig %}<div id="benchmark">{% include 'snpportal/_figure.html' with fig=benchmark_fig %}
-      <p class="sp-small sp-muted mt-1 mb-0">caQTLs are called on the same AQUA-FAANG ATAC data, so their chromatin enrichment
-        is partly expected; eQTLs are the fairer test. Leads from 12 fish carry winner's curse.</p></div>{% endif %}
+      {% if benchmark %}<p class="sp-small sp-muted mt-1 mb-0">Known loci were partly chosen as missense: CDS enrichment is
+        expected; not a validation (n = {{ benchmark }}).</p>{% endif %}</div>{% endif %}
     <section class="sp-card" id="presets" aria-labelledby="p-h">
       <h2 id="p-h">Traits</h2>
       <p class="sp-small sp-muted mt-1">The chromatin conditions each trait counts.</p>

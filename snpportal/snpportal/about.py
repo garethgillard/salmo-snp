@@ -31,7 +31,7 @@ TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.sc
     "active_elsewhere": "An active state only in conditions outside the trait.",
     "weak": "A weak state in a condition of the trait, and no active state there.",
     "coding": "A CDS change to the protein (missense, stop gained or lost, start lost) or of unknown effect.",
-    "synonymous": "A synonymous CDS change (or stop retained): no amino-acid change.",
+    "synonymous": "A synonymous CDS change (or stop retained): no amino-acid change (weight under review).",
     "splice": "In a splice region.",
     "utr": "In a 5' or 3' UTR.",
     "constrained": "Inside a GERP constrained element (65 fish).",
@@ -210,6 +210,17 @@ def benchmark_rows(name="benchmark.tsv"):
     return [dict(r, set=r.get("set") or "known_loci") for r in rows if r.get("share_pos") not in (None, "") and r.get("positives")]
 
 
+def benchmark_notes():
+    """The '#' lines of the release's benchmark TSVs (matching rule, intervals, molQTL caveats), each once."""
+    out = []
+    for name in ("benchmark.tsv", "benchmark_molqtl.tsv"):
+        path = jobs.release() / name
+        if path.exists():
+            with open(path) as f:
+                out += [line.rstrip("\n") for line in f if line.startswith("#") and line.rstrip("\n") not in out]
+    return out
+
+
 def benchmark_sets():
     """({set: {feature: row}} for the BENCH_SETS in benchmark.tsv and benchmark_molqtl.tsv, synthetic: a file says
     SYNTHETIC in its '#' lines)."""
@@ -305,22 +316,24 @@ def methods(request):
     w, m = jobs.weights() or {}, jobs.manifest()
     rows, what = benchmark_rows(), request.GET.get("download")
     if what == "benchmark.tsv" and rows:
-        header = explore.provenance("benchmark of the known loci (n = %s, smoke test only)" % rows[0]["positives"])
+        header = explore.provenance("benchmark of the known loci (n = %s, smoke test only)" % rows[0]["positives"], trait="all")
         return explore.download((jobs.release() / "benchmark.tsv").read_text(), "benchmark.tsv", request, header)
     sets, synthetic = benchmark_sets()
     fig = None
     if "molqtl:ca" in sets or "molqtl:e" in sets:  # with the molQTL sets the benchmark is a figure, else one line
         what_is = "benchmark of the known loci and nf-RASQUAL lead SNPs against matched controls"
+        header = explore.provenance(what_is, trait="all") + benchmark_notes()  # the full caveat travels with the files
         if what == "benchmark.svg":
-            note = " ".join(line[2:] for line in explore.provenance(what_is))
+            note = " ".join(line[2:] for line in header)
             return explore.download(benchmark_svg(sets, note, synthetic), "benchmark.svg", request, [])
         if what == "benchmark_figure.tsv":
-            return explore.download(benchmark_tsv(sets), "benchmark_figure.tsv", request, explore.provenance(what_is))
+            return explore.download(benchmark_tsv(sets), "benchmark_figure.tsv", request, header)
         base = reverse("snpportal:methods")
         fig = {"name": "benchmark", "title": "Benchmark against matched controls", "svg": mark_safe(benchmark_svg(sets, "", synthetic)),
                "info": "How much more often positives have each kind of evidence than controls: 10 public SNPs per positive "
-                       "at the same distance to the nearest gene and public MAF. Tiers use the provisional weights; the "
-                       "intervals assume simple random sampling.",
+                       "in the same distance-to-gene bin and, where the positive has one, the same public MAF bin; tiers "
+                       "for all conditions, with the provisional weights. caQTLs share the ATAC data, so eQTLs are the "
+                       "fairer test; leads from 12 fish carry winner's curse. Intervals assume simple random sampling.",
                "svg_url": f"{base}?download=benchmark.svg", "tsv_url": f"{base}?download=benchmark_figure.tsv"}
     conditions = [c for c in explore.layer("chromatin").get("columns", []) if c != "summary"]
     presets = [(jobs.trait_label(name), ", ".join(figures.STAGE_LABELS.get(x, x) for x in prefixes or []),

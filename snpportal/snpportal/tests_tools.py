@@ -190,6 +190,7 @@ class ToolsTest(SimpleTestCase):
         self.assertContains(export, "below Illumina")  # a 20-SNP panel is far below the Infinium bin minimums
         self.assertContains(export, "Ssa25p28996360")  # locus names and the lookup sidecar explained
         self.assertContains(export, "format=illumina.lookup")
+        self.assertRegex(export.content.decode(), r'scope=all&amp;format=priors"[^>]*>Genomic-prediction priors, all [\d,]+ SNPs')
         report = self.client.get(reverse("snpportal:report", args=[self.key]), {"panel": h})
         self.assertContains(report, tools.panel_name(info))
         con = jobs.connect([self.d])  # lists without alleles: the assay flank's (public) alleles, as in vendor files

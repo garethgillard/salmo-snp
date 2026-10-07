@@ -526,7 +526,8 @@ def _listed(con, info, d, trait, key, limit):
     cols = _columns(con, rel)
     maf = jobs.maf_sql(cols)[0]
     want = [c for c in ("source_row", "panel_rank", "selection_reason", "chrom", "pos", "id", "ref", "alt", "tier", "gene_name",
-                        "gene_id", "gene_ortholog_human", "region_class", "assay_status", "assay_reasons", "on_chip") if c in cols]
+                        "gene_id", "gene_ortholog_human", "region_class", "coding_consequence", "coding_hgvsp", "coding_transcript",
+                        "coding_note", "assay_status", "assay_reasons", "on_chip") if c in cols]
     cur = con.execute(f"SELECT {', '.join(map(jobs.ident, want))}{f', {maf} AS _maf' if maf else ''} FROM {rel} "
                       f"ORDER BY panel_rank LIMIT {int(limit)}")
     names = [x[0] for x in cur.description]
@@ -542,7 +543,7 @@ def _listed(con, info, d, trait, key, limit):
                     "reason": REASONS.get(g("selection_reason"), (g("selection_reason"), ""))[0],
                     "reason_tip": REASONS.get(g("selection_reason"), ("", ""))[1],
                     "gene": gene, "gene_tip": results.UNNAMED if gene.startswith("~") else g("gene_id") or "",
-                    "region": results.CLASS_LABELS.get(g("region_class"), g("region_class")) or "intergenic",
+                    "region": results.region_text(g), "region_tip": results.coding_tip(g),
                     "maf": "" if g("_maf") is None else f"{g('_maf'):.2f}",
                     "assay": (results.ASSAY.get(status, ("?", "not_checked")) + (status.replace("_", " "), results.reasons_text(g("assay_reasons"))))
                     if status else None, "on_chip": g("on_chip")})
@@ -781,10 +782,10 @@ def credible_rows(request, key):
     return [r for r, in a["con"].execute("SELECT DISTINCT file_row_number FROM fm WHERE cs_uniform OR cs_functional ORDER BY 1").fetchall()]
 
 
-def _scope(request, key, d, con, view, types, weights, job):
-    """(view to export, tag for the file name, filters {name: value}, panel hash, synthetic) for ?scope=: all,
-    filtered (the Table tab's filters in the URL), panel-<hash> or credible (a GWAS job's credible-set SNPs)."""
-    scope = request.GET.get("scope", "all")
+def _scope(request, key, d, con, view, types, weights, job, scope=None):
+    """(view to export, tag for the file name, filters {name: value}, panel hash, synthetic) for ?scope= (or `scope`):
+    all, filtered (the Table tab's filters in the URL), panel-<hash> or credible (a GWAS job's credible-set SNPs)."""
+    scope = scope or request.GET.get("scope", "all")
     if scope == "credible" and job.get("input_kind") == "gwas":
         rows = ", ".join(str(int(r)) for r in credible_rows(request, key)) or "NULL"
         con.execute(f"CREATE OR REPLACE VIEW f AS SELECT * FROM {view} WHERE file_row_number IN ({rows})")
@@ -805,11 +806,11 @@ def _scope(request, key, d, con, view, types, weights, job):
     return "f", "filtered", chosen, None, synthetic
 
 
-def _command(job, trait, tag):
+def _command(job, trait, tag, fmt="<format>"):
     base = f"snpscore annotate <your list> --release <release {job.get('release')}> --trait {trait} -o annotated.parquet"
-    if tag and tag.startswith("panel-"):
+    if tag and tag.startswith("panel-") and fmt != "priors":
         return base + f"; snpscore panel annotated.parquet --release <release {job.get('release')}> --preset {trait} (parameters in panels/{tag[6:]}.json of the job)"
-    return base + f"; snpscore export annotated.parquet --release <release {job.get('release')}> --preset {trait} --format <format>"
+    return base + f"; snpscore export annotated.parquet --release <release {job.get('release')}> --preset {trait} --format {fmt}"
 
 
 def export(request, key, job, fmt):
@@ -825,7 +826,8 @@ def export(request, key, job, fmt):
     weights = jobs.weights(d)
     trait = _trait(request, weights)
     con, view, types = _open(d, trait, weights)
-    table, tag, filters, panel_hash, synthetic = _scope(request, key, d, con, view, types, weights, job)
+    table, tag, filters, panel_hash, synthetic = _scope(request, key, d, con, view, types, weights, job,
+                                                        "all" if fmt == "priors" else None)  # priors: every SNP
     n = con.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
     cap = int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000))
     if fmt in VENDORS and n > cap:
@@ -834,7 +836,7 @@ def export(request, key, job, fmt):
                       "Panel tab, or filter the table first."}, status=400)
     formats = ["tsv", "bed"] + (list(VENDORS) if n <= cap else [])
     notes = {"vendor_files": f"left out above {cap:,} SNPs"} if fmt == "bundle" and n > cap else {}
-    meta = _meta(job, trait, synthetic, {**filters, **notes}, panel_hash, _command(job, trait, tag))
+    meta = _meta(job, trait, synthetic, {**filters, **notes}, panel_hash, _command(job, trait, tag, fmt))
     if fmt == "bundle" and job.get("input_kind") == "gwas":  # methods.txt gains the fine-mapping paragraph and Wakefield 2009
         from . import association  # association imports views, which imports this module
         meta["finemap"] = association.finemap_used(association.analyse(request, key))
@@ -950,6 +952,7 @@ def exports(request, key, job):
     if old and old.get("preset") != trait:  # a panel of another trait (the Trait changed): its parameters for this trait
         wanted = "panel-" + _design(con, view, d, trait, old["params"], weights, chip)["hash"]
     scopes = []  # (value, label, SNPs, relation, a synthetic chip contributes)
+    total = con.execute("SELECT count(*) FROM r").fetchone()[0]
     if gwas:
         rows = ", ".join(str(int(r)) for r in credible_rows(request, key)) or "NULL"
         rel = f"(SELECT * FROM {view} WHERE file_row_number IN ({rows}))"
@@ -964,7 +967,7 @@ def exports(request, key, job):
         for info in panels:  # two panels with the same name get their times
             scopes.append((f"panel-{info['hash']}", panel_name(info, names.count(panel_name(info)) > 1), info["summary"]["n_selected"],
                            f"read_parquet({lit(d / 'panels' / (info['hash'] + '.parquet'))})", info.get("chip_synthetic")))
-        scopes.append(("all", "All SNPs", con.execute("SELECT count(*) FROM r").fetchone()[0], view, view == "vc" and chip.get("synthetic")))
+        scopes.append(("all", "All SNPs", total, view, view == "vc" and chip.get("synthetic")))
     value, label, n, rel, chip_synthetic = next((x for x in scopes if x[0] == wanted), scopes[0])
     cap = int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000))
     genome = bool(jobs.manifest(d).get("genome"))  # vendor files need the genome
@@ -994,7 +997,8 @@ def exports(request, key, job):
             if fmt in VENDORS and n > cap:
                 text = [f"Vendor files hold at most {cap:,} SNPs: filter the table or design a panel."]
             rows.append((name, text, None if fmt in VENDORS and not notes else href(fmt)))
-    more = [(name, about, href(fmt, **({"scope": "all"} if gwas and fmt == "priors" else {})))  # GWAS: priors of every SNP
+    more = [(name.replace("priors", f"priors, all {total:,} SNPs") if fmt == "priors" else name, about,
+             href(fmt, **({"scope": "all"} if fmt == "priors" else {})))  # priors need every genotyped SNP: never a subset
             for fmt, name, about in MORE_FORMATS if fmt != "priors" or fmt in getattr(snp_export, "FORMATS", ())] + [("Table without # lines (TSV)", "for scripts", href("tsv", plain="1"))]
     if notes:
         more += [(f"{fmt.upper() if fmt == 'kasp' else fmt.capitalize()}: keep SNPs that fail the assay check or are not checked, flagged", "",

@@ -105,17 +105,22 @@ Public data on the pages (R1, R3-R8 of salmo-snpscore's ROADMAP 'Push 2'):
   `vendor_checks.txt`; alleles are the list's, else the assay flank's (public) ones, as in the vendor files. Help
   (`#exports`) explains the `Ssa<chrom>p<pos>` locus names, the bins' error 111 / warning 604 minimums and the
   `.provenance.txt` and `.lookup.tsv` sidecars.
-- Coding consequences (`coding_*` columns, snpscore's VEP-lite): the Table and Overview Region cell shows the
-  consequence (missense, synonymous, stop gained, splice donor, ..., tooltip `p.Thr46Met · <transcript>`); the Region
-  filter (More filters) adds `region=missense` (missense, stop and start changes) and `region=synonymous`; the card's
-  tier line names it (`Missense p.Thr46Met (ENSSSAT00000230965; published as Met54Thr) +3`, the published label when
-  the catalogue's residue number differs) and its closed Details add the codons; the variant page gets the same through
-  `snpscore.locus.annotate_position`.
+- Coding consequences (`coding_*` columns, snpscore's VEP-lite): the Table's and the Panel's Region cell shows the
+  consequence (missense, synonymous, stop gained, splice donor, ..., tooltip `p.Thr46Met · <transcript>`; a bare CDS
+  says 'amino-acid effect not computed: <reason>' in its tooltip); the Region filter (More filters) adds
+  `region=missense` ('protein-changing': missense, stop and start changes) and `region=synonymous`; the card's tier line
+  and the Table's drawer name it (`results.tier_parts`: `Missense p.Thr46Met (ENSSSAT00000230965; published as
+  Met54Thr) +3`, the published label when the catalogue's residue or direction differs, one- or three-letter), the
+  'why this tier' bar labels it (`missense +3`) and the card's closed Details add the transcript and codons; the variant
+  page gets the same through `snpscore.locus.annotate_position` (a position only: the 504-fish panel's alleles).
 - Genomic-prediction priors: the Export tab's closed 'More formats' offers `format=priors` (snpscore's zip of BayesRC
-  classes, GFBLUP/MultiBLUP sets, LDAK partitions and an annotation matrix) for the selected scope (`all` on GWAS jobs).
+  classes, GFBLUP/MultiBLUP sets, LDAK partitions and an annotation matrix), always for all SNPs (`scope=all`, whatever
+  the selected scope: genomic prediction needs a class for every genotyped SNP).
 - Benchmark: with `benchmark_molqtl.tsv` in the release, Methods shows one enrichment figure (log2 axis, 95% intervals)
   for known loci, caQTL and eQTL leads against matched controls, with `?download=benchmark.svg` and
-  `benchmark_figure.tsv`; without it, the one-line 'not yet validated' note stays.
+  `benchmark_figure.tsv` (their '#' lines and `<desc>`: provenance, the PROVISIONAL tier rules and the release TSVs'
+  own '#' lines), and one line under it: the known loci were partly chosen as missense, so their CDS enrichment is not a
+  validation; without it, the one-line 'not yet validated' note stays.
 - Upload QC: chromosome-name warnings (e.g. `HG993277.1`, an older chromosome 18) as alerts; `.2` GenBank names are
   accepted; the Panel tab's Assay readiness card labels snpscore's reasons.
 - Data page: layer population and licence, the AQUA-FAANG samples (ENA projects, BodyMap fish) and a 'How to cite'
