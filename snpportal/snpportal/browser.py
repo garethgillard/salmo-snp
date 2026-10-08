@@ -1,5 +1,5 @@
 """The locus browser page (/snp/locus/): tracks in groups on one axis, each track its own SVG beside an HTML label, so a
-group opens in place (combined track always, one track per condition or gene when open). Release lanes come from
+group opens in place (combined track always, one track per condition when open). Release lanes come from
 snpscore.locus; ChromHMM and the per-condition peaks are read live from salmobase (tracks.yaml) on snpscore's tile
 grid; the functional assays (RNA-seq, ATAC-seq, ChIP-seq, means over replicates) load one assay at a time when their
 section is opened (/snp/locus/assay/). A red band marks the centre: the SNP the view was opened on, else the middle.
@@ -41,17 +41,8 @@ ASSAYS = {"RNA": ("RNA-seq", "expression; + strand up, &#8722; down; conditions 
           "H3K27ac": ("ChIP-seq H3K27ac", "active enhancers and promoters"), "H3K4me3": ("ChIP-seq H3K4me3", "active promoters"),
           "H3K4me1": ("ChIP-seq H3K4me1", "enhancers, active and primed"), "H3K27me3": ("ChIP-seq H3K27me3", "polycomb repression"),
           "CTCF": ("ChIP-seq CTCF", "insulators")}
-SKIP_TISSUES = {"Sperm"}  # salmobase answers 403 for the sperm ChIP files (2026-10-08)
-GROUPS = ("bgee", "peaks", "hmm", "assays", *ASSAYS)  # the groups ?open= may list
-ORGANS = [  # Bgee anatomical entities in tissue groups, one column each (PROVISIONAL grouping)
-    ("Brain", ["brain"]), ("Pituitary", ["pituitary gland"]), ("Gonad", ["testis", "ovary", "immature gonad"]),
-    ("Semen", ["semen"]), ("Liver", ["liver"]), ("Muscle", ["fast muscle tissue", "muscle tissue"]),
-    ("Gill", ["gill", "gill filament", "pharyngeal gill"]), ("Head kid.", ["head kidney"]), ("Kidney", ["kidney", "mesonephros"]),
-    ("Spleen", ["spleen"]), ("Gut", ["digestive tract", "actinopterygian pyloric caecum", "ileum", "midgut", "hindgut",
-                                     "terminal part of digestive tract", "intestine"]),
-    ("Heart", ["heart"]), ("Skin", ["zone of skin"]), ("Eye", ["eye", "camera-type eye"]), ("Nose", ["olfactory pit", "nose"]),
-    ("Notochord", ["notochord"]), ("Juvenile", ["sexually immature organism"])]
-BGEE_PRESENT = 0.5  # 'expressed': Bgee calls the gene present in at least this share of a tissue's libraries (PROVISIONAL)
+SKIP_TISSUES = {"Sperm"}  # sperm ChIP is left out (salmobase answers 403 for its files)
+GROUPS = ("peaks", "hmm", "assays", *ASSAYS)  # the groups ?open= may list
 
 
 # ---- view state, links and the centre ----
@@ -252,49 +243,6 @@ def genes_group(request, s, ax, data):
         body.append(locus_svg._t(4, 20, "none in this window", 9.5, G[700]))
     rows.append(row("Public variants", trk(ax, s, 28, "".join(body)), "504 fish, height = MAF"))
     return group("genes", "Genes and variants", "", rows)
-
-
-# ---- gene expression by tissue (Bgee) ----
-
-def bgee_group(s, data, open_):
-    """One row per gene in view, nearest the centre first (the others when open): a box per tissue group, filled when Bgee
-    calls the gene present in at least half of that tissue's libraries."""
-    genes = data.get("genes", [])
-    if not genes or not (jobs.release() / "bgee.parquet").exists():
-        return None
-    rows = release_rows("bgee", "list_contains(?, gene_id)", [[g["id"] for g in genes]])
-    if not rows:
-        return None
-    by = {}
-    for r in rows:
-        by.setdefault(r["gene_id"], {})[r["tissue"]] = r
-    pos = centre(s)
-    dist = lambda g: 0 if g["start"] < pos <= g["end"] else min(abs(pos - g["start"]), abs(pos - g["end"]))  # noqa: E731
-    genes = sorted((g for g in genes if g["id"] in by), key=dist)
-    colw = W / len(ORGANS)
-    names = "".join(locus_svg._t((i + 0.5) * colw, 10, n, 10, G[700], "middle") for i, (n, _) in enumerate(ORGANS))
-    out = []
-    for i, g in enumerate(genes):
-        cells = []
-        for j, (name, entities) in enumerate(ORGANS):
-            got = [by[g["id"]][e] for e in entities if e in by[g["id"]]]
-            if not got:
-                continue
-            libraries, present = sum(r["libraries"] for r in got), sum(r["present"] for r in got)
-            on = present >= BGEE_PRESENT * libraries
-            tpm = max(r["median_tpm"] or 0 for r in got)
-            tip = (f"{g['label']} · {name}: {'expressed' if on else 'not detected'} (present in {present} of {libraries} libraries; "
-                   f"median up to {tpm:.1f} TPM)")
-            cells.append(f'<rect x="{j * colw + 6:.1f}" y="2" width="{colw - 12:.1f}" height="9" rx="1.5" '
-                         f'fill="{palette.ACCENT if on else palette.WHITE}" stroke="{palette.ACCENT if on else G[300]}">'
-                         f'<title>{escape(tip)}</title></rect>')
-        d = dist(g)
-        out.append(row(g["label"], plain(13, "".join(cells)),
-                       "nearest gene" if i == 0 else "overlaps the centre" if d == 0 else f"{d / 1000:.1f} kb away"))
-    header = row("", plain(13, names), dense=True)
-    more = len(out) - 1
-    return group("bgee", "Expression by tissue", "Bgee 16.0, public RNA-seq · filled: expressed", [header, out[0]], out[1:],
-                 f"{more} more gene{'s' if more != 1 else ''}", open_)
 
 
 # ---- regulatory elements and chromatin states ----
@@ -540,7 +488,7 @@ def context(request, s, layout):
     prefix = f"snpportal:{(info.get('sha256') or 'release')[:12]}"
     deadline = float(jobs.setting("SNPPORTAL_SIGNAL_DEADLINE", 4.0))
     notes = []
-    groups = [genes_group(request, s, ax, data), bgee_group(s, data, open_), peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes),
+    groups = [genes_group(request, s, ax, data), peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes),
               hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes)]
     synthetic = bool(info.get("synthetic")) or any(locus.synthetic_track(t) for t in (cfg or {}).get("tracks", []))
     if s["key"]:

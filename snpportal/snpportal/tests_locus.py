@@ -90,7 +90,7 @@ class LocusTest(SimpleTestCase):
 
     def test_locus_page_groups(self):
         page = self.get(f"{reverse('snpportal:locus')}?{VGLL3}")
-        for group in ("genes", "bgee", "peaks", "hmm", "assays", "other"):  # track groups, closed by default
+        for group in ("genes", "peaks", "hmm", "assays", "other"):  # track groups, closed by default
             self.assertIn(f'class="sp-grp" id="g-{group}"' if group != "assays" else 'class="sp-grp sp-sec" id="g-assays"', page)
         self.assertIn(palette.CENTRE, page)  # the centre band and position
         self.assertIn("ENSSSAG00000053708", page)  # the vgll3 gene model, black, with its Ss4R duplicate linked
@@ -100,7 +100,7 @@ class LocusTest(SimpleTestCase):
         self.assertIn("504-fish panel: MAF 0.48, alt AF 0.48", page)  # public variant at vgll3 Met54Thr (R1)
         self.assertIn("AQUA-FAANG 12 fish: alt AF 0.67, DR2 1.00", page)
         self.assertIn("vgll3_Met54Thr", page)
-        self.assertIn("nearest gene", page)  # Bgee: the gene nearest the centre first
+        self.assertNotIn("g-bgee", page)  # no Bgee expression on the locus browser
         self.assertIn("conditions with the peak", page)  # regulatory elements: the unified robust peaks
         self.assertIn("inside robust peaks", page)  # no ChromHMM in this registry: states in peaks
         self.assertIn('class="st-Active_TSS"', page)  # the state legend, in its group

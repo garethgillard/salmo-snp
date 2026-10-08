@@ -620,8 +620,8 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
     {"slug": "locus", "title": "Explore a locus",
      "text": "The locus browser lines up genes, published loci, regulatory elements, chromatin states and live RNA, ATAC "
              "and ChIP data from salmobase. Open a group for one track per condition.",
-     "alt": "Locus browser at vgll3 on chromosome 25: genes and published SNPs, expression, regulatory elements, chromatin "
-            "states and the functional assays, with a red band at the centre.",
+     "alt": "Locus browser at vgll3 on chromosome 25: genes and published SNPs, regulatory elements, chromatin states and "
+            "the functional assays, with a red band at the centre.",
      "callouts": [("Zoom and move", ".sp-bctl .btn-group:nth-of-type(1)"),
                   ("Genes, published loci and variants", "#g-genes"),
                   ("Open a group: one track per condition", "#g-hmm .sp-tog"),
