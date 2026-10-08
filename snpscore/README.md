@@ -79,9 +79,15 @@ release/v0.1/
   rsid.parquet           rs (BIGINT, the number), chrom, pos, ref, alt (Ssal_v3.1), v2_chrom, v2_pos, v2_ref, v2_alt
                          (ICSASG_v2; NULL unless on exactly one ICSASG_v2 line) from EVA release 9, sorted by rs, zstd;
                          rs IDs on several Ssal_v3.1 lines are left out. `snpscore.rsid(release, rs)` looks one up
+  synteny.parquet        Ss4R homeologous blocks (salmobase synteny 2021-11), each block once from each side: chrom,
+                         start, end (BED), partner, partner_start, partner_end, pairs, aore, lore; not annotated
+  bgee.parquet           Bgee 16.0 RNA-seq per gene_id and tissue (anatomical entity): libraries, present (libraries
+                         calling the gene present), median_tpm, studies; not annotated
   catalog/known_loci.tsv the known-loci catalogue (copy of benchmark/known_loci.tsv)
   weights.yaml           tier rules and trait presets; PROVISIONAL `assay`, `design` and `finemap` blocks
-  tracks.yaml            track registry for the locus browser (if tracks.yaml is next to layers.yaml)
+  tracks.yaml            track registry for the locus browser (if tracks.yaml is next to layers.yaml): `tracks`
+                         (bigWigs), `chromhmm` and `peaks` (one bigBed per condition: ChromHMM segmentation, robust
+                         ATAC peaks; the name field is the state)
   benchmark.tsv          optional: `snpscore benchmark` output for this release (known loci)
   benchmark_molqtl.tsv   optional: `snpscore benchmark --positives molqtl:ca molqtl:e --by-tissue` (nf-RASQUAL leads
                          vs matched controls); same columns as benchmark.tsv (see "Benchmark")

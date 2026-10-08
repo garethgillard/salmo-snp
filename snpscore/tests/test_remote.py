@@ -182,7 +182,7 @@ def test_parse_trackdb():
     assert rna["strand"] == "-" and rna["chromatin_condition"] == "chromatin_Liver_Immature_Female"
     assert (chip["assay"], chip["tissue"], chip["stage"], chip["chromatin_condition"]) == (
         "Input", "Embryo", "MidGastrulation", "chromatin_MidGastrulation")
-    brain, blast = tracks.parse_chromhmm(CHROMHMM, "https://salmobase.org/datafiles/datasets/Aqua-Faang/")
+    brain, blast = tracks.parse_bigbeds(CHROMHMM, "https://salmobase.org/datafiles/datasets/Aqua-Faang/")
     assert (brain["id"], brain["source"], brain["kind"], brain["chromatin_condition"]) == (
         "ChromHMM_Brain_Immature_Female", "BodyMap", "bigBed", "chromatin_Brain_Immature_Female")
     assert (blast["tissue"], blast["stage"]) == ("Embryo", "LateBlastulation")

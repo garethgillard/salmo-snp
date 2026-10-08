@@ -291,6 +291,22 @@ def test_transcripts_and_gene_columns(release, tmp_path):
     assert (vgll3["ss4r_ohnolog"], vgll3["ss4r_ohnolog_chrom"], vgll3["ss4r_class"]) == ("ENSSSAG00000099564", "21", "AORe")
 
 
+def test_synteny_and_bgee_extras(release):
+    blocks = read(release / "synteny.parquet")  # each Ss4R block from both chromosomes, BED coordinates
+    pair = [b for b in blocks if {b["chrom"], b["partner"]} == {"21", "25"} and b["pairs"] == 437]
+    assert sorted((b["chrom"], b["start"], b["end"], b["partner_start"]) for b in pair) == [
+        ("21", 1714550, 57740012, 1172788), ("25", 1172788, 53480658, 1714550)]
+    rows = {(r["gene_id"], r["tissue"]): r for r in read(release / "bgee.parquet")}
+    testis = rows["ENSSSAG00000053708", "testis"]  # vgll3; checked against the fixture's own rows
+    raw = duckdb.sql(f"""SELECT count(*), count(*) FILTER (WHERE "Detection flag" = 'present'), median(TPM::DOUBLE)
+        FROM read_csv('{FIXTURE / "bgee16" / "*.tsv.gz"}', delim='\t', header=true, all_varchar=true, quote='')
+        WHERE "Gene ID" = 'ENSSSAG00000053708' AND "Anatomical entity name" = '"testis"'""").fetchone()
+    assert (testis["libraries"], testis["present"], testis["median_tpm"]) == raw and testis["libraries"] > 0
+    manifest = json.loads((release / "manifest.json").read_text())
+    assert manifest["bgee"]["rows"] == len(rows) and manifest["synteny"]["file"] == "synteny.parquet"
+    assert "bgee_tissue" not in str(manifest["layers"])  # extras, not annotation layers
+
+
 def test_known_loci(release, tmp_path):
     assert (release / "catalog" / "known_loci.tsv").exists()
     rows = {r["id"]: r for r in read(annotate(ROOT / "benchmark" / "known_loci.tsv", release, tmp_path / "out.parquet"))}

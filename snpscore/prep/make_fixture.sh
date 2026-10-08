@@ -55,7 +55,20 @@ done
 # Ss4R table: whole salmon-trout clades of the fixture genes, so their duplicates on other chromosomes stay in.
 awk -F'\t' 'NR == FNR { keep[$1]; next } $4 in keep { print $1 }' "$OUT/genes.tmp" "$RAW/SalmonTroutOrthologs.tsv" | sort -u > "$OUT/ogs.tmp"
 awk -F'\t' 'NR == FNR { keep[$1]; next } FNR == 1 || ($1 in keep)' "$OUT/ogs.tmp" "$RAW/SalmonTroutOrthologs.tsv" > "$OUT/SalmonTroutOrthologs.tsv"
+# Bgee 16.0 RNA-seq values: three multi-tissue studies cut to the fixture genes on chromosomes 21 and 25 (vgll3 and its
+# duplicate); the other study files keep their header only.
+mkdir -p "$OUT/bgee16"
+gzip -dc "$OUT/Salmo_salar.Ssal_v3.1.116.chr.gff3.gz" | awk -F'\t' '$1 == "21" || $1 == "25"' | grep -o 'gene_id=[^;]*' | cut -d= -f2 | sort -u > "$OUT/genes2125.tmp"
+for f in "$RAW"/bgee16/*.tsv.gz; do
+  case "$f" in
+    *SRP011583*|*SRP279079*|*ERP131682*) gzip -dc "$f" | awk -F'\t' 'NR == FNR { keep[$1]; next } FNR == 1 || ($4 in keep)' "$OUT/genes2125.tmp" - ;;
+    *) gzip -dc "$f" | head -1 ;;
+  esac | gzip -9n > "$OUT/bgee16/$(basename "$f")"
+done
+rm "$OUT/genes2125.tmp"
 rm "$OUT/genes.tmp" "$OUT/ogs.tmp"
+# Ss4R blocks touching the fixture chromosomes.
+awk -F'\t' 'NR == 1 || $2 ~ /^(1|9|21|25|26)$/ || $5 ~ /^(1|9|21|25|26)$/' "$RAW/AtlanticSalmon_synteny.tsv" > "$OUT/AtlanticSalmon_synteny.tsv"
 awk -F'\t' '$1 == "1" || $1 == "9" || $1 == "21" || $1 == "25" || $1 == "26"' "$RAW/alias_filtered.txt" > "$OUT/alias_filtered.txt"
 .venv/bin/python prep/make_fixture_genome.py
 wc -l "$OUT"/*

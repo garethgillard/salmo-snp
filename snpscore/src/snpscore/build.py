@@ -214,6 +214,32 @@ def read_ss4r(path, layer):
         GROUP BY a.gene_id"""
 
 
+def read_synteny(path):
+    # salmobase synteny.tsv: one row per Ss4R block pair (chromosome_x, begin_x, end_x, chromosome_y, begin_y, end_y,
+    # 1-based, begin may be above end). One row per block side: chrom, start, end (BED), partner (the other chromosome),
+    # partner_start, partner_end, pairs (anchor gene pairs), aore and lore (their AORe and LORe counts).
+    def side(a, b):
+        return f"""SELECT chromosome_{a} AS chrom, least(begin_{a}, end_{a}) - 1 AS start, greatest(begin_{a}, end_{a}) AS "end",
+                          chromosome_{b} AS partner, least(begin_{b}, end_{b}) - 1 AS partner_start,
+                          greatest(begin_{b}, end_{b}) AS partner_end, number_of_anchorpoints AS pairs,
+                          aore_count AS aore, lore_count AS lore FROM s"""
+    types = {**{f"chromosome_{a}": "VARCHAR" for a in "xy"}, **{f"{k}_{a}": "BIGINT" for k in ("begin", "end") for a in "xy"},
+             **{k: "INTEGER" for k in ("number_of_anchorpoints", "aore_count", "lore_count")}}
+    return f"""WITH s AS (SELECT * FROM read_csv({lit(path)}, delim='\t', header=true, types={types}))
+               {side('x', 'y')} UNION ALL {side('y', 'x')}"""
+
+
+def read_bgee(paths):
+    # Bgee processed RNA-seq values, one file per study (one row per library and gene; the anatomical entity name is
+    # in double quotes). Per gene and entity: libraries, libraries called present, median TPM, studies.
+    return f"""SELECT "Gene ID" AS gene_id, trim("Anatomical entity name", '"') AS tissue,
+                      count(DISTINCT "Library ID")::INTEGER AS libraries,
+                      count(DISTINCT "Library ID") FILTER (WHERE "Detection flag" = 'present')::INTEGER AS present,
+                      median(TPM::DOUBLE) AS median_tpm, count(DISTINCT "Experiment ID")::INTEGER AS studies
+               FROM read_csv({[str(p) for p in paths]}, delim='\t', header=true, all_varchar=true, quote='')
+               GROUP BY 1, 2"""
+
+
 READERS = {"bed": read_bed, "tsv": read_tsv, "aquafaang_peaks": read_aquafaang_peaks, "gff3": read_gff3,
            "gff3_regions": read_gff3_regions, "vcf": read_vcf, "rna_counts": read_rna_counts,
            "gff3_transcripts": read_gff3_transcripts, "vcf_info": read_vcf_info, "gene_tsv": read_gene_tsv,
@@ -229,6 +255,11 @@ def load_yaml(path):
 def sources(layer):
     """The (file, url) entries of a layer: its `files` list, or the layer itself."""
     return layer.get("files") or [layer]
+
+
+def bgee_sources(bgee):
+    """The (file, url) entries of the layers.yaml `bgee` block: <dir>/<name> for each of its `files`."""
+    return [{"file": f"{bgee['dir']}/{name}", "url": bgee["url"] + name} for name in bgee["files"]] if bgee else []
 
 
 def flatten(features, classes):
@@ -251,21 +282,23 @@ def flatten(features, classes):
 
 
 def fetch(layers_yaml, data_dir):
-    """Download every `url` in layers.yaml (layers, genome, aliases, rsid) that isn't in data_dir yet. A bigBed url with
-    a .bed `file` is converted to BED; a `query` is sent as ?query=... (Ensembl BioMart); a source with `sites_only`
-    is streamed through sites_only()."""
+    """Download every `url` in layers.yaml (layers, genome, aliases, rsid, synteny, bgee) that isn't in data_dir yet. A
+    bigBed url with a .bed `file` is converted to BED; a `query` is sent as ?query=... (Ensembl BioMart); a source with
+    `sites_only` is streamed through sites_only()."""
     data = Path(data_dir)
     data.mkdir(parents=True, exist_ok=True)
     cfg = load_yaml(layers_yaml)
     genome = cfg.get("genome")
     extra = [{"file": genome["file"] + ext, "url": genome["url"] + ext} for ext in (".fai", ".gzi", "")] if genome else []
-    extra += [cfg["aliases"]] if cfg.get("aliases") else []
+    extra += [cfg[k] for k in ("aliases", "synteny") if cfg.get(k)]
     extra += cfg["rsid"]["files"] if cfg.get("rsid") else []
+    extra += bgee_sources(cfg.get("bgee"))
     for layer in [s for layer in cfg["layers"] for s in sources(layer)] + extra:
         target = data / layer["file"]
         if layer.get("url") and not target.exists():
             url = layer["url"] + ("?query=" + urllib.parse.quote(layer["query"]) if layer.get("query") else "")
             print(f"downloading {layer['url']} -> {target}", flush=True)
+            target.parent.mkdir(parents=True, exist_ok=True)
             part = target.with_name(target.name + ".part")
             if layer.get("sites_only"):
                 sites_only(url, part, layer["sites_only"])
@@ -403,6 +436,17 @@ def build(layers_yaml, data_dir, out_dir):
                             "urls": [s.get("url") for s in rsid["files"]], "citation": rsid.get("citation"),
                             "source_sha256": hashes(paths)[1], "sha256": hashes([out / "rsid.parquet"])[1]}
         print(f"rsid: {manifest['rsid']['rows']} rows", flush=True)
+    for name, block, sql in (("synteny", cfg.get("synteny"), lambda b: read_synteny(data / b["file"])),
+                             ("bgee", cfg.get("bgee"), lambda b: read_bgee([data / s["file"] for s in bgee_sources(b)]))):
+        paths = [data / block["file"]] if name == "synteny" and block else [data / s["file"] for s in bgee_sources(block)]
+        if not block or not all(p.exists() for p in paths):
+            continue  # optional extras for the portal, never annotated
+        target = out / f"{name}.parquet"
+        con.execute(f"COPY ({sql(block)} ORDER BY 1, 2) TO {lit(target)} (FORMAT parquet, COMPRESSION zstd)")
+        manifest[name] = {"file": target.name, "rows": con.execute(f"SELECT count(*) FROM read_parquet({lit(target)})").fetchone()[0],
+                          "url": block.get("url"), "citation": block.get("citation"), "source_sha256": hashes(paths)[1],
+                          "sha256": hashes([target])[1]}
+        print(f"{name}: {manifest[name]['rows']} rows", flush=True)
     catalog = cfg.get("catalog")
     if catalog and (here / catalog["file"]).exists():
         (out / "catalog").mkdir(exist_ok=True)

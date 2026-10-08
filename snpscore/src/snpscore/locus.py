@@ -241,9 +241,17 @@ def signal(tracks, chrom, start, end, cache=None, prefix="snpscore", deadline=4.
     todo = [(t["url"], [i for i in tiles if keys[(t["url"], i)] not in have]) for t in tracks]
     todo = [item for item in todo if item[1]]
 
-    def read(url, wanted):
-        f = bbi.open_bbi(url)
-        return [f.bins(chrom, i * size, (i + 1) * size, TILE_BINS) for i in wanted]
+    def read(url, wanted):  # one read per run of adjacent tiles (the same bins as tile by tile: they share the grid)
+        f, out, runs = bbi.open_bbi(url), [], []
+        for i in wanted:
+            if runs and i == runs[-1][-1] + 1:
+                runs[-1].append(i)
+            else:
+                runs.append([i])
+        for run in runs:
+            values = f.bins(chrom, run[0] * size, (run[-1] + 1) * size, TILE_BINS * len(run))
+            out += [values[k * TILE_BINS:(k + 1) * TILE_BINS] for k in range(len(run))]
+        return out
 
     fresh = {}
     for (url, wanted), got in zip(todo, _many(read, todo, deadline)):

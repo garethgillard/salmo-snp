@@ -50,6 +50,30 @@ rsid:
       url: https://ftp.ebi.ac.uk/pub/databases/eva/rs_releases/release_9/by_species/salmo_salar/GCA_000233375.4/8030_GCA_000233375.4_current_ids.vcf.gz
   citation: European Variation Archive (EVA) release 9, Salmo salar rs IDs on Ssal_v3.1 (GCA_905237065.2) and ICSASG_v2 (GCA_000233375.4) (ebi.ac.uk/eva)
 
+# Ss4R homeologous blocks for the locus browser (not annotated): build writes synteny.parquet, each block once from
+# each chromosome (BED coordinates, partner = the other chromosome).
+synteny:
+  file: AtlanticSalmon_synteny.tsv
+  url: https://salmobase.org/datafiles/TSV/synteny/2021-11/AtlanticSalmon/synteny.tsv
+  citation: Ss4R homeologous blocks, salmobase synteny 2021-11 (salmon-trout orthology pipeline)
+
+# Bgee RNA-seq expression for the gene pages (not annotated): fetch downloads `files` from `url` into <data>/<dir>/,
+# build writes bgee.parquet (per gene and anatomical entity: libraries, present calls, median TPM, studies).
+bgee:
+  url: https://www.bgee.org/ftp/16-0/download/processed_expr_values/rna_seq/Salmo_salar/
+  dir: bgee16
+  files: [Salmo_salar_RNA-Seq_read_counts_TPM_ERP106308.tsv.gz, Salmo_salar_RNA-Seq_read_counts_TPM_ERP112945.tsv.gz,
+          Salmo_salar_RNA-Seq_read_counts_TPM_ERP117343.tsv.gz, Salmo_salar_RNA-Seq_read_counts_TPM_ERP131682.tsv.gz,
+          Salmo_salar_RNA-Seq_read_counts_TPM_SRP011583.tsv.gz, Salmo_salar_RNA-Seq_read_counts_TPM_SRP035898.tsv.gz,
+          Salmo_salar_RNA-Seq_read_counts_TPM_SRP059010.tsv.gz, Salmo_salar_RNA-Seq_read_counts_TPM_SRP095919.tsv.gz,
+          Salmo_salar_RNA-Seq_read_counts_TPM_SRP169832.tsv.gz, Salmo_salar_RNA-Seq_read_counts_TPM_SRP181697.tsv.gz,
+          Salmo_salar_RNA-Seq_read_counts_TPM_SRP261472.tsv.gz, Salmo_salar_RNA-Seq_read_counts_TPM_SRP278943.tsv.gz,
+          Salmo_salar_RNA-Seq_read_counts_TPM_SRP279079.tsv.gz, Salmo_salar_RNA-Seq_read_counts_TPM_SRP289187.tsv.gz,
+          Salmo_salar_RNA-Seq_read_counts_TPM_SRP293731.tsv.gz, Salmo_salar_RNA-Seq_read_counts_TPM_SRP293733.tsv.gz,
+          Salmo_salar_RNA-Seq_read_counts_TPM_SRP296448.tsv.gz, Salmo_salar_RNA-Seq_read_counts_TPM_SRP309222.tsv.gz,
+          Salmo_salar_RNA-Seq_read_counts_TPM_SRP353984.tsv.gz, Salmo_salar_RNA-Seq_read_counts_TPM_SRP379303.tsv.gz]
+  citation: Bgee 16.0, processed RNA-seq expression values for Salmo salar (Ssal_v3.1, Ensembl gene ids); Bastian et al. 2021, Nucleic Acids Research 49:D831
+
 # Published SNPs at known loci; build copies the file to catalog/, annotate adds the nearest one within `window` bp.
 catalog:
   file: benchmark/known_loci.tsv

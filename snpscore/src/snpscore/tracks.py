@@ -1,5 +1,5 @@
 """Signal track registry: the AQUA-FAANG trackhub bigWigs (BodyMap and DevMap trackDb.txt) and the per-condition
-ChromHMM bigBeds as tracks.yaml, plus picking tracks for a view and reading their signal with bbi.bins_many.
+ChromHMM and robust ATAC peak bigBeds as tracks.yaml, plus picking tracks for a view and reading their signal with bbi.bins_many.
 URLs come only from tracks.yaml, never from requests, and every one must pass bbi.check_url.
 Regenerate the repo copy with `snpscore tracks` (needs the network); `snpscore build` copies it into the release,
 and the portal reads release/<v>/tracks.yaml."""
@@ -19,6 +19,7 @@ from . import bbi
 HUB = "https://salmobase.org/datafiles/datasets/Aqua-Faang/trackhub/AtlanticSalmon/"
 SOURCES = ("BodyMap", "DevMap")
 CHROMHMM_LIST = "../../chromatin_states/chromhmm_salmon_files.txt"  # relative to HUB; its paths are relative to its parent
+PEAKS_LIST = "../../robust_ATAC_peaks/salmon_files.txt"  # the same for the robust ATAC peaks
 DEFAULT = Path("tracks.yaml")  # where `snpscore tracks` writes: next to layers.yaml, as the other commands assume
 # The 21 conditions with ChromHMM states in AtlanticSalmon_unified_peaks.bed (annotate columns chromatin_<condition>).
 # Gill (ATAC and ChIP only), Sperm (ChIP only) and the RNA-only embryo stages have none.
@@ -72,37 +73,43 @@ def parse_trackdb(text, base, source):
     return tracks
 
 
-def parse_chromhmm(text, base):
-    """ChromHMM segmentations (one bigBed per condition) from chromhmm_salmon_files.txt, whose lines look like
-    chromatin_states/AtlanticSalmon/<BodyMap|DevMap>/AtlanticSalmon_<condition>.bb, relative to `base`.
-    Listed for the P4.3c lanes; not drawn yet."""
+def parse_bigbeds(text, base, assay="ChromHMM"):
+    """One bigBed per condition from a salmobase file list, paths relative to `base`: ChromHMM segmentations
+    (chromhmm_salmon_files.txt: chromatin_states/AtlanticSalmon/<BodyMap|DevMap>/AtlanticSalmon_<condition>.bb) or,
+    with assay 'Peaks', the robust ATAC peaks (robust_ATAC_peaks/salmon_files.txt: .../AtlanticSalmon_ATAC_<condition>.bb).
+    Either way the bigBed name field is the ChromHMM state (e.g. 'Accessible chromatin'), read by locus.segments()."""
+    prefix = "AtlanticSalmon_ATAC_" if assay == "Peaks" else "AtlanticSalmon_"
     out = []
     for line in text.split():
         *_, source, name = line.split("/")
-        cond = name[:-len(".bb")].split("_")[1:]
-        if not (name.startswith("AtlanticSalmon_") and name.endswith(".bb") and len(cond) in (1, 3)):
-            raise ValueError(f"unexpected ChromHMM file name {name}")
+        cond = name[len(prefix):-len(".bb")].split("_")
+        if not (name.startswith(prefix) and name.endswith(".bb") and len(cond) in (1, 3)):
+            raise ValueError(f"unexpected {assay} file name {name}")
         fields = _condition(cond)
-        out.append({"id": f"ChromHMM_{fields['condition']}", "source": source, "assay": "ChromHMM", **fields,
+        out.append({"id": f"{assay}_{fields['condition']}", "source": source, "assay": assay, **fields,
                     "replicate": None, "strand": None, "kind": "bigBed", "url": urljoin(base, line)})
     return out
 
 
 def from_trackhub(hub=HUB, defaults=None):
-    """The tracks.yaml content, read from the trackhub's BodyMap and DevMap trackDb.txt and the ChromHMM file list."""
+    """The tracks.yaml content, read from the trackhub's BodyMap and DevMap trackDb.txt and the ChromHMM and robust
+    ATAC peak file lists."""
     hub = hub.rstrip("/") + "/"
     tracks = []
     for source in SOURCES:
         base = f"{hub}{source}/"
         tracks += parse_trackdb(bbi.read_all(base + "trackDb.txt").decode(), base, source)
-    listing = urljoin(hub, CHROMHMM_LIST)
-    chromhmm = parse_chromhmm(bbi.read_all(listing).decode(), urljoin(listing, "../"))
-    ids = [t["id"] for t in tracks + chromhmm]
+    beds = {}
+    for key, listing, assay in (("chromhmm", CHROMHMM_LIST, "ChromHMM"), ("peaks", PEAKS_LIST, "Peaks")):
+        listing = urljoin(hub, listing)
+        beds[key] = parse_bigbeds(bbi.read_all(listing).decode(), urljoin(listing, "../"), assay)
+    every = tracks + beds["chromhmm"] + beds["peaks"]
+    ids = [t["id"] for t in every]
     if len(set(ids)) != len(ids):
         raise ValueError("duplicate track ids")
     return {"version": 1, "generated": datetime.date.today().isoformat(), "hub": hub,
-            "hosts": sorted({urlsplit(t["url"]).hostname for t in tracks + chromhmm}), "defaults": defaults or DEFAULTS,
-            "tracks": tracks, "chromhmm": chromhmm}
+            "hosts": sorted({urlsplit(t["url"]).hostname for t in every}), "defaults": defaults or DEFAULTS,
+            "tracks": tracks, **beds}
 
 
 def write_tracks(cfg, path):
@@ -114,7 +121,7 @@ def write_tracks(cfg, path):
 @functools.lru_cache(maxsize=8)
 def _load(path, mtime):
     cfg = yaml.load(Path(path).read_text(), Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader)) or {}
-    for t in cfg.get("tracks", []) + cfg.get("chromhmm", []):
+    for t in cfg.get("tracks", []) + cfg.get("chromhmm", []) + cfg.get("peaks", []):
         bbi.check_url(t["url"])
         if urlsplit(t["url"]).hostname not in cfg.get("hosts", []):
             raise ValueError(f"{t['url']}: host not in the hosts of {path}")
@@ -175,7 +182,7 @@ def main(argv=None):
     for t in cfg["tracks"]:
         counts[(t["source"], t["assay"])] = counts.get((t["source"], t["assay"]), 0) + 1
     print(f"{args.out}: {len(cfg['tracks'])} bigWigs; " + ", ".join(f"{s} {a} {n}" for (s, a), n in counts.items())
-          + f"; {len(cfg['chromhmm'])} ChromHMM bigBeds")
+          + f"; {len(cfg['chromhmm'])} ChromHMM and {len(cfg['peaks'])} peak bigBeds")
 
 
 if __name__ == "__main__":

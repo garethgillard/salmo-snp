@@ -61,6 +61,11 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
 - Ss4R duplicates (2026-10-07): `ss4r` layer from the AQUA-FAANG SalmonTroutOrthologs.tsv on salmobase: the other
   salmon genes of a gene's clade on the paired chromosome of its syntenic quartet (any other chromosome when the quartet
   is unknown); class AORe/LORe from the clade or its neighbours; Ens106 gene ids used as Ens116 ids.
+- Locus browser redesign (2026-10-08): no trait on the browser; signal tracks are the mean over a condition's replicates;
+  combined tracks stack the tissue means; RNA-seq per-condition rows on a shared log scale; sperm ChIP left out (salmobase
+  answers 403); RNA '.forward' files are the + strand (checked at vgll3: 16x the reverse files' reads over the gene).
+  Bgee 16.0 (bgee.org, Ssal_v3.1 ids; salmobase's copy is 15.2 on ICSASG_v2): a gene is 'expressed' in a tissue when Bgee
+  calls it present in at least half of that tissue's libraries; Bgee's 31 tissues grouped into 17 columns (browser.ORGANS).
 
 Open (ask G; all collected with options and recommendations in DECISIONS.md):
 - Everything under Provisional.

@@ -27,7 +27,7 @@ ALLOWED_HOSTS = {h.strip().lower() for h in os.environ.get("SNPSCORE_ALLOWED_HOS
                  if h.strip()}
 ALLOWED_SCHEMES = ("https",)
 CONNECT_TIMEOUT, READ_TIMEOUT, RETRIES = 3, 5, 2
-MAX_PER_HOST = 8
+MAX_PER_HOST = 16  # range requests in flight per host (salmobase serves static files; a browser view reads ~600)
 HEAD = 131072  # first read of a file: header, zoom list and the chromosome tree (90 KB for Ssal_v3.1's 3,218 sequences)
 CHROM_TREE_MAX = 256 * 1024  # read the whole chromosome tree at once when it is smaller than this
 RTREE_GUESS = 256  # R-tree block size assumed when reading an index header and its root node together
