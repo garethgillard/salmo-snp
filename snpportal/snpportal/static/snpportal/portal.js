@@ -213,5 +213,17 @@
     if (e.detail.elt.closest && e.detail.elt.closest("#locus-view .sp-bctl")) e.detail.parameters.open = opened();
   });
   document.addEventListener("htmx:pushedIntoHistory", function () { if (document.querySelector("#locus-view [data-group]")) sync(); });
+  var cur = null;  // the mouse line: over the track column (not the chromosome), at the base under the mouse
+  document.addEventListener("mousemove", function (e) {
+    var t = e.target.closest ? e.target : null, box = t && !t.closest(".sp-trk-chr") && t.closest("#locus-view .sp-tracks");
+    var ax = box && box.querySelector(".sp-ax"), r = ax && ax.getBoundingClientRect(), x = r ? e.clientX - r.left : -1;
+    if (cur && (cur !== box || x < 0 || x > r.width)) { cur.classList.remove("sp-cur"); cur = null; }
+    if (!r || x < 0 || x > r.width) return;
+    var a = +box.getAttribute("data-start"), b = +box.getAttribute("data-end"), base = Math.min(b, a + 1 + Math.floor(x / r.width * (b - a)));
+    box.style.setProperty("--sp-x", (r.left - ax.parentNode.getBoundingClientRect().left + x) + "px");
+    box.style.setProperty("--sp-pos", JSON.stringify(base.toLocaleString("en")));
+    box.classList.add("sp-cur");
+    cur = box;
+  });
 })();
 /* end browser */

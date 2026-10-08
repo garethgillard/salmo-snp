@@ -78,11 +78,12 @@ def centre(s):
 
 
 def trk(ax, s, h, body, line_from=0):
-    """One track: an SVG on the shared axis whose first mark is the centre band, so the track's own marks draw over it."""
+    """One track: an SVG on the shared axis (class sp-ax: portal.js draws the mouse line through these) whose first mark
+    is the centre band, so the track's own marks draw over it."""
     x = ax.x(centre(s) - 0.5)
     band = (f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{line_from}" y2="{h}" stroke="{palette.CENTRE}" stroke-width="{GLOW}" '
             'stroke-opacity="0.18"/>')
-    return mark_safe(f'<svg class="sp-trk-svg" viewBox="0 0 {W} {h}" width="{W}" height="{h}" role="img">{band}{body}</svg>')
+    return mark_safe(f'<svg class="sp-trk-svg sp-ax" viewBox="0 0 {W} {h}" width="{W}" height="{h}" role="img">{band}{body}</svg>')
 
 
 def plain(h, body):
