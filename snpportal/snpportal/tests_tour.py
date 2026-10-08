@@ -41,7 +41,7 @@ class Page(HTMLParser):
 
 
 def headline(html):  # the summary figure's key numbers
-    return re.findall(r'font-size="24" font-weight="700">([^<]*)</tspan>', html)
+    return re.findall(r'font-size="28" font-weight="700">([^<]*)</text>', html)
 
 
 def card_rows(html, key):

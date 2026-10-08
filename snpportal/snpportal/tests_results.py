@@ -87,13 +87,14 @@ class ResultsTest(SimpleTestCase):
         expected = ["summary", "ideogram", "conditions", "regions", "terms", "maf"]
         for name in expected:
             self.assertIn(f'id="fig-{name}"', page)
-        more = page[page.index("More charts (3)"):]  # analyst charts closed, after the three open ones
-        self.assertTrue(all(f'id="fig-{name}"' in more for name in ("regions", "terms", "maf")))
+        more = page[page.index("More charts (4)"):]  # analyst charts closed, after the two open ones side by side
+        self.assertTrue(all(f'id="fig-{name}"' in more for name in ("conditions", "regions", "terms", "maf")))
         self.assertNotIn('id="top-h"', page)  # an overview of the whole list: the SNPs themselves are on the Table tab
         summary = page[page.index('id="fig-summary"'):page.index('id="fig-ideogram"')]  # key numbers and how the SNPs split
-        self.assertIn(f'{self.summary["n_rows"]:,}</tspan><tspan dx="6" font-size="13" fill="#495057">SNPs scored', summary)
-        rows = re.findall(r'text-anchor="end" font-weight="600">([^<]*)</text>', summary)
-        self.assertEqual(rows, ["Tier", "Gene region", "Known locus"] + ["Assay check"] * ("assay_status" in self.columns))
+        self.assertIn(f'font-size="28" font-weight="700">{self.summary["n_rows"]:,}</text><text x="0.0" y="46.0" text-anchor="start" '
+                      'font-size="12.5">SNPs scored', summary)
+        rows = re.findall(r'font-size="12.5" font-weight="600">([^<]*)</text>', summary)
+        self.assertEqual(rows, ["Tier for maturation", "Gene region", "Near a known locus"] + ["Assay check"] * ("assay_status" in self.columns))
         self.assertIn('href="?tab=table&amp;trait=maturation&amp;tier=1-2"', summary)  # every part lists its SNPs
         self.assertNotIn("PROVISIONAL", re.sub(r"<svg .*?</svg>", "", page, flags=re.S))  # no badges: one caveat line
         self.assertEqual(page.count('class="sp-caveat'), 1)  # one caveat line

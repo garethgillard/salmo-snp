@@ -795,30 +795,47 @@ def _tier_segments(counts, total, label, href):
 
 
 def _fig_summary(c, link, desc):
-    """The SNPs per tier, genic region, known locus and assay check (not for GWAS jobs), under the key numbers."""
-    s, trait = c["s"], c["trait"]
+    """The key numbers, then the SNPs per tier and genic region (each over the public background's split, when the
+    release has one), near a known locus and by assay check (not for GWAS jobs)."""
+    s, trait, bg = c["s"], c["trait"], c["background"]
     tiers = s.get("tiers", {}).get(trait)
     if not tiers:
         return None
     n, href = s.get("n_rows") or sum(tiers.values()), link or (lambda **_: None)
     top2 = int(tiers.get("1", 0)) + int(tiers.get("2", 0))
-    head = [(f"{n:,}", "SNPs scored", None), (f"{top2:,}", f"in tier 1–2 for {c['preset']} ({pct(top2, n)})", href(tier="1-2"))]
+    public = _shares((bg.get("tiers") or {}).get(trait))
+    chroms = len([k for k, v in (s.get("chrom_tiers", {}).get(trait) or {}).items() if sum(v.values())])
+    head = [(f"{n:,}", "SNPs scored", f"on {chroms} chromosome{'' if chroms == 1 else 's'}" if chroms else "", None),
+            (f"{top2:,}", f"in tier 1–2 for {c['preset']}",
+             f"{pct(top2, n)} of the list" + (f"; {100 * (public.get('1', 0) + public.get('2', 0)):.1f}% of public sites" if public else ""),
+             href(tier="1-2"))]
     if c.get("loci"):
-        head.append((f"{c['loci'][0]:,}", "loci", c["loci"][1]))
-    rows = [("Tier", [(figures.TIER_NAMES[int(t)].capitalize(), tiers[t], palette.TIERS[int(t)][0], href(tier=t)) for t in sorted(tiers, key=int)])]
-    regions = s.get("region_tiers", {}).get(trait) or {}
-    rows.append(("Gene region", [(REGION_LABELS[g].split(" (")[0], sum(regions.get(g, {}).values()), palette.REGIONS[g], href(region=g) if g in REGIONS else None)
-                                 for g in list(REGIONS) + ["other"]]))
+        head.append((f"{c['loci'][0]:,}", "loci", "on the Association tab", c["loci"][1]))
+    names = {t: figures.TIER_NAMES[t].capitalize() for t in (1, 2, 3, 4)}
+    groups = [{"title": f"Tier for {c['preset']}", "note": "1 = strongest functional evidence" + (" · thin bar: public sites" if public else ""),
+               "parts": [(names[t], int(tiers.get(str(t), 0)), palette.TIERS[t][0], href(tier=str(t))) for t in (1, 2, 3, 4)],
+               "background": [(names[t], public.get(str(t), 0), palette.TIERS[t][0]) for t in (1, 2, 3, 4)] if public else None}]
+    regions, region_bg = s.get("region_tiers", {}).get(trait) or {}, background_regions(bg)
+    label = {g: REGION_LABELS[g].split(" (")[0] for g in list(REGIONS) + ["other"]}
+    groups.append({"title": "Gene region", "note": "Ensembl 116" + (" · thin bar: public sites" if region_bg else ""),
+                   "parts": [(label[g], sum(regions.get(g, {}).values()), palette.REGIONS[g], href(region=g) if g in REGIONS else None)
+                             for g in list(REGIONS) + ["other"]],
+                   "background": [(label[g], region_bg.get(g, 0), palette.REGIONS[g]) for g in list(REGIONS) + ["other"]] if region_bg else None})
     if "known" in s.get("counts", {}):
         window = (c["manifest"].get("catalog") or {}).get("window")
         near = s["counts"]["known"]
-        rows.append(("Known locus", [(f"within {window / 1000:g} kb" if window else "near one", near, palette.GREY[700], href(known="1")),
-                                     ("further away", n - near, palette.GREY[200], None)]))
+        groups.append({"title": "Near a known locus", "note": f"within {window / 1000:g} kb of a published trait locus" if window else "",
+                       "parts": [("near one", near, palette.GREY[700], href(known="1")), ("further away", n - near, palette.GREY[200], None)]})
     if s.get("assay") and c["job"].get("input_kind") != "gwas":
-        rows.append(("Assay check", [(k.replace("_", " "), s["assay"].get(k, 0), palette.STATUS[ASSAY[k][1]][2], href(assay=k)) for k in ASSAY]))
-    rows = [{"label": label, "parts": [p for p in parts if p[1]]} for label, parts in rows if any(p[1] for p in parts)]
-    svg = figures.summary(head, rows, f"Summary, {c['preset']}", desc, c["synthetic"])
-    return svg, ["group", "category", "snps"], [(r["label"], p[0], p[1]) for r in rows for p in r["parts"]]
+        groups.append({"title": "Assay check", "note": "probe flanks for genotyping assays",
+                       "parts": [(k.replace("_", " "), s["assay"].get(k, 0), palette.STATUS[ASSAY[k][1]][2], href(assay=k)) for k in ASSAY]})
+    for g in groups:
+        g["parts"] = [p for p in g["parts"] if p[1]]
+        if g.get("background"):
+            g["background"] = [b for b in g["background"] if b[1]]
+    svg = figures.summary(head, [g for g in groups if g["parts"]], f"Summary, {c['preset']}", desc, c["synthetic"])
+    return svg, ["group", "category", "snps", "public_share"], \
+        [(g["title"], p[0], p[1], next((f"{b[1]:.5f}" for b in g.get("background") or () if b[0] == p[0]), "")) for g in groups for p in g["parts"]]
 
 
 def _fig_ideogram(c, link, desc):
@@ -829,7 +846,7 @@ def _fig_ideogram(c, link, desc):
     for chrom, b, *_ in bins:
         sizes[chrom] = max(sizes.get(chrom, 0), int((b + 1) * 1e6))
     chroms = [(k, sizes[k]) for k in sorted(sizes, key=_chrom_key)]
-    href = (lambda chrom, start, end: link(chrom=chrom, start=start, end=end)) if link else None
+    href = (lambda chrom, start, end, tier: link(chrom=chrom, start=start, end=end, tier=tier)) if link else None
     chip = c.get("chip") or {}  # the Panel tab's reference chip, as ticks (P6.6)
     svg = figures.ideogram(chroms, bins, c["s"]["chrom_tiers"].get(c["trait"], {}), f"SNPs along the genome, {c['preset']}",
                            desc, c["synthetic"] or bool(chip.get("synthetic")), href, chip.get("density"),
@@ -927,11 +944,12 @@ def _fig_maf(c, link, desc):
 FIGURES = {  # name -> (card title, (i) definition, builder(context, link or None, desc) -> (svg, header, rows) or None)
     "summary": ("Summary", "How the SNPs scored for this trait (tier 1 = strongest functional evidence, tier 4 = no "
                 "evidence found, not evidence of no effect), where they fall relative to genes, how many are near a "
-                "published locus and how they did in the assay design check. Click a part of a bar, or its legend "
-                "entry, to list those SNPs in the Table.", _fig_summary),
-    "ideogram": ("Where the SNPs are", "Chromosomes to scale (Ssal_v3.1). Each 1 Mb bin is coloured by the best tier among "
-                 "its SNPs (grey: tier 4 only); the bar on the right splits each chromosome's SNPs by tier. Click a bin "
-                 "to list its SNPs.", _fig_ideogram),
+                "published locus and how they did in the assay design check. Thin bars: the same split for the release's "
+                "public sites, for comparison. Click a number, a part of a bar or its legend entry to list those SNPs.",
+                _fig_summary),
+    "ideogram": ("Where the SNPs are", "Chromosomes to scale (Ssal_v3.1). Each 1 Mb bin holding SNPs is shaded: blue when "
+                 "some are in tier 1–2 (darker = more of them), grey when none are. On the right: each chromosome's SNPs "
+                 "and, as a bar, its tier 1–2 SNPs. Click a bin, chromosome or bar to list those SNPs.", _fig_ideogram),
     "conditions": ("Active chromatin per condition", "Share of the SNPs in an active chromatin state in each of the 21 "
                    "AQUA-FAANG conditions; × = fold over a background of public sites, when the release has one. "
                    "Outlined: the trait's conditions. Click a cell to list those SNPs.", _fig_conditions),
@@ -943,7 +961,7 @@ FIGURES = {  # name -> (card title, (i) definition, builder(context, link or Non
             "and farmed, pooled; your strain can differ). Light bars: below 0.05. Black ticks: the count expected from a "
             "background of public sites. Click a bar to list those SNPs.", _fig_maf),
 }
-OPEN = ("summary", "ideogram", "conditions")  # open on the Overview; the rest are under 'More charts'
+OPEN = ("summary", "ideogram")  # side by side on the Overview (GWAS jobs: conditions beside); the rest under 'More charts'
 
 
 def _figure_context(key, job, trait, summary, d):
@@ -993,11 +1011,12 @@ def overview(request, key, job):
         built = build(c, link, info)
         if built:
             figs[name] = figure_card(c, name, built[0])
+    pair = OPEN if "ideogram" in figs else ("summary", "conditions")  # GWAS jobs have no ideogram here
     validation = {} if gwas else jobs.read_json(d / "validation.json")
     qc_items, qc_warning = qc(validation)
     rejected = sum(v for v in (validation.get("rejected") or {}).values() if isinstance(v, int))
     return {
-        "figs": {k: v for k, v in figs.items() if k in OPEN}, "more_figs": [v for k, v in figs.items() if k not in OPEN],
+        "figs": {k: v for k, v in figs.items() if k in pair}, "more_figs": [v for k, v in figs.items() if k not in pair],
         "warnings": warnings_of(validation) if validation else [],
         "qc_items": qc_items, "qc_warning": qc_warning, "qc_alias": validation.get("alias_warnings") or [],
         "qc_line": qc_line(validation), "qc_open": qc_problem(validation),

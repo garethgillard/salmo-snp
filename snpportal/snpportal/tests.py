@@ -187,7 +187,7 @@ class PortalTest(SimpleTestCase):
         root = ET.fromstring(text)
         self.assertEqual(root.get("role"), "img")
         tsv = self.client.get(reverse("snpportal:figure", args=[key, "summary"]) + "?format=tsv&plain=1").content.decode()
-        self.assertEqual(sum(int(line.split("\t")[2]) for line in tsv.splitlines()[1:] if line.startswith("Tier\t")), n)
+        self.assertEqual(sum(int(line.split("\t")[2]) for line in tsv.splitlines()[1:] if line.startswith("Tier for ")), n)
 
     def test_switching_preset_never_rescores_and_card_reads_one_row(self):
         url = self.upload().url

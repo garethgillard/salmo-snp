@@ -11,6 +11,7 @@ Conventions every figure follows:
 """
 from __future__ import annotations
 
+import math
 from html import escape
 
 from . import palette
@@ -20,6 +21,7 @@ TIER_NAMES = {1: "tier 1", 2: "tier 2", 3: "tier 3", 4: "tier 4 (no evidence)"}
 STAGE_LABELS = {"LateBlastulation": "Blastula", "MidGastrulation": "Gastrula", "EarlySomitogenesis": "E somit.",  # the one
                 "MidSomitogenesis": "M somit.", "LateSomitogenesis": "L somit."}  # short name of each embryo stage
 IDEOGRAM_TIER4 = palette.GREY[300]  # #F0F0F0 would vanish on the white chromosome
+IDEOGRAM_OTHER = palette.GREY[300]  # bins whose SNPs are all in tier 3-4
 
 
 def svg(width, height, title, desc, body, synthetic=False):
@@ -71,10 +73,6 @@ def _tier_fill(tier):
     return palette.TIERS.get(int(tier), palette.TIERS[4])
 
 
-def tier_legend(x, y, tier4=None):
-    return _legend([(tier4 if t == 4 and tier4 else _tier_fill(t)[0], TIER_NAMES[t]) for t in (1, 2, 3, 4)], x, y)
-
-
 def mix(a, b, t):
     """The colour t (0-1) of the way from palette colour a to b, for sequential scales."""
     t = min(max(t, 0.0), 1.0)
@@ -101,92 +99,115 @@ def bar(parts, title, desc="", synthetic=False, marks=None):
     return svg(width, 40 + (len(parts) + 1) // 2 * 24, title, desc, "".join(body), synthetic)
 
 
-def summary(head, rows, title, desc="", synthetic=False):
-    """The Overview's summary: a headline of key numbers, then one stacked bar per way of grouping the SNPs, each with
-    its legend (count and share) underneath. head: [(number, text, href)]; rows: [{label, parts: [(name, n, fill,
-    href)]}]. Parts and legend entries with an href link to the table filtered to them."""
-    width, left, bar_w = 960, 112, 840
-    out, x = [], 0
-    for number, text, href in head:
-        out.append(_a(href, f'<text x="{x:.0f}" y="24"><tspan font-size="24" font-weight="700">{escape(number)}</tspan>'
-                            f'<tspan dx="6" font-size="13" fill="{palette.GREY[700]}">{escape(text)}</tspan></text>'))
-        x += 14 * len(number) + 6.3 * len(text) + 40
-    y = 44
-    for r in rows:
-        total = sum(n for _, n, _, _ in r["parts"]) or 1
-        out.append(_text(left - 10, y + 15, r["label"], "end", font_weight=600))
-        x = left
-        for name, n, fill, href in r["parts"]:
-            w = bar_w * n / total
-            out.append(_rect(x, y, w, 22, fill, f"{r['label']}: {name}, {n:,} SNP{'' if n == 1 else 's'} ({share_label(n, total)})", href,
-                             f' stroke="{palette.WHITE}"'))
+def summary(head, groups, title, desc="", synthetic=False, width=580):
+    """The Overview's summary, drawn to sit beside the ideogram: key numbers, then one stacked bar per way of grouping
+    the SNPs, with its title and note above and a two-column legend of counts and shares below. head: [(number,
+    label, note, href)]; groups: [{title, note, parts: [(name, n, fill, href)], background: [(name, share, fill)] or
+    None}]. A background is a thin bar under the SNPs' bar: the same split for public sites. Parts with an href link
+    to the table filtered to them."""
+    out, col = [], width / max(len(head), 1)
+    for i, (number, label, note, href) in enumerate(head):
+        x = i * col
+        out.append(_a(href, _text(x, 28, number, font_size=28, font_weight=700) + _text(x, 46, label, font_size=12.5)))
+        if note:
+            out.append(_text(x, 62, note, font_size=11, fill=palette.GREY[700]))
+    y = 88
+    for g in groups:
+        total = sum(n for _, n, _, _ in g["parts"]) or 1
+        out.append(_text(0, y, g["title"], font_size=12.5, font_weight=600)
+                   + _text(width, y, g["note"], "end", font_size=11, fill=palette.GREY[700]))
+        x, y = 0.0, y + 7
+        for name, n, fill, href in g["parts"]:
+            w = width * n / total
+            out.append(_rect(x, y, w, 26, fill, f"{g['title']}: {name}, {n:,} SNP{'' if n == 1 else 's'} ({share_label(n, total)})",
+                             href, f' stroke="{palette.WHITE}"'))
             if w > 7.5 * len(f"{n:,}") + 8:
-                out.append(_text(x + w / 2, y + 15.5, f"{n:,}", "middle", fill=palette.text_on(fill), font_weight=600,
+                out.append(_text(x + w / 2, y + 17.5, f"{n:,}", "middle", fill=palette.text_on(fill), font_weight=600,
                                  pointer_events="none"))
             x += w
-        lx, ly = left, y + 30
-        for name, n, fill, href in r["parts"]:
-            label = f"{name}: {n:,} ({share_label(n, total)})"
-            w = 24 + 6.2 * len(label)
-            if lx > left and lx + w > left + bar_w:
-                lx, ly = left, ly + 17
+        y += 26
+        if g.get("background"):
+            x = 0.0
+            for name, share, fill in g["background"]:
+                out.append(_rect(x, y + 3, width * share, 6, fill, f"Public sites: {name}, {share_label(share, 1)}",
+                                 extra=f' stroke="{palette.WHITE}" stroke-width="0.5"'))
+                x += width * share
+            y += 9
+        for i, (name, n, fill, href) in enumerate(g["parts"]):
+            lx, ly = (i % 2) * width / 2, y + 10 + (i // 2) * 16
             out.append(_a(href, f'<rect x="{lx:.0f}" y="{ly}" width="11" height="11" fill="{fill}" stroke="{palette.GREY[500]}"/>'
-                                + _text(lx + 16, ly + 9.5, label, font_size=11)))
-            lx += w
-        y = ly + 28
-    return svg(width, y - 12, title, desc, "".join(out), synthetic)
+                                + _text(lx + 16, ly + 9.5, f"{name}: {n:,} ({share_label(n, total)})", font_size=11)))
+        y += 10 + (len(g["parts"]) + 1) // 2 * 16 + 24
+    return svg(width, y - 18, title, desc, "".join(out), synthetic)
 
 
-def ideogram(chroms, bins, chrom_tiers, title, desc="", synthetic=False, link=None, chip=None, chip_label="chip"):
-    """Chromosomes to scale with 1 Mb bins coloured by the best tier in them (grey: tier 4 only), and on the right
-    each chromosome's SNPs split by tier. chroms: [(chrom, length)]; bins: [[chrom, bin, n1, n2, n3, n4]];
-    chrom_tiers: {chrom: {tier: n}}; link(chrom, start, end) -> href for a bin (end = None: whole chromosome);
-    chip: [[chrom, mb, n]] markers of a reference chip per 1 Mb bin, drawn as ticks under each chromosome."""
-    left, track, gap, stack, right = 34, 500, 14, 110, 64
-    width, top, row = left + track + gap + stack + right, 26, 15
+def ideogram(chroms, bins, chrom_tiers, title, desc="", synthetic=False, link=None, chip=None, chip_label="chip", width=580):
+    """Chromosomes to scale, each 1 Mb bin that holds SNPs shaded: grey when none is in tier 1-2, else blue, darker
+    with more tier 1-2 SNPs (a log scale up to the busiest bin); on the right each chromosome's SNP count and its tier
+    1-2 SNPs as a bar. chroms: [(chrom, length)]; bins: [[chrom, bin, n1, n2, n3, n4]]; chrom_tiers: {chrom: {tier: n}};
+    link(chrom, start, end, tier) -> href (start None: the whole chromosome); chip: [[chrom, mb, n]] markers of a
+    reference chip per 1 Mb bin, drawn as ticks under each chromosome."""
+    left, gap, count_w, bar_w, number_w = 24, 10, 44, 64, 42
+    track = width - left - gap - count_w - 10 - bar_w - number_w
+    top, row = 34, 16
     longest = max([size for _, size in chroms] + [1])
     scale = track / longest
     y_of = {c: top + i * row for i, (c, _) in enumerate(chroms)}
-    parts = [_text(left - 8, 12, "Mb", "end", fill=palette.GREY[700], font_size=10)]
+    top12 = {c: sum(int((chrom_tiers.get(c) or {}).get(t, 0)) for t in ("1", "2")) for c, _ in chroms}
+    most_bin = max([n[0] + n[1] for _, _, *n in bins] + [1])
+    most_chrom = max(list(top12.values()) + [1])
+    cx, bx = left + track + gap + count_w, left + track + gap + count_w + 10
+
+    def shade(k):  # tier 1-2 SNPs in a bin -> a blue from light (1) to the darkest tier blue (the busiest bin)
+        return mix(palette.TIERS[3][0], palette.TIERS[1][0], 0.45 + 0.55 * math.log1p(k) / math.log1p(most_bin))
+
+    parts = [_text(left - 6, 12, "Mb", "end", fill=palette.GREY[700], font_size=10),
+             _text(cx, 26, "SNPs", "end", fill=palette.GREY[700], font_size=10.5),
+             _text(bx, 26, "tier 1–2", fill=palette.GREY[700], font_size=10.5)]
     for mb in range(0, int(longest / 1e6) + 1, 20):
         x = left + mb * 1e6 * scale
         parts.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="16" y2="{top + len(chroms) * row - 4}" stroke="{palette.GREY[200]}"/>'
                      + _text(x, 12, mb, "middle", fill=palette.GREY[700], font_size=10))
     for chrom, size in chroms:
         y = y_of[chrom]
-        parts.append(_a(link and link(chrom, None, None), _text(left - 6, y + 9, chrom, "end", font_size=11))
-                     + f'<rect x="{left}" y="{y + 1}" width="{size * scale:.1f}" height="9" rx="2" fill="{palette.WHITE}" '
-                       f'stroke="{palette.GREY[300]}"/>')
-        counts = {int(t): n for t, n in (chrom_tiers.get(chrom) or {}).items()}
-        total, x = sum(counts.values()), left + track + gap
-        for t in (1, 2, 3, 4):
-            w = stack * counts.get(t, 0) / (total or 1)
-            if w:
-                parts.append(_rect(x, y + 1, w, 9, _tier_fill(t)[0], f"Chromosome {chrom}: {counts[t]:,} SNPs in {TIER_NAMES[t]}",
-                                   extra=f' stroke="{palette.GREY[500]}" stroke-width="0.3"' if t == 4 else ""))
-                x += w
-        parts.append(_text(width - 4, y + 9, f"{total:,}", "end", font_size=11))
-    w = max(1e6 * scale, 1.0)
-    for chrom, b, *n in bins:
+        total = sum(int(n) for n in (chrom_tiers.get(chrom) or {}).values())
+        parts.append(_a(link and link(chrom, None, None, None), _text(left - 6, y + 9.5, chrom, "end", font_size=11))
+                     + f'<rect x="{left}" y="{y + 1}" width="{size * scale:.1f}" height="10" rx="3" fill="{palette.WHITE}" '
+                       f'stroke="{palette.GREY[300]}"/>'
+                     + _text(cx, y + 9.5, f"{total:,}", "end", font_size=11, fill=palette.GREY[700 if total else 500]))
+        k = top12[chrom]
+        if k:
+            parts.append(_rect(bx, y + 2, max(1.0, bar_w * k / most_chrom), 8, palette.TIERS[2][0],
+                               f"Chromosome {chrom}: {k:,} of {total:,} SNPs in tier 1–2", link and link(chrom, None, None, "1-2")))
+        parts.append(_text(bx + bar_w + number_w, y + 9.5, f"{k:,}", "end", font_size=11, fill=palette.GREY[900 if k else 500]))
+    w = max(1e6 * scale, 2.5)  # a lone SNP's bin stays visible
+    for chrom, b, *n in sorted(bins, key=lambda x: x[2] + x[3]):  # blue bins over grey ones
         if chrom not in y_of:
             continue
-        best = next((t for t in (1, 2, 3, 4) if n[t - 1]), 4)
-        fill = IDEOGRAM_TIER4 if best == 4 else _tier_fill(best)[0]
-        tip = (f"{chrom}:{b}-{b + 1} Mb: {sum(n):,} SNPs (" + ", ".join(f"tier {t}: {k:,}" for t, k in zip((1, 2, 3, 4), n) if k) + ")")
-        parts.append(_rect(left + b * 1e6 * scale, y_of[chrom] + 1, w, 9, fill, tip,
-                           link and link(chrom, int(b * 1e6), int((b + 1) * 1e6))))
+        k = n[0] + n[1]
+        tip = (f"{chrom}:{b}-{b + 1} Mb: {sum(n):,} SNPs (" + ", ".join(f"tier {t}: {m:,}" for t, m in zip((1, 2, 3, 4), n) if m) + ")")
+        parts.append(_rect(left + b * 1e6 * scale, y_of[chrom] + 1, w, 10, shade(k) if k else IDEOGRAM_OTHER, tip,
+                           link and link(chrom, int(b * 1e6), int((b + 1) * 1e6), None)))
     for chrom, mb, n in chip or ():
         if chrom in y_of:
-            parts.append(_rect(left + mb * 1e6 * scale, y_of[chrom] + 11, w, 3, palette.GREY[700],
+            parts.append(_rect(left + mb * 1e6 * scale, y_of[chrom] + 12, w, 3, palette.GREY[700],
                                f"{chrom}:{mb}-{mb + 1} Mb: {n:,} {chip_label} markers"))
-    y = top + len(chroms) * row + 6
-    parts.append(tier_legend(left, y, IDEOGRAM_TIER4)
-                 + _text(width - 4, y + 9.5, "SNPs by tier", "end", font_size=11, fill=palette.GREY[700]))
+    y = top + len(chroms) * row + 8
+    steps = sorted({1, most_bin} | ({round(math.sqrt(most_bin))} if most_bin > 3 else set()))
+    legend = [f'<rect x="{left}" y="{y}" width="11" height="11" fill="{IDEOGRAM_OTHER}" stroke="{palette.GREY[500]}"/>'
+              + _text(left + 16, y + 9.5, "SNPs, none in tier 1–2", font_size=11)]
+    x = left + 170
+    legend.append(_text(x, y + 9.5, "tier 1–2 SNPs per Mb:", font_size=11))
+    x += 124
+    for s in steps:
+        legend.append(f'<rect x="{x}" y="{y}" width="11" height="11" fill="{shade(s)}"/>' + _text(x + 15, y + 9.5, f"{s:,}", font_size=11))
+        x += 24 + 7 * len(f"{s:,}")
+    parts += legend
     if chip:
         y += 18
         parts.append(f'<rect x="{left}" y="{y + 4}" width="11" height="3" fill="{palette.GREY[700]}"/>'
                      + _text(left + 16, y + 9.5, f"{chip_label}: 1 Mb bins with markers", font_size=11))
-    return svg(width, y + 18, title, desc, "".join(parts), synthetic)
+    return svg(width, y + 16, title, desc, "".join(parts), synthetic)
 
 
 def heatmap(rows, title, desc="", synthetic=False, link=None, scale_max=None):

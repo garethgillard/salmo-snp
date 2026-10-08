@@ -125,6 +125,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-figure { margin: 0; }
 .sp-stack > * + .sp-figure { margin-top: 1rem; }  /* the reset above would otherwise drop the stack's gap (Panel tab) */
 .sp-figure svg { display: block; max-width: 100%; height: auto; }
+.sp-pair .sp-figure { height: 100%; }  /* the Overview's two cards side by side, as tall as each other */
 @media (max-width: 575.98px) { .sp-figure svg .sp-lg { font-size: 22px; } }  /* figures.bar text, drawn at ~half size on phones */
 .sp-caption { font-size: .75rem; color: var(--sp-grey-700); margin-top: .5rem; }
 .sp-downloads { margin-left: auto; display: flex; gap: .35rem; font-size: .8rem; }
