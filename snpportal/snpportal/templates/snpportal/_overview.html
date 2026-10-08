@@ -1,6 +1,7 @@
 {% load snpportal_tags %}
-{% comment %}Overview tab: key numbers, the top SNPs, three open figures, 'More charts' and the upload QC line (open by
-   itself on any problem). Every number, bar, bin and cell links to the Table tab with its filter.{% endcomment %}
+{% comment %}Overview tab: the whole list at a glance (key numbers, three open figures, 'More charts' and the upload QC line,
+   open by itself on any problem); the SNPs themselves are on the Table tab. Every number, bar, bin and cell links to the
+   Table tab with its filter.{% endcomment %}
 <div class="sp-stack">
   <div class="sp-kpis" aria-label="Key numbers">
     {% for k in kpis %}{% if k.href %}<a class="sp-kpi{% if k.warn %} sp-kpi-warn{% endif %}" href="{{ k.href }}">{% else %}<div class="sp-kpi">{% endif %}
@@ -11,28 +12,6 @@
 
   {% if figs.tiers %}<div>{% include 'snpportal/_figure.html' with fig=figs.tiers %}
     <p class="sp-small sp-muted mt-1 mb-0">Tier 1 = strongest functional evidence for this trait &middot; Tier 4 = no evidence found (not evidence of no effect)</p></div>{% endif %}
-
-  {% if top.rows %}<section class="sp-card" aria-labelledby="top-h">
-    <h2 id="top-h">Top {{ top.rows|length }} SNPs for {{ trait_label }}</h2>
-    <div class="table-responsive"><table class="table table-sm sp-table mb-1">
-      <thead><tr><th scope="col">SNP</th>{% if top.gwas %}<th scope="col" class="sp-num">p</th>{% endif %}<th scope="col">Gene</th><th scope="col">Tier</th>
-        <th scope="col">Evidence</th>{% if not top.gwas %}{% if 'known_locus' in top.columns %}<th scope="col">Known locus</th>{% endif %}
-        {% if 'assay_status' in top.columns %}<th scope="col">Assay</th>{% endif %}{% endif %}</tr></thead>
-      <tbody>{% for r in top.rows %}<tr>
-        <td><a href="{{ r.url }}">{{ r.snp }}</a>{% if r.alleles %} <span class="sp-muted">&middot; {{ r.alleles }}</span>{% endif %}</td>
-        {% if top.gwas %}<td class="sp-num">{{ r.p }}</td>{% endif %}
-        <td title="{{ r.gene_tip }}">{{ r.gene }}</td>
-        <td>{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
-        <td title="{{ r.evidence }}">{{ r.evidence|default:"no evidence found" }}</td>
-        {% if not top.gwas %}{% if 'known_locus' in top.columns %}<td>{% if r.known %}<span class="sp-known" title="{% if r.known_dist == 0 %}At{% else %}{{ r.known_dist|thousands }} bp from{% endif %} the published SNP {{ r.known }}">&#9733; {{ r.known }}{% if r.caveat %} ({{ r.caveat }}){% endif %}</span>{% endif %}</td>{% endif %}
-        {% if 'assay_status' in top.columns %}<td>{% if r.assay %}<span class="sp-as sp-as-{{ r.assay.1 }}" title="{{ r.assay.3|default:r.assay.2 }}"><span aria-hidden="true">{{ r.assay.0 }}</span> {{ r.assay.2 }}</span>{% endif %}</td>{% endif %}{% endif %}
-      </tr>{% endfor %}</tbody>
-    </table></div>
-    <p class="sp-small sp-muted mb-1">{% if top.gwas %}Ordered by p.{% else %}Ordered by tier, then score.{% endif %}{% if top.ties %} {{ top.ties }}{% endif %}</p>
-    <p class="sp-small mb-0">{% if association %}<a href="{{ association }}">All loci on the Association tab &rarr;</a>
-      {% elif n_top %}<a href="{{ top_link }}" hx-boost="true">All {{ n_top|thousands }} tier 1–2 in the table &rarr;</a>
-      {% else %}No tier 1–2 SNPs for this trait.{% endif %}</p>
-  </section>{% endif %}
 
   {% if figs.ideogram or figs.conditions %}<div class="row g-3">
     {% if figs.ideogram %}<div class="col-xl-7">{% include 'snpportal/_figure.html' with fig=figs.ideogram %}</div>{% endif %}

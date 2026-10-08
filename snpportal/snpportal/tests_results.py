@@ -89,8 +89,7 @@ class ResultsTest(SimpleTestCase):
             self.assertIn(f'id="fig-{name}"', page)
         more = page[page.index("More charts (3)"):]  # analyst charts closed, after the three open ones
         self.assertTrue(all(f'id="fig-{name}"' in more for name in ("regions", "terms", "maf")))
-        self.assertLess(page.index('id="top-h"'), page.index('id="fig-ideogram"'))  # answer first: the top SNPs
-        self.assertIn("Ordered by tier, then score.", page)
+        self.assertNotIn('id="top-h"', page)  # an overview of the whole list: the SNPs themselves are on the Table tab
         labels = re.findall(r'<b>[^<]*</b><span>([^<]*)</span>', page)
         self.assertEqual(labels, ["SNPs scored", "tier 1–2", "near a known locus"] + ["assay pass"] * ("assay_status" in self.columns))
         self.assertNotIn("PROVISIONAL", re.sub(r"<svg .*?</svg>", "", page, flags=re.S))  # no badges: one caveat line

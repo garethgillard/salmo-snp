@@ -156,7 +156,7 @@ class TourTest(SimpleTestCase):
         drawers = list(dict.fromkeys(re.findall(r"snp=(\d+)", table)))  # the table's rows, in order
         self.assertEqual(card_rows(html, key), drawers[:20])
         self.assertEqual(len(card_rows(html, key)), 20)
-        self.assertEqual(card_rows(overview.content.decode(), key), drawers[:10])  # the Overview's top 10, in the same order
+        self.assertEqual(card_rows(overview.content.decode(), key), [])  # the Overview lists no SNPs: the Table does
         self.assertIn("SNPs were annotated with snpscore", html)
         self.assertIn(jobs.read(key)["manifest_sha256"][:12], html)  # provenance, 12-character hashes
         self.assertNotIn(jobs.read(key)["manifest_sha256"], html)

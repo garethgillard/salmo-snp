@@ -580,14 +580,15 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
     # union, and a leading 'row' stretches it across the crop.
     {"slug": "overview", "title": "Find SNPs with functional evidence",
      "text": "Each SNP gets a tier for the trait you pick, from 1 (strongest) to 4 (no evidence found, not evidence of no "
-             "effect). Results open with the key numbers and your top SNPs.",
-     "alt": "Results of the known-loci example for maturation: trait menu, key numbers, SNPs per tier and the top SNPs.",
+             "effect). Results open with an overview of the whole list.",
+     "alt": "Results of the known-loci example for maturation: trait menu, key numbers, SNPs per tier and where they "
+            "fall in the genome.",
      "callouts": [("Pick the trait", "#trait"), ("Click a number to list those SNPs", ".sp-kpis"),
                   ("Tier: 1 strongest, 4 no evidence found", "#fig-tiers"),
-                  ("The evidence behind it", ["#top-h + div th:nth-child(4)", "#top-h + div tr:nth-child(4) td:nth-child(4)"])],
+                  ("Where they fall in the genome", "#fig-ideogram")],
      "try": ("Try it: score the known loci", {"example": "known_loci"}),
      "shot": {"path": "results/{snps}/?trait=maturation", "width": 1100,
-              "crop": [".nav-tabs", "#top-h + div tr:nth-child(4)"]}},
+              "crop": [".nav-tabs", "#fig-ideogram"]}},
     {"slug": "score", "title": "Score your list",
      "text": "Upload a VCF, SNP table, PLINK or chip file, paste positions, name genes or regions, or upload GWAS "
              "results. Without a list, try one of the examples.",

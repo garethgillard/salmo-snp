@@ -1,8 +1,8 @@
-"""Results of a finished job: the Overview (key numbers, the top SNPs, figures, upload QC), the Table (filters, columns
+"""Results of a finished job: the Overview (key numbers, genome-wide figures, upload QC), the Table (filters, columns
 and the evidence drawer) and the figures (the full evidence card is in locus.py). Tiers for the chosen trait come from
 the job's tiers.parquet (precomputed for every preset), so switching traits never rescores; snpscore.scored() runs per
-request only for presets missing from it. The Overview reads summary.json (plus one small query for the top SNPs); the
-table sorts and pages on the server in two steps (row numbers first, then that page's columns)."""
+request only for presets missing from it. The Overview reads summary.json; the table sorts and pages on the server in
+two steps (row numbers first, then that page's columns)."""
 from __future__ import annotations
 
 import os
@@ -24,7 +24,6 @@ from .jobs import ident
 
 PAGE_SIZE = 50
 PAGE_SIZES = (25, 50, 100, 500)
-TOP = 10  # SNPs in the Overview's top list (the report lists 20)
 REGIONS = jobs.REGION_GROUPS
 REGION_LABELS = {"coding": "coding (CDS, splice)", "UTR": "UTR", "exon": "non-coding exon", "intron": "intron",
                  "intergenic": "intergenic", "other": "other"}
@@ -711,9 +710,9 @@ def _drawer(con, view, row, types, weights, trait, key, conditions, in_preset, c
             "card": f"{reverse('snpportal:card', args=[key, row])}?{urlencode({'trait': trait, **(settings or {})})}", "close": close}
 
 
-# ---- the top SNPs (Overview and report) ----
+# ---- the top SNPs (the report) ----
 
-def top(request, key, job, n=TOP):
+def top(request, key, job, n):
     """{rows, matching, ties, gwas} for the first `n` SNPs with the request's trait and table filters, ordered as the
     Table: tier, then score (highest first), then list order; GWAS jobs by p. `ties` says how many SNPs share the
     tier and score at the cut, when the cut splits them."""
@@ -955,8 +954,8 @@ def figure_card(c, name, svg):
 
 
 def overview(request, key, job):
-    """Context for the Overview tab: key numbers, the top SNPs, the figures whose data exist and the upload QC line.
-    Reads summary.json and validation.json, plus one top-N query."""
+    """Context for the Overview tab: key numbers, the figures whose data exist and the upload QC line. Reads
+    summary.json and validation.json."""
     d = jobs.folder(key)
     s = summary_of(d)
     trait = _trait(request, s)
@@ -971,8 +970,6 @@ def overview(request, key, job):
         if built:
             figs[name] = figure_card(c, name, built[0])
     validation = {} if gwas else jobs.read_json(d / "validation.json")
-    best = top(request, key, job)
-    tiers = s.get("tiers", {}).get(trait) or {}
     loci = None
     if gwas:
         from . import association
@@ -987,12 +984,11 @@ def overview(request, key, job):
     return {
         "kpis": tiles,
         "figs": {k: v for k, v in figs.items() if k in OPEN}, "more_figs": [v for k, v in figs.items() if k not in OPEN],
-        "top": best, "n_top": int(tiers.get("1", 0)) + int(tiers.get("2", 0)), "top_link": link(tier="1-2"),
         "association": association,
         "qc_items": qc_items, "qc_warning": qc_warning, "qc_alias": validation.get("alias_warnings") or [],
         "qc_line": qc_line(validation), "qc_open": qc_problem(validation),
         "rejects": (d / "rejects.tsv").exists() and bool(rejected), "trait": trait, "trait_label": jobs.trait_label(trait),
-        "keep": [(k, v) for k, v in best["chosen"].items() if k != "trait"] + list(gwas_settings(request).items()),
+        "keep": list(gwas_settings(request).items()),  # the tab links drop table filters too
     }
 
 
