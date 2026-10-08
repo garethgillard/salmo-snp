@@ -129,7 +129,7 @@ class PortalTest(SimpleTestCase):
 
         overview = self.client.get(response.url)
         self.assertContains(overview, "SNPs scored")
-        self.assertContains(overview, 'id="fig-tiers"')
+        self.assertContains(overview, 'id="fig-summary"')
         self.assertEqual(overview["Cache-Control"], "no-store, private")
         self.assertEqual(overview["Referrer-Policy"], "same-origin")
         self.assertContains(overview, 'hx-select-oob="#sp-actions"')  # Download in the header follows preset switches
@@ -180,14 +180,14 @@ class PortalTest(SimpleTestCase):
         self.assertTrue(plain.startswith("id\t") or plain.startswith("chrom\t"))
         self.assertFalse([p for p in folder.iterdir() if p.name.startswith(".")])  # no export left behind
 
-        svg = self.client.get(reverse("snpportal:figure", args=[key, "tiers"]) + "?trait=liver")
+        svg = self.client.get(reverse("snpportal:figure", args=[key, "summary"]) + "?trait=liver")
         text = svg.content.decode()
         self.assertNotIn("var(--", text)
         self.assertIn("PROVISIONAL", text)
         root = ET.fromstring(text)
         self.assertEqual(root.get("role"), "img")
-        tsv = self.client.get(reverse("snpportal:figure", args=[key, "tiers"]) + "?format=tsv&plain=1").content.decode()
-        self.assertEqual(sum(int(line.split("\t")[1]) for line in tsv.splitlines()[1:]), n)
+        tsv = self.client.get(reverse("snpportal:figure", args=[key, "summary"]) + "?format=tsv&plain=1").content.decode()
+        self.assertEqual(sum(int(line.split("\t")[2]) for line in tsv.splitlines()[1:] if line.startswith("Tier\t")), n)
 
     def test_switching_preset_never_rescores_and_card_reads_one_row(self):
         url = self.upload().url

@@ -81,6 +81,9 @@ BLACKLISTED = ("#FFFFFF", "#878787", "BL")  # fill, hatch colour, label
 # Tissues (Okabe-Ito, colour-blind safe); for lines, swatches and dots, not for text backgrounds.
 TISSUES = {"Brain": "#0072B2", "Gill": "#56B4E9", "Gonad": "#CC79A7", "Liver": "#D55E00", "Muscle": "#009E73",
            "Embryo": "#E69F00", "HeadKidney": "#7B3294", "DistalIntestine": "#8C6D31"}  # the last two: RNA-seq only
+# Genic region (results.REGION_LABELS) -> fill: sequential oranges from the protein outwards, apart from the tier blues
+REGIONS = {"coding": "#A63603", "UTR": "#E6550D", "exon": "#FD8D3C", "intron": "#FDAE6B", "intergenic": "#FEE6CE",
+           "other": GREY[300]}
 CENTRE = "#FF1744"  # the locus browser's centre position on its ruler: a fluorescent red that no track uses
 
 REGBUILD = "#56B4E9"  # Okabe-Ito sky blue: 'Ensembl regulatory' in the 'why this tier' bar (apart from the blues under CVD)

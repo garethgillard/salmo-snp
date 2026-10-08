@@ -1,6 +1,6 @@
 {% extends 'snpportal/base_portal.html' %}
 {% load snpportal_tags %}
-{% comment %}Printable report of a job (report.py): the caveat, key numbers, top SNPs, a panel, two figures, a methods
+{% comment %}Printable report of a job (report.py): the caveat, upload warnings, the summary, top SNPs, a panel, a figure, a methods
    summary with references and the provenance (portal.css /* report */ sets A4). Links point at the results page.{% endcomment %}
 {% block main %}
 <div class="sp-report sp-stack">
@@ -9,14 +9,8 @@
   <div class="sp-status sp-status-not_checked" role="note">{% if synthetic %}<strong>SYNTHETIC data</strong> &middot; {% endif %}Prototype scoring:
     tiers rank annotated evidence, not proven effects; rules are provisional.</div>
 
-  <section aria-labelledby="kpi-h">
-    <h2 class="visually-hidden" id="kpi-h">Key numbers</h2>
-    <div class="sp-kpis">
-      {% for k in kpis %}{% if k.href %}<a class="sp-kpi{% if k.warn %} sp-kpi-warn{% endif %}" href="{{ k.href }}">{% else %}<div class="sp-kpi">{% endif %}
-        <b>{{ k.value }}</b><span>{{ k.label }}</span>{% if k.note %}<small>{{ k.note }}</small>{% endif %}
-      {% if k.href %}</a>{% else %}</div>{% endif %}{% endfor %}
-    </div>
-  </section>
+  {% if warnings %}<div class="sp-status sp-status-warn" role="note">&#9888; Upload warnings: {{ warnings|join:"; " }}</div>{% endif %}
+  {% if summary %}<figure class="sp-card sp-figure" id="fig-{{ summary.name }}"><h2>{{ summary.title }}</h2>{{ summary.svg }}</figure>{% endif %}
 
   <section class="sp-card" aria-labelledby="top-h">
     <div class="sp-card-head"><h2 id="top-h">Top {{ top.rows|length }} SNPs for {{ preset }}</h2>

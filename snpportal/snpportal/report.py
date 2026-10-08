@@ -16,20 +16,13 @@ from . import association, jobs, results, tools
 from .views import finished, private
 
 TOP = 20
-FIGURES = ("tiers", "ideogram")  # the report's two figures, when their data exist
-
-
-def rebase(href, base):
-    """Overview links are relative to the results page ('?tab=table&...', '#qc'): make them point there."""
-    return f"{base}{href}" if href and href[0] in "?#" else href
+FIGURES = ("summary", "ideogram")  # the report's two figures, when their data exist: the summary first, at the top
 
 
 def overview(request, key, job):
-    """results.overview() for a page other than the results page: KPI and figure links point at the results page."""
+    """results.overview() for a page other than the results page: figure links point at the results page."""
     base = reverse("snpportal:results", args=[key])
     ov = results.overview(request, key, job)
-    for k in ov["kpis"]:
-        k["href"] = rebase(k.get("href"), base)
     ov["figs"] = {name: dict(fig, svg=mark_safe(str(fig["svg"]).replace('href="?', f'href="{base}?')))
                   for name, fig in list(ov["figs"].items()) + [(f["name"], f) for f in ov["more_figs"]]}
     return ov
@@ -98,7 +91,7 @@ def report(request, key):
         "meta": " · ".join(x for x in [f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None, f"trait {label}",
                                        f"printed {jobs.utc()}"] if x),
         "actions": [{"label": "Back to the results", "url": f"{base}?{urlencode({'trait': trait, **filters})}"}],
-        "kpis": ov["kpis"], "figs": [ov["figs"][n] for n in FIGURES if n in ov["figs"]], "panel": panel(request, key, d),
+        "warnings": ov["warnings"], "summary": ov["figs"].get(FIGURES[0]), "figs": [ov["figs"][n] for n in FIGURES[1:] if n in ov["figs"]], "panel": panel(request, key, d),
         "top": best, "filters": filters, "synthetic": synthetic,
         "table_url": f"{base}?{urlencode({'tab': 'table', 'trait': trait, **filters})}",
         "methods_url": request.build_absolute_uri(reverse("snpportal:methods")), "refs": references(refs),

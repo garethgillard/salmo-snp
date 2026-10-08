@@ -101,12 +101,40 @@ def bar(parts, title, desc="", synthetic=False, marks=None):
     return svg(width, 40 + (len(parts) + 1) // 2 * 24, title, desc, "".join(body), synthetic)
 
 
-def tier_bar(counts, title="SNPs per tier", desc="", synthetic=False, links=None):
-    """One horizontal bar split by tier (1 best to 4), with a legend of counts and shares. counts: {tier: n};
-    links: {tier: href}."""
-    tiers = sorted(counts, key=int)
-    return bar([(f"Tier {t}", counts[t], _tier_fill(t)[0], (links or {}).get(str(t))) for t in tiers], title, desc, synthetic,
-               [str(int(t)) for t in tiers])
+def summary(head, rows, title, desc="", synthetic=False):
+    """The Overview's summary: a headline of key numbers, then one stacked bar per way of grouping the SNPs, each with
+    its legend (count and share) underneath. head: [(number, text, href)]; rows: [{label, parts: [(name, n, fill,
+    href)]}]. Parts and legend entries with an href link to the table filtered to them."""
+    width, left, bar_w = 960, 112, 840
+    out, x = [], 0
+    for number, text, href in head:
+        out.append(_a(href, f'<text x="{x:.0f}" y="24"><tspan font-size="24" font-weight="700">{escape(number)}</tspan>'
+                            f'<tspan dx="6" font-size="13" fill="{palette.GREY[700]}">{escape(text)}</tspan></text>'))
+        x += 14 * len(number) + 6.3 * len(text) + 40
+    y = 44
+    for r in rows:
+        total = sum(n for _, n, _, _ in r["parts"]) or 1
+        out.append(_text(left - 10, y + 15, r["label"], "end", font_weight=600))
+        x = left
+        for name, n, fill, href in r["parts"]:
+            w = bar_w * n / total
+            out.append(_rect(x, y, w, 22, fill, f"{r['label']}: {name}, {n:,} SNP{'' if n == 1 else 's'} ({share_label(n, total)})", href,
+                             f' stroke="{palette.WHITE}"'))
+            if w > 7.5 * len(f"{n:,}") + 8:
+                out.append(_text(x + w / 2, y + 15.5, f"{n:,}", "middle", fill=palette.text_on(fill), font_weight=600,
+                                 pointer_events="none"))
+            x += w
+        lx, ly = left, y + 30
+        for name, n, fill, href in r["parts"]:
+            label = f"{name}: {n:,} ({share_label(n, total)})"
+            w = 24 + 6.2 * len(label)
+            if lx > left and lx + w > left + bar_w:
+                lx, ly = left, ly + 17
+            out.append(_a(href, f'<rect x="{lx:.0f}" y="{ly}" width="11" height="11" fill="{fill}" stroke="{palette.GREY[500]}"/>'
+                                + _text(lx + 16, ly + 9.5, label, font_size=11)))
+            lx += w
+        y = ly + 28
+    return svg(width, y - 12, title, desc, "".join(out), synthetic)
 
 
 def ideogram(chroms, bins, chrom_tiers, title, desc="", synthetic=False, link=None, chip=None, chip_label="chip"):

@@ -1,17 +1,12 @@
 {% load snpportal_tags %}
-{% comment %}Overview tab: the whole list at a glance (key numbers, three open figures, 'More charts' and the upload QC line,
-   open by itself on any problem); the SNPs themselves are on the Table tab. Every number, bar, bin and cell links to the
-   Table tab with its filter.{% endcomment %}
+{% comment %}Overview tab: the whole list at a glance (upload warnings, the summary of key numbers and how the SNPs split,
+   two more open figures, 'More charts' and the upload QC line, open by itself on any problem); the SNPs themselves are
+   on the Table tab. Every number, bar, bin and cell links to the Table tab with its filter.{% endcomment %}
 <div class="sp-stack">
-  <div class="sp-kpis" aria-label="Key numbers">
-    {% for k in kpis %}{% if k.href %}<a class="sp-kpi{% if k.warn %} sp-kpi-warn{% endif %}" href="{{ k.href }}">{% else %}<div class="sp-kpi">{% endif %}
-      <b>{{ k.value }}</b><span>{{ k.label }}</span>{% if k.note %}<small>{{ k.note }}</small>{% endif %}
-    {% if k.href %}</a>{% else %}</div>{% endif %}{% endfor %}
-  </div>
-  <p class="sp-small sp-muted mb-0">Click any number, bar or cell to list those SNPs.</p>
-
-  {% if figs.tiers %}<div>{% include 'snpportal/_figure.html' with fig=figs.tiers %}
-    <p class="sp-small sp-muted mt-1 mb-0">Tier 1 = strongest functional evidence for this trait &middot; Tier 4 = no evidence found (not evidence of no effect)</p></div>{% endif %}
+  {% if warnings %}<a class="sp-status sp-status-warn" href="#qc">&#9888; Upload warnings: {{ warnings|join:"; " }}</a>{% endif %}
+  {% if figs.summary %}<div>{% include 'snpportal/_figure.html' with fig=figs.summary %}
+    <p class="sp-small sp-muted mt-1 mb-0">Tier 1 = strongest functional evidence for this trait &middot; Tier 4 = no evidence found (not evidence of no effect)
+      &middot; Click any number, bar or cell to list those SNPs.</p></div>{% endif %}
 
   {% if figs.ideogram or figs.conditions %}<div class="row g-3">
     {% if figs.ideogram %}<div class="col-xl-7">{% include 'snpportal/_figure.html' with fig=figs.ideogram %}</div>{% endif %}

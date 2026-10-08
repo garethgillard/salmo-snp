@@ -84,14 +84,17 @@ class ResultsTest(SimpleTestCase):
 
     def test_overview_renders_every_panel_and_parses(self):
         page = self.client.get(self.url + "?trait=maturation").content.decode()
-        expected = ["tiers", "ideogram", "conditions", "regions", "terms", "maf"]
+        expected = ["summary", "ideogram", "conditions", "regions", "terms", "maf"]
         for name in expected:
             self.assertIn(f'id="fig-{name}"', page)
         more = page[page.index("More charts (3)"):]  # analyst charts closed, after the three open ones
         self.assertTrue(all(f'id="fig-{name}"' in more for name in ("regions", "terms", "maf")))
         self.assertNotIn('id="top-h"', page)  # an overview of the whole list: the SNPs themselves are on the Table tab
-        labels = re.findall(r'<b>[^<]*</b><span>([^<]*)</span>', page)
-        self.assertEqual(labels, ["SNPs scored", "tier 1–2", "near a known locus"] + ["assay pass"] * ("assay_status" in self.columns))
+        summary = page[page.index('id="fig-summary"'):page.index('id="fig-ideogram"')]  # key numbers and how the SNPs split
+        self.assertIn(f'{self.summary["n_rows"]:,}</tspan><tspan dx="6" font-size="13" fill="#495057">SNPs scored', summary)
+        rows = re.findall(r'text-anchor="end" font-weight="600">([^<]*)</text>', summary)
+        self.assertEqual(rows, ["Tier", "Gene region", "Known locus"] + ["Assay check"] * ("assay_status" in self.columns))
+        self.assertIn('href="?tab=table&amp;trait=maturation&amp;tier=1-2"', summary)  # every part lists its SNPs
         self.assertNotIn("PROVISIONAL", re.sub(r"<svg .*?</svg>", "", page, flags=re.S))  # no badges: one caveat line
         self.assertEqual(page.count('class="sp-caveat'), 1)  # one caveat line
         self.assertEqual('id="qc" open' in page, results.qc_problem(jobs.read_json(self.d / "validation.json")))  # one QC line

@@ -40,8 +40,8 @@ class Page(HTMLParser):
             self.forms[-1][1][a["name"]] = a["value"]
 
 
-def kpis(html):
-    return re.findall(r'class="sp-kpi[^"]*"(?: href="[^"]*")?>\s*<b>([^<]*)</b>', html)
+def headline(html):  # the summary figure's key numbers
+    return re.findall(r'font-size="24" font-weight="700">([^<]*)</tspan>', html)
 
 
 def card_rows(html, key):
@@ -146,9 +146,9 @@ class TourTest(SimpleTestCase):
         self.assertEqual(page.status_code, 200)
         self.assertEqual(page["Cache-Control"], "no-store, private")
         html = page.content.decode()
-        self.assertTrue(kpis(html))
-        self.assertEqual(kpis(html), kpis(overview.content.decode()))  # the same 4 tiles
-        for name in ("tiers", "ideogram"):  # two figures
+        self.assertTrue(headline(html))
+        self.assertEqual(headline(html), headline(overview.content.decode()))  # the same key numbers
+        for name in ("summary", "ideogram"):  # two figures
             self.assertIn(f'id="fig-{name}"', html)
         for svg in re.findall(r"<svg .*?</svg>", html, re.S):
             ET.fromstring(svg)
