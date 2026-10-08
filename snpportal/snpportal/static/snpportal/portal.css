@@ -386,6 +386,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-blegend i { display: inline-block; width: 9px; height: 9px; margin-right: 3px; vertical-align: -1px; border: 1px solid var(--sp-grey-500); }
 .sp-blegend i.sp-tbg { background: currentColor; }
 .sp-assay-slot { padding-left: 200px; }
+.sp .sp-spin { width: .8rem; height: .8rem; border-width: .15em; margin-right: 5px; vertical-align: -.1em; color: var(--sp-grey-700); }
 /* the mouse line (portal.js sets --sp-x and --sp-pos on .sp-tracks): through every track on the axis, its base on the ruler */
 .sp-trk:has(> .sp-ax) { position: relative; }
 .sp-cur .sp-trk:has(> .sp-ax)::after { content: ""; position: absolute; top: 0; bottom: 0; left: var(--sp-x); width: 1px;

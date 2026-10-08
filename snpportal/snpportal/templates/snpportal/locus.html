@@ -13,8 +13,9 @@
     <input type="hidden" name="open" value="{{ open }}" data-open>
     <button class="btn btn-sm btn-primary" type="submit">Go</button>
     {% if moves %}{% for label, q, tip in moves %}{% if forloop.counter0|divisibleby:2 %}<span class="btn-group btn-group-sm" role="group">{% endif %}{% if q %}<a class="btn btn-outline-secondary" href="{% url 'snpportal:locus' %}?{{ q }}" title="{{ tip }}" aria-label="{{ tip }}"
-       hx-get="{% url 'snpportal:locus_svg' %}?{{ q }}" hx-target="#locus-view" hx-select="#locus-view" hx-swap="outerHTML"
-       hx-push-url="{% url 'snpportal:locus' %}?{{ q }}">{{ label }}</a>{% else %}<span class="btn btn-outline-secondary disabled" aria-disabled="true" title="{{ tip }}">{{ label }}</span>{% endif %}{% if not forloop.counter0|divisibleby:2 %}</span>{% endif %}{% endfor %}{% endif %}
+       hx-get="{% url 'snpportal:locus_svg' %}?{{ q }}" hx-target="#locus-view" hx-select="#locus-view" hx-swap="outerHTML" hx-indicator="#locus-busy"
+       hx-push-url="{% url 'snpportal:locus' %}?{{ q }}">{{ label }}</a>{% else %}<span class="btn btn-outline-secondary disabled" aria-disabled="true" title="{{ tip }}">{{ label }}</span>{% endif %}{% if not forloop.counter0|divisibleby:2 %}</span>{% endif %}{% endfor %}
+    <span id="locus-busy" class="spinner-border sp-spin htmx-indicator" role="status" aria-label="Loading"></span>{% endif %}
     {% if groups %}<span class="btn-group btn-group-sm sp-push" role="group" aria-label="Track groups"><button type="button" class="btn btn-outline-secondary" data-all="open">Expand all</button><button type="button" class="btn btn-outline-secondary" data-all="close">Collapse all</button></span>
     <a class="btn btn-sm btn-outline-secondary" href="{{ download }}" title="Download the locus figure (SVG)" aria-label="Download the locus figure (SVG)" hx-boost="false" download>&#10515;</a>{% endif %}
   </form>
@@ -37,7 +38,7 @@
       <div class="sp-more-rows" id="m-assays">
         <div class="sp-trk"><div class="sp-trk-lab"></div><div class="sp-blegend">{% for cls, label in tissue_legend %}<span><i class="{{ cls }}"></i>{{ label }}</span>{% endfor %}</div></div>
         {% for name, title in assays %}<div class="sp-assay-slot" hx-get="{% url 'snpportal:locus_assay' %}?{{ query }}&amp;assay={{ name }}" hx-trigger="{% if assays_open %}load{% else %}sp-open once{% endif %}" hx-swap="outerHTML">
-          <p class="sp-small sp-muted mb-1">Loading {{ title }}&hellip;</p></div>{% endfor %}
+          <p class="sp-small sp-muted mb-1"><span class="spinner-border sp-spin" aria-hidden="true"></span>Loading {{ title }}&hellip;</p></div>{% endfor %}
       </div>
     </section>
     {% include 'snpportal/_browser_group.html' with g=other %}

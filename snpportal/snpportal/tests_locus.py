@@ -125,7 +125,11 @@ class LocusTest(SimpleTestCase):
         url = f"{reverse('snpportal:locus_assay')}?{VGLL3}&assay=ATAC"
         with self.settings(SNPPORTAL_ASSAY_DEADLINE=1.0):  # the slow Gonad track misses it
             group = self.get(url)
+            retried = self.get(url + "&retry=1")
         self.assertIn('id="g-ATAC"', group)
+        self.assertIn("&amp;retry=1", group)  # it fetches itself once more
+        self.assertIn("1 of 4 files did not load in time", retried)
+        self.assertNotIn("data-retry", retried)  # but only once
         self.assertIn("Brain Imm F", group)
         self.assertEqual(group.count("<polygon"), 2 + 3)  # Brain and Liver stacked (Gonad missed it), three conditions read
         self.assertIn("1 of 4 files did not load in time", group)

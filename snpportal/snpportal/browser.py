@@ -438,8 +438,10 @@ def assay_group(s, assay, open_):
     if failed:
         note += f" · {failed} of {len(tracks)} files did not load in time"
     sub = f"0–{total:.1f} RPM per strand" if rna else f"0–{total:.2f} RPM"
-    return group(assay, title, note, [row("Combined", trk(ax, s, combined_h + 2, "".join(body)), sub)], more,
-                 f"{len(more)} conditions", open_)
+    g = group(assay, title, note, [row("Combined", trk(ax, s, combined_h + 2, "".join(body)), sub)], more,
+              f"{len(more)} conditions", open_)
+    g["failed"] = failed
+    return g
 
 
 # ---- other annotation ----
@@ -521,4 +523,7 @@ def assay(request):
     s = locus.view_state(request)
     if not s["chrom"] or s["too_wide"]:
         return HttpResponseBadRequest("no region")
-    return render(request, "snpportal/_browser_group.html", {"g": assay_group(s, name, opened(request))})
+    g = assay_group(s, name, opened(request))
+    if g.get("failed") and not request.GET.get("retry"):  # e.g. a cold start: what did load is cached, so one more try reads the rest
+        g["retry"] = f"{request.path}?{request.GET.urlencode()}&retry=1"
+    return render(request, "snpportal/_browser_group.html", {"g": g})

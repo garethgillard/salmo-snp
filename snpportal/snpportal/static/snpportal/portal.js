@@ -209,8 +209,8 @@
       sync();
     }
   });
-  document.addEventListener("htmx:configRequest", function (e) {  // moves carry the open groups (assay slots have theirs)
-    if (e.detail.elt.closest && e.detail.elt.closest("#locus-view .sp-bctl")) e.detail.parameters.open = opened();
+  document.addEventListener("htmx:configRequest", function (e) {  // moves and assay retries carry the open groups (slots have theirs)
+    if (e.detail.elt.closest && e.detail.elt.closest("#locus-view .sp-bctl, #locus-view [data-retry]")) e.detail.parameters.open = opened();
   });
   document.addEventListener("htmx:pushedIntoHistory", function () { if (document.querySelector("#locus-view [data-group]")) sync(); });
   var cur = null;  // the mouse line: over the track column (not the chromosome), at the base under the mouse
