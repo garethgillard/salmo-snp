@@ -27,6 +27,11 @@ Don't invent thresholds, weights, "active" state definitions or trait-to-tissue 
 
 Decided:
 - Primary element set: AQUA-FAANG per-condition ChromHMM states (Ensembl regulatory build may be added as a second layer).
+- RNA-seq strands (2026-10-08): the trackhub's '.forward' files are the + strand (checked at vgll3: 16x the reverse
+  files' reads over the gene).
+- Sperm ChIP is ignored (2026-10-08; salmobase answers 403 for its files).
+- No Bgee expression in the locus browser (2026-10-08); the release keeps bgee.parquet (Bgee 16.0, bgee.org, Ssal_v3.1
+  ids; salmobase's copy is 15.2 on ICSASG_v2) for a gene card later.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.
@@ -43,7 +48,7 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   - Upload QC: assembly warning when (mismatch + strand_flip) / checked > 10%; remote genome checks a 200-SNP sample;
     duplicates = same chrom, pos, ref, alt (first kept); only chromosomes 1-29 are accepted (scaffolds rejected).
   - Locus browser default tracks (tracks.yaml defaults): ATAC, replicate R1, at most 8 rows; preset `all` = first condition
-    per tissue incl. Gill and one embryo stage. RNA '.forward' = + strand (to verify).
+    per tissue incl. Gill and one embryo stage.
   - Palette: tier 2 #2171B5 (AA contrast), ChromHMM colours in one dict (palette.STATES) until G picks AQUA-FAANG itemRgb.
   - Portal limits: 3M SNPs, 300 MB upload, 10,000 pasted lines, 24 h retention; privacy statement and citation text need G.
 - Portal roadmap v2, stages 2-3 (all in weights.yaml blocks, labelled PROVISIONAL in the UI):
@@ -62,10 +67,7 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   salmon genes of a gene's clade on the paired chromosome of its syntenic quartet (any other chromosome when the quartet
   is unknown); class AORe/LORe from the clade or its neighbours; Ens106 gene ids used as Ens116 ids.
 - Locus browser redesign (2026-10-08): no trait on the browser; signal tracks are the mean over a condition's replicates;
-  combined tracks stack the tissue means; RNA-seq per-condition rows on a shared log scale; sperm ChIP left out (salmobase
-  answers 403); RNA '.forward' files are the + strand (checked at vgll3: 16x the reverse files' reads over the gene).
-  Bgee 16.0 (bgee.org, Ssal_v3.1 ids; salmobase's copy is 15.2 on ICSASG_v2): a gene is 'expressed' in a tissue when Bgee
-  calls it present in at least half of that tissue's libraries; Bgee's 31 tissues grouped into 17 columns (browser.ORGANS).
+  combined tracks stack the tissue means; RNA-seq per-condition rows on a shared log scale.
 
 Open (ask G; all collected with options and recommendations in DECISIONS.md):
 - Everything under Provisional.
