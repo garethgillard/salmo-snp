@@ -168,3 +168,50 @@
   });
 })();
 /* end tour */
+
+/* browser: the locus browser's groups open and close in place; Expand all / Collapse all reach every group. The open
+   groups go into the URL (?open=), the region form and every move, so a link or a move keeps them. */
+(function () {
+  "use strict";
+  function groups() { return Array.prototype.slice.call(document.querySelectorAll("#locus-view [data-group]")); }
+  function opened() {  // open groups on the page, and those the URL lists that aren't loaded yet (an assay still loading)
+    var here = groups().map(function (g) { return g.getAttribute("data-group"); });
+    var listed = (new URL(location.href).searchParams.get("open") || "").split(",").filter(function (n) { return n && here.indexOf(n) < 0; });
+    return groups().filter(function (g) { return g.classList.contains("open"); }).map(function (g) { return g.getAttribute("data-group"); })
+      .concat(listed).join(",");
+  }
+  function set(g, open) {
+    g.classList.toggle("open", open);
+    var b = g.querySelector(":scope > .sp-grp-h .sp-tog");
+    if (b) b.setAttribute("aria-expanded", open);
+    if (open && window.htmx) {  // the functional assays load when their section first opens
+      g.querySelectorAll(":scope > .sp-more-rows > .sp-assay-slot").forEach(function (slot) { htmx.trigger(slot, "sp-open"); });
+    }
+  }
+  function sync() {
+    var list = opened(), input = document.querySelector("#locus-view [data-open]");
+    if (input) input.value = list;
+    var url = new URL(location.href);
+    if (list) url.searchParams.set("open", list); else url.searchParams.delete("open");
+    history.replaceState(history.state, "", url);
+  }
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest && e.target.closest("#locus-view .sp-tog");
+    if (t) {
+      var g = t.closest("[data-group]");
+      set(g, !g.classList.contains("open"));
+      sync();
+      return;
+    }
+    var all = e.target.closest && e.target.closest("#locus-view [data-all]");
+    if (all) {
+      groups().forEach(function (g) { set(g, all.getAttribute("data-all") === "open"); });
+      sync();
+    }
+  });
+  document.addEventListener("htmx:configRequest", function (e) {  // moves carry the open groups (assay slots have theirs)
+    if (e.detail.elt.closest && e.detail.elt.closest("#locus-view .sp-bctl")) e.detail.parameters.open = opened();
+  });
+  document.addEventListener("htmx:pushedIntoHistory", function () { if (document.querySelector("#locus-view [data-group]")) sync(); });
+})();
+/* end browser */

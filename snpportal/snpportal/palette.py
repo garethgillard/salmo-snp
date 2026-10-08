@@ -80,7 +80,8 @@ BLACKLISTED = ("#FFFFFF", "#878787", "BL")  # fill, hatch colour, label
 
 # Tissues (Okabe-Ito, colour-blind safe); for lines, swatches and dots, not for text backgrounds.
 TISSUES = {"Brain": "#0072B2", "Gill": "#56B4E9", "Gonad": "#CC79A7", "Liver": "#D55E00", "Muscle": "#009E73",
-           "Embryo": "#E69F00"}
+           "Embryo": "#E69F00", "HeadKidney": "#7B3294", "DistalIntestine": "#8C6D31"}  # the last two: RNA-seq only
+CENTRE = "#FF1744"  # the locus browser's centre band: a fluorescent red that no track uses
 
 REGBUILD = "#56B4E9"  # Okabe-Ito sky blue: 'Ensembl regulatory' in the 'why this tier' bar (apart from the blues under CVD)
 

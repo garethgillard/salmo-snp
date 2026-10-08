@@ -175,7 +175,8 @@ Vendor files say 'layout to confirm against the vendor's current template'.
    `SNPPORTAL_TRACKS` (a tracks.yaml overriding the release's), `SNPPORTAL_STATE_PALETTE` (`portal`, or `aquafaang`
    for AQUA-FAANG's own state colours; viewers can switch), `SNPPORTAL_SIGNAL_DEADLINE` (4.0 s for live signal
    rows), `SNPPORTAL_MAX_VENDOR_SNPS` (50,000 SNPs per Illumina/Axiom/KASP file or bundle; larger requests get a 400),
-   `SNPPORTAL_MAX_CHIP_SNPS` (1,000,000 chip markers, at most `SNPPORTAL_MAX_SNPS`; longer chips are refused) and a `CACHES['snpportal_tiles']` entry for the locus browser's public tiles (else a per-process LocMemCache;
+   `SNPPORTAL_MAX_CHIP_SNPS` (1,000,000 chip markers, at most `SNPPORTAL_MAX_SNPS`; longer chips are refused) and a `CACHES['snpportal_tiles']` entry for the locus browser's public tiles (Redis or Memcached on a server, not the
+   file-based cache, which lists its folder on every write; a view with the functional assays open writes ~3,000 tiles; else a per-process LocMemCache;
    `sandbox/settings.py` shows a FileBasedCache).
 3. `urls.py`: `path('snp/', include('snpportal.urls'))`. Run `collectstatic` for `snpportal/portal.css` and `portal.js`.
 4. `requirements.txt`: add `duckdb` and `snpscore @ git+<salmo-snpscore repo URL>`.

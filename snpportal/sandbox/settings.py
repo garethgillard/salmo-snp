@@ -1,6 +1,5 @@
 """Minimal Django project for developing the snpportal app outside salmobase. Not used in production."""
 import os
-import tempfile
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -31,9 +30,10 @@ SNPPORTAL_STATE_PALETTE = os.environ.get("SNPPORTAL_STATE_PALETTE", "portal")  #
 DATA_UPLOAD_MAX_MEMORY_SIZE = 2_621_440  # form fields such as the paste box (Django's default); files stream to disk
 CACHES = {  # 'snpportal_tiles': public signal tiles of the locus browser (keys never hold a user's position)
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
-    "snpportal_tiles": {"BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
-                        "LOCATION": os.path.join(tempfile.gettempdir(), "snpportal_tiles"),
-                        "TIMEOUT": 7 * 86400, "OPTIONS": {"MAX_ENTRIES": 20_000}},
+    # in memory here; a server shares Redis or Memcached. Not the file-based cache: it lists its folder on every write,
+    # and one locus browser view with the functional assays open writes ~3,000 tiles (~2 KB each)
+    "snpportal_tiles": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "snpportal-tiles",
+                        "TIMEOUT": 7 * 86400, "OPTIONS": {"MAX_ENTRIES": 100_000}},
 }
 
 LOGGING = {  # event names, job_ref hashes, counts and timings only: never SNPs or file names

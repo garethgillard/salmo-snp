@@ -1,7 +1,7 @@
 from django.urls import path
 
 from . import about, explore, search, tools, views
-from . import locus  # AGENT locus (stage 2)
+from . import browser, locus  # AGENT locus (stage 2)
 from . import report  # AGENT tour (stage 3)
 from . import association  # AGENT gwas (stage 3)
 
@@ -12,7 +12,8 @@ urlpatterns = [
     path("search/", search.search, name="search"),
     path("search/suggest/", search.suggest, name="suggest"),
     path("tour/", explore.tour, name="tour"),
-    path("locus/", locus.locus, name="locus"),  # AGENT locus (stage 2)
+    path("locus/", browser.page, name="locus"),
+    path("locus/assay/", browser.assay, name="locus_assay"),
     path("locus/svg/", locus.locus_svg_view, name="locus_svg"),  # AGENT locus (stage 2)
     path("gene/<str:gene_id>/", explore.gene, name="gene"),
     path("variant/<str:spec>/", locus.variant, name="variant"),  # AGENT locus (stage 2)

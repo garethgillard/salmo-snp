@@ -1,9 +1,8 @@
-"""Locus browser (P4.3a/b), evidence card and variant page (P4.4a).
+"""The locus figure (single SVG), evidence card and variant page (P4.4a); the locus browser page is browser.py.
 
-- /snp/locus/?r=25:28980000-29010000[&trait=][&assay=ATAC|H3K27ac|H3K4me3][&hmm=1][&scale=track][&key=<job>[&row=]]
-  draws the release's lanes, the job's SNPs (tier lollipops, only with key=) and live salmobase signal rows; without a
-  region it opens at vgll3. &slim=1 draws the card's mini view (genes and the trait's chromatin rows).
-  htmx swaps #locus-view from /snp/locus/svg/ (same parameters); without htmx that URL is the SVG file.
+- /snp/locus/svg/?r=25:28980000-29010000[&trait=][&assay=ATAC|H3K27ac|H3K4me3][&hmm=1][&scale=track][&key=<job>[&row=]]
+  is the locus figure as one SVG file (the browser's download; &slim=1: the card's mini view, genes and the trait's
+  chromatin rows); htmx swaps of #locus-view (HX-Target) get the browser page's fragment instead.
 - Signal and ChromHMM come from tracks.yaml through snpscore.locus on a fixed public tile grid, cached in the Django
   cache 'snpportal_tiles' (if configured) or a LocMemCache of 5,000 entries. Views opened from a job (key=) only read
   that cache: their tiles would record, for days, where the job's SNPs are.
@@ -160,19 +159,6 @@ def query(s, **changes):
     return urlencode({k: v for k, v in params.items() if v not in ("", None, "all", "ATAC")})
 
 
-def moves(s):
-    """Toolbar: (label, query, title) for zoom in x3, out x3 and x10, and pan by half a window."""
-    w, mid = s["end"] - s["start"], (s["start"] + s["end"]) // 2
-    span = lambda width, centre=mid: sl.clamp(centre - width // 2, centre + width - width // 2, s.get("size"), sl.MIN_WINDOW, sl.MAX_WINDOW)
-    out = []
-    for label, (a, b), title in [("Zoom in", span(w // 3), "zoom in 3x"), ("Out ×3", span(w * 3), "zoom out 3x"),
-                                 ("Out ×10", span(w * 10), "zoom out 10x"), ("◀ Left", span(w, mid - w // 2), "move left half a window"),
-                                 ("Right ▶", span(w, mid + w // 2), "move right half a window")]:
-        if (a, b) != (s["start"], s["end"]):
-            out.append((label, query(s, start=a, end=b), title))
-    return out
-
-
 # ---- the figure ----
 
 def user_snps(request, s, link=True):
@@ -293,38 +279,13 @@ def provenance(info, cfg):
             "track sets and tier rules are PROVISIONAL.")
 
 
-def page(request, s, layout="snpportal/base_portal.html"):
-    """Context for locus.html. `changed` counts the display options away from their defaults (they open by themselves)."""
-    ctx = {"nav": "explore", "title": "Locus browser", "layout": layout, "s": s, "presets": jobs.presets(), "assays": ASSAYS,
-           "changed": (s["assay"] != "ATAC") + s["hmm"] + (s["scale"] == "track")}
-    if s["chrom"]:
-        ctx["region_text"] = region_text(s["chrom"], s["start"], s["end"], commas=True)
-        if s["too_wide"]:
-            mid = (s["start"] + s["end"]) // 2
-            ctx["centre"] = query(s, start=mid - sl.MAX_WINDOW // 2, end=mid + sl.MAX_WINDOW // 2)
-        else:
-            svg, notes, synthetic = draw(request, s)
-            a, b = s["start"] + 1, s["end"]
-            ctx.update(svg=mark_safe(svg), notes=notes, synthetic=synthetic, moves=moves(s), query=query(s),
-                       jbrowse=JBROWSE.format(chrom=s["chrom"], start=a, end=b), ensembl=ENSEMBL.format(chrom=s["chrom"], start=a, end=b),
-                       file_name=f"locus_{s['chrom']}_{a}_{b}")
-    else:
-        ctx["region_text"] = request.GET.get("r") or request.GET.get("region") or ""
-    return ctx
-
-
-@private
-def locus(request):
-    """The locus browser page."""
-    return render(request, "snpportal/locus.html", page(request, view_state(request)))
-
-
 @private
 def locus_svg_view(request):
     """htmx swaps of #locus-view get that fragment; anything else the standalone SVG (?download=1 as an attachment)."""
     s = view_state(request)
     if request.headers.get("HX-Target") == "locus-view":
-        return render(request, "snpportal/locus.html", page(request, s, fragment()))
+        from . import browser  # browser imports this module
+        return render(request, "snpportal/locus.html", browser.context(request, s, fragment()))
     if not s["chrom"] or s["too_wide"]:
         message = s["error"] or ("Zoom in: the window is wider than 2 Mb" if s["too_wide"] else "Choose a region, e.g. 25:28,980,000-29,010,000")
         return HttpResponse(figures.placeholder(900, 120, "Locus browser", message), content_type="image/svg+xml")

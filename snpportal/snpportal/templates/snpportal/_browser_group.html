@@ -1,0 +1,9 @@
+{% comment %}One track group of the locus browser (browser.group): a header with its note and toggle, its legend, its rows, and
+   the rows it adds when open (one per condition or gene). portal.js /* browser */ opens and closes it in place.{% endcomment %}
+<section class="sp-grp{% if g.open %} open{% endif %}" id="g-{{ g.id }}" data-group="{{ g.id }}">
+  <header class="sp-grp-h"><h3>{{ g.title }}</h3>{% if g.note %}<span class="sp-grp-note">{{ g.note }}</span>{% endif %}
+    {% if g.more %}<button type="button" class="sp-tog" aria-expanded="{% if g.open %}true{% else %}false{% endif %}" aria-controls="m-{{ g.id }}"><span class="sp-when-closed">{{ g.more_label }} &#9662;</span><span class="sp-when-open">Collapse &#9652;</span></button>{% endif %}</header>
+  {% if g.legend %}<div class="sp-trk"><div class="sp-trk-lab"></div><div class="sp-blegend">{% for cls, label in g.legend %}<span><i class="{{ cls }}"></i>{{ label }}</span>{% endfor %}</div></div>{% endif %}
+  {% for r in g.rows %}{% include 'snpportal/_browser_row.html' %}{% endfor %}
+  {% if g.more %}<div class="sp-more-rows" id="m-{{ g.id }}">{% for r in g.more %}{% include 'snpportal/_browser_row.html' %}{% endfor %}</div>{% endif %}
+</section>

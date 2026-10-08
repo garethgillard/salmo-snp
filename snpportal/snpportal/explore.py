@@ -618,16 +618,16 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
      "shot": {"path": "variant/25-29064238-A-G/?trait=maturation", "width": 1000,
               "crop": ["#card-body p:has(> .sp-badge)", "#card-body .sp-card-side > .sp-figure:first-child svg"]}},
     {"slug": "locus", "title": "Explore a locus",
-     "text": "The locus browser lines up genes, published loci, chromatin states and live ATAC signal from salmobase. "
-             "Zoom, move, or type any region, gene or SNP.",
-     "alt": "Locus browser at vgll3 on chromosome 25: published SNPs, genes, chromatin states per tissue and ATAC signal.",
-     "callouts": [("Zoom and move", ["[aria-label='Zoom and move'] a:first-child", "[aria-label='Zoom and move'] a:nth-child(5)"]),
-                  ("Published loci and genes", ["row", "text=Published", "text=vgll3 →"]),
-                  ("Chromatin states in 21 conditions", ["row", "text=Chromatin states", "text=L somit."]),
-                  ("Live ATAC signal from salmobase", ["row", "text=ATAC signal", "text=Gonad Imm F R1"])],
-     "try": ("Try it: vgll3 in the locus browser", "locus/?r=25:28985000-29010000&trait=maturation"),
-     "shot": {"path": "locus/?r=25:28985000-29010000&trait=maturation", "width": 1280,
-              "crop": ["[aria-label='Zoom and move']", "text=Gonad Imm F R1"]}},
+     "text": "The locus browser lines up genes, published loci, regulatory elements, chromatin states and live RNA, ATAC "
+             "and ChIP data from salmobase. Open a group for one track per condition.",
+     "alt": "Locus browser at vgll3 on chromosome 25: genes and published SNPs, expression, regulatory elements, chromatin "
+            "states and the functional assays, with a red band at the centre.",
+     "callouts": [("Zoom and move", ".sp-bctl .btn-group:nth-of-type(1)"),
+                  ("Genes, published loci and variants", "#g-genes"),
+                  ("Open a group: one track per condition", "#g-hmm .sp-tog"),
+                  ("RNA, ATAC and ChIP from salmobase", "#g-assays .sp-grp-h")],
+     "try": ("Try it: vgll3 in the locus browser", "locus/?r=25:28983861-29008860"),
+     "shot": {"path": "locus/?r=25:28983861-29008860", "width": 1280, "crop": [".sp-bctl", "#g-assays .sp-grp-h"]}},
     {"slug": "panel", "title": "Design a genotyping panel",
      "text": "The Panel tab picks the best-scoring SNPs that pass the assay checks, spread over every chromosome. Export "
              "writes the KASP, Illumina and Axiom files.",

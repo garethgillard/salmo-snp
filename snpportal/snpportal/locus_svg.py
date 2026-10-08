@@ -317,7 +317,8 @@ def _legend(body, groups, y, width, gutter):
 
 
 def _genes(body, ax, genes, y, gene_url, max_rows, lane_label):
-    """Gene models packed into at most max_rows rows (labels dropped when that does not fit), '+N more' after."""
+    """Gene models packed into at most max_rows rows (labels dropped when that does not fit), '+N more' after. A gene
+    dict may carry dup = {text, url, title}: its Ss4R duplicate, linked after the label (the locus browser's)."""
     if not genes:
         lane_label("Genes", y + 12)
         body.append(_t(ax.x0, y + 12, "no Ensembl gene in this window", 9.5, G[700]))
@@ -327,7 +328,8 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label):
         rows, placed, hidden = [], [], 0
         for g in sorted(genes, key=lambda g: g["start"]):
             x0, x1 = ax.x(g["start"]), ax.x(g["end"])
-            right = max(x1, x0 + 6.2 * (len(g["label"]) + 2)) if with_labels else x1
+            text = len(g["label"]) + 2 + (len(g["dup"]["text"]) + 1 if g.get("dup") else 0)
+            right = max(x1, x0 + 6.2 * text) if with_labels else x1
             row = next((i for i, end in enumerate(rows) if end + 8 < x0), None)
             if row is None:
                 if len(rows) == max_rows:
@@ -347,7 +349,7 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label):
     for row, g in placed:
         yy = y + row * 26 + (12 if labels else 4)
         coding = g.get("biotype") == "protein_coding"
-        colour = palette.ACCENT if coding else G[500]
+        colour = G[900] if coding else G[500]
         t = (g.get("transcripts") or [None])[0]
         title = (f"{g['label']} ({g['id']}) · {g.get('biotype') or ''} · {g.get('strand')} strand · "
                  f"{g['start'] + 1:,}-{g['end']:,}" + (f" · transcript {t['transcript_id']}" + (" (canonical)" if t["canonical"] else "")
@@ -374,6 +376,10 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label):
             parts.append(_t(max(ax.x0, x0), yy - 3, name, 10, G[900], extra=' font-style="italic"' if g.get("name") else ""))
         group = "".join(parts)
         body.append(f'<a href="{escape(gene_url(g["id"]))}">{group}</a>' if gene_url else f"<g>{group}</g>")
+        if labels and g.get("dup"):  # after the gene's own link, as links can't nest
+            dx = max(ax.x0, x0) + 6.3 * (len(g["label"]) + 2) + 6  # after the name and its strand arrow
+            dup = _t(dx, yy - 3, g["dup"]["text"], 9.5, G[700]).replace("</text>", f'<title>{escape(g["dup"]["title"])}</title></text>')
+            body.append(f'<a href="{escape(g["dup"]["url"])}">{dup}</a>' if g["dup"].get("url") else dup)
     y += n * 26 + (8 if labels else 4)
     if hidden:
         body.append(_t(ax.x0, y + 8, f"+{hidden} more genes: zoom in", 9.5, G[700]))

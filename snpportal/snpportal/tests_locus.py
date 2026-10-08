@@ -19,7 +19,7 @@ from django.urls import reverse
 import snpscore
 from snpscore import bbi
 
-from . import jobs, locus
+from . import jobs, locus, palette
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
@@ -88,45 +88,49 @@ class LocusTest(SimpleTestCase):
         self.assertEqual(response.status_code, 200, url)
         return response.content.decode()
 
-    def test_locus_page_lanes_and_signal(self):
-        page = self.get(f"{reverse('snpportal:locus')}?{VGLL3}&trait=maturation")
-        svg = svg_of(page)
-        root = ET.fromstring(svg)
-        self.assertEqual(root.get("role"), "img")
-        self.assertIn("ENSSSAG00000053708", svg)  # the vgll3 gene model
-        self.assertRegex(svg, r">(← )?vgll3( →)?</text>")  # Ensembl leaves it unnamed: the catalogue's name, as on every page
-        self.assertEqual(len(re.findall(r">((?:Imm|Mat) [FM]|Blastula|Gastrula|[EML] somit\.)</text>", svg)), 21)  # condition rows
-        self.assertIn("promoter", svg)  # regbuild
-        self.assertIn("504-fish panel: MAF 0.48, alt AF 0.48", svg)  # public variant at vgll3 Met54Thr (R1)
-        self.assertIn("AQUA-FAANG 12 fish: alt AF 0.67, DR2 1.00", svg)
-        self.assertIn("vgll3_Met54Thr", svg)
-        self.assertIn(">Published</text>", svg)  # the published-associations lane (R3) and its legend
-        self.assertIn(">missense</text>", svg)
-        self.assertIn(" RPM", svg)  # signal unit
-        # maturation: Brain and Gonad conditions of the synthetic registry; the slow Gonad track is hatched, not made up
-        self.assertEqual(svg.count(SIGNAL_PATH), 2)
-        self.assertIn("signal unavailable", svg)
-        self.assertIn("SYNTHETIC", svg)  # watermark: synthetic tracks contribute
-        self.assertIn("Zoom in", page)
+    def test_locus_page_groups(self):
+        page = self.get(f"{reverse('snpportal:locus')}?{VGLL3}")
+        for group in ("genes", "bgee", "peaks", "hmm", "assays", "other"):  # track groups, closed by default
+            self.assertIn(f'class="sp-grp" id="g-{group}"' if group != "assays" else 'class="sp-grp sp-sec" id="g-assays"', page)
+        self.assertIn(palette.CENTRE, page)  # the centre band and position
+        self.assertIn("ENSSSAG00000053708", page)  # the vgll3 gene model, black, with its Ss4R duplicate linked
+        self.assertRegex(page, r">(← )?vgll3( →)?</text>")
+        self.assertIn("duplicate chr21:33.00 Mb", page)
+        self.assertIn("Ss4R block, duplicated on chr21", page)  # the chromosome: the block around the window
+        self.assertIn("504-fish panel: MAF 0.48, alt AF 0.48", page)  # public variant at vgll3 Met54Thr (R1)
+        self.assertIn("AQUA-FAANG 12 fish: alt AF 0.67, DR2 1.00", page)
+        self.assertIn("vgll3_Met54Thr", page)
+        self.assertIn("nearest gene", page)  # Bgee: the gene nearest the centre first
+        self.assertIn("conditions with the peak", page)  # regulatory elements: the unified robust peaks
+        self.assertIn("inside robust peaks", page)  # no ChromHMM in this registry: states in peaks
+        self.assertIn('class="st-Active_TSS"', page)  # the state legend, in its group
+        self.assertNotIn("Display options", page)
+        self.assertNotIn('name="trait"', page)  # no trait on the locus browser
+        self.assertIn(f'hx-get="{reverse("snpportal:locus_assay")}?', page)  # assays load when their section opens
         self.assertIn('hx-push-url="/snp/locus/?r=25%3A', page)
         self.assertIn("https://salmobase.org/jbrowse/?assembly=Ssal_v3.1&amp;loc=25:28980000..29010000", page)
-        self.assertIn("https://www.ensembl.org/Salmo_salar/Location/View?r=25:28980000-29010000", page)
+        self.assertIn('class="sp-grp open" id="g-peaks"', self.get(f"{reverse('snpportal:locus')}?{VGLL3}&open=peaks,nonsense"))
 
-        wide = svg_of(self.get(f"{reverse('snpportal:locus')}?r=25:28.88-29.2Mb"))
+        wide = self.get(f"{reverse('snpportal:locus')}?r=25:28.88-29.2Mb")
         self.assertIn("GERP constrained element", wide)
         self.assertIn("molQTL lead (nf-RASQUAL, 12 fish): Brain ca 25:28963213-28965045", wide)  # the molQTL lane (R4)
         self.assertIn("AQUA-FAANG blacklist", wide)
-        self.assertIn("LORe region", svg_of(self.get(f"{reverse('snpportal:locus')}?r=26:19.1-19.2Mb")))
-        self.assertIn("Chromosome 25: 28,980,000-29,010,000",
-                      self.get(f"{reverse('snpportal:locus')}?r=ssa25:28.98-29.01Mb"))  # alias and Mb units: the same view
+        self.assertIn("LORe region", self.get(f"{reverse('snpportal:locus')}?r=26:19.1-19.2Mb"))
+        self.assertIn('value="25:28,980,000-29,010,000"', self.get(f"{reverse('snpportal:locus')}?r=ssa25:28.98-29.01Mb"))  # aliases, Mb
         self.assertIn("wider than 2 Mb", self.get(f"{reverse('snpportal:locus')}?r=25:20-29Mb"))
         self.assertIn("Unknown chromosome", self.get(f"{reverse('snpportal:locus')}?r=ssa99:1-100"))
-        self.assertIn("Chromosome 25: 28,985,000-29,010,000", self.get(reverse("snpportal:locus")))  # opens at vgll3
-        self.assertNotIn("tracks.yaml", re.sub(r"<svg .*?</svg>", "", page, flags=re.S))  # provenance stays in the SVG's <desc>
-        self.assertIn('<details class="sp-more mt-2"><summary>Display options</summary>', page)  # closed at the defaults
-        self.assertIn(f'{reverse("snpportal:state_palette")}?name=aquafaang', page)  # the palette toggle lives here
-        changed = self.get(f"{reverse('snpportal:locus')}?{VGLL3}&assay=H3K27ac")
-        self.assertIn('<details class="sp-more mt-2" open><summary>Display options (1 changed)</summary>', changed)
+        self.assertIn('value="25:28,985,000-29,010,000"', self.get(reverse("snpportal:locus")))  # opens at vgll3
+
+    def test_assay_group(self):
+        url = f"{reverse('snpportal:locus_assay')}?{VGLL3}&assay=ATAC"
+        with self.settings(SNPPORTAL_ASSAY_DEADLINE=1.0):  # the slow Gonad track misses it
+            group = self.get(url)
+        self.assertIn('id="g-ATAC"', group)
+        self.assertIn("Brain Imm F", group)
+        self.assertEqual(group.count("<polygon"), 2 + 3)  # Brain and Liver stacked (Gonad missed it), three conditions read
+        self.assertIn("1 of 4 files did not load in time", group)
+        self.assertIn('class="sp-grp open" id="g-ATAC"', self.get(url + "&open=ATAC"))
+        self.assertEqual(self.client.get(f"{reverse('snpportal:locus_assay')}?{VGLL3}&assay=nope").status_code, 400)
 
     def test_fragment_download_and_moves(self):
         url = f"{reverse('snpportal:locus_svg')}?{VGLL3}"
@@ -134,7 +138,7 @@ class LocusTest(SimpleTestCase):
         self.assertIn('id="locus-view"', fragment)
         self.assertNotIn("sp-nav", fragment)  # only the swapped part
         moved = re.findall(r'hx-get="/snp/locus/svg/\?([^"]+)"', fragment)
-        self.assertEqual(len(moved), 5)  # zoom in, out x3, out x10, left, right
+        self.assertEqual(len(moved), 4)  # zoom out, zoom in, left, right
         self.assertTrue(all(m.startswith("r=25%3A") for m in moved))
         response = self.client.get(url + "&download=1")
         self.assertIn("attachment", response["Content-Disposition"])
@@ -163,7 +167,8 @@ class LocusTest(SimpleTestCase):
             self.assertNotIn(str(key), k)
         self.assertEqual(self.client.get(f"{reverse('snpportal:locus')}?key=00000000-0000-0000-0000-000000000000").status_code, 404)
         centred = self.get(f"{reverse('snpportal:locus')}?key={key}&row=1")  # opened from a card: no coordinates in the URL
-        self.assertIn("Chromosome 25: 28,993,410-29,003,409", centred)
+        self.assertIn('value="25:28,993,410-29,003,409"', centred)
+        self.assertIn(">28,998,410</text>", centred)  # the centre: the SNP, in red on the ruler
         bare = Path(self.tmp.name) / "bare.tsv"  # a list with no id, ref or alt column (e.g. a chip of chrom, pos)
         bare.write_text("chrom\tpos\n25\t28996360\n")
         key = jobs.create(bare, ".tsv", label="Positions only")
@@ -245,12 +250,12 @@ class LiveLocusTest(SimpleTestCase):
         with override_settings(**({"SNPSCORE_RELEASE": str(dev)} if dev.exists() else {})), \
                 mock.patch.object(locus, "tile_cache", return_value=Tiles()):
             bbi.clear_caches()
-            url = f"{reverse('snpportal:locus')}?region=25:28,990,000-29,000,000&trait=maturation"
+            url = f"{reverse('snpportal:locus_assay')}?region=25:28,990,000-29,000,000&assay=ATAC"
             t = time.time()
             cold = self.client.get(url).content.decode()
             t_cold, t = time.time() - t, time.time()
             self.client.get(url)
             t_warm = time.time() - t
-            self.assertEqual(cold.count(SIGNAL_PATH), 8)
-            self.assertNotIn("signal unavailable", cold)
+            self.assertGreaterEqual(cold.count("<polygon"), 25)  # 25 conditions, means of 3 replicates
+            self.assertNotIn("did not load", cold)
             print(f"\nlive locus: cold {t_cold:.2f} s ({bbi.STATS['requests']} requests), warm {t_warm:.2f} s")
