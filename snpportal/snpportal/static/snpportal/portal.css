@@ -356,7 +356,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-bctl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; background: var(--sp-grey-50); border-radius: 6px;
   padding: 4px 8px; margin-bottom: 8px; }
 .sp-bctl .sp-region { width: 16rem; }
-.sp-bctl .sp-push { margin-left: auto; }
+.sp-bctl .sp-push { margin-left: auto; display: flex; gap: 8px; }  /* the line, groups and download buttons wrap together */
 .sp-tracks { overflow-x: auto; }
 .sp-trk { display: grid; grid-template-columns: 200px 1000px; align-items: center; width: 1200px; min-height: 14px; }
 .sp-trk-dense { min-height: 13px; }
@@ -386,6 +386,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-blegend i { display: inline-block; width: 9px; height: 9px; margin-right: 3px; vertical-align: -1px; border: 1px solid var(--sp-grey-500); }
 .sp-blegend i.sp-tbg { background: currentColor; }
 .sp-assay-slot { padding-left: 200px; }
+.sp-bctl .sp-ico { vertical-align: -2px; }
 .sp .sp-spin { width: .8rem; height: .8rem; border-width: .15em; margin-right: 5px; vertical-align: -.1em; color: var(--sp-grey-700); }
 /* the mouse line (portal.js sets --sp-x and --sp-pos on .sp-tracks): through every track on the axis, its base on the ruler */
 .sp-trk:has(> .sp-ax) { position: relative; }

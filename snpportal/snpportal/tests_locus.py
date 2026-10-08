@@ -92,7 +92,7 @@ class LocusTest(SimpleTestCase):
         page = self.get(f"{reverse('snpportal:locus')}?{VGLL3}")
         for group in ("genes", "peaks", "hmm", "assays", "other"):  # track groups, closed by default
             self.assertIn(f'class="sp-grp" id="g-{group}"' if group != "assays" else 'class="sp-grp sp-sec" id="g-assays"', page)
-        self.assertIn(palette.CENTRE, page)  # the centre band and position
+        self.assertIn(palette.CENTRE, page)  # the centre position on the ruler
         self.assertIn("ENSSSAG00000053708", page)  # the vgll3 gene model, black, with its Ss4R duplicate linked
         self.assertRegex(page, r">(← )?vgll3( →)?</text>")
         self.assertIn("duplicate chr21:33.00 Mb", page)

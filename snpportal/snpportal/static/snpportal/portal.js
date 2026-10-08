@@ -213,17 +213,45 @@
     if (e.detail.elt.closest && e.detail.elt.closest("#locus-view .sp-bctl, #locus-view [data-retry]")) e.detail.parameters.open = opened();
   });
   document.addEventListener("htmx:pushedIntoHistory", function () { if (document.querySelector("#locus-view [data-group]")) sync(); });
-  var cur = null;  // the mouse line: over the track column (not the chromosome), at the base under the mouse
-  document.addEventListener("mousemove", function (e) {
+  /* the mouse line: follows the mouse over the track column (not the chromosome) and names the base under it on the
+     ruler; a click on the tracks holds it still and the next click lets it go; the [data-line] button turns it off */
+  var cur = null, held = false, off = false;
+  try { off = localStorage.getItem("sp-line") === "off"; } catch (e) { /* storage blocked: the line starts on */ }
+  function at(e) {  // the tracks under the mouse and its x on the axis, or null
     var t = e.target.closest ? e.target : null, box = t && !t.closest(".sp-trk-chr") && t.closest("#locus-view .sp-tracks");
     var ax = box && box.querySelector(".sp-ax"), r = ax && ax.getBoundingClientRect(), x = r ? e.clientX - r.left : -1;
-    if (cur && (cur !== box || x < 0 || x > r.width)) { cur.classList.remove("sp-cur"); cur = null; }
-    if (!r || x < 0 || x > r.width) return;
-    var a = +box.getAttribute("data-start"), b = +box.getAttribute("data-end"), base = Math.min(b, a + 1 + Math.floor(x / r.width * (b - a)));
-    box.style.setProperty("--sp-x", (r.left - ax.parentNode.getBoundingClientRect().left + x) + "px");
-    box.style.setProperty("--sp-pos", JSON.stringify(base.toLocaleString("en")));
-    box.classList.add("sp-cur");
-    cur = box;
+    return r && x >= 0 && x <= r.width ? {box: box, ax: ax, r: r, x: x} : null;
+  }
+  function follow(e) {
+    var p = at(e);
+    if (cur && (!p || cur !== p.box)) { cur.classList.remove("sp-cur"); cur = null; }
+    if (!p) return;
+    var a = +p.box.getAttribute("data-start"), b = +p.box.getAttribute("data-end"), base = Math.min(b, a + 1 + Math.floor(p.x / p.r.width * (b - a)));
+    p.box.style.setProperty("--sp-x", (p.r.left - p.ax.parentNode.getBoundingClientRect().left + p.x) + "px");
+    p.box.style.setProperty("--sp-pos", JSON.stringify(base.toLocaleString("en")));
+    p.box.classList.add("sp-cur");
+    cur = p.box;
+  }
+  function buttons() {
+    document.querySelectorAll("#locus-view [data-line]").forEach(function (b) { b.classList.toggle("active", !off); b.setAttribute("aria-pressed", !off); });
+  }
+  document.addEventListener("mousemove", function (e) {
+    if (cur && !cur.isConnected) { cur = null; held = false; }  // a move swapped the view
+    if (!off && !held) follow(e);
   });
+  document.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest("#locus-view [data-line]")) {
+      off = !off;
+      held = false;
+      if (cur) { cur.classList.remove("sp-cur"); cur = null; }
+      try { localStorage.setItem("sp-line", off ? "off" : "on"); } catch (err) { /* not remembered */ }
+      buttons();
+    } else if (!off && at(e) && !e.target.closest("a, button, input")) {  // not a gene link or a group's toggle
+      follow(e);
+      held = !held;
+    }
+  });
+  document.addEventListener("htmx:afterSettle", buttons);
+  buttons();
 })();
 /* end browser */

@@ -24,7 +24,6 @@ from .views import private
 
 W = 1000  # SVG user units across the track column, drawn 1:1 so text never stretches
 G = palette.GREY
-GLOW = 10  # the centre band's width: a published-SNP diamond's
 TISSUE_ORDER = ("Brain", "Gonad", "Liver", "Muscle", "Gill", "HeadKidney", "DistalIntestine", "Embryo")
 TISSUE_NAMES = {"HeadKidney": "Head kidney", "DistalIntestine": "Distal intestine"}
 STAGES = {"LateCleavage": "L cleavage", "EarlyBlastulation": "E blastula", "MidBlastulation": "M blastula",
@@ -77,17 +76,13 @@ def centre(s):
     return s["mark"] or (s["start"] + s["end"] + 1) // 2
 
 
-def trk(ax, s, h, body, line_from=0):
-    """One track: an SVG on the shared axis (class sp-ax: portal.js draws the mouse line through these) whose first mark
-    is the centre band, so the track's own marks draw over it."""
-    x = ax.x(centre(s) - 0.5)
-    band = (f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{line_from}" y2="{h}" stroke="{palette.CENTRE}" stroke-width="{GLOW}" '
-            'stroke-opacity="0.18"/>')
-    return mark_safe(f'<svg class="sp-trk-svg sp-ax" viewBox="0 0 {W} {h}" width="{W}" height="{h}" role="img">{band}{body}</svg>')
+def trk(h, body):
+    """One track: an SVG on the shared axis (class sp-ax: portal.js draws the mouse line through these)."""
+    return mark_safe(f'<svg class="sp-trk-svg sp-ax" viewBox="0 0 {W} {h}" width="{W}" height="{h}" role="img">{body}</svg>')
 
 
 def plain(h, body):
-    """A row that isn't genomic (no centre band)."""
+    """A row that isn't on the axis (no mouse line)."""
     return mark_safe(f'<svg class="sp-trk-svg" viewBox="0 0 {W} {h}" width="{W}" height="{h}" role="img">{body}</svg>')
 
 
@@ -171,7 +166,7 @@ def ruler(ax, s):
         half = 3.3 * len(f"{t:,}")
         anchor = "start" if x - half < 0 else "end" if x + half > W else "middle"
         body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="25" y2="30" stroke="{G[500]}"/>' + locus_svg._t(x, 21, f"{t:,}", 11, G[900], anchor))
-    return trk(ax, s, 34, "".join(body), line_from=12)
+    return trk(34, "".join(body))
 
 
 # ---- genes and variants ----
@@ -201,7 +196,7 @@ def genes_group(request, s, ax, data):
     if gwas:
         body = []
         h = locus_svg.gwas_lane(body, ax, gwas, 0, None, height=120)
-        rows.append(row("", trk(ax, s, h, "".join(body))))
+        rows.append(row("", trk(h, "".join(body))))
     snps = [] if gwas else locus.user_snps(request, s)
     if snps:
         top = max([p.get("tier_score") or 0 for p in snps] + [1])
@@ -212,11 +207,11 @@ def genes_group(request, s, ax, data):
             dot = (f'<line x1="{x:.1f}" x2="{x:.1f}" y1="40" y2="{40 - h:.1f}" stroke="{G[500]}"/>'
                    f'<circle cx="{x:.1f}" cy="{40 - h:.1f}" r="4" fill="{fill}" stroke="{G[900]}" stroke-width="0.6"><title>{escape(p["title"])}</title></circle>')
             body.append(f'<a href="{escape(p["url"])}">{dot}</a>' if p.get("url") else dot)
-        rows.append(row("Your SNPs", trk(ax, s, 44, "".join(body)), f"tiers: {s['trait'].replace('_', ' ')}"))
+        rows.append(row("Your SNPs", trk(44, "".join(body)), f"tiers: {s['trait'].replace('_', ' ')}"))
     if data.get("known"):
         body = []
         h = locus_svg._published(body, ax, data["known"], 0, noop, {})
-        rows.append(row("Published loci", trk(ax, s, h, "".join(body))))
+        rows.append(row("Published loci", trk(h, "".join(body))))
     if data.get("molqtl"):
         body = []
         for m in data["molqtl"]:
@@ -224,7 +219,7 @@ def genes_group(request, s, ax, data):
             tissue = (m.get("tissues") or "").split(",")[0]
             body.append(f'<path d="M{x:.1f} 2 l5 9 l-10 0z" fill="{palette.TISSUES.get(tissue, G[700])}" stroke="{G[900]}" '
                         f'stroke-width="0.5"><title>{escape(m.get("title") or "")}</title></path>')
-        rows.append(row("molQTL leads", trk(ax, s, 13, "".join(body)), "nf-RASQUAL, 12 fish"))
+        rows.append(row("molQTL leads", trk(13, "".join(body)), "nf-RASQUAL, 12 fish"))
     duplicates(data.get("genes", []))
     body = []
     h = locus_svg._genes(body, ax, data.get("genes", []), 0, lambda gid: reverse("snpportal:gene", args=[gid]), 8, noop)
@@ -232,7 +227,7 @@ def genes_group(request, s, ax, data):
                    f'fill="url(#sp-lore)" fill-opacity="0.25"><title>LORe region {escape(str(b.get("label") or ""))}: the duplicate '
                    'copies are still nearly identical</title></rect>' for b in data.get("lore", []))
     defs = locus_svg._hatch("sp", "lore", locus_svg.LORE, -45) if lore else ""  # id sp-lore
-    rows.append(row("Genes", trk(ax, s, h, (f"<defs>{defs}</defs>" if defs else "") + lore + "".join(body)), "Ensembl 116"))
+    rows.append(row("Genes", trk(h, (f"<defs>{defs}</defs>" if defs else "") + lore + "".join(body)), "Ensembl 116"))
     body = [f'<line x1="0" x2="{W}" y1="26" y2="26" stroke="{G[300]}"/>']
     for v in data.get("variants", []):
         x, h = ax.x(v["pos"] - 0.5), 3 + 22 * min(0.5, v.get("maf") or 0) / 0.5
@@ -242,7 +237,7 @@ def genes_group(request, s, ax, data):
         body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="26" y2="{26 - h:.1f}" stroke="{G[700]}"><title>{escape(tip)}</title></line>')
     if not data.get("variants"):
         body.append(locus_svg._t(4, 20, "none in this window", 9.5, G[700]))
-    rows.append(row("Public variants", trk(ax, s, 28, "".join(body)), "504 fish, height = MAF"))
+    rows.append(row("Public variants", trk(28, "".join(body)), "504 fish, height = MAF"))
     return group("genes", "Genes and variants", "", rows)
 
 
@@ -289,11 +284,11 @@ def peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes):
         segs = found[c]
         parts = [state_rect(ax, a, e, 2, 9, st, short(c)) for a, e, st in segs or ()] if segs is not None else [
             f'<rect x="0" y="2" width="{W}" height="9" fill="{G[200]}"><title>{escape(short(c))}: peaks unavailable</title></rect>']
-        more.append(row(short(c), trk(ax, s, 13, "".join(parts)), tissue=tissue_of(c), dense=True))
+        more.append(row(short(c), trk(13, "".join(parts)), tissue=tissue_of(c), dense=True))
     if any(v is None for v in found.values()):
         notes.append("Some per-condition peak tracks did not load in time (grey rows); reload to try again.")
     return group("peaks", "Regulatory elements", "AQUA-FAANG robust ATAC peaks, coloured by chromatin state",
-                 [row("Combined", trk(ax, s, 32, "".join(body)), f"n/{len(conditions)}: conditions with the peak")],
+                 [row("Combined", trk(32, "".join(body)), f"n/{len(conditions)}: conditions with the peak")],
                  more, f"{len(more)} conditions", open_)
 
 
@@ -338,9 +333,9 @@ def hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes):
             parts = [f'<rect x="0" y="1" width="{W}" height="11" fill="{G[200]}"><title>{escape(short(c))}: ChromHMM unavailable</title></rect>']
         else:
             parts = [state_rect(ax, a, e, 1, 11, st, short(c)) for a, e, st in segs.get(c) or ()]
-        more.append(row(short(c), trk(ax, s, 13, "".join(parts)), tissue=tissue_of(c), dense=True))
+        more.append(row(short(c), trk(13, "".join(parts)), tissue=tissue_of(c), dense=True))
     legend = [(f"st-{x}", x.replace("_", " ").replace(" 1", "")) for x in LEGEND_STATES]
-    return group("hmm", "Chromatin states", note, [row("Combined", trk(ax, s, h + 2, "".join(body)), f"conditions per state, 0–{total}")],
+    return group("hmm", "Chromatin states", note, [row("Combined", trk(h + 2, "".join(body)), f"conditions per state, 0–{total}")],
                  more, f"{len(more)} conditions", open_, legend)
 
 
@@ -431,14 +426,14 @@ def assay_group(s, assay, open_):
                 parts.append(polygon(xs, [22 - 21 * min(1, x / vmax) for x in v], [22] * len(xs), colour))
         parts.append(f'<line x1="0" x2="{W}" y1="{12 if rna else 22}" y2="{12 if rna else 22}" stroke="{G[300]}" stroke-width="0.6"/>')
         reps = max(found[c, st][1] for st in strands if (c, st) in found)
-        more.append(row(short(c), trk(ax, s, 24, "".join(parts)), tissue=tissue[c]))
+        more.append(row(short(c), trk(24, "".join(parts)), tissue=tissue[c]))
         more[-1]["title"] = f"mean of {reps} replicate{'s' if reps > 1 else ''}"
     scale = f"conditions on a log scale, 0–{vmax:.0f} RPM" if rna else f"conditions 0–{vmax:.2f} RPM"
     note = f"{what.split(';')[0]}{'; + strand up, &#8722; down' if rna else ''} · {scale}"
     if failed:
         note += f" · {failed} of {len(tracks)} files did not load in time"
     sub = f"0–{total:.1f} RPM per strand" if rna else f"0–{total:.2f} RPM"
-    g = group(assay, title, note, [row("Combined", trk(ax, s, combined_h + 2, "".join(body)), sub)], more,
+    g = group(assay, title, note, [row("Combined", trk(combined_h + 2, "".join(body)), sub)], more,
               f"{len(more)} conditions", open_)
     g["failed"] = failed
     return g
@@ -463,8 +458,8 @@ def other_group(s, ax, data):
                     f'fill-opacity="{0.35 + 0.65 * (g.get("score") or 0) / top:.2f}"><title>GERP constrained element (65 fish), score {g.get("score")}</title></rect>')
     if not data.get("gerp"):
         gerp.append(locus_svg._t(4, 10, "none in this window", 9.5, G[700]))
-    return group("other", "Other annotation", "", [row("Ensembl regulatory", trk(ax, s, 13, "".join(body)), "build 116"),
-                                                   row("GERP constrained", trk(ax, s, 13, "".join(gerp)), "65 fish")])
+    return group("other", "Other annotation", "", [row("Ensembl regulatory", trk(13, "".join(body)), "build 116"),
+                                                   row("GERP constrained", trk(13, "".join(gerp)), "65 fish")])
 
 
 # ---- the page ----
