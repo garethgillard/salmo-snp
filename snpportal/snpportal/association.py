@@ -105,8 +105,7 @@ def score(request):
 @csrf_protect
 @sensitive_post_parameters()
 def _score(request):
-    preset = request.POST.get("trait", "all")
-    preset = preset if preset in dict(jobs.presets()) else "all"
+    preset = jobs.canonical(request.POST.get("trait", "all"), (jobs.weights() or {}).get("presets") or {})
     example, upload = request.POST.get("example"), request.FILES.get("sumstats")
     try:
         if example:
@@ -430,10 +429,10 @@ def pip_svg(panels, title, desc, synthetic=False):
 
 FIGURES = {  # name -> (title, definition)
     "manhattan": ("Manhattan plot", "-log10 p of every SNP along the genome. SNPs with p > 0.01 are thinned to the strongest per "
-                  "50 kb; tier 1-2 SNPs for the trait are drawn on top in tier colours. Lines: genome-wide significance, "
+                  "50 kb; tier 1-2 SNPs for the chosen conditions are drawn on top in tier colours. Lines: genome-wide significance, "
                   "Bonferroni and suggestive thresholds (conventions, not rules for salmon). Diamonds mark locus leads: click "
                   "one for its regional plot."),
-    "qq": ("QQ plot by tier", "Observed against expected -log10 p per tier for the trait, each thinned to about 2,000 "
+    "qq": ("QQ plot by tier", "Observed against expected -log10 p per tier for the chosen conditions, each thinned to about 2,000 "
            "quantiles, with lambda_GC = median(z^2)/0.4549 per tier. Grey band: 95% interval of the expected order "
            "statistics for all SNPs. A tier lifting off the diagonal earlier than others is enriched for association, but "
            "tiers differ in size and allele frequency."),

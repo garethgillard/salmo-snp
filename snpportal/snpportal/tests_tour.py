@@ -133,7 +133,7 @@ class TourTest(SimpleTestCase):
         table = next(f for _, f in page.forms if f.get("tab") == "table")
         key, url = self.example(**table)
         self.assertIn("tab=table", url)
-        self.assertIn("trait=maturation", url)
+        self.assertIn("trait=Brain%2BGonad", url)
         self.assertEqual(jobs.read(key)["state"], "done")
 
     def test_report_matches_overview_and_table(self):
@@ -142,7 +142,7 @@ class TourTest(SimpleTestCase):
         results, report = reverse("snpportal:results", args=[key]), reverse("snpportal:report", args=[key])
         self.client.get(results, {"tab": "table", "trait": "maturation"})  # the Table keeps its selection
         overview = self.client.get(results)
-        self.assertContains(overview, f"{report}?trait=maturation")  # the results header links the report of the selection
+        self.assertContains(overview, f"{report}?trait=Brain%2BGonad")  # the results header links the report of the selection
         page = self.client.get(report, {"trait": "maturation"})
         self.assertEqual(page.status_code, 200)
         self.assertEqual(page["Cache-Control"], "no-store, private")

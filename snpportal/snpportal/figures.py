@@ -222,7 +222,7 @@ def heatmap(rows, title, desc="", synthetic=False, link=None, scale_max=None):
             fill = mix(palette.GREY[50], palette.TIERS[1][0], share / top_share)
             ink = palette.text_on(fill)
             tip = f"{group} {label}: {100 * share:.1f}% of SNPs active" + (f", {fold:.1f}× the public background" if fold else "") \
-                + (" (a condition of the trait)" if chosen else "")
+                + (" (a chosen condition)" if chosen else "")
             stroke = (f' stroke="{palette.GREY[900]}" stroke-width="2.5"' if chosen else f' stroke="{palette.GREY[200]}"')
             cell = _rect(x, y, cw, ch, fill, tip, extra=stroke) + "".join([
                 _text(x + cw / 2, y + 11, label, "middle", fill=ink, font_size=9.5, pointer_events="none"),
@@ -234,7 +234,7 @@ def heatmap(rows, title, desc="", synthetic=False, link=None, scale_max=None):
     for k, t in enumerate(steps):
         parts.append(f'<rect x="{left + k * 22}" y="{y}" width="22" height="10" fill="{mix(palette.GREY[50], palette.TIERS[1][0], t)}"/>')
     parts.append(_text(left - 4, y + 9, "0%", "end", font_size=10) + _text(left + 5 * 22 + 4, y + 9, f"{100 * top_share:.1f}%", font_size=10)
-                 + _text(left, y + 26, "Outlined: the trait's conditions. ×: fold over the public background.", font_size=10, fill=palette.GREY[700]))
+                 + _text(left, y + 26, "Outlined: the chosen conditions. ×: fold over the public background.", font_size=10, fill=palette.GREY[700]))
     return svg(width, y + 32, title, desc, "".join(parts), synthetic)
 
 

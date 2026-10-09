@@ -235,7 +235,7 @@ def draw(request, s, download=False, show=FULL):
                  + (" SYNTHETIC" if synthetic_track(t) else "")} for t, v in zip(picked, read["values"])]
         signal = {"title": f"{s['assay']} signal", "subtitle": "salmobase, live", "rows": rows, "start": read["start"],
                   "rung": read["rung"], "scale": s["scale"],
-                  "note": "" if picked else f"No {s['assay']} tracks for this trait"}
+                  "note": "" if picked else f"No {s['assay']} tracks for these conditions"}
         synthetic = synthetic or any(synthetic_track(t) for t in picked)
         failed = sum(r["values"] is None for r in rows)
         if failed:
@@ -539,7 +539,8 @@ def variant(request, spec):
     presets = jobs.presets()
     trait = request.GET.get("trait") if request.GET.get("trait") in dict(presets) else "all"
     try:
-        snp = sl.annotate_position(jobs.release(), chrom, pos, ref, alt, trait, work_dir=jobs.results_dir())
+        snp = sl.annotate_position(jobs.release(), chrom, pos, ref, alt, jobs.stored_preset(trait, jobs.weights()["presets"]) or "all",
+                                   work_dir=jobs.results_dir())  # snpscore knows the stored presets' names
     except snpscore.InputError as e:
         raise Http404(str(e)) from None
     snp["id"] = snp.get("id") or next((r["id"] for r in sl.catalog(jobs.release()) if r.get("chrom") == chrom and r.get("pos") == str(pos)), None)

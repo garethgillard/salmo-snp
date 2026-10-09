@@ -1,7 +1,7 @@
 {% extends 'snpportal/base_portal.html' %}
 {% load snpportal_tags %}
 {% comment %}Gene page: facts, known loci with their caveats, expression and the locus view; the 10 best public variants
-   (then 'Show all'); the element grid closed. The trait, flank and sort apply on change (htmx swaps #gene).{% endcomment %}
+   (then 'Show all'); the element grid closed. The conditions, flank and sort apply on change (htmx swaps #gene).{% endcomment %}
 {% block main %}
 <div id="gene" hx-target="#gene" hx-select="#gene" hx-swap="outerHTML">
 {% include 'snpportal/_caveat.html' with synthetic=synthetic %}
@@ -43,7 +43,7 @@
 <section class="sp-card mb-3" id="candidates" aria-labelledby="cand-h">
   <div class="sp-card-head"><h2 id="cand-h">Public variants</h2></div>
   <form method="get" action="#candidates" class="d-flex flex-wrap align-items-end gap-3 sp-small" hx-get="{% url 'snpportal:gene' gene.id %}" hx-trigger="change" hx-push-url="true">
-    <div class="mb-2"><label class="form-label sp-small mb-0" for="gene-trait">Trait</label>
+    <div class="mb-2"><label class="form-label sp-small mb-0" for="gene-trait" title="The conditions tiers count chromatin activity in">Conditions</label>
       <select class="form-select form-select-sm w-auto" id="gene-trait" name="trait">
         {% for value, label in presets %}<option value="{{ value }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
       </select></div>

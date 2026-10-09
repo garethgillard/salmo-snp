@@ -186,7 +186,7 @@ class ExploreTest(SimpleTestCase):
         text = f"{VGLL3}\n26:14.5-15Mb"
         response = self.client.post(reverse("snpportal:candidates"), {"targets": text, "flank": "50000", "trait": "maturation"})
         self.assertEqual(response.status_code, 302)
-        self.assertIn("trait=maturation", response.url)
+        self.assertIn("trait=Brain%2BGonad", response.url)  # an older preset name: its tissues
         job = jobs.read(response.url.split("/")[-2])
         windows = [("25", 28995075 - 50000, 28999268 + 50000), ("26", 14_500_000, 15_000_000)]
         self.assertEqual((job["state"], job["input_kind"]), ("done", "from_rows"))
@@ -263,7 +263,7 @@ class ExploreTest(SimpleTestCase):
         self.assertNotIn("sp-badge-prov", edited)  # one caveat line, no badges
         self.assertIn("Not yet validated against known causal variants (n = 6)", edited)
         self.assertTrue(tsv.startswith("# ") and "\nfeature\tpositives" in tsv)
-        self.assertContains(local, "--trait maturation")
+        self.assertContains(local, "--trait all")  # snpscore names single tissues only
         lines = sorted(f"{x['name']} {x.get('sha256')}\n" for x in jobs.release_info()["layers"])  # a self-built release:
         self.assertContains(local, hashlib.sha256("".join(lines).encode()).hexdigest())  # checked by its layers,
         self.assertNotContains(local, jobs.release_info()["sha256"])  # not by its manifest (build date, genome path)

@@ -27,9 +27,9 @@ from . import explore, figures, jobs, palette, search
 EMISSIONS = "https://salmobase.org/datafiles/datasets/Aqua-Faang/figures/chromHMM.png"
 STATE_MODELS = {"Bivalent": "DevMap only", "Poised_enhancer_2": "BodyMap only"}  # BodyMap and DevMap: separate 12-state models
 TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.scored)
-    "active": "An active state in at least one condition of the trait.",
-    "active_elsewhere": "An active state only in conditions outside the trait.",
-    "weak": "A weak state in a condition of the trait, and no active state there.",
+    "active": "An active state in at least one of the chosen conditions.",
+    "active_elsewhere": "An active state only in conditions outside the chosen ones.",
+    "weak": "A weak state in a chosen condition, and no active state there.",
     "coding": "A CDS change to the protein (missense, stop gained or lost, start lost) or of unknown effect.",
     "synonymous": "A synonymous CDS change (or stop retained): no amino-acid change (weight under review).",
     "splice": "In a splice region.",
@@ -144,7 +144,7 @@ def release_facts(m):
             facts.append(f"{layers[name]['rows']:,} {label}")
     if (m.get("catalog") or {}).get("rows"):
         facts.append(f"{m['catalog']['rows']} known loci")
-    return ", ".join(facts + [f"{len(jobs.presets())} trait presets"])
+    return ", ".join(facts)
 
 
 def data(request):
@@ -170,7 +170,7 @@ def data(request):
         files.append((c.get("file", "catalog/known_loci.tsv"), f"Known-loci catalogue; uploads within {c.get('window', 0):,} bp get a badge",
                       c.get("rows"), c.get("sha256"), None, None))
     for name, sha in (m.get("files") or {}).items():
-        files.append((name, {"weights.yaml": "Tier rules and trait presets", "tracks.yaml": "Signal track registry"}.get(name, ""),
+        files.append((name, {"weights.yaml": "Tier rules", "tracks.yaml": "Signal track registry"}.get(name, ""),
                       None, sha, None, None))
     if (jobs.release() / "pool" / "pool.parquet").exists():
         files.append(("pool/pool.parquet", "Public variants annotated with this release (gene pages, candidate lists)", None, None, None, None))
@@ -337,9 +337,6 @@ def methods(request):
                        "for all conditions, with the provisional weights. caQTLs share the ATAC data, so eQTLs are the "
                        "fairer test; leads from 12 fish carry winner's curse. Intervals assume simple random sampling.",
                "svg_url": f"{base}?download=benchmark.svg", "tsv_url": f"{base}?download=benchmark_figure.tsv"}
-    conditions = [c for c in explore.layer("chromatin").get("columns", []) if c != "summary"]
-    presets = [(jobs.trait_label(name), ", ".join(figures.STAGE_LABELS.get(x, x) for x in prefixes or []),
-                len([c for c in conditions if not prefixes or c.startswith(tuple(prefixes))])) for name, prefixes in (w.get("presets") or {}).items()]
     cuts = list(w.get("tiers") or [])
     tiers = [(i + 1, f"tier_score {c} or more" if i == 0 else f"tier_score {c} to {cuts[i - 1] - 1}") for i, c in enumerate(cuts)]
     if cuts:
@@ -350,7 +347,7 @@ def methods(request):
     blocks = [(name, [(k, _flat(v)) for k, v in (value.items() if isinstance(value, dict) else [("value", value)])])
               for name, value in w.items() if name not in STANDARD]
     return render(request, "snpportal/methods.html", {
-        "nav": "about", "title": "Methods", "states": states, "emissions": EMISSIONS, "presets": presets, "tiers": tiers, "blocks": blocks,
+        "nav": "about", "title": "Methods", "states": states, "emissions": EMISSIONS, "tiers": tiers, "blocks": blocks,
         "weights": [(name, value, TERM_TEXT.get(name, "")) for name, value in sorted((w.get("weights") or {}).items(), key=lambda kv: -kv[1])],
         "finemap": w.get("finemap") or {},
         "glossary": [(a, t, text.format(window=(m.get("catalog") or {}).get("window") or 50_000)) for a, t, text in GLOSSARY],
@@ -386,7 +383,7 @@ def methods_text(m, w):
             + (", the Ensembl regulatory build" if "regbuild" in layers else "")
             + (", GERP constrained elements from the Ensembl Compara 65-fish alignment" if "gerp" in layers else "")
             + (" and allele frequencies of the 504-fish reference panel" if "public_af" in layers else "")
-            + ". Each SNP's tier_score is the sum of the weights of its evidence for the chosen trait preset, and tiers "
+            + ". Each SNP's tier_score is the sum of the weights of its evidence for the chosen conditions, and tiers "
               "are cut-offs on that score (rules in weights.yaml, sha256 given in each download; PROVISIONAL).")
     return [text], []
 
@@ -430,8 +427,7 @@ def chrom_aliases(chrom):
 def run_locally(request):
     """/snp/run-locally/: how to score a confidential list on your own computer with the same release and settings."""
     info, presets = jobs.release_info(), jobs.presets()
-    trait = request.GET.get("trait", "all")
-    trait = trait if trait in dict(presets) else "all"
+    trait = jobs.canonical(request.GET.get("trait", "all"), (jobs.weights() or {}).get("presets") or {})
     release = jobs.release()
     checksum = None
     if (release / "release.zip.sha256").exists():
@@ -442,13 +438,16 @@ def run_locally(request):
     lines = sorted(f"{x['name']} {x.get('sha256')}\n" for x in info["layers"])
     weights = release / "weights.yaml"
     return render(request, "snpportal/run_locally.html", {
-        "nav": "about", "title": "Run it locally", "release": info, "presets": presets, "trait": trait, "folder": folder,
+        "nav": "about", "title": "Run it locally", "release": info, "presets": presets, "trait": trait,
+        "trait_label": jobs.trait_label(jobs.cli_trait(trait) and trait or "all"), "folder": folder,
+        "cli": [(jobs.stored_preset(v, jobs.weights()["presets"]), label) for v, label in presets if jobs.stored_preset(v, jobs.weights()["presets"])],
         "zip": (release / "release.zip").exists(), "zip_sha256": checksum,
         "layers_sha256": hashlib.sha256("".join(lines).encode()).hexdigest() if lines else None,
         "weights_sha256": jobs.sha256(weights) if weights.exists() else None,
         "layers_check": (f"python3 -c \"import hashlib, json; m = json.load(open('{folder}/manifest.json')); print(hashlib.sha256(''.join("
                          "sorted(x['name'] + ' ' + str(x.get('sha256')) + chr(10) for x in m['layers'])).encode()).hexdigest())\""),
-        "command": f"snpscore annotate my_snps.vcf.gz --release {folder} --trait {trait} -o my_snps_{trait}.tsv",
+        "command": f"snpscore annotate my_snps.vcf.gz --release {folder} --trait {jobs.cli_trait(trait) or 'all'} "
+                   f"-o my_snps.tsv",  # snpscore names all conditions and single tissues
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}"})
 
 

@@ -70,7 +70,7 @@ class ResultsTest(SimpleTestCase):
 
     def test_active_in_sets_the_tiers(self):
         same = self.client.get(self.url + "?tab=table&active_set=1&tissue=Gonad&tissue=Brain").content.decode()
-        self.assertIn("Active in: <b>maturation</b>", same)  # the preset with these conditions: stored tiers
+        self.assertIn("Active in: <b>brain + gonad</b>", same)  # conditions, never a trait; a stored preset's tiers
         self.assertFalse(list(self.d.glob("tiers_*")))
         own = self.client.get(self.url + "?tab=table&trait=Brain.Mature.Female").content.decode()
         self.assertIn("Active in: <b>brain (mature females)</b>", own)

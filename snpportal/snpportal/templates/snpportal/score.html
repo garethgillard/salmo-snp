@@ -7,12 +7,12 @@
 
 {% if error %}<div class="sp-status sp-status-fail" role="alert"><strong>&#9888; {% if tab == 'gwas' %}Can't analyse these summary statistics.{% else %}Can't score this list.{% endif %}</strong> {{ error }}</div>{% endif %}
 
-{# the release's demo/ inputs (views.TRY): SNP lists post to Score, the GWAS one to association.score with its trait #}
+{# the release's demo/ inputs (views.TRY): SNP lists post to Score, the GWAS one to association.score #}
 {% if tries %}<section class="sp-card" aria-labelledby="try-it">
   <h2 class="mb-2" id="try-it">Try it</h2>
   <div class="sp-try">{% for ex in tries %}
     <form method="post" action="{% if ex.gwas %}{% url 'snpportal:gwas_score' %}{% else %}{% url 'snpportal:upload' %}{% endif %}">{% csrf_token %}
-      {% if ex.gwas %}<input type="hidden" name="trait" value="maturation">{% endif %}
+      {% if ex.gwas %}<input type="hidden" name="trait" value="all">{% endif %}
       <button class="btn btn-outline-primary" type="submit" name="example" value="{{ ex.name }}">{{ ex.title }} <small>{{ ex.what }}</small></button>
     </form>{% endfor %}
   </div>
@@ -71,7 +71,7 @@
       <button class="btn btn-primary" type="submit">Analyse</button>
     </form>
   </div>
-  <p class="sp-small sp-muted mt-2 mb-1">You choose the trait on the results page.</p>
+  <p class="sp-small sp-muted mt-2 mb-1">Tiers count chromatin activity in all 21 sample conditions; choose conditions with Active in on the Table.</p>
   <p class="sp-small mb-0" id="privacy">From a VCF only CHROM, POS, ID, REF and ALT are read. Other table columns and summary
     statistics are kept with the results for {{ keep_hours }} h; anyone with the link can see them. Confidential? <a href="{% url 'snpportal:run_locally' %}">Run it locally</a>.</p>
 </section>

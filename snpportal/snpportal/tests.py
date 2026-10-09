@@ -115,11 +115,11 @@ class PortalTest(SimpleTestCase):
     def test_upload_job_tabs_card_download(self):
         response = self.upload(trait="liver")
         self.assertEqual(response.status_code, 302)
-        self.assertIn("trait=liver", response.url)
+        self.assertIn("trait=Liver", response.url)  # an older preset name: the conditions of its tissue
         key, url = self.key(response), response.url.split("?")[0]
         folder = self.results / key
         job = json.loads((folder / "job.json").read_text())
-        self.assertEqual((job["state"], job["preset"]), ("done", "liver"))
+        self.assertEqual((job["state"], job["preset"]), ("done", "Liver"))
         n = job["n_rows"]
         self.assertGreater(n, 1000)
         self.assertTrue(all(job[k] for k in ("manifest_sha256", "weights_sha256", "input_sha256", "created_utc")))
@@ -150,7 +150,7 @@ class PortalTest(SimpleTestCase):
         self.assertIn('name="tier" value="1" checked', form)  # max_tier=2 (older links): tiers 1 and 2 ticked
         self.assertIn('name="tier" value="2" checked', form)
         self.assertIn('name="hide_lore" value="1" checked', form)
-        self.assertContains(filtered, "Active in: <b>maturation</b>")  # the trait's conditions
+        self.assertContains(filtered, "Active in: <b>brain + gonad</b>")  # conditions, never a trait
 
         card = self.client.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain", HTTP_HX_REQUEST="true")
         self.assertTrue("Chromatin state per condition" in card.content.decode() or "conditions sampled" in card.content.decode())

@@ -14,7 +14,7 @@
     {% if switch_url %}<form class="d-flex align-items-center gap-1 ms-auto sp-noprint" method="get" action="{{ switch_url }}"
           hx-get="{{ switch_url }}" hx-trigger="change" hx-target="#card-body" hx-select="#card-body" hx-swap="outerHTML" hx-push-url="true">
       {% for name, value in keep %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
-      <label class="sp-muted" for="card-trait">Trait</label>
+      <label class="sp-muted" for="card-trait">Conditions</label>
       <select class="form-select form-select-sm w-auto" id="card-trait" name="trait">
         {% for value, label in presets %}<option value="{{ value }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
       </select>

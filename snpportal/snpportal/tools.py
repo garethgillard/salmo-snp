@@ -110,13 +110,13 @@ def _open(d, trait, weights, selected=False):
     con = jobs.connect([d, jobs.release()], d)
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet({lit(d / 'result.parquet')}, file_row_number=true)")
     columns = _columns(con, "r")
-    tiers = d / "tiers.parquet"
-    stored = _columns(con, f"read_parquet({lit(tiers)})") if tiers.exists() else {}
-    picked = [c for c in jobs.TIER_COLUMNS if f"{c}__{trait}" in stored]
+    tiers, suffix = jobs.trait_tiers(d, weights, trait) if weights else (None, None)
+    stored = _columns(con, f"read_parquet({lit(tiers)})") if tiers else {}
+    picked = [c for c in jobs.TIER_COLUMNS if f"{c}__{suffix}" in stored]
     if picked:
         drop = [c for c in jobs.TIER_COLUMNS if c in columns]
         keep = f"r.* EXCLUDE ({', '.join(drop)})" if drop else "r.*"
-        con.execute(f"CREATE VIEW v0 AS SELECT {keep}, " + ", ".join(f"t.{jobs.ident(c + '__' + trait)} AS {c}" for c in picked)
+        con.execute(f"CREATE VIEW v0 AS SELECT {keep}, " + ", ".join(f"t.{jobs.ident(c + '__' + suffix)} AS {c}" for c in picked)
                     + f" FROM r JOIN read_parquet({lit(tiers)}) t USING (file_row_number)")
     elif weights:
         con.execute(f"CREATE VIEW v0 AS {jobs.scored_sql('r', weights, list(columns), trait, d)}")
@@ -839,10 +839,11 @@ def _scope(request, key, d, con, view, types, weights, job, scope=None):
 
 
 def _command(job, trait, tag, fmt="<format>"):
-    base = f"snpscore annotate <your list> --release <release {job.get('release')}> --trait {trait} -o annotated.parquet"
+    name = jobs.cli_trait(trait) or "all"  # snpscore's name for these conditions (others: all, and the portal's tiers differ)
+    base = f"snpscore annotate <your list> --release <release {job.get('release')}> --trait {name} -o annotated.parquet"
     if tag and tag.startswith("panel-") and fmt != "priors":
-        return base + f"; snpscore panel annotated.parquet --release <release {job.get('release')}> --preset {trait} (parameters in panels/{tag[6:]}.json of the job)"
-    return base + f"; snpscore export annotated.parquet --release <release {job.get('release')}> --preset {trait} --format {fmt}"
+        return base + f"; snpscore panel annotated.parquet --release <release {job.get('release')}> --preset {name} (parameters in panels/{tag[6:]}.json of the job)"
+    return base + f"; snpscore export annotated.parquet --release <release {job.get('release')}> --preset {name} --format {fmt}"
 
 
 def export(request, key, job, fmt):

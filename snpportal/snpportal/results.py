@@ -97,7 +97,7 @@ COLUMNS = {
     "position": ("Position", "Chromosome:position (1-based, Ssal_v3.1)", ("pos",), [("length(chrom)", True), ("chrom", True), ("pos", True)]),
     "p": ("p", "GWAS p value", ("neglog10p",), [("neglog10p", False)]),
     "beta": ("beta (se)", "GWAS effect of the alt allele (standard error)", ("beta",), [("beta", False)]),
-    "tier": ("Tier", "1 = strongest functional evidence for this trait; 4 = no evidence found (not evidence of no effect)",
+    "tier": ("Tier", "1 = strongest functional evidence for the chosen conditions; 4 = no evidence found (not evidence of no effect)",
              ("tier",), [("tier", True), ("tier_score", False)]),
     "pip": ("PIP", "Posterior inclusion probability, uniform → functional prior; one causal variant per locus, no LD. "
             "Blank outside loci", ("pip_uniform",), [("pip_functional", False)]),
@@ -109,7 +109,7 @@ COLUMNS = {
     "score": ("Score", "Tier score: the summed weights of the evidence terms", ("tier_score",), [("tier_score", True)]),
     "evidence": ("Evidence", "The evidence behind the tier", ("tier_evidence",), []),
     "chromatin": ("Chromatin", "AQUA-FAANG chromatin state in 21 conditions: Brain, Gonad, Liver, Muscle (immature F, M; "
-                  "mature F, M), then 5 embryo stages. Underlined: the trait's conditions", ("chromatin",), []),
+                  "mature F, M), then 5 embryo stages. Underlined: the chosen conditions", ("chromatin",), []),
     "known": ("Known locus", "Near a published locus of the known-loci catalogue", ("known_locus",), [("known_locus_dist", True)]),
     "maf": ("MAF", MAF_TIP, ("maf", "af", "public_af_maf"), [("{maf}", True)]),
     "assay": ("Assay", "Assay design check of the probe flanks; hover for the reasons", ("assay_status",), [("assay_status", True)]),
@@ -169,13 +169,13 @@ def _open(request, key, write=False, chip=False):
     trait = "all"
     if weights:
         trait = jobs.requested_trait(request.GET.get, request.GET.getlist, weights["presets"])
-        path = jobs.trait_tiers(d, weights, trait)  # an Active-in selection's tiers are scored on its first view
+        path, suffix = jobs.trait_tiers(d, weights, trait)  # a new set of conditions is scored on its first view
         stored = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet('{path}'))").fetchall()] if path else []
-        picked = [c for c in jobs.TIER_COLUMNS if f"{c}__{trait}" in stored]
+        picked = [c for c in jobs.TIER_COLUMNS if f"{c}__{suffix}" in stored]
         if picked:
             drop = [c for c in jobs.TIER_COLUMNS if c in columns]
             keep = f"r.* EXCLUDE ({', '.join(drop)})" if drop else "r.*"
-            tiers = ", ".join(f"t.{ident(f'{c}__{trait}')} AS {c}" for c in picked)
+            tiers = ", ".join(f"t.{ident(f'{c}__{suffix}')} AS {c}" for c in picked)
             con.execute(f"CREATE VIEW v0 AS SELECT {keep}, {tiers} FROM r JOIN read_parquet('{path}') t USING (file_row_number)")
         else:  # a job made before tiers.parquet existed
             con.execute(f"CREATE VIEW v0 AS {jobs.scored_sql('r', weights, columns, trait, d)}")
@@ -518,7 +518,6 @@ def table(request, key, job=None):
 
     if weights and conditions:  # the conditions tiers score against: tissues, maturity and sex, or a trait preset
         tissues, maturity, sex = jobs.selection_of(chosen["trait"], weights["presets"])
-        named = [p for p in weights["presets"] if p != "all" and p.capitalize() not in jobs.TISSUES]  # all: Reset; tissues: ticks
         every = len(tissues) == len(jobs.TISSUES)
         level = chosen.get("act", "peak")
         dd("active", "active", "Active in", jobs.trait_label(chosen["trait"]) + (" · active state" if level != "peak" else ""),
@@ -527,9 +526,7 @@ def table(request, key, job=None):
            maturity=[("", "any", not maturity)] + [(x, x.lower(), x == maturity) for x in jobs.MATURITIES],
            sex=[("", "any", not sex)] + [(x, x.lower(), x == sex) for x in jobs.SEXES],
            levels=[(k, label, tip, k == level) for k, (label, tip) in ACTIVITY.items()],
-           reset=link(trait=None, act=None, page=None) if chosen["trait"] != "all" else None,
-           picks=[(jobs.trait_label(p), " + ".join(x.lower() for x in jobs.selection_of(p, weights["presets"])[0]),
-                   link(trait=p, page=None), p == chosen["trait"]) for p in named])
+           reset=link(trait=None, act=None, page=None) if chosen["trait"] != "all" else None)
     if "tier" in types:
         counts = dict(tier_counts)
         dd("list", "tier", "Tier", f"{tier_text(ticked['tier'])}" if ticked["tier"] else "any", bool(ticked["tier"]),
@@ -859,7 +856,7 @@ def _fig_summary(c, link, desc):
     if "known" in s.get("counts", {}):
         window = (c["manifest"].get("catalog") or {}).get("window")
         near = s["counts"]["known"]
-        groups.append({"title": "Near a known locus", "note": f"within {window / 1000:g} kb of a published trait locus" if window else "",
+        groups.append({"title": "Near a known locus", "note": f"within {window / 1000:g} kb of a published locus" if window else "",
                        "parts": [("near one", near, palette.GREY[700], href(known="1")), ("further away", n - near, palette.GREY[200], None)]})
     if s.get("assay") and c["job"].get("input_kind") != "gwas":
         groups.append({"title": "Assay check", "note": "probe flanks for genotyping assays",
@@ -977,7 +974,7 @@ def _fig_maf(c, link, desc):
 
 
 FIGURES = {  # name -> (card title, (i) definition, builder(context, link or None, desc) -> (svg, header, rows) or None)
-    "summary": ("Summary", "How the SNPs scored for this trait (tier 1 = strongest functional evidence, tier 4 = no "
+    "summary": ("Summary", "How the SNPs scored for all 21 conditions (tier 1 = strongest functional evidence, tier 4 = no "
                 "evidence found, not evidence of no effect), where they fall relative to genes, how many are near a "
                 "published locus and how they did in the assay design check. Thin bars: the same split for the release's "
                 "public sites, for comparison. Click a number, a part of a bar or its legend entry to list those SNPs.",
@@ -987,7 +984,7 @@ FIGURES = {  # name -> (card title, (i) definition, builder(context, link or Non
                  "and, as a bar, its tier 1–2 SNPs. Click a bin, chromosome or bar to list those SNPs.", _fig_ideogram),
     "conditions": ("Active chromatin per condition", "Share of the SNPs in an active chromatin state in each of the 21 "
                    "AQUA-FAANG conditions; × = fold over a background of public sites, when the release has one. "
-                   "Outlined: the trait's conditions. Click a cell to list those SNPs.", _fig_conditions),
+                   "Click a cell to list those SNPs.", _fig_conditions),
     "regions": ("Genic region by tier", "SNPs per genic region class (Ensembl 116), split by tier; the black tick is "
                 "the share expected from a background of public sites. Click a bar to list those SNPs.", _fig_regions),
     "terms": ("Evidence behind the tiers", "For each evidence term (its weight in brackets), the SNPs it applies to, split "

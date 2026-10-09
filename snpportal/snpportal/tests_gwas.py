@@ -96,7 +96,7 @@ class GwasTest(SimpleTestCase):
         self.assertEqual(re.findall(r'name="example" value="(\w+)"', box), ["known_loci", "chip_demo_SYNTHETIC", STEM])
         form = box[box.rindex("<form", 0, box.index(f'value="{STEM}"')):]  # the GWAS example's form
         self.assertTrue(form.startswith(f'<form method="post" action="{reverse("snpportal:gwas_score")}">'))
-        self.assertIn('name="trait" value="maturation"', form)  # the example opens with trait=maturation
+        self.assertIn('name="trait" value="all"', form)  # the example opens with all conditions
         self.assertIn("synthetic, maturation", form)
         self.assertEqual(html.count(f'value="{STEM}"'), 1)  # not offered as a SNP-list example too
         gwas = self.client.get(reverse("snpportal:upload"), {"input": "gwas"})  # the GWAS tab, also without JavaScript
@@ -144,7 +144,7 @@ class GwasTest(SimpleTestCase):
         self.assertIn("sig=1e-10&amp;locus=1", changed)  # links keep the settings, so a regional plot opens the same locus
         self.assertIn("sig=1e-10&amp;tab=table", changed)  # and so do the tabs
         self.assertTrue(list((jobs.folder(self.key) / "loci").glob("*.json")))  # loci and fine-mapping cached per settings
-        self.assertIn(f'{reverse("snpportal:results", args=[self.key])}?trait=maturation&amp;tab=export', html)  # one Export link
+        self.assertRegex(html, rf'{reverse("snpportal:results", args=[self.key])}\?trait=[^"&]*&amp;tab=export')  # the Export link
         self.assertNotIn("format=loci", html)
         results = self.client.get(reverse("snpportal:results", args=[self.key]))  # GWAS jobs open on Association
         self.assertTrue(results.url.startswith(reverse("snpportal:association", args=[self.key])))
@@ -207,7 +207,7 @@ class GwasTest(SimpleTestCase):
         self.assertIn("Prototype: tiers rank", html[:html.index('id="fig-region"')])  # the caveat line
         credible = html[html.index('id="credible"'):]
         self.assertIn(causal, credible)  # the credible-set SNPs under both priors, linked to their cards
-        card = re.search(rf'href="(/snp/results/{self.key}/snp/\d+/\?trait=maturation)">{re.escape(causal)}<', credible).group(1)
+        card = re.search(rf'href="(/snp/results/{self.key}/snp/\d+/\?trait=[^"]*)">{re.escape(causal)}<', credible).group(1)
         card = self.client.get(card, follow=True).content.decode()  # the card opens in the Table's drawer
         card = card[card.index('id="drawer"'):]
         self.assertIn("GWAS: p ", card)  # the card's GWAS line, with its qualifier

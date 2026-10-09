@@ -15,7 +15,7 @@ COLUMNS = (("Immature", "Female", "Imm F"), ("Immature", "Male", "Imm M"), ("Mat
 STAGES = figures.STAGE_LABELS
 REGBUILD = {"promoter": "Active_TSS", "enhancer": "Active_enhancer", "open_chromatin_region": "Accessible_chromatin"}  # -> state colour
 TERMS = {  # tier_terms term -> (state name or colour, label) for the 'why this tier' bar
-    "active": ("Active_enhancer", "active in the trait's conditions"),
+    "active": ("Active_enhancer", "active in the chosen conditions"),
     "active_elsewhere": ("Flanking_upstream", "active elsewhere"),
     "weak": ("Primed_enhancer", "weak state"),
     "coding": (palette.TIERS[1][0], "CDS"),
@@ -169,7 +169,7 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
     y, present, chosen = _chromatin(body, ax, data, y, chosen, hmm, compact, gutter, uid, lane_label)
     states = [(_swatch(palette.STATES[s][0]), f"{s.replace('_', ' ')} ({palette.STATES[s][1]})") for s in palette.STATES if s in present]
     if chosen:
-        states.append((f'<path d="M2 0 l6 5 l-6 5z" fill="{palette.ACCENT}"/>', "a condition of the trait"))
+        states.append((f'<path d="M2 0 l6 5 l-6 5z" fill="{palette.ACCENT}"/>', "a chosen condition"))
     legend["Chromatin state" + ("" if hmm else " (inside AQUA-FAANG robust peaks only)")] = states
 
     # regulatory build and GERP
@@ -410,7 +410,7 @@ def _chromatin(body, ax, data, y, chosen, hmm, compact, gutter, uid, lane_label)
             body.append(_t(8, y + h + (3 if compact else 0), group, 11 if compact else 9.5, G[900], weight="600"))
         last_group = group
         if c in chosen:
-            body.append(f'<path d="M{gutter - 15} {y} l5 {h / 2} l-5 {h / 2}z" fill="{palette.ACCENT}"><title>a condition of the trait</title></path>')
+            body.append(f'<path d="M{gutter - 15} {y} l5 {h / 2} l-5 {h / 2}z" fill="{palette.ACCENT}"><title>a chosen condition</title></path>')
         if not compact:
             body.append(_t(gutter - (17 if c in chosen else 10), y + h - 1, label, 8.5, G[900] if c in chosen else G[700], "end",
                            "600" if c in chosen else ""))
@@ -522,7 +522,7 @@ def tier_contribution(terms, score, tier, cutoffs, synthetic=False, uid="tc", la
         parts.append(f'<line x1="{sx(c):.1f}" x2="{sx(c):.1f}" y1="16" y2="48" stroke="{G[900]}" stroke-dasharray="3 2"/>'
                      + _t(sx(c) + 2, 12, f"tier {i + 1} ≥ {c}", 9, G[900]))
     if not terms:
-        parts.append(_t(x0 + 4, 37, "no evidence counted for this trait: tier 4", 10, G[700]))
+        parts.append(_t(x0 + 4, 37, "no evidence counted for these conditions: tier 4", 10, G[700]))
     legend = "; ".join(f"{(labels.get(t['term']) or TERMS.get(t['term'], (0, t['term'])))[1]} +{t['weight']}" for t in terms or [] if t["weight"])
     desc = f"tier_score {score} = {legend or 'nothing'}; tier {tier}. Weights and cut-offs are provisional."
     parts.append(_t(x0, 74, f"score {score} → tier {tier}", 9.5, G[700]))
@@ -580,7 +580,7 @@ def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="c
                          + _t(x + 16, y + 9, label, 9, G[700]))
             x += 16 + 5.4 * len(label) + 10
     y += 14 if present else 0
-    parts.append(_t(4, y + 10, "outlined = the trait's conditions; empty = no AQUA-FAANG peak" + ("; n/a = blacklisted" if blacklisted else ""), 9, G[700]))
+    parts.append(_t(4, y + 10, "outlined = the chosen conditions; empty = no AQUA-FAANG peak" + ("; n/a = blacklisted" if blacklisted else ""), 9, G[700]))
     width = left + 4 * (cw + gap) + 4
     desc = "; ".join(f"{c}: {s}" for c, s in states.items() if s) or "No AQUA-FAANG peak in any condition."
     return figures.svg(width, y + 16, "Chromatin state per condition", desc, defs + "".join(parts), synthetic)

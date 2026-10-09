@@ -28,11 +28,11 @@ snpscore build --out {{ folder }}</pre>
       check the layers and the rules instead: both commands must print the value after the #.
       <pre class="sp-mono mb-0">{{ layers_check }}   # {{ layers_sha256 }}{% if weights_sha256 %}
 shasum -a 256 {{ folder }}/weights.yaml   # {{ weights_sha256 }}{% endif %}</pre>{% endif %}{% endif %}</li>
-    <li class="mb-2">Score your list (VCF, SNP table, PLINK .bim/.map or chip manifest) with the <code>{{ trait }}</code> preset:
+    <li class="mb-2">Score your list (VCF, SNP table, PLINK .bim/.map or chip manifest), tiers for {{ trait_label }}:
       <pre class="sp-mono mb-0">{{ command }}</pre>
       Add <code>--threads 4 --memory 4GB</code> to change DuckDB's limits, or <code>-o my_snps.parquet</code> for Parquet.
       Next to the output come <code>.validation.json</code> (the upload QC) and <code>.rejects.tsv</code> (rows not annotated).</li>
-    <li>For another preset, run it again with <code>--trait</code>: {% for value, label in presets %}<code>{{ value }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.</li>
+    <li>For other conditions, run it again with <code>--trait</code>: {% for name, label in cli %}<code>{{ name }}</code> ({{ label }}){% if not forloop.last %}, {% endif %}{% endfor %}.</li>
   </ol>
   <p class="sp-small sp-muted mt-2 mb-0">Every portal download starts with &lsquo;#&rsquo; lines naming the release, the manifest and
     weights sha256 and the equivalent snpscore command, so a result can be reproduced and checked.</p>

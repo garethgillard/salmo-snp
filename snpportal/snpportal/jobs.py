@@ -161,19 +161,34 @@ def release_changed(job):
 
 
 def presets(where=None):
-    """[(value, label)] of the trait presets in weights.yaml."""
-    w = weights(where)
-    return [(p, trait_label(p)) for p in w["presets"]] if w else []
+    """[(value, label)] of the condition sets a page's Conditions menu offers: all conditions, then one per tissue
+    (each has stored tiers). Never a phenotype: the portal names sample conditions only."""
+    return [("all", trait_label("all"))] + [(t, trait_label(t)) for t in TISSUES] if weights(where) else []
 
 
 def trait_label(trait):
-    """A trait as people read it: 'growth and fillet', 'all conditions', 'brain + gonad (mature females)'."""
-    sel = selection(trait)
-    if sel:
+    """The conditions tiers count, as people read them: 'all conditions', 'brain + gonad (mature females)'. A
+    weights.yaml preset name (older links, job.json) reads as its tissues."""
+    sel = selection(trait if trait == "all" or selection(trait) else _as_key(trait))
+    if sel and trait != "all":
         tissues, maturity, sex = sel
         who = " ".join(x.lower() for x in (maturity, sex and f"{sex}s") if x)
         return " + ".join(t.lower() for t in tissues) + (f" ({who})" if who else "")
-    return "all conditions" if trait == "all" else trait.replace("_", " ")
+    return "all conditions"
+
+
+def _as_key(name, presets=None):
+    """The Active-in key of a weights.yaml preset name ('maturation' -> 'Brain+Gonad'), 'all' for 'all' or unknown."""
+    if name == "all":
+        return "all"
+    try:
+        presets = presets if presets is not None else (weights() or {}).get("presets") or {}
+    except OSError:  # no release configured
+        presets = {}
+    if not dict.__contains__(presets, name):
+        return "all"
+    tissues = selection_of(name, presets)[0]
+    return "all" if len(tissues) == len(TISSUES) else selection_key(tissues)
 
 
 # ---- traits: the conditions tiers score against. A weights.yaml preset, or the Table's Active-in selection of
@@ -244,16 +259,29 @@ def conditions_in(prefixes):
 
 
 def canonical(trait, presets):
-    """`trait` as URLs carry it: a named preset with the same conditions as an Active-in key (single tissues first, so
-    Liver is 'liver', not 'disease_resistance'), else the key; 'all' when it is neither."""
-    if trait not in presets:
+    """`trait` as URLs carry it: an Active-in key in one spelling ('Brain+Gonad', tissues in order), or 'all'. A preset
+    name of older links becomes the key of its tissues."""
+    if trait == "all" or trait not in presets:
         return "all"
-    if dict.__contains__(presets, trait):
-        return trait
-    key = selection_key(*selection(trait))  # tissues in order, one spelling
-    wanted = conditions_in(presets[key])
+    key = selection_key(*selection(trait)) if selection(trait) else _as_key(trait, presets)
+    return "all" if key == "all" or conditions_in(presets[key]) == set(CONDITIONS) else key
+
+
+def cli_trait(trait):
+    """snpscore's --trait for these conditions: 'all' or a single tissue's preset; None for any other set."""
+    w = weights() or {}
+    name = stored_preset(canonical(trait, w["presets"]), w["presets"]) if w.get("presets") else None
+    return name if name and (name == "all" or name.capitalize() in TISSUES) else None
+
+
+def stored_preset(trait, presets):
+    """The weights.yaml preset whose stored tiers (tiers.parquet, summary.json, the pool) are those of the Active-in
+    key `trait`: the same conditions, single tissues first; None when no preset has them."""
+    if trait == "all":
+        return "all" if dict.__contains__(presets, "all") else None
+    wanted = conditions_in(presets[trait])
     names = sorted(presets, key=lambda p: p.capitalize() not in TISSUES)
-    return next((p for p in names if conditions_in(presets[p]) == wanted), key)
+    return next((p for p in names if conditions_in(presets[p]) == wanted), None)
 
 
 def selection_of(trait, presets):
@@ -273,12 +301,14 @@ def requested_trait(get, getlist, presets):
 
 
 def trait_tiers(d, w, trait):
-    """The file holding a job's tier columns for `trait` (<column>__<trait>): tiers.parquet for a named preset, else
-    tiers_<key>.parquet, scored once for an Active-in selection. None for jobs made before tiers.parquet."""
+    """(file, suffix) holding a job's tier columns for `trait` (<column>__<suffix>): tiers.parquet under the stored
+    preset with the same conditions, else tiers_<key>.parquet, scored once. (None, None) for jobs made before
+    tiers.parquet."""
     if not (d / "tiers.parquet").exists():
-        return None
-    if dict.__contains__(w["presets"], trait):
-        return d / "tiers.parquet"
+        return None, None
+    stored = stored_preset(trait, w["presets"])
+    if stored:
+        return d / "tiers.parquet", stored
     path = d / f"tiers_{trait}.parquet"
     if not path.exists():
         con = connect([d], d)
@@ -292,7 +322,7 @@ def trait_tiers(d, w, trait):
         con.close()
         tmp.chmod(0o600)
         os.replace(tmp, path)
-    return path
+    return path, trait
 
 
 def trait_summary(d, w, trait, s):
@@ -300,10 +330,13 @@ def trait_summary(d, w, trait, s):
     tiers file, computed once and kept in summary_<key>.json."""
     if not w or trait in s.get("tiers", {}) or trait not in w["presets"]:
         return s
+    stored = stored_preset(trait, w["presets"])
+    if stored in s.get("tiers", {}):  # a stored preset's parts, under the key
+        return {**s, **{k: {**s[k], trait: s[k][stored]} for k in ("tiers", "region_tiers", "chrom_tiers", "bins", "terms") if stored in s.get(k, {})}}
     path = d / f"summary_{trait}.json"
     parts = read_json(path) if path.exists() else None
     if not parts:
-        tiers = trait_tiers(d, w, trait)
+        tiers, _ = trait_tiers(d, w, trait)
         if tiers is None:
             return s
         con = connect([d], d)
@@ -789,12 +822,12 @@ def provenance(job, trait=None, filters=None):
         f"release {job.get('release')} ({job.get('assembly', 'Ssal_v3.1')}); manifest sha256 {job.get('manifest_sha256')}; "
         f"weights sha256 {job.get('weights_sha256')}",
         f"snpscore {job.get('snpscore_version')}; duckdb {job.get('duckdb_version')}; job created {job.get('created_utc')}",
-        f"preset {trait}; filters: {', '.join(f'{k}={v}' for k, v in (filters or {}).items()) or 'none'}",
+        f"conditions {trait_label(trait)}; filters: {', '.join(f'{k}={v}' for k, v in (filters or {}).items()) or 'none'}",
         "tier rules PROVISIONAL (prototype weights, under review)",
     ]
     if job.get("synthetic_input") or job.get("synthetic_layers"):
         lines.append("SYNTHETIC: built from synthetic test data, not real results")
-    custom = selection(trait) is not None  # an Active-in selection: no snpscore preset has its conditions
+    cli = cli_trait(trait)
     lines.append(f"equivalent command: snpscore annotate <your list> --release <release {job.get('release')}> --trait "
-                 + (f"all (the portal scored tiers for {trait_label(trait)}, which has no preset)" if custom else trait))
+                 + (cli or f"all (the portal scored tiers for {trait_label(trait)}, which snpscore has no name for)"))
     return ["# " + line for line in lines]

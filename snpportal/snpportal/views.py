@@ -192,8 +192,7 @@ def _score(request):
 
 def start_job(request):
     """Create the job for a POSTed example, file or paste. Returns (key, preset)."""
-    preset = request.POST.get("trait", "all")
-    preset = preset if preset in dict(jobs.presets()) else "all"
+    preset = jobs.canonical(request.POST.get("trait", "all"), (jobs.weights() or {}).get("presets") or {})
     example, upload, paste = request.POST.get("example"), request.FILES.get("snps"), request.POST.get("paste", "").strip()
     if example:
         found = examples().get(example)

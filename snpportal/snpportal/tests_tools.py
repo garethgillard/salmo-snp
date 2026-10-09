@@ -216,7 +216,7 @@ class ToolsTest(SimpleTestCase):
         for fmt in ("tsv", "bed", "illumina", "axiom", "kasp"):
             response = self.client.get(download, {"scope": "all", "format": fmt, "trait": "maturation"})
             self.assertEqual(response.status_code, 200, fmt)
-            self.assertIn("maturation", response["Content-Disposition"])
+            self.assertIn("Brain-Gonad", response["Content-Disposition"])  # 'maturation' of older links: its tissues
             text = body(response).decode()
             if fmt in tools.VENDORS and not text.startswith("#"):  # R2: vendor files hold no comment lines; a sidecar has them
                 side = self.client.get(download, {"scope": "all", "format": f"{fmt}.provenance", "trait": "maturation"})

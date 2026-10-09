@@ -549,8 +549,7 @@ def candidate_job(request):
     text = request.POST.get("targets", "")[:20_000]
     flank = request.POST.get("flank", "")
     flank = int(flank) if flank.isdecimal() and int(flank) <= max(FLANKS) else FLANK
-    trait = request.POST.get("trait", "all")
-    trait = trait if trait in dict(jobs.presets()) else "all"
+    trait = jobs.canonical(request.POST.get("trait", "all"), (jobs.weights() or {}).get("presets") or {})
     try:
         windows, labels = targets(text, flank)
         rows = public_rows(windows)

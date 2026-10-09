@@ -2,7 +2,7 @@
 {% load snpportal_tags %}
 {% comment %}Association tab of a GWAS job (P7.1-P7.4), the job's first tab: one QC line, Manhattan, loci, PIPs, then a
    closed QQ plot and closed fine-mapping settings (open by themselves when changed). Settings are plain GET parameters
-   (whitelisted in association.py); the trait applies on change; every link and form works without JavaScript.{% endcomment %}
+   (whitelisted in association.py); the conditions apply on change; every link and form works without JavaScript.{% endcomment %}
 
 {% block portal_head %}{% if job.state == 'queued' or job.state == 'running' %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock portal_head %}
 
@@ -27,7 +27,7 @@
     <li class="ms-auto align-self-center">
       <form method="get" class="d-flex align-items-center gap-2 sp-small" hx-get="{% url 'snpportal:association' key %}" hx-trigger="change" hx-push-url="true">
         {% for name, value in settings %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
-        <label for="trait">Trait</label>
+        <label for="trait" title="The conditions tiers (and the functional prior) count chromatin activity in">Conditions</label>
         <select class="form-select form-select-sm w-auto" id="trait" name="trait">
           {% for value, label, tip in presets %}<option value="{{ value }}" title="{{ tip }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
