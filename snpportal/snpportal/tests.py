@@ -150,7 +150,7 @@ class PortalTest(SimpleTestCase):
         self.assertIn('name="tier" value="1" checked', form)  # max_tier=2 (older links): tiers 1 and 2 ticked
         self.assertIn('name="tier" value="2" checked', form)
         self.assertIn('name="hide_lore" value="1" checked', form)
-        self.assertContains(filtered, "Active in: <b>brain + gonad</b>")  # conditions, never a trait
+        self.assertContains(filtered, 'class="sp-colf-val" title="brain + gonad">brain + gonad</span>')  # under Chromatin: conditions, never a trait
 
         card = self.client.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain", HTTP_HX_REQUEST="true")
         self.assertTrue("Chromatin state per condition" in card.content.decode() or "conditions sampled" in card.content.decode())

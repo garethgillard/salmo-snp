@@ -1,0 +1,43 @@
+{% comment %}One filter dropdown (results.table's dds): in the bar above the table a labelled button showing the choice,
+   in its column's header (col) a funnel button; the panel's controls belong to the filter form #tf, which applies
+   them on change. portal.js places a column's panel on the page, as the table's scroll box would clip it.{% endcomment %}
+<details class="sp-dd{% if col %} sp-dd-col{% elif dd.id in groups %} sp-dd-gap{% endif %}" id="{{ dd.id }}">
+  {% if col %}<summary class="sp-colf{% if dd.on %} on{% endif %}" title="Filter {{ dd.label }}{% if dd.on %}: {{ dd.summary }}{% endif %}" aria-label="Filter {{ dd.label }}"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 2.5h13l-5 6v4.5l-3 1.5v-6z" fill="{% if dd.on %}currentColor{% else %}none{% endif %}" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></summary>
+  {% else %}<summary class="btn btn-sm {% if dd.on %}btn-outline-primary sp-on{% else %}btn-outline-secondary{% endif %}"{% if dd.tip %} title="{{ dd.tip }}"{% endif %}>{{ dd.label }}{% if dd.on and dd.summary %}: <b>{{ dd.summary }}</b>{% endif %}</summary>{% endif %}
+  <div class="sp-dd-panel{% if right %} sp-dd-right{% endif %}">
+    {% if dd.kind == 'active' %}
+      <div class="sp-dd-head"><span>SNPs active in these conditions</span>{% if dd.reset %}<a href="{{ dd.reset }}" hx-boost="true">Reset</a>{% endif %}</div>
+      <fieldset class="sp-dd-list"><legend>Tissue</legend>
+        <label class="sp-any"><input class="form-check-input" type="checkbox" data-any{% if dd.anyon %} checked{% endif %}> All tissues</label>
+        {% for t, ticked in dd.tissues %}<label><input class="form-check-input" type="checkbox" name="tissue" value="{{ t }}"{% if ticked %} checked{% endif %}> {{ t }}{% if t == 'Embryo' %} <span class="sp-muted ms-auto ps-3">5 stages</span>{% endif %}</label>{% endfor %}
+      </fieldset>
+      <fieldset class="sp-seg"><legend>Maturity</legend>{% for v, text, sel in dd.maturity %}<label><input type="radio" name="maturity" value="{{ v }}"{% if sel %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</fieldset>
+      <fieldset class="sp-seg"><legend>Sex</legend>{% for v, text, sel in dd.sex %}<label><input type="radio" name="sex" value="{{ v }}"{% if sel %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</fieldset>
+      <fieldset class="sp-seg"><legend>Active means</legend>{% for v, text, tip, sel in dd.levels %}<label title="{{ tip }}"><input type="radio" name="act" value="{{ v }}"{% if sel %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</fieldset>
+      <p class="sp-dd-foot sp-dd-note">In at least one of the conditions; tiers count activity there (+3), elsewhere less.</p>
+    {% elif dd.kind == 'list' %}
+      <fieldset class="sp-dd-list"><legend class="visually-hidden">{{ dd.label }}</legend>
+        <label class="sp-any"><input class="form-check-input" type="checkbox" data-any{% if dd.anyon %} checked{% endif %}> {{ dd.any }}</label>
+        {% for value, text, ticked, note in dd.options %}<label><input class="form-check-input" type="checkbox" name="{{ dd.name }}" value="{{ value }}"{% if ticked %} checked{% endif %}> {{ text }}{% if note %} <span class="sp-muted ms-auto ps-3">{{ note }}</span>{% endif %}</label>{% endfor %}
+      </fieldset>
+      {% for name, label, ticked in dd.extras %}<label class="sp-dd-extra"><input class="form-check-input" type="checkbox" name="{{ name }}" value="1"{% if ticked %} checked{% endif %}> {{ label }}</label>{% endfor %}
+    {% elif dd.kind == 'radio' %}
+      <fieldset class="sp-dd-list"><legend class="visually-hidden">{{ dd.label }}</legend>
+        {% for value, text, sel in dd.options %}<label><input class="form-check-input" type="radio" name="{{ dd.name }}" value="{{ value }}"{% if sel %} checked{% endif %}> {{ text }}</label>{% endfor %}
+      </fieldset>
+    {% elif dd.kind == 'location' %}
+      <label class="sp-dd-row">Chromosome <select class="form-select form-select-sm" name="chrom"><option value="">any</option>
+        {% for c, sel in dd.chroms %}<option value="{{ c }}"{% if sel %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
+      <div class="sp-dd-row"><label>from <input class="form-control form-control-sm sp-pos" type="text" inputmode="numeric" name="start" value="{{ start }}" aria-label="From position (exclusive)"></label>
+        <label>to <input class="form-control form-control-sm sp-pos" type="text" inputmode="numeric" name="end" value="{{ end }}" aria-label="To position"></label></div>
+    {% elif dd.kind == 'more' %}
+      <fieldset class="sp-dd-list"><legend class="visually-hidden">More filters</legend>
+        {% for name, label, ticked in dd.extras %}<label><input class="form-check-input" type="checkbox" name="{{ name }}" value="1"{% if ticked %} checked{% endif %}> {{ label }}</label>{% endfor %}
+      </fieldset>
+    {% endif %}
+    {% if dd.kind == 'gene' %}
+      <label class="sp-dd-row">Gene <input class="form-control form-control-sm sp-gene" type="search" name="gene" value="{{ dd.value }}" maxlength="40" placeholder="name, id or ortholog"></label>
+      <p class="sp-dd-note mb-0">Press Enter to apply.</p>
+    {% endif %}
+  </div>
+</details>

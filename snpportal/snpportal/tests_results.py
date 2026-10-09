@@ -70,10 +70,10 @@ class ResultsTest(SimpleTestCase):
 
     def test_active_in_sets_the_tiers(self):
         same = self.client.get(self.url + "?tab=table&active_set=1&tissue=Gonad&tissue=Brain").content.decode()
-        self.assertIn("Active in: <b>brain + gonad</b>", same)  # conditions, never a trait; a stored preset's tiers
+        self.assertIn('class="sp-colf-val" title="brain + gonad">brain + gonad</span>', same)  # conditions, never a trait; stored tiers
         self.assertFalse(list(self.d.glob("tiers_*")))
         own = self.client.get(self.url + "?tab=table&trait=Brain.Mature.Female").content.decode()
-        self.assertIn("Active in: <b>brain (mature females)</b>", own)
+        self.assertIn(">brain (mature females)</span>", own)
         self.assertTrue((self.d / "tiers_Brain.Mature.Female.parquet").exists())  # scored once, kept with the job
         parts = jobs.trait_summary(self.d, jobs.weights(self.d), "Brain.Mature.Female", self.summary)  # the Export bundle's figures
         self.assertEqual(sum(parts["tiers"]["Brain.Mature.Female"].values()), self.summary["n_rows"])
@@ -183,10 +183,14 @@ class ResultsTest(SimpleTestCase):
         barcode = re.search(r'<span class="sp-bc".*?</span></span>', page, re.S).group(0)
         self.assertEqual(barcode.count("<i "), 21)
         self.assertEqual(len(re.findall(r'class="st-\w+ in"|class=" in"', barcode)), 4)  # the brain conditions are underlined
-        headers = re.findall(r'<th scope="col" title="[^"]*"[^>]*>(?:<a [^>]*>)?([^<&]+)', page)
+        headers = re.findall(r'<th scope="col"[^>]*><span class="sp-th">(?:<a [^>]*>|<span [^>]*>)([^<&]+)', page)
         self.assertEqual([h.strip() for h in headers if h.strip() != "Position"],
                          [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS])  # 9 default columns
         self.assertIn('aria-sort="ascending"', page)  # tier, the default
+        head = page[page.index("<thead"):page.index("</thead>")]  # each filter on its column; the others above the table
+        self.assertTrue(all(f'id="dd-{d}"' in head for d in ("tier", "region", "gene", "active", "assay")))
+        few = self.client.get(self.url + "?tab=table&cols=1&col=tier").content.decode()
+        self.assertIn('id="dd-region"', few[few.index('class="sp-filters"'):few.index("<thead")])  # Region hidden: its filter above
         self.assertNotIn('id="drawer"', page)  # the evidence drawer opens only on a click
         row = re.search(r'href="\?[^"]*snp=(\d+)"', page).group(1)
         drawer = self.client.get(self.url + f"?tab=table&trait=brain&snp={row}").content.decode()
@@ -195,9 +199,9 @@ class ResultsTest(SimpleTestCase):
         self.assertIn("Tier ", drawer[drawer.index('id="drawer"'):])
         self.assertIn('aria-current="true">100</a>', page)  # rows per page, under the table
         region = page[page.index('id="dd-region"'):]
-        self.assertIn('class="btn btn-sm btn-outline-secondary"', region[:200])  # no region filter: a plain button
+        self.assertIn('<summary class="sp-colf" title="Filter Region"', region[:200])  # no region filter: a plain funnel
         both = self.client.get(self.url + "?tab=table&region=coding&region=UTR").content.decode()  # ticked: any of them
-        self.assertIn("Region: <b>coding (CDS, splice), UTR</b>", both)
+        self.assertIn('<summary class="sp-colf on" title="Filter Region: coding (CDS, splice), UTR"', both)
         self.assertEqual(int(re.search(r"of ([\d,]+) shown", both).group(1).replace(",", "")),
                          self.direct("region_class IN ('CDS', 'splice_region') OR region_class LIKE '%UTR'"))
         tiers = re.findall(r'<span class="sp-badge sp-tier-(\d)" title="[^"]*">Tier \d: ([\d,]+)', both)  # the shown rows' tiers

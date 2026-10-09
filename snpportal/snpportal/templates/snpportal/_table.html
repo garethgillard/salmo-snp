@@ -1,7 +1,7 @@
 {% load snpportal_tags %}
-{% comment %}Table tab. A bar of dropdown buttons (results.table's dds, in groups: what tiers count, where, genotyping,
-   more) applied on change, each showing its choice once set; the tier counts of the rows shown; sort links and pages
-   stay on this page (htmx swaps #results). A click on a row opens its card in the drawer (?snp=); every control is a
+{% comment %}Table tab. Each filter sits on its column: a funnel button in the header (_dd.html), its choice under the
+   column's name; filters whose column is hidden form the bar above the table. The form #tf holds them all and applies
+   them on change; the tier counts of the rows shown; sort links and pages stay on this page (htmx swaps #results). A click on a row opens its card in the drawer (?snp=); every control is a
    plain link or GET form, so it all works without JavaScript.{% endcomment %}
 <form method="get" class="sp-small" id="tf" hx-get="{% url 'snpportal:results' key %}" hx-trigger="change, submit" hx-push-url="true"
       hx-indicator="#tf-busy" aria-label="Filter the SNPs">
@@ -9,43 +9,7 @@
   {% if active_set %}<input type="hidden" name="active_set" value="1">{% else %}<input type="hidden" name="trait" value="{{ chosen.trait }}">{% endif %}
   {% for name, value in hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
   <div class="sp-filters">
-    {% for dd in dds %}{% if dd.kind == 'gene' %}
-    {% if gene is not None %}<label class="sp-gene-box"><span class="visually-hidden">Gene</span><input class="form-control form-control-sm sp-gene{% if gene %} sp-on{% endif %}" type="search" name="gene" value="{{ gene }}" maxlength="40" placeholder="Gene" title="Gene name, Ensembl id or ortholog"></label>{% endif %}
-    {% else %}<details class="sp-dd{% if dd.id in groups %} sp-dd-gap{% endif %}" id="{{ dd.id }}">
-      <summary class="btn btn-sm {% if dd.on %}btn-outline-primary sp-on{% else %}btn-outline-secondary{% endif %}"{% if dd.tip %} title="{{ dd.tip }}"{% endif %}>{{ dd.label }}{% if dd.on and dd.summary %}: <b>{{ dd.summary }}</b>{% endif %}</summary>
-      <div class="sp-dd-panel{% if forloop.revcounter < 4 %} sp-dd-right{% endif %}">
-      {% if dd.kind == 'active' %}
-        <div class="sp-dd-head"><span>SNPs active in these conditions</span>{% if dd.reset %}<a href="{{ dd.reset }}" hx-boost="true">Reset</a>{% endif %}</div>
-        <fieldset class="sp-dd-list"><legend>Tissue</legend>
-          <label class="sp-any"><input class="form-check-input" type="checkbox" data-any{% if dd.anyon %} checked{% endif %}> All tissues</label>
-          {% for t, ticked in dd.tissues %}<label><input class="form-check-input" type="checkbox" name="tissue" value="{{ t }}"{% if ticked %} checked{% endif %}> {{ t }}{% if t == 'Embryo' %} <span class="sp-muted ms-auto ps-3">5 stages</span>{% endif %}</label>{% endfor %}
-        </fieldset>
-        <fieldset class="sp-seg"><legend>Maturity</legend>{% for v, text, sel in dd.maturity %}<label><input type="radio" name="maturity" value="{{ v }}"{% if sel %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</fieldset>
-        <fieldset class="sp-seg"><legend>Sex</legend>{% for v, text, sel in dd.sex %}<label><input type="radio" name="sex" value="{{ v }}"{% if sel %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</fieldset>
-        <fieldset class="sp-seg"><legend>Active means</legend>{% for v, text, tip, sel in dd.levels %}<label title="{{ tip }}"><input type="radio" name="act" value="{{ v }}"{% if sel %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</fieldset>
-        <p class="sp-dd-foot sp-dd-note">In at least one of the conditions; tiers count activity there (+3), elsewhere less.</p>
-      {% elif dd.kind == 'list' %}
-        <fieldset class="sp-dd-list"><legend class="visually-hidden">{{ dd.label }}</legend>
-          <label class="sp-any"><input class="form-check-input" type="checkbox" data-any{% if dd.anyon %} checked{% endif %}> {{ dd.any }}</label>
-          {% for value, text, ticked, note in dd.options %}<label><input class="form-check-input" type="checkbox" name="{{ dd.name }}" value="{{ value }}"{% if ticked %} checked{% endif %}> {{ text }}{% if note %} <span class="sp-muted ms-auto ps-3">{{ note }}</span>{% endif %}</label>{% endfor %}
-        </fieldset>
-        {% for name, label, ticked in dd.extras %}<label class="sp-dd-extra"><input class="form-check-input" type="checkbox" name="{{ name }}" value="1"{% if ticked %} checked{% endif %}> {{ label }}</label>{% endfor %}
-      {% elif dd.kind == 'radio' %}
-        <fieldset class="sp-dd-list"><legend class="visually-hidden">{{ dd.label }}</legend>
-          {% for value, text, sel in dd.options %}<label><input class="form-check-input" type="radio" name="{{ dd.name }}" value="{{ value }}"{% if sel %} checked{% endif %}> {{ text }}</label>{% endfor %}
-        </fieldset>
-      {% elif dd.kind == 'location' %}
-        <label class="sp-dd-row">Chromosome <select class="form-select form-select-sm" name="chrom"><option value="">any</option>
-          {% for c, sel in dd.chroms %}<option value="{{ c }}"{% if sel %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
-        <div class="sp-dd-row"><label>from <input class="form-control form-control-sm sp-pos" type="text" inputmode="numeric" name="start" value="{{ start }}" aria-label="From position (exclusive)"></label>
-          <label>to <input class="form-control form-control-sm sp-pos" type="text" inputmode="numeric" name="end" value="{{ end }}" aria-label="To position"></label></div>
-      {% elif dd.kind == 'more' %}
-        <fieldset class="sp-dd-list"><legend class="visually-hidden">More filters</legend>
-          {% for name, label, ticked in dd.extras %}<label><input class="form-check-input" type="checkbox" name="{{ name }}" value="1"{% if ticked %} checked{% endif %}> {{ label }}</label>{% endfor %}
-        </fieldset>
-      {% endif %}
-      </div>
-    </details>{% endif %}{% endfor %}
+    {% for dd in dds %}{% if not dd.header %}{% include 'snpportal/_dd.html' with right=forloop.last %}{% endif %}{% endfor %}
     {% if clear %}<a class="btn btn-sm btn-link sp-clear" href="{{ clear }}" hx-boost="true">Clear filters</a>{% endif %}
     <noscript><button class="btn btn-sm btn-primary" type="submit">Apply</button></noscript>
   </div>
@@ -64,8 +28,6 @@
     </details>
   </span>
 </div>
-</form>
-<form id="add-panel" method="post" action="{% url 'snpportal:panel_add' key %}">{% csrf_token %}</form>
 {% if added %}<div class="sp-status sp-status-ok mb-2" role="status">&#10003; {{ added|thousands }} SNPs added to your panel. <a href="{% url 'snpportal:design_panel' %}">Open Design panel &rarr;</a></div>
 {% elif panel_error %}<div class="sp-status sp-status-warn mb-2" role="status">&#9888; {{ panel_error }}</div>{% endif %}
 
@@ -78,7 +40,8 @@
 <div class="sp-scroll">
   <table class="table table-sm table-hover sp-table sp-results mb-0">
     <thead hx-boost="true">
-      <tr>{% for key, label, tip, url, order in headers %}<th scope="col" title="{{ tip }}"{% if order %} aria-sort="{{ order }}"{% endif %}>{% if url %}<a href="{{ url }}">{{ label }}{% if order == 'ascending' %} &#9650;{% elif order %} &#9660;{% endif %}</a>{% else %}{{ label }}{% endif %}</th>{% endfor %}</tr>
+      <tr>{% for key, label, tip, url, order, dd in headers %}<th scope="col"{% if order %} aria-sort="{{ order }}"{% endif %}><span class="sp-th">{% if url %}<a href="{{ url }}" title="{{ tip }}">{{ label }}{% if order == 'ascending' %} &#9650;{% elif order %} &#9660;{% endif %}</a>{% else %}<span title="{{ tip }}">{{ label }}</span>{% endif %}
+        {% if dd %}{% include 'snpportal/_dd.html' with col=1 right=forloop.last %}{% endif %}</span>{% if dd.on %}<span class="sp-colf-val" title="{{ dd.summary }}">{{ dd.summary }}</span>{% endif %}</th>{% endfor %}</tr>
     </thead>
     <tbody>
       {% for r in rows %}<tr data-card{% if r.n == snp %} class="sp-selected"{% endif %}>
@@ -118,6 +81,8 @@
   <span class="btn-group btn-group-sm" role="group" aria-label="Rows per page">{% for s, href, on in sizes %}<a class="btn {% if on %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="{{ href }}"{% if on %} aria-current="true"{% endif %}>{{ s }}</a>{% endfor %}</span>
 </nav>
 {% endif %}
+</form>
+<form id="add-panel" method="post" action="{% url 'snpportal:panel_add' key %}">{% csrf_token %}</form>
 
 {% if drawer %}<aside class="fixed-top ms-auto col-12 col-lg-7 col-xl-6 h-100 overflow-auto sp-card shadow sp-drawer" id="drawer" aria-labelledby="drawer-h">
   <div class="d-flex align-items-start gap-2 mb-2">

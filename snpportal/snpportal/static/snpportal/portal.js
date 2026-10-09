@@ -170,7 +170,8 @@
 /* end tour */
 
 /* table: the filter dropdowns (details.sp-dd) stay open while their ticks apply (each change swaps #results); a click
-   outside one closes it; a list's 'Any' box and its ticks exclude each other. Escape closes the card drawer. */
+   outside one closes it; a list's 'Any' box and its ticks exclude each other; a column's panel is placed on the page.
+   Escape closes the card drawer. */
 (function () {
   "use strict";
   var open = [];
@@ -195,6 +196,18 @@
       any.checked = !list.querySelector("input[type=checkbox][name]:checked");
     }
   }, true);
+  function place(d) {  // a column's filter panel, on the page under its funnel: the table's scroll box would clip it
+    var panel = d.querySelector(".sp-dd-panel"), r = d.querySelector("summary").getBoundingClientRect();
+    panel.style.position = "fixed";
+    panel.style.top = (r.bottom + 4) + "px";
+    panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - panel.offsetWidth - 8)) + "px";
+  }
+  document.addEventListener("toggle", function (e) {
+    if (e.target.classList && e.target.classList.contains("sp-dd-col") && e.target.open) place(e.target);
+  }, true);
+  ["scroll", "resize"].forEach(function (name) {
+    window.addEventListener(name, function () { document.querySelectorAll("details.sp-dd-col[open]").forEach(place); }, true);
+  });
   document.addEventListener("keydown", function (e) {  // Escape closes the card drawer
     var close = e.key === "Escape" && document.querySelector("#drawer .btn-close");
     if (close) close.click();
