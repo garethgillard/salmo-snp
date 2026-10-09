@@ -84,10 +84,10 @@
 </form>
 <form id="add-panel" method="post" action="{% url 'snpportal:panel_add' key %}">{% csrf_token %}</form>
 
-{% if drawer %}<aside class="fixed-top ms-auto col-12 col-lg-7 col-xl-6 h-100 overflow-auto sp-card shadow sp-drawer" id="drawer" aria-labelledby="drawer-h">
-  <div class="d-flex align-items-start gap-2 mb-2">
-    <h2 class="h5 mb-0 me-auto" id="drawer-h">{{ drawer.ev.title }}</h2>
-    <a class="btn-close" href="{{ drawer.close }}" hx-get="{{ drawer.close }}" aria-label="Close" title="Close (Esc)"></a>
+{% if drawer %}<aside class="fixed-top ms-auto col-12 col-lg-7 col-xl-6 h-100 sp-drawer" id="drawer" aria-labelledby="drawer-h">
+  <a class="sp-drawer-tab" href="{{ drawer.close }}" hx-get="{{ drawer.close }}" data-close aria-label="Close the card" title="Close (Esc, or click outside the card)"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 2.5 11 8l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+  <div class="sp-drawer-body sp-card shadow h-100 overflow-auto">
+    <h2 class="h5 mb-2" id="drawer-h">{{ drawer.ev.title }}</h2>
+    {% include 'snpportal/card.html' with ev=drawer.ev presets=drawer.presets switch_url=None hx=drawer.hx mini_url=drawer.mini_url locus_url=drawer.locus_url trait=drawer.trait keep=drawer.keep crumbs=None %}
   </div>
-  {% include 'snpportal/card.html' with ev=drawer.ev presets=drawer.presets switch_url=None hx=drawer.hx mini_url=drawer.mini_url locus_url=drawer.locus_url trait=drawer.trait keep=drawer.keep crumbs=None %}
 </aside>{% endif %}

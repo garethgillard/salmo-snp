@@ -300,7 +300,13 @@ a.sp-card:hover { border-color: var(--sp-accent); }
   color: var(--sp-grey-900); border-color: var(--sp-grey-700); background: var(--sp-white); }
 .sp-results tr.sp-out .sp-pick { background: var(--sp-grey-100); color: var(--sp-grey-900); border-color: var(--sp-grey-500); }
 .sp-results tr.sp-out > td:not(.sp-pickcol) { opacity: .45; }
-.sp-drawer { z-index: 1040; border-radius: 0; }  /* the Table's card drawer: the card inside without its own frame */
+.sp-drawer { z-index: 1040; }  /* the Table's card drawer: the card inside without its own frame */
+.sp-drawer-body { border-radius: 0; }
+.sp-drawer-tab { position: absolute; left: -2rem; top: 1rem; display: flex; align-items: center; justify-content: center; width: 2rem;
+  height: 3.25rem; background: var(--sp-white); border: 1px solid var(--sp-grey-300); border-right: 0; border-radius: .5rem 0 0 .5rem;
+  box-shadow: -3px 2px 6px var(--sp-grey-300); color: var(--sp-grey-700); }  /* sticks out on the left: pushes the card away */
+.sp .sp-drawer-tab:hover { background: var(--sp-grey-100); color: var(--sp-grey-900); }
+@media (max-width: 991.98px) { .sp-drawer-tab { left: auto; right: .5rem; z-index: 1; border-right: 1px solid var(--sp-grey-300); border-radius: .5rem; } }
 .sp-drawer #card-body { border: 0; padding: 0; }
 .sp-results tbody tr.sp-selected > * { background: var(--sp-grey-100); }
 .sp-results tbody tr.sp-selected > :first-child { box-shadow: inset 3px 0 0 var(--sp-accent); }

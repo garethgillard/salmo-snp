@@ -171,7 +171,7 @@
 
 /* table: the filter dropdowns (details.sp-dd) stay open while their ticks apply (each change swaps #results); a click
    outside one closes it; a list's 'Any' box and its ticks exclude each other; a column's panel is placed on the page.
-   Escape closes the card drawer. */
+   Escape, its tab or a click outside closes the card drawer. */
 (function () {
   "use strict";
   var open = [];
@@ -208,8 +208,14 @@
   ["scroll", "resize"].forEach(function (name) {
     window.addEventListener(name, function () { document.querySelectorAll("details.sp-dd-col[open]").forEach(place); }, true);
   });
+  document.addEventListener("click", function (e) {  // a click outside the card closes it; a row's click opens that row's card
+    var drawer = document.getElementById("drawer"), t = e.target;
+    if (!drawer || drawer.contains(t) || !t.closest || t.closest("tr[data-card], a, button, input, select, label, summary, .sp-dd-panel")) return;
+    var close = drawer.querySelector("[data-close]");
+    if (close) close.click();
+  });
   document.addEventListener("keydown", function (e) {  // Escape closes the card drawer
-    var close = e.key === "Escape" && document.querySelector("#drawer .btn-close");
+    var close = e.key === "Escape" && document.querySelector("#drawer [data-close]");
     if (close) close.click();
   });
 })();
