@@ -292,8 +292,8 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-pick { display: inline-flex; align-items: center; justify-content: center; width: 1.35rem; height: 1.35rem; border: 1px solid var(--sp-grey-300);
   border-radius: .25rem; color: var(--sp-grey-700); font-weight: 600; line-height: 1; text-decoration: none; background: var(--sp-white); }
 .sp-pick-next { display: none; }  /* under the cursor the mark shows what a click does: + turns a red −, − a + */
-.sp-pick:hover .sp-pick-now, .sp-pick:focus-visible .sp-pick-now { display: none; }
-.sp-pick:hover .sp-pick-next, .sp-pick:focus-visible .sp-pick-next { display: inline; }
+.sp-pick:hover .sp-pick-now, .sp-pick:focus-visible .sp-pick-now, .sp-keep:hover .sp-pick-now, .sp-keep:focus-visible .sp-pick-now { display: none; }
+.sp-pick:hover .sp-pick-next, .sp-pick:focus-visible .sp-pick-next, .sp-keep:hover .sp-pick-next, .sp-keep:focus-visible .sp-pick-next { display: inline; }
 .sp-results tr:not(.sp-out) .sp-pick:hover, .sp-results tr:not(.sp-out) .sp-pick:focus-visible {
   color: var(--sp-fail-text); border-color: var(--sp-fail-border); background: var(--sp-fail-bg); }
 .sp-results tr.sp-out .sp-pick:hover, .sp-results tr.sp-out .sp-pick:focus-visible {
@@ -308,6 +308,33 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp .sp-drawer-tab:hover { background: var(--sp-grey-100); color: var(--sp-grey-900); }
 @media (max-width: 991.98px) { .sp-drawer-tab { left: auto; right: .5rem; z-index: 1; border-right: 1px solid var(--sp-grey-300); border-radius: .5rem; } }
 .sp-drawer #card-body { border: 0; padding: 0; }
+/* the card (card.html): a bar with the +/− switch and Previous/Next (the drawer), key facts, caveats, then sections */
+.sp-card-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .75rem; padding-bottom: .6rem;
+  border-bottom: 1px solid var(--sp-grey-200); }
+.sp .sp-keep { min-width: 7.5rem; border: 1px solid var(--sp-grey-500); background: var(--sp-white); color: var(--sp-grey-900); font-weight: 600; }
+.sp .sp-keep:hover, .sp .sp-keep:focus-visible { color: var(--sp-fail-text); border-color: var(--sp-fail-border); background: var(--sp-fail-bg); }
+.sp .sp-keep-out { border-style: dashed; background: var(--sp-grey-100); color: var(--sp-grey-700); }
+.sp .sp-keep-out:hover, .sp .sp-keep-out:focus-visible { color: var(--sp-ok-text); border-color: var(--sp-ok-border); background: var(--sp-ok-bg); }
+.sp-facts { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-bottom: .6rem; }
+.sp-fact { padding: .05rem .5rem; border: 1px solid var(--sp-grey-300); border-radius: 1rem; background: var(--sp-white); font-size: .8rem; white-space: nowrap; }
+.sp-fact-ok { color: var(--sp-ok-text); background: var(--sp-ok-bg); border-color: var(--sp-ok-border); }
+.sp-fact-warn { color: var(--sp-warn-text); background: var(--sp-warn-bg); border-color: var(--sp-warn-border); }
+.sp-fact-fail { color: var(--sp-fail-text); background: var(--sp-fail-bg); border-color: var(--sp-fail-border); }
+.sp-fact-muted { color: var(--sp-grey-700); background: var(--sp-grey-100); }
+.sp-caveats { list-style: none; margin: 0 0 .6rem; padding: .35rem .6rem; }
+.sp-caveats li::before { content: "\26A0\00a0"; }
+.sp-cs { margin-top: .9rem; padding-top: .6rem; border-top: 1px solid var(--sp-grey-200); }
+.sp-cs-h { margin-bottom: .5rem; font-size: .75rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--sp-grey-700); }
+.sp-cs-h4 { margin: .6rem 0 .3rem; font-size: .875rem; font-weight: 600; }
+.sp-cs-sub { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .6rem 0 .3rem; }
+.sp-cs-sub .sp-cs-h4 { margin: 0; }
+.sp-flank { font-size: .8rem; line-height: 1.7; word-break: break-all; }
+.sp-flank mark, .sp-cs mark { padding: 0 .1rem; border-radius: .15rem; }
+.sp-cs mark.sp-flank-snp { background: var(--sp-grey-900); color: var(--sp-white); font-weight: 600; }
+.sp-cs mark.sp-flank-var { background: var(--sp-warn-bg); color: var(--sp-warn-text); box-shadow: inset 0 0 0 1px var(--sp-warn-border); }
+.sp-cs mark.sp-flank-n { background: var(--sp-fail-bg); color: var(--sp-fail-text); }
+.sp-near th, .sp-near td { vertical-align: middle; }
+.sp-near tr.sp-this > * { background: var(--sp-grey-100); }
 .sp-results tbody tr.sp-selected > * { background: var(--sp-grey-100); }
 .sp-results tbody tr.sp-selected > :first-child { box-shadow: inset 3px 0 0 var(--sp-accent); }
 .sp-known { white-space: nowrap; }

@@ -26,6 +26,7 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 from snpscore import export as snp_export
 from snpscore import panel as snp_panel
+from snpscore.formats import lit
 
 from . import figures, jobs, results, tools
 from .views import UploadToResults, accepted_suffix, finished, private
@@ -74,6 +75,31 @@ def count(request):
     d = _folder(request)
     n = sum(s["n"] for s in jobs.read_json(d / "panel.json").get("sources", [])) if d else 0
     return HttpResponse(f" ({n:,})" if n else "", content_type="text/plain")
+
+
+def holds(request, snp):
+    """For a SNP's card: None without a panel, else {sources: ['S1', ...] that hold it (same chrom, pos and alleles),
+    chip: where the panel's chip has its nearest marker, in words (None without a chip)}."""
+    d = _folder(request)
+    if d is None:
+        return None
+    s, files = jobs.read_json(d / "panel.json"), sorted(d.glob("source_*.parquet"))
+    con = jobs.connect([d])
+    found = []
+    if files:
+        same = " AND ".join(["chrom = ?", "pos = ?"] + [f"coalesce({c}, '') = ?" for c in ("ref", "alt") if c in snp])
+        found = [x for x, in con.execute(f"SELECT DISTINCT panel_source FROM read_parquet([{', '.join(lit(f) for f in files)}], union_by_name=true) "
+                                         f"WHERE {same}", [snp["chrom"], snp["pos"]] + [snp.get(c) or "" for c in ("ref", "alt") if c in snp]).fetchall()]
+    names = {x["id"]: f"S{i + 1}" for i, x in enumerate(s.get("sources", []))}
+    out = {"sources": [names.get(x, "?") for x in sorted(found)], "chip": None}
+    if (d / "chip.parquet").exists():
+        label = (jobs.read_json(d / "chip.json").get("label") or "your chip").lower()
+        dist = con.execute(f"SELECT min(abs(pos - ?)) FROM read_parquet({lit(d / 'chip.parquet')}) WHERE chrom = ?",
+                           [snp["pos"], snp["chrom"]]).fetchone()[0]
+        out["chip"] = (f"On {label}." if dist == 0 else f"The nearest marker of {label} is {tools._bp(dist)} away." if dist is not None
+                       else f"No marker of {label} on this chromosome.")
+    con.close()
+    return out
 
 
 # ---- adding a Table selection ----

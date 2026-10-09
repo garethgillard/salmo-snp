@@ -1,16 +1,16 @@
 {% load snpportal_tags %}
-{% comment %}Evidence card for one SNP (context: ev from locus.evidence, presets, switch_url (none: no trait form; a job's
-   card follows the Table's Active in), hx, mini_url, locus_url, keep: other parameters the trait form keeps): the Table's
-   drawer and the body of variant.html (their heading is the title); an htmx
-   swap also brings the breadcrumb, whose links carry the trait. Parts render only when their columns exist;
-   expression, the user's own columns and details are closed. On wide pages (.sp-wide-card) the figures
-   (.sp-card-side) sit to the right of the text; narrower, everything stacks in this order.{% endcomment %}
+{% comment %}Evidence card for one SNP, laid out to decide whether to keep it (context: ev from locus.evidence, presets,
+   switch_url (none: no conditions form; a job's card follows the Table's Active in), hx, locus_url, keep: other
+   parameters the conditions form keeps; a job's card also panel (panel.holds) and, in the Table's drawer, nearby):
+   the key facts and caveats; why it scores (the tier terms, the robust ATAC peaks around it with a button to the
+   locus browser, chromatin per condition, other layers, molQTL); as a marker (assay and flank, duplicates, MAF, the
+   Design panel); the list's SNPs nearby; context (published association, gene; expression, the user's own columns
+   and details closed). Parts render only when their columns exist. The drawer and variant.html give the heading.{% endcomment %}
 {% if hx and crumbs %}{% include 'snpportal/_crumbs.html' with oob=1 %}{% endif %}
 <div id="card-body" class="sp-card sp-small">
   <div class="d-flex flex-wrap align-items-start gap-2 mb-2">
     <p class="mb-0"><span class="sp-mono">{{ ev.position }}{% if ev.alleles %} {{ ev.alleles }}{% endif %}</span>
-      <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-copy="{{ ev.spec }}">Copy {{ ev.spec }}</button>
-      {% if ev.gene %}· nearest gene <a href="{{ ev.gene.url }}"{% if ev.gene.tip %} title="{{ ev.gene.tip }}"{% endif %}>{% if ev.gene.named %}<em>{{ ev.gene.label }}</em>{% else %}{{ ev.gene.label }}{% endif %}</a> ({{ ev.gene.where }}){% endif %}</p>
+      <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-copy="{{ ev.spec }}">Copy {{ ev.spec }}</button></p>
     {% if switch_url %}<form class="d-flex align-items-center gap-1 ms-auto sp-noprint" method="get" action="{{ switch_url }}"
           hx-get="{{ switch_url }}" hx-trigger="change" hx-target="#card-body" hx-select="#card-body" hx-swap="outerHTML" hx-push-url="true">
       {% for name, value in keep %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
@@ -22,73 +22,91 @@
     </form>{% endif %}
   </div>
 
-  <div class="sp-card-top">
-  {% if ev.tier %}<p class="mb-2">{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %} &middot;
-    {% for text, w in ev.terms %}{{ text }}{% if w is not None %} +{{ w }}{% endif %}{% if not forloop.last %} &middot; {% endif %}{% empty %}no evidence found (not evidence of no effect){% endfor %}</p>{% endif %}
-  {% if ev.why %}<div class="sp-figure mb-2">{{ ev.why }}</div>{% endif %}
+  <p class="sp-facts">{% if ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %}{% if ev.score is not None %}<span class="sp-fact" title="Tier score: the summed weights of the evidence below">score {{ ev.score }}</span>{% endif %}{% endif %}
+    {% for text, cls, tip in ev.facts %}<span class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</span>{% endfor %}
+    {% if panel.sources %}<span class="sp-fact sp-fact-ok" title="Your Design panel holds this SNP ({{ panel.sources|join:', ' }})">in your panel</span>{% endif %}</p>
+  {% if ev.caveats %}<ul class="sp-status sp-status-warn sp-caveats" aria-label="Caveats">{% for text in ev.caveats %}<li>{{ text }}</li>{% endfor %}</ul>{% endif %}
 
-  {% if ev.gwas %}<p class="mb-2">GWAS: p {{ ev.gwas.p }}{% if ev.gwas.beta is not None %} &middot; beta {{ ev.gwas.beta|floatformat:3 }}{% if ev.gwas.se is not None %} ({{ ev.gwas.se|floatformat:3 }}){% endif %}{% endif %}
-    {% if ev.gwas.locus %}&middot; <a href="{{ ev.gwas.region }}">locus {{ ev.gwas.locus }}</a>{% if ev.gwas.pip_u is not None %} &middot; PIP {{ ev.gwas.pip_u|floatformat:2 }} &rarr; {{ ev.gwas.pip_f|floatformat:2 }} (functional prior)
-    &middot; {{ ev.gwas.cs }} (one causal variant, no LD){% endif %}{% endif %}</p>{% endif %}
+  <section class="sp-cs" aria-labelledby="cs-why"><h3 class="sp-cs-h" id="cs-why">Why it scores</h3>
+    {% if ev.tier %}<p class="mb-2">Score {{ ev.score|default_if_none:"0" }}:
+      {% for text, w in ev.terms %}{{ text }}{% if w is not None %} +{{ w }}{% endif %}{% if not forloop.last %} &middot; {% endif %}{% empty %}no evidence found (not evidence of no effect){% endfor %}</p>{% endif %}
+    {% if ev.why %}<div class="sp-figure mb-2">{{ ev.why }}</div>{% endif %}
+    {% if ev.gwas %}<p class="mb-2">GWAS: p {{ ev.gwas.p }}{% if ev.gwas.beta is not None %} &middot; beta {{ ev.gwas.beta|floatformat:3 }}{% if ev.gwas.se is not None %} ({{ ev.gwas.se|floatformat:3 }}){% endif %}{% endif %}
+      {% if ev.gwas.locus %}&middot; <a href="{{ ev.gwas.region }}">locus {{ ev.gwas.locus }}</a>{% if ev.gwas.pip_u is not None %} &middot; PIP {{ ev.gwas.pip_u|floatformat:2 }} &rarr; {{ ev.gwas.pip_f|floatformat:2 }} (functional prior)
+      &middot; {{ ev.gwas.cs }} (one causal variant, no LD){% endif %}{% endif %}</p>{% endif %}
 
-  {% if ev.known %}<section class="sp-status sp-status-ok mb-2" aria-label="Published association">
-    <p class="mb-0">&#9733; <strong>{{ ev.known.id }}</strong>{% if ev.known.trait %} ({{ ev.known.trait }}){% endif %} {{ ev.known.where }}.
-      {% if ev.known.kind %}<span title="{{ ev.known.kind_tip }}">{{ ev.known.kind }}</span>{% if ev.known.effect %};{% else %}.{% endif %}{% endif %}{% if ev.known.effect %} {{ ev.known.effect }}.{% endif %}
-      {% for cls, text, tip in ev.known.flags %}{% include 'snpportal/_badges.html' with kind='evidence' value=text cls=cls tip=tip %} {% endfor %}{% if ev.known.caveat %}<em>{{ ev.known.caveat }}.</em>{% endif %}
-      {% if ev.known.rsid %}{{ ev.known.rsid }} &middot;{% endif %}
-      {% for doi in ev.known.dois %}<a href="https://doi.org/{{ doi }}" rel="noreferrer noopener" target="_blank">doi:{{ doi }}</a>{% if not forloop.last %} &middot; {% endif %}{% endfor %}
-      {% if ev.known.others %}Nearby: {% for r in ev.known.others %}<a href="{{ r.url }}">{{ r.id }}</a> ({{ r.dist }}){% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}</p>
+    {% if ev.element %}<div class="sp-cs-sub"><h4 class="sp-cs-h4">Regulatory element</h4>
+      {% if locus_url %}<a class="btn btn-sm btn-outline-primary ms-auto" href="{{ locus_url }}">Open in the locus browser &rarr;</a>{% endif %}</div>
+    <div class="sp-figure">{{ ev.element.svg }}</div>
+    <p class="mb-2">{{ ev.element.text }}</p>
+    {% elif locus_url %}<p class="mb-2"><a class="btn btn-sm btn-outline-primary" href="{{ locus_url }}">Open in the locus browser &rarr;</a></p>{% endif %}
+    {% if ev.grid %}<h4 class="sp-cs-h4">Chromatin state at the SNP, per condition</h4><div class="sp-figure mb-2">{{ ev.grid }}</div>
+    {% elif ev.no_peak %}<p class="mb-2">{{ ev.no_peak }}</p>{% endif %}
+    {% if ev.function %}<dl class="sp-dl mb-2">{% for label, value in ev.function %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
+
+    {% if ev.molqtl %}<h4 class="sp-cs-h4">molQTL lead SNP (nf-RASQUAL)</h4>
+    <div class="table-responsive"><table class="table table-sm mb-1">
+      <thead><tr><th scope="col">Tissue</th><th scope="col">Kind</th><th scope="col">Feature</th><th scope="col" class="sp-num" title="eigenMT-adjusted p (the table's BF column)">Adj. p</th><th scope="col" class="sp-num" title="RASQUAL effect size; which allele it refers to is not confirmed">&pi;</th></tr></thead>
+      <tbody>{% for f in ev.molqtl.features %}<tr><td class="text-nowrap"><span class="sp-tissue-{{ f.tissue }}" aria-hidden="true">&#9679;</span> {{ f.tissue }}</td><td>{{ f.kind }}</td>
+        <td class="sp-mono">{% if f.url %}<a href="{{ f.url }}">{{ f.feature }}</a>{% else %}{{ f.feature }}{% endif %}</td><td class="sp-num">{{ f.bf }}</td><td class="sp-num">{{ f.pi }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <p class="sp-muted mb-2">Lead SNP per feature in 12 fish (low power): not fine-mapped, not counted in tiers; no direction is implied.
+      {{ ev.molqtl.citation }}{% if ev.molqtl.licence %} Licence: {{ ev.molqtl.licence }}.{% endif %}</p>{% endif %}
+  </section>
+
+  {% if ev.assay or ev.duplicates or ev.maf or panel %}<section class="sp-cs" aria-labelledby="cs-marker"><h3 class="sp-cs-h" id="cs-marker">As a marker</h3>
+    {% if ev.assay %}<p class="mb-1"{% if ev.assay.tip %} title="{{ ev.assay.tip }}"{% endif %}>Assay: <span class="sp-as sp-as-{{ ev.assay.cls }}"><span aria-hidden="true">{{ ev.assay.icon }}</span> {{ ev.assay.status }}</span>{% if ev.assay.reasons %} {{ ev.assay.reasons }}{% endif %}</p>
+    {% if ev.assay.flank_parts %}<p class="sp-mono sp-flank mb-0">{% for text, kind in ev.assay.flank_parts %}{% if kind %}<mark class="sp-flank-{{ kind }}">{{ text }}</mark>{% else %}{{ text }}{% endif %}{% endfor %}</p>
+    <p class="sp-muted mb-2">Probe flanks, 35 bp each side: <mark class="sp-flank-snp">the SNP</mark>, <mark class="sp-flank-var">public variants</mark> (IUPAC codes)
+      &middot; <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-copy="{{ ev.assay.flank }}">Copy</button></p>{% endif %}{% endif %}
+    {% for text, gene, after in ev.duplicates %}<p class="mb-1">{{ text }}{% if gene %}<a href="{% url 'snpportal:gene' gene %}">{{ gene }}</a>{% endif %}{{ after }}</p>{% endfor %}
+    {% if ev.maf %}<p class="mb-1">{% if ev.maf.value %}MAF {{ ev.maf.value }}{% if ev.maf.low %} <span class="sp-as sp-as-warn">below {{ ev.maf.min }}</span>{% endif %} in <span title="{{ ev.maf.tip }}">{{ ev.maf.fish }} public fish</span>, wild and farmed,
+      pooled; your strain can differ.{% elif ev.maf.other %}No MAF: the 504-fish public panel has a different variant at this position.{% else %}Not a site of the 504-fish public panel.{% endif %}</p>{% endif %}
+    {% if panel %}<p class="mb-1">{% if panel.sources %}In your <a href="{% url 'snpportal:design_panel' %}">Design panel</a> ({{ panel.sources|join:", " }}).{% else %}Not in your <a href="{% url 'snpportal:design_panel' %}">Design panel</a>.{% endif %}
+      {% if panel.chip %}{{ panel.chip }}{% endif %}</p>{% endif %}
   </section>{% endif %}
 
-  </div>
-  <div class="sp-card-side">
-  {% if ev.grid %}<div class="sp-figure mb-1">{{ ev.grid }}</div>
-  {% elif ev.no_peak %}<p class="mb-1">{{ ev.no_peak }}</p>{% endif %}
-  {% if ev.blacklisted %}<p class="mb-1">Blacklisted region: no peak here means can&rsquo;t tell, not inactive.</p>{% endif %}
+  {% if nearby %}<section class="sp-cs" aria-labelledby="cs-near"><h3 class="sp-cs-h" id="cs-near">Nearby in your list</h3>
+    <p class="mb-1">{% if nearby.others %}{{ nearby.others|thousands }} other SNP{{ nearby.others|pluralize }} within {{ nearby.spacing }} (the panel designer&rsquo;s minimum spacing),
+      {{ nearby.selected|thousands }} in the selection{% if nearby.better %}; {{ nearby.better }} score{{ nearby.better|pluralize:"s," }} higher{% else %}; none scores higher{% endif %}.{% if nearby.others > 8 %} The 8 nearest:{% endif %}
+      {% else %}No other SNP of your list within {{ nearby.spacing }} (the panel designer&rsquo;s minimum spacing).{% endif %}</p>
+    {% if nearby.others %}<div class="table-responsive"><table class="table table-sm sp-table sp-near mb-1">
+      <thead><tr><th scope="col" title="+ in the selection, − not">+/&minus;</th><th scope="col">SNP</th><th scope="col" class="sp-num">Distance</th><th scope="col" class="sp-ctr">Tier</th><th scope="col" class="sp-num">Score</th><th scope="col">Consequence</th><th scope="col">Assay</th></tr></thead>
+      <tbody>{% for r in nearby.rows %}<tr{% if r.this %} class="sp-this"{% endif %}><td class="sp-ctr">{% if r.in %}+{% else %}&minus;{% endif %}</td>
+        <td>{% if r.this %}<strong>this SNP</strong>{% else %}<a href="{{ r.href }}" hx-get="{{ r.href }}">{{ r.name }}</a>{% if r.better %} <span class="sp-muted" title="Higher tier or score">&#9650;</span>{% endif %}{% endif %}</td>
+        <td class="sp-num">{{ r.dist }}</td><td class="sp-ctr">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
+        <td class="sp-num">{{ r.score|default_if_none:"" }}</td><td>{{ r.region }}</td>
+        <td>{% if r.assay %}<span class="sp-as sp-as-{{ r.assay.1 }}"><span aria-hidden="true">{{ r.assay.0 }}</span> {{ r.assay.2 }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <p class="sp-muted mb-0">SNPs this close are often inherited together, so one may be enough; there is no LD data here.</p>{% endif %}
+  </section>{% endif %}
 
-  {% if mini_url %}<div class="sp-figure mt-2" hx-get="{{ mini_url }}" hx-trigger="revealed" hx-target="this" hx-select="svg" hx-swap="innerHTML">
-    <p class="sp-muted mb-1">Loading the locus view&hellip;</p>
-    <noscript><img class="img-fluid" src="{{ mini_url }}" alt="Genes and chromatin states around this SNP"></noscript>
-  </div>
-  <p class="mb-2"><a href="{{ locus_url }}">Open in the locus browser</a></p>{% endif %}
+  <section class="sp-cs" aria-labelledby="cs-context"><h3 class="sp-cs-h" id="cs-context">Context</h3>
+    {% if ev.known %}<div class="sp-status sp-status-ok mb-2" role="group" aria-label="Published association">
+      <p class="mb-0">&#9733; <strong>{{ ev.known.id }}</strong>{% if ev.known.trait %} ({{ ev.known.trait }}){% endif %} {{ ev.known.where }}.
+        {% if ev.known.kind %}<span title="{{ ev.known.kind_tip }}">{{ ev.known.kind }}</span>{% if ev.known.effect %};{% else %}.{% endif %}{% endif %}{% if ev.known.effect %} {{ ev.known.effect }}.{% endif %}
+        {% for cls, text, tip in ev.known.flags %}{% include 'snpportal/_badges.html' with kind='evidence' value=text cls=cls tip=tip %} {% endfor %}
+        {% if ev.known.rsid %}{{ ev.known.rsid }} &middot;{% endif %}
+        {% for doi in ev.known.dois %}<a href="https://doi.org/{{ doi }}" rel="noreferrer noopener" target="_blank">doi:{{ doi }}</a>{% if not forloop.last %} &middot; {% endif %}{% endfor %}
+        {% if ev.known.others %}Nearby: {% for r in ev.known.others %}<a href="{{ r.url }}">{{ r.id }}</a> ({{ r.dist }}){% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}</p>
+    </div>{% endif %}
+    {% if ev.gene %}<p class="mb-1">Nearest gene <a href="{{ ev.gene.url }}"{% if ev.gene.tip %} title="{{ ev.gene.tip }}"{% endif %}>{% if ev.gene.named %}<em>{{ ev.gene.label }}</em>{% else %}{{ ev.gene.label }}{% endif %}</a>, {{ ev.gene.where }}{% if ev.gene.description %}: {{ ev.gene.description }}{% endif %}.
+      {% if ev.gene.human or ev.gene.zebrafish %}Orthologs: {% if ev.gene.human %}human {{ ev.gene.human }}{% endif %}{% if ev.gene.human and ev.gene.zebrafish %}, {% endif %}{% if ev.gene.zebrafish %}zebrafish <em>{{ ev.gene.zebrafish }}</em>{% endif %}.{% endif %}</p>{% endif %}
 
-  </div>
-  <div class="sp-card-rest">
-  {% if ev.assay %}<p class="mb-1"{% if ev.assay.tip %} title="{{ ev.assay.tip }}"{% endif %}>Assay: {{ ev.assay.status }}{% if ev.assay.reasons %} ({{ ev.assay.reasons }}){% endif %}</p>
-  {% if ev.assay.flank %}<details class="sp-more"><summary>Probe flank</summary>
-    <p class="sp-mono text-break mb-1">{{ ev.assay.flank }}</p>
-    <button type="button" class="btn btn-link btn-sm p-0" data-copy="{{ ev.assay.flank }}">Copy</button></details>{% endif %}{% endif %}
+    {% if ev.expression %}<details class="sp-more"><summary>Expression of the nearest gene (not necessarily the target)</summary>
+      <div class="sp-figure">{{ ev.expression }}</div>
+      <p class="sp-muted mb-1">Mean counts per million per tissue (nf-RASQUAL RNA-seq, 12 AQUA-FAANG fish).</p></details>{% endif %}
 
-  {% if ev.maf %}<p class="mb-2">{% if ev.maf.value %}MAF {{ ev.maf.value }} from <span title="{{ ev.maf.tip }}">{{ ev.maf.fish }} public fish</span>, wild and farmed,
-    pooled; your strain can differ.{% elif ev.maf.other %}No MAF: the 504-fish public panel has a different variant at this position.{% else %}Not a site of the 504-fish public panel.{% endif %} Chromatin: {{ ev.samples }}.
-    <a href="{% url 'snpportal:about_data' %}">About the data &rarr;</a></p>{% endif %}
+    {% if ev.yours %}<details class="sp-more"><summary>Your columns</summary>
+      <dl class="sp-dl mb-0">{% for name, v in ev.yours %}<dt>{{ name }}</dt><dd>{{ v|default_if_none:"" }}</dd>{% endfor %}</dl></details>{% endif %}
 
-  {% if ev.molqtl %}<h3 class="h6 mt-3">molQTL lead SNP (nf-RASQUAL)</h3>
-  <div class="table-responsive"><table class="table table-sm mb-1">
-    <thead><tr><th scope="col">Tissue</th><th scope="col">Kind</th><th scope="col">Feature</th><th scope="col" class="sp-num" title="eigenMT-adjusted p (the table's BF column)">Adj. p</th><th scope="col" class="sp-num" title="RASQUAL effect size; which allele it refers to is not confirmed">&pi;</th></tr></thead>
-    <tbody>{% for f in ev.molqtl.features %}<tr><td class="text-nowrap"><span class="sp-tissue-{{ f.tissue }}" aria-hidden="true">&#9679;</span> {{ f.tissue }}</td><td>{{ f.kind }}</td>
-      <td class="sp-mono">{% if f.url %}<a href="{{ f.url }}">{{ f.feature }}</a>{% else %}{{ f.feature }}{% endif %}</td><td class="sp-num">{{ f.bf }}</td><td class="sp-num">{{ f.pi }}</td></tr>{% endfor %}</tbody>
-  </table></div>
-  <p class="sp-muted mb-2">Lead SNP per feature in 12 fish (low power): not fine-mapped, not counted in tiers; no direction is implied.
-    {{ ev.molqtl.citation }}{% if ev.molqtl.licence %} Licence: {{ ev.molqtl.licence }}.{% endif %}</p>{% endif %}
-
-  {% if ev.expression %}<details class="sp-more"><summary>Expression of the nearest gene (not necessarily the target)</summary>
-    <div class="sp-figure">{{ ev.expression }}</div>
-    <p class="sp-muted mb-1">Mean counts per million per tissue (nf-RASQUAL RNA-seq, 12 AQUA-FAANG fish).</p></details>{% endif %}
-
-  {% if ev.yours %}<details class="sp-more"><summary>Your columns</summary>
-    <dl class="sp-dl mb-0">{% for name, v in ev.yours %}<dt>{{ name }}</dt><dd>{{ v|default_if_none:"" }}</dd>{% endfor %}</dl></details>{% endif %}
-
-  <details class="sp-more"><summary>Details</summary>
-    {% if ev.gene %}<dl class="sp-dl mb-1">
-      <dt>Nearest gene</dt><dd><a href="{{ ev.gene.url }}">{{ ev.gene.label }}</a> <span class="sp-mono">{{ ev.gene.id }}</span>{% if ev.gene.biotype %}, {{ ev.gene.biotype }}, {{ ev.gene.strand }} strand{% endif %}</dd>
-      {% if ev.gene.human or ev.gene.zebrafish %}<dt>Orthologs</dt><dd>{% if ev.gene.human %}human {{ ev.gene.human }}{% endif %}{% if ev.gene.human and ev.gene.zebrafish %}; {% endif %}{% if ev.gene.zebrafish %}zebrafish <em>{{ ev.gene.zebrafish }}</em>{% endif %}</dd>{% endif %}
-      {% if ev.gene.description %}<dt>Description</dt><dd>{{ ev.gene.description }}</dd>{% endif %}
-    </dl>{% endif %}
-    {% if ev.details %}<dl class="sp-dl mb-1">{% for label, value in ev.details %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
-    <p class="mb-1">{% for label, url in ev.links %}<a href="{{ url }}" rel="noreferrer noopener" target="_blank">{{ label }}</a> · {% endfor %}
-      {% if ev.gene %}<a href="{{ ev.gene.salmobase }}" rel="noreferrer noopener" target="_blank">SalmoBase gene</a> ·
-      <a href="{{ ev.gene.url }}">Gene page</a> · {% endif %}<a href="{{ ev.permalink }}">Permalink</a></p>
-  </details>
-  </div>
+    <details class="sp-more"><summary>Details and links</summary>
+      {% if ev.gene %}<dl class="sp-dl mb-1"><dt>Nearest gene</dt><dd><a href="{{ ev.gene.url }}">{{ ev.gene.label }}</a> <span class="sp-mono">{{ ev.gene.id }}</span>{% if ev.gene.biotype %}, {{ ev.gene.biotype }}, {{ ev.gene.strand }} strand{% endif %}</dd></dl>{% endif %}
+      {% if ev.details %}<dl class="sp-dl mb-1">{% for label, value in ev.details %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
+      <p class="mb-1">Chromatin: {{ ev.samples }}. <a href="{% url 'snpportal:about_data' %}">About the data &rarr;</a></p>
+      <p class="mb-1">{% for label, url in ev.links %}<a href="{{ url }}" rel="noreferrer noopener" target="_blank">{{ label }}</a> · {% endfor %}
+        {% if ev.gene %}<a href="{{ ev.gene.salmobase }}" rel="noreferrer noopener" target="_blank">SalmoBase gene</a> ·
+        <a href="{{ ev.gene.url }}">Gene page</a> · {% endif %}<a href="{{ ev.permalink }}">Permalink</a></p>
+    </details>
+  </section>
 </div>

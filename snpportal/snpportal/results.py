@@ -503,6 +503,10 @@ def table(request, key, job=None):
     view_picks = get("picked") if get("picked") in ("all", "out") and mark else "in"  # the + rows unless asked
     shown_conds = every + ([mark] if view_picks == "in" and mark else [({}, "Unselected only", mark[2].replace("NOT IN", "IN"))]
                            if view_picks == "out" else [])
+    snp = int(get("snp")) if get("snp", "").isdecimal() else None
+    if snp is not None and view_picks != "all" and mark:  # the open card's SNP stays in the table until the card closes
+        params, label, sql = shown_conds[-1]
+        shown_conds[-1] = (params, label, f"({sql}) OR file_row_number = {snp}")
     selection_conds, conds = conds, shown_conds  # the selection leaves the − rows out; the table shows what the selector asks
     where = _where(conds)
     order = [f"{sql.format(maf=maf)} {'ASC' if asc != desc else 'DESC'} NULLS LAST" for sql, asc in (COLUMNS[sort][3] if sort else [])]
@@ -534,7 +538,6 @@ def table(request, key, job=None):
 
     keep_selection(jobs.folder(key), urlencode({k: v for k, v in base.items() if k != "tab" and v not in ("", None, [])}, doseq=True))
     here = page if page > 1 else None
-    snp = int(get("snp")) if get("snp", "").isdecimal() else None
     for r in rows:
         r["href"] = link(page=here, snp=r["n"])
         r["out"] = r["n"] in picks_out  # the selector: + in the selection, − taken out (one click each way)
@@ -657,8 +660,61 @@ def table(request, key, job=None):
         "sizes": [(s, link(size=str(s) if s != PAGE_SIZE else None, page=None), s == size) for s in PAGE_SIZES],
         "download": f"{reverse('snpportal:download', args=[key])}?{filtered}" if selection_conds else None,
         "vendor": f"?{urlencode({'tab': 'export', 'scope': 'filtered', **chosen})}" if selection_conds and not gwas else None,
-        "snp": snp, "drawer": _drawer(request, key, job, snp, link(page=here)) if snp is not None else None,
+        "snp": snp, "drawer": _drawer(request, key, job, snp, link, here, picks_out, _steps(con, src, where, order, ids, snp, page, size, pages, matching),
+                                      _nearby(con, view, selection_conds, snp, weights)) if snp is not None else None,
     }
+
+
+def _steps(con, src, where, order, ids, row, page, size, pages, matching):
+    """The card's place in the table: {rank, of, prev: (row, page), next: (row, page)}, or None when the row is not on
+    this page. Across a page edge, the neighbour is read from the next or previous page."""
+    if row not in ids:
+        return None
+    i = ids.index(row)
+
+    def at(offset):
+        hit = con.execute(f"SELECT file_row_number FROM {src} {where} ORDER BY {', '.join(order + ['file_row_number'])} "
+                          f"LIMIT 1 OFFSET {int(offset)}").fetchone()
+        return hit and hit[0]
+
+    prev = (ids[i - 1], page) if i else (at((page - 1) * size - 1), page - 1) if page > 1 else None
+    after = (ids[i + 1], page) if i + 1 < len(ids) else (at(page * size), page + 1) if page < pages else None
+    return {"rank": (page - 1) * size + i + 1, "of": matching, "prev": prev, "next": after}
+
+
+def _nearby(con, view, conds, row, weights):
+    """The list's SNPs within the panel designer's minimum spacing of `row` (the 8 nearest and the row itself, in genome
+    order), each with whether it is in the selection: {spacing, rows, others, selected, better}."""
+    spacing = int(snp_panel.settings(weights)["min_spacing"])
+    hit = con.execute(f"SELECT chrom, pos FROM {view} WHERE file_row_number = ?", [row]).fetchone()
+    if hit is None:
+        return None
+    chrom, pos = hit
+    near = f"chrom = {lit(chrom)} AND pos BETWEEN {int(pos) - spacing} AND {int(pos) + spacing}"
+    types = {c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE {view})").fetchall()}
+    cols = [c for c in ("id", "ref", "alt", "tier", "tier_score", "region_class", "coding_consequence", "assay_status") if c in types]
+    cur = con.execute(f"SELECT file_row_number, pos, {', '.join(cols)} FROM {view} WHERE {near} "
+                      f"ORDER BY abs(pos - {int(pos)}), file_row_number LIMIT 9")
+    names = [d[0] for d in cur.description]
+    found = [dict(zip(names, r)) for r in cur.fetchall()]
+    if not any(r["file_row_number"] == row for r in found):
+        found.append(dict(zip(names, con.execute(f"SELECT file_row_number, pos, {', '.join(cols)} FROM {view} WHERE file_row_number = ?",
+                                                   [row]).fetchone())))
+    selected = {i for i, in con.execute(f"SELECT file_row_number FROM {view} {_where(conds + [({}, '', near)])}").fetchall()}
+    others = con.execute(f"SELECT count(*) FROM {view} WHERE {near}").fetchone()[0] - 1
+    me = next(r for r in found if r["file_row_number"] == row)
+    rank = lambda r: (r.get("tier") or 5, -(r.get("tier_score") or 0))  # noqa: E731
+    out = []
+    for r in sorted(found, key=lambda r: (r["pos"], r["file_row_number"])):
+        g, d = r.get, r["pos"] - pos
+        status = g("assay_status") or ("not_checked" if "assay_status" in r else None)
+        out.append({"n": r["file_row_number"], "this": r is me, "name": g("id") if g("id") not in (None, ".") else f"{chrom}:{r['pos']:,}",
+                    "dist": "0" if not d else f"{'+' if d > 0 else '−'}{_dist(abs(d))}", "tier": g("tier"), "score": g("tier_score"),
+                    "region": region_text(g) if "region_class" in r else "", "in": r["file_row_number"] in selected,
+                    "assay": ASSAY.get(status, ("?", "not_checked")) + (status.replace("_", " "),) if status else None,
+                    "better": rank(r) < rank(me)})
+    return {"spacing": f"{spacing / 1000:g} kb" if spacing >= 1000 else f"{spacing} bp", "rows": out, "others": others, "selected": len(selected - {row}),
+            "better": sum(r["better"] for r in out)}
 
 
 def _page(con, view, ids, types, shown, maf, conditions, in_preset, active_states, caveats):
@@ -808,12 +864,20 @@ def tier_parts(g):
              t["weight"] if t else None) for p, t in zip(parts, terms) if not t or t["weight"]]
 
 
-def _drawer(request, key, job, row, close):
-    """The Table's evidence drawer: the SNP's full card (locus.job_card) and the link that closes it; None when the
+def _drawer(request, key, job, row, link, here, out, steps, nearby):
+    """The Table's evidence drawer: the SNP's full card (locus.job_card), the link that closes it, its +/− switch, the
+    previous and next rows of the table (steps) and the list's SNPs nearby, each opening its own card; None when the
     row doesn't exist."""
     from . import locus  # locus imports this module
     ctx = locus.job_card(request, key, row, job or jobs.read(key))
-    return ctx and {**ctx, "close": close}
+    if not ctx:
+        return None
+    for r in (nearby or {}).get("rows", []):
+        r["href"] = link(page=here, snp=r["n"])
+    step = lambda x: x and link(page=x[1] if x[1] > 1 else None, snp=x[0])  # noqa: E731
+    return {**ctx, "close": link(page=here), "out": row in out, "nearby": nearby,
+            "pick": link(page=here, snp=row, **({"include": row} if row in out else {"exclude": row})),
+            "steps": steps and {**steps, "prev": step(steps["prev"]), "next": step(steps["next"])}}
 
 
 # ---- the top SNPs (the report) ----

@@ -87,7 +87,16 @@
 {% if drawer %}<aside class="fixed-top ms-auto col-12 col-lg-7 col-xl-6 h-100 sp-drawer" id="drawer" aria-labelledby="drawer-h">
   <a class="sp-drawer-tab" href="{{ drawer.close }}" hx-get="{{ drawer.close }}" data-close aria-label="Close the card" title="Close (Esc, or click outside the card)"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 2.5 11 8l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
   <div class="sp-drawer-body sp-card shadow h-100 overflow-auto">
+    <div class="sp-card-bar">
+      <a class="btn btn-sm sp-keep{% if drawer.out %} sp-keep-out{% endif %}" href="{{ drawer.pick }}" hx-get="{{ drawer.pick }}" data-pick role="button"
+         aria-pressed="{% if drawer.out %}false{% else %}true{% endif %}" title="{% if drawer.out %}Put it back into the selection{% else %}Take it out of the selection{% endif %} (x)"><span class="sp-pick-now">{% if drawer.out %}&minus; Not selected{% else %}+ Selected{% endif %}</span><span class="sp-pick-next">{% if drawer.out %}+ Put back{% else %}&minus; Take out{% endif %}</span></a>
+      {% if drawer.steps %}<nav class="ms-auto d-flex align-items-center gap-1" aria-label="Other SNPs of the table">
+        {% if drawer.steps.prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ drawer.steps.prev }}" hx-get="{{ drawer.steps.prev }}" data-prev title="Previous row (k)">&lsaquo; Previous</a>{% endif %}
+        <span class="sp-muted px-1">{{ drawer.steps.rank|thousands }} of {{ drawer.steps.of|thousands }}</span>
+        {% if drawer.steps.next %}<a class="btn btn-sm btn-outline-secondary" href="{{ drawer.steps.next }}" hx-get="{{ drawer.steps.next }}" data-next title="Next row (j)">Next &rsaquo;</a>{% endif %}
+      </nav>{% endif %}
+    </div>
     <h2 class="h5 mb-2" id="drawer-h">{{ drawer.ev.title }}</h2>
-    {% include 'snpportal/card.html' with ev=drawer.ev presets=drawer.presets switch_url=None hx=drawer.hx mini_url=drawer.mini_url locus_url=drawer.locus_url trait=drawer.trait keep=drawer.keep crumbs=None %}
+    {% include 'snpportal/card.html' with ev=drawer.ev presets=drawer.presets switch_url=None hx=drawer.hx locus_url=drawer.locus_url trait=drawer.trait keep=drawer.keep panel=drawer.panel nearby=drawer.nearby crumbs=None %}
   </div>
 </aside>{% endif %}

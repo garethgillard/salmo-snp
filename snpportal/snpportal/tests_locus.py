@@ -19,7 +19,7 @@ from django.urls import reverse
 import snpscore
 from snpscore import bbi
 
-from . import jobs, locus, palette
+from . import jobs, locus, locus_svg, palette
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
@@ -186,8 +186,24 @@ class LocusTest(SimpleTestCase):
         card = page[page.index('id="drawer"'):]
         d = jobs.folder(key)
         scores = dict(jobs.connect([d]).execute(f"SELECT file_row_number, tier_score__brain FROM read_parquet('{d / 'tiers.parquet'}')").fetchall())
-        line = re.search(r'class="sp-badge sp-tier-\d"[^>]*>Tier \d</span>\s*&middot;(.*?)</p>', card, re.S).group(1)
+        score, line = re.search(r">Score (\d+):(.*?)</p>", card, re.S).groups()
         self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)", line)), scores[0])  # the tier line sums to tier_score
+        self.assertEqual(int(score), scores[0])
+        self.assertIn('class="sp-fact" title="Known locus vgll3_Met54Thr', card)  # the key facts
+        self.assertIn("Regulatory elements around the SNP", svg_of(card[card.index("Regulatory element"):]))  # the locus view, inline
+        self.assertIn(f'href="/snp/locus/?key={key}&amp;row=0&amp;trait=Brain"', card)  # its button to the locus browser
+        self.assertIn("Nearby in your list", card)  # mq is 32 kb away: none within 20 kb
+        self.assertIn("No other SNP of your list within 20 kb", card)
+        self.assertIn("exclude=0", card[:card.index('id="card-body"')])  # the +/− switch
+        self.assertNotIn("data-next", card)  # no peak in Brain: not in the table, so no Previous/Next
+        every = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&snp=0")
+        self.assertIn(" of 3</span>", every)  # its place in the table, and the rows either side
+        self.assertTrue("data-next" in every or "data-prev" in every)
+        out = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&snp=0&exclude=0")
+        self.assertIn("&minus; Not selected", out)  # taken out, it stays in the table while its card is open
+        self.assertIn('class="sp-selected sp-out"', out)
+        self.assertIn("include=0", out[out.index('id="drawer"'):])
+        self.get(reverse("snpportal:results", args=[key]) + "?tab=table&include=0")
         self.assertIn("Missense p.Thr46Met (ENSSSAT00000230965; published as Met54Thr) +3", line)
         self.assertIn("No AQUA-FAANG peak in the 21 conditions sampled", card)  # one line instead of an empty grid
         self.assertNotIn("Chromatin state per condition", card)
@@ -205,7 +221,7 @@ class LocusTest(SimpleTestCase):
         self.assertIn("caQTL (chromatin accessibility)", mq)  # the molQTL section (R4): the peak shown 1-based
         self.assertIn("25:28,963,214-28,965,045", mq)
         self.assertIn("no direction is implied", mq)
-        grid = svg_of(mq[mq.index('id="card-body"'):])
+        grid = svg_of(mq[mq.index("Chromatin state at the SNP"):])
         self.assertIn("Chromatin state per condition", grid)  # a peak somewhere: the grid
         self.assertEqual(grid.count('rx="3" fill="none"'), 4)  # the 4 Brain conditions of the trait are outlined
         swap = self.get(reverse("snpportal:card", args=[key, 2]) + "?trait=all", HTTP_HX_REQUEST="true", HTTP_HX_TARGET="card-body")
@@ -227,21 +243,17 @@ class LocusTest(SimpleTestCase):
         self.assertIn("a different variant at this position", render_to_string("snpportal/card.html", {"ev": other}))
         why = svg_of(two["why"])  # the score bars only when two or more terms count
         self.assertEqual(sum(int(w) for w in re.findall(r": \+(\d+)</title>", why)), 6)
-        mini = re.search(r'hx-get="([^"]+locus.svg[^"]*)"', card).group(1)
-        self.assertNotIn("28996360", mini)  # addressed by row: no coordinates in the URL
-        self.assertNotIn("r=", mini)
-        svg = self.get(mini.replace("&amp;", "&"))
-        ET.fromstring(svg)
-        self.assertNotIn(SIGNAL_PATH, svg)  # slim: genes and the trait's chromatin rows, no live ATAC
-        self.assertEqual(len(re.findall(r">Brain</text>", svg)), 1)
-        self.assertNotIn(">Gonad</text>", svg)
+        peaks = locus_svg.element_view([{"start": 90, "end": 400, "state": "Active TSS", "peaks": 14, "active": 9}], 0, 5000, 200)
+        ET.fromstring(peaks)
+        self.assertIn("a peak in 14 of 21 conditions, active in 9", peaks)
+        self.assertEqual(locus.flank_parts("ACGYT[A/G]NNA"), [("ACG", ""), ("Y", "var"), ("T", ""), ("[A/G]", "snp"), ("NN", "n"), ("A", "")])
 
         variant = self.get(reverse("snpportal:variant", args=["25-28996360-C-T"]))
         self.assertIn("vgll3_Met54Thr", variant)  # no upload: annotated on the fly
         self.assertIn("sp-tier-", variant)
         self.assertIn("conditions sampled", variant)
-        self.assertIn("compact=1", variant)
-        self.assertIn("slim=1", variant)
+        self.assertIn("Regulatory elements around the SNP", variant)
+        self.assertIn("Open in the locus browser", variant)
         self.assertIn("25:28996360", self.get(reverse("snpportal:variant", args=["ssa25-28996360"])))
         self.assertEqual(self.client.get(reverse("snpportal:variant", args=["ssa99-1"])).status_code, 404)
         self.assertFalse([p for p in (Path(self.tmp.name) / "results").iterdir() if p.name.startswith(".")])

@@ -31,7 +31,6 @@ urlpatterns = [
     path("results/<uuid:key>/", views.results, name="results"),
     path("results/<uuid:key>/status/", views.status, name="status"),
     path("results/<uuid:key>/snp/<int:row>/", locus.card, name="card"),  # AGENT locus (stage 2)
-    path("results/<uuid:key>/snp/<int:row>/locus.svg", locus.card_locus, name="card_locus"),  # AGENT locus (stage 2)
     path("results/<uuid:key>/figure/<slug:name>.svg", views.figure, name="figure"),
     path("results/<uuid:key>/download/", views.download, name="download"),
     path("results/<uuid:key>/chip/", tools.chip, name="chip"),

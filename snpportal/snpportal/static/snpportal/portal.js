@@ -85,9 +85,13 @@
     input.addEventListener("change", show);
   });
 
-  // j/k move between table rows that open a card (rows with [data-card]); Enter opens it.
+  // j/k move between table rows that open a card (rows with [data-card]); Enter opens it. With a card open they step
+  // to the next or previous row's card instead, and x takes the card's SNP out of the selection (or puts it back).
   document.addEventListener("keydown", function (e) {
-    if (e.target.closest("input, select, textarea") || (e.key !== "j" && e.key !== "k")) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest("input, select, textarea") || ["j", "k", "x"].indexOf(e.key) < 0) return;
+    var step = document.querySelector({j: "#drawer [data-next]", k: "#drawer [data-prev]", x: "#drawer [data-pick]"}[e.key]);
+    if (step || document.getElementById("drawer")) { if (step) step.click(); return; }
+    if (e.key === "x") return;
     var rows = Array.prototype.slice.call(document.querySelectorAll("tr[data-card]"));
     if (!rows.length) return;
     var i = rows.indexOf(document.activeElement.closest && document.activeElement.closest("tr[data-card]"));
