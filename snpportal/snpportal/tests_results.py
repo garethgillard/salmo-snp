@@ -72,11 +72,13 @@ class ResultsTest(SimpleTestCase):
         same = self.client.get(self.url + "?tab=table&active_set=1&tissue=Gonad&tissue=Brain").content.decode()
         self.assertIn("Active in: <b>maturation</b>", same)  # the preset with these conditions: stored tiers
         self.assertFalse(list(self.d.glob("tiers_*")))
-        own = self.client.get(self.url + "?tab=overview&trait=Brain.Mature.Female").content.decode()
-        self.assertIn("Tier for brain (mature females)", own)  # the summary figure
+        own = self.client.get(self.url + "?tab=table&trait=Brain.Mature.Female").content.decode()
+        self.assertIn("Active in: <b>brain (mature females)</b>", own)
         self.assertTrue((self.d / "tiers_Brain.Mature.Female.parquet").exists())  # scored once, kept with the job
-        parts = json.loads((self.d / "summary_Brain.Mature.Female.json").read_text())
+        parts = jobs.trait_summary(self.d, jobs.weights(self.d), "Brain.Mature.Female", self.summary)  # the Export bundle's figures
         self.assertEqual(sum(parts["tiers"]["Brain.Mature.Female"].values()), self.summary["n_rows"])
+        self.assertIn("Tier for all conditions", self.client.get(self.url + "?trait=Brain.Mature.Female").content.decode())  # Overview: whole list
+        self.client.get(self.url + "?tab=table")  # back to the whole list, for the other tests
         if "tier_terms" not in self.columns:  # several evidence terms: SNPs with any of them
             terms = jobs.connect([self.d]).execute(
                 f"SELECT count(*) FROM '{self.d / 'tiers.parquet'}' WHERE list_has_any(list_transform(tier_terms__maturation, x -> x.term), "
@@ -111,8 +113,8 @@ class ResultsTest(SimpleTestCase):
         self.assertIn(f'font-size="28" font-weight="700">{self.summary["n_rows"]:,}</text><text x="0.0" y="46.0" text-anchor="start" '
                       'font-size="12.5">SNPs scored', summary)
         rows = re.findall(r'font-size="12.5" font-weight="600">([^<]*)</text>', summary)
-        self.assertEqual(rows, ["Tier for maturation", "Gene region", "Near a known locus"] + ["Assay check"] * ("assay_status" in self.columns))
-        self.assertIn('href="?tab=table&amp;trait=maturation&amp;tier=1-2"', summary)  # every part lists its SNPs
+        self.assertEqual(rows, ["Tier for all conditions", "Gene region", "Near a known locus"] + ["Assay check"] * ("assay_status" in self.columns))
+        self.assertIn('href="?tab=table&amp;trait=all&amp;tier=1-2"', summary)  # every part lists its SNPs, Active in reset
         self.assertNotIn("PROVISIONAL", re.sub(r"<svg .*?</svg>", "", page, flags=re.S))  # no badges: one caveat line
         self.assertEqual(page.count('class="sp-caveat'), 1)  # one caveat line
         self.assertEqual('id="qc" open' in page, results.qc_problem(jobs.read_json(self.d / "validation.json")))  # one QC line
@@ -122,7 +124,7 @@ class ResultsTest(SimpleTestCase):
             self.assertEqual(root.get("role"), "img")
             self.assertTrue(root.find("{http://www.w3.org/2000/svg}title").text)
         self.assertNotIn("var(--", "".join(SVG.findall(page)))
-        self.assertIn("?tab=table&amp;trait=maturation&amp;tier=1", page)  # tier bar -> table
+        self.assertIn("?tab=table&amp;trait=all&amp;tier=1", page)  # tier bar -> table, Active in reset
 
     def test_figure_downloads(self):
         n = self.summary["n_rows"]

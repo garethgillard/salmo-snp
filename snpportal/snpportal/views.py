@@ -29,6 +29,7 @@ from . import jobs, results as result_views, tools
 SUFFIXES = (".vcf.gz", ".vcf", ".tsv.gz", ".tsv", ".csv.gz", ".csv", ".txt.gz", ".txt", ".bim", ".map")
 PASTE_LINES = 10_000
 TABS = ("overview", "table", "panel", "export")
+CURRENT = "snpportal_current"  # cookie: the results this browser last opened, for the nav's Score
 EXAMPLES = {  # the release's demo/ files (name without extension) -> (title, what it is; {n}: its rows)
     "known_loci": ("Known loci", "{n:,} from published studies"),
     "chip_demo_SYNTHETIC": ("SNP chip", "synthetic, {n:,} SNPs"),
@@ -257,21 +258,36 @@ def results(request, key):
         weights = jobs.weights(d)
         trait = jobs.requested_trait(request.GET.get, request.GET.getlist, weights["presets"]) if weights else "all"
         settings = result_views.gwas_settings(request) if gwas else {}
-        context.update(trait=trait, query=urlencode({"trait": trait, **settings}), release_changed=jobs.release_changed(job))
+        context.update(trait=trait, query=urlencode(settings), release_changed=jobs.release_changed(job))
         if tab == "table":
-            context.update(result_views.table(request, key, job))
+            context.update(result_views.table(request, key, job))  # keeps the selection it shows
         elif tab == "overview":
             context.update(result_views.overview(request, key, job))
         elif tab == "panel":
             context.update(tools.panel(request, key, job))
         else:
             context.update(tools.exports(request, key, job))
-        context["actions"] = [{"label": "Report", "url": f"{reverse('snpportal:report', args=[key])}?{context['query']}"},
+        context["table_query"] = result_views.selection(d) or urlencode(settings)  # the Table tab returns to the selection
+        context["actions"] = [{"label": "Report", "url": f"{reverse('snpportal:report', args=[key])}?{context['table_query']}"},
                               {"label": "Score another list", "url": reverse("snpportal:upload")}]
     context.setdefault("actions", []).append(
         {"label": "Delete", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",
          "confirm": "Delete these results now? This can't be undone."})
-    return render(request, "snpportal/results.html", context)
+    response = render(request, "snpportal/results.html", context)
+    response.set_cookie(CURRENT, str(key), max_age=24 * 3600, httponly=True, samesite="Lax")  # the nav's Score returns here
+    return response
+
+
+@private
+def current(request):
+    """The nav's Score: the results this browser last opened while they exist, else the Score page."""
+    key = request.COOKIES.get(CURRENT, "")
+    try:
+        if jobs.read(key):
+            return redirect(reverse("snpportal:results", args=[key]))
+    except (ValueError, OSError, Http404):
+        pass
+    return redirect(reverse("snpportal:upload"))
 
 
 @private

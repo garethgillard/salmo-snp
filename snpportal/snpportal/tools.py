@@ -102,11 +102,11 @@ def _trait(request, weights):
     return jobs.canonical(trait, weights["presets"]) if weights else "all"
 
 
-def _open(d, trait, weights):
+def _open(d, trait, weights, selected=False):
     """Sandboxed connection that reads the job folder and the release (genome neighbours, pool) and writes only the
     job folder, with view v = the result plus the tiers of `trait` (as on the Table tab) and, when the job has a chip,
-    view vc = v plus on_chip, dist_to_chip, near_chip and novel_functional (results.chip_view). Returns (con, view name,
-    its column types)."""
+    view vc = v plus on_chip, dist_to_chip, near_chip and novel_functional (results.chip_view). With `selected`, v
+    holds only the SNPs of the Table's selection (the Panel designs from it). Returns (con, view name, its types)."""
     con = jobs.connect([d, jobs.release()], d)
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet({lit(d / 'result.parquet')}, file_row_number=true)")
     columns = _columns(con, "r")
@@ -116,12 +116,15 @@ def _open(d, trait, weights):
     if picked:
         drop = [c for c in jobs.TIER_COLUMNS if c in columns]
         keep = f"r.* EXCLUDE ({', '.join(drop)})" if drop else "r.*"
-        con.execute(f"CREATE VIEW v AS SELECT {keep}, " + ", ".join(f"t.{jobs.ident(c + '__' + trait)} AS {c}" for c in picked)
+        con.execute(f"CREATE VIEW v0 AS SELECT {keep}, " + ", ".join(f"t.{jobs.ident(c + '__' + trait)} AS {c}" for c in picked)
                     + f" FROM r JOIN read_parquet({lit(tiers)}) t USING (file_row_number)")
     elif weights:
-        con.execute(f"CREATE VIEW v AS {jobs.scored_sql('r', weights, list(columns), trait, d)}")
+        con.execute(f"CREATE VIEW v0 AS {jobs.scored_sql('r', weights, list(columns), trait, d)}")
     else:
-        con.execute("CREATE VIEW v AS SELECT * FROM r")
+        con.execute("CREATE VIEW v0 AS SELECT * FROM r")
+    where = results._where(results.filters(results.selection_request(results.selection(d)), _columns(con, "v0"), weights)) \
+        if selected else ""
+    con.execute(f"CREATE VIEW v AS SELECT * FROM v0 {where}")
     view = "v"
     chipped = results.chip_view(con, d, "v", weights)
     if chipped:
@@ -265,7 +268,7 @@ def _fig_coverage(c, link, desc):
 
 def _fig_chip(c, link, desc):
     chip = c["chip"]
-    res = chip["results"][c["trait"]]
+    res = chip["results"][_chip_tag(c["d"], c["trait"])]
     top = max([n for _, _, n in chip["density"]] + [1])
     density = [(chrom, mb * 1_000_000, (mb + 1) * 1_000_000, n / top, f"{chrom}:{mb}–{mb + 1} Mb: {n:,} chip markers")
                for chrom, mb, n in chip["density"]]
@@ -324,8 +327,8 @@ def figure(request, key, name):
     if name not in FIGURES:
         raise Http404("No such figure")
     d, weights = jobs.folder(key), jobs.weights(jobs.folder(key))
-    trait = _trait(request, weights)
-    con, view, types = _open(d, trait, weights)
+    trait = _selected_trait(d, weights)
+    con, view, types = _open(d, trait, weights, selected=True)
     c = _context(key, job, d, trait, con)
     if name.startswith("panel"):
         h = request.GET.get("panel", "")
@@ -354,6 +357,23 @@ def figure(request, key, name):
     response = HttpResponse(svg, content_type="image/svg+xml")
     response["Content-Disposition"] = f'attachment; filename="{name}_{trait}{trailer}.svg"'
     return response
+
+
+def _selected_trait(d, weights):
+    """The Table selection's Active in: the conditions the Panel's tiers count."""
+    req = results.selection_request(results.selection(d))
+    return jobs.requested_trait(req.GET.get, req.GET.getlist, weights["presets"]) if weights else "all"
+
+
+def _selection_key(d):
+    """The Table selection's filters (not its sort, page size or columns), for the panel and chip caches."""
+    q = results.selection_request(results.selection(d)).GET
+    return urlencode(sorted((k, v) for k in q for v in q.getlist(k) if k not in ("sort", "desc", "size", "cols", "col")))
+
+
+def _chip_tag(d, trait):
+    """chip.json's key for the comparison of the Table selection under `trait`."""
+    return f"{trait}|{_selection_key(d)}" if _selection_key(d) else trait
 
 
 def _context(key, job, d, trait, con):
@@ -439,7 +459,7 @@ def _saved(d, h):
 def _design(con, view, d, trait, p, weights, chip):
     """panels/<hash>.parquet and .json for the parameters: made once, as the same parameters give the same panel."""
     key = {"v": 1, "preset": trait, **p, "weights": jobs.sha256(d / "weights.yaml") if (d / "weights.yaml").exists() else None,
-           "chip": chip.get("sha256")}
+           "chip": chip.get("sha256"), **({"selection": _selection_key(d)} if _selection_key(d) else {})}
     h = snp_panel.params_hash(key)
     folder = d / "panels"
     if (folder / f"{h}.parquet").exists():
@@ -451,7 +471,7 @@ def _design(con, view, d, trait, p, weights, chip):
                              p["max_per_element"], p["require_assay_pass"], p["exclude_flags"], p["must_include"], weights=weights,
                              chrom_sizes=jobs.manifest(d).get("chrom_sizes"), table=view, out=tmp,
                              **{k: p[k] for k in ("min_spacing_cm", "cm_map") if k in p})
-        info = {"hash": h, "selection_hash": r["hash"], "preset": trait, "params": p, "summary": r["summary"],
+        info = {"hash": h, "selection_hash": r["hash"], "preset": trait, "params": p, "summary": r["summary"], "table": _selection_key(d),
                 "chip": chip.get("label"), "chip_synthetic": bool(chip.get("synthetic")), "created_utc": jobs.utc()}
         jobs._write_json(folder / f"{h}.json", info)
         os.chmod(tmp, 0o600)
@@ -551,13 +571,21 @@ def _listed(con, info, d, trait, key, limit):
     return out
 
 
-def assay_readiness(d, synthetic, link):
-    """The Panel tab's 'Assay readiness' card from summary.json: one bar of pass / warn / fail / not checked (each
-    links to those SNPs in the table) and the reasons SNPs warn or fail, each with a 'hide in table' link."""
-    s = results.summary_of(d)
-    counts = s.get("assay")
+def assay_readiness(con, types, synthetic, link):
+    """The Panel tab's 'Assay readiness' card for the Table selection (view v): one bar of pass / warn / fail / not
+    checked (each links to those SNPs in the table) and the reasons SNPs warn or fail, each with a 'hide in table' link."""
+    if "assay_status" not in types:
+        return None
+    counts = dict(con.execute("SELECT coalesce(assay_status, 'not_checked'), count(*) FROM v GROUP BY 1").fetchall())
     if not counts:
         return None
+    s = {"assay_reasons": {}}
+    if "assay_reasons" in types:  # as jobs.summarise counts them
+        for reason, status, k in con.execute("""
+                SELECT trim(regexp_replace(regexp_replace(x, '^[0-9]+ ', ''), '( +[0-9.+-]+)+$', '')), status, count(*) FROM (
+                    SELECT unnest(string_split(assay_reasons, '; ')) AS x, coalesce(assay_status, 'not_checked') AS status
+                    FROM v WHERE assay_reasons IS NOT NULL AND coalesce(assay_status, '') <> 'pass') GROUP BY ALL ORDER BY ALL""").fetchall():
+            s["assay_reasons"].setdefault(reason, {})[status] = k
     n = sum(counts.values())
     statuses = [st for st in ("pass", "warn", "fail", "not_checked") if st in counts or st != "not_checked"]
     parts = [(st.replace("_", " "), counts.get(st, 0), palette.STATUS[results.ASSAY[st][1]][2], link(assay=st)) for st in statuses]
@@ -575,8 +603,8 @@ def panel(request, key, job):
     The default panel is designed on the first visit; every parameter set is cached in the job folder."""
     d = jobs.folder(key)
     weights = jobs.weights(d)
-    trait = _trait(request, weights)
-    con, view, types = _open(d, trait, weights)
+    trait = _selected_trait(d, weights)
+    con, view, types = _open(d, trait, weights, selected=True)
     chip = chip_info(d)
     c = _context(key, job, d, trait, con)
     link = results.table_link(trait)
@@ -592,7 +620,10 @@ def panel(request, key, job):
     more = request.GET.copy()
     more["show"] = "all"
     visible, advanced = _fields(p, types, pv["gap_bp"] / 1e6)
+    picked = results.filters(results.selection_request(results.selection(d)), _columns(con, "v0"), weights)
     designer = {
+        "selection": {"n": con.execute("SELECT count(*) FROM v").fetchone()[0], "total": con.execute("SELECT count(*) FROM r").fetchone()[0],
+                      "filters": [label for _, label, _ in picked], "table": f"?{results.selection(d)}&tab=table"},
         "fields": visible, "advanced": advanced, "n_advanced": changed, "must": " ".join(p["must_include"]),
         "too_many_ids": request.GET.get("must_capped") == "1", "max_must": MAX_MUST, "url": reverse("snpportal:panel_design", args=[key]),
         "assay": [(k, label, k == choice) for k, (label, _) in results.ASSAY_FILTERS.items()
@@ -606,7 +637,7 @@ def panel(request, key, job):
         "export_link": "?" + urlencode({"tab": "export", "trait": trait, "scope": f"panel-{pv['hash']}"}),
         "reset": "?" + urlencode({"tab": "panel", "trait": trait}),
     }
-    return {"designer": designer, "readiness": assay_readiness(d, _synthetic(job), link),
+    return {"designer": designer, "readiness": assay_readiness(con, types, _synthetic(job), link),
             "chip": _chip_context(request, key, job, d, trait, con, weights, chip, link)}
 
 
@@ -619,8 +650,8 @@ def design(request, key):
     _views().finished(key)
     d = jobs.folder(key)
     weights = jobs.weights(d)
-    trait = _trait(request, weights)
-    con, view, types = _open(d, trait, weights)
+    trait = _selected_trait(d, weights)
+    con, view, types = _open(d, trait, weights, selected=True)
     ids = MUST.findall(request.POST.get("must", "")[:20_000])
     info = _design(con, view, d, trait, _params(request.POST, weights, types, ids), weights, chip_info(d))
     query = {"tab": "panel", "trait": trait, "panel": info["hash"], "gap_mb": request.POST.get("gap_mb", "")[:20],
@@ -633,7 +664,8 @@ def design(request, key):
 def _compared(con, d, trait, weights, chip):
     """chip.json with the comparison for `trait` (cached there): counts, chip gaps with the best SNP of the list or the
     release pool, and the novel functional SNPs per BIN for the figure."""
-    if trait in chip.get("results", {}):
+    tag = _chip_tag(d, trait)
+    if tag in chip.get("results", {}):
         return chip
     pool = jobs.release() / "pool" / "pool.parquet"
     res = snp_panel.compare(con, d / "chip.parquet", trait, weights=weights, chrom_sizes=jobs.manifest(d).get("chrom_sizes"),
@@ -648,7 +680,7 @@ def _compared(con, d, trait, weights, chip):
             f["row"] = rows.get((f["chrom"], f["pos"]))
     res["novel_bins"] = [list(x) for x in con.execute(  # vc: v with the chip columns (see _open)
         f"SELECT chrom, pos // {BIN} * {BIN}, min(tier), count(*) FROM vc WHERE novel_functional GROUP BY ALL ORDER BY ALL").fetchall()]
-    chip.setdefault("results", {})[trait] = res
+    chip.setdefault("results", {})[tag] = res
     jobs._write_json(d / "chip.json", chip)
     return chip
 
@@ -662,7 +694,7 @@ def _chip_context(request, key, job, d, trait, con, weights, chip, link):
     if not chip:
         return out
     chip = _compared(con, d, trait, weights, chip)
-    res = chip["results"][trait]
+    res = chip["results"][_chip_tag(d, trait)]
     s = res["summary"]
     c = _context(key, job, d, trait, con)
     c.update(chip=chip, synthetic=_synthetic(job, chip.get("synthetic")))
@@ -674,7 +706,7 @@ def _chip_context(request, key, job, d, trait, con, weights, chip, link):
                      "card": f"{reverse('snpportal:card', args=[key, f['row']])}?{q}" if f and f.get("row") is not None else None})
     fig = _figures(c, ["chip-coverage"], link).get("coverage")
     out.update(info=chip, synthetic=c["synthetic"], gaps=gaps, n_gaps=len(res["gaps"]), top=TOP_GAPS, gaps_tsv=fig and fig["tsv_url"],
-               heading=f"Compared with the {(chip.get('label') or 'chip').lower()}" + (" (synthetic)" if chip.get("synthetic") else ""),
+               heading=f"Your selection compared with the {(chip.get('label') or 'chip').lower()}",
                kpis=[{"value": f"{s['chip_snps']:,}", "label": "chip markers", "note": f"{sum(n for _, n in chip.get('rejected', {}).items()):,} "
                       "rows left out" if chip.get("rejected") else "all on chromosomes 1–29"},
                      {"value": f"{s['shared']:,}", "label": "shared", "note": f"{results.pct(s['shared'], s['total'])} of your SNPs are on the chip"},
@@ -815,7 +847,7 @@ def _command(job, trait, tag, fmt="<format>"):
 
 def export(request, key, job, fmt):
     """The download view's formats beyond the table's TSV: tsv, parquet, bed, illumina, axiom, kasp or bundle of the
-    whole result, the filtered table (?scope=filtered plus the Table tab's filters) or a panel (?scope=panel-<hash>).
+    whole result, the Table selection (?scope=filtered plus its filters, as the Export tab links) or a panel (?scope=panel-<hash>).
     TSV and BED start with snpscore's provenance lines (?plain=1 drops them); vendor files hold none, so
     ?format=<vendor>.provenance or .lookup gives the sidecar snpscore writes next to them (provenance; ids, TOP/BOT and
     assay status). Vendor rows that fail the assay check or are not checked are left out unless ?include_failed=1."""
@@ -935,16 +967,16 @@ def _vendor_notes(con, rel, n):
 
 
 def exports(request, key, job):
-    """Context for the Export tab: one scope choice (the filtered table when the Table has filters, else the latest
-    panel of this trait, else all SNPs), five download rows with each vendor file's counts and checks, and 'More
-    formats'. GWAS jobs lead with their association files and one KASP row for the credible-set SNPs."""
+    """Context for the Export tab: one scope choice (the Table selection when it has filters, else the latest panel,
+    else all SNPs), five download rows with each vendor file's counts and checks, and 'More formats'. GWAS jobs lead
+    with their association files and one KASP row for the credible-set SNPs."""
     d = jobs.folder(key)
     weights = jobs.weights(d)
-    trait = _trait(request, weights)
+    trait = _selected_trait(d, weights)  # the Table selection's Active in
     con, view, types = _open(d, trait, weights)
     gwas = job.get("input_kind") == "gwas"
     settings = results.gwas_settings(request) if gwas else {}  # the loci and credible sets of the Association page's settings
-    conds = results.filters(request, types, weights)
+    conds = results.filters(results.selection_request(results.selection(d)), types, weights)
     chosen = {k: v for params, _, _ in conds for k, v in params.items()}
     chip = chip_info(d)
     wanted = request.GET.get("scope")
@@ -960,7 +992,7 @@ def exports(request, key, job):
     else:
         if conds:
             rel = f"(SELECT * FROM {view} WHERE {' AND '.join(f'({sql})' for _, _, sql in conds)})"
-            scopes.append(("filtered", "Filtered table", con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0], rel,
+            scopes.append(("filtered", "Table selection", con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0], rel,
                            view == "vc" and chip.get("synthetic")))
         panels = recent_panels(d, trait, (wanted or "")[6:] if (wanted or "").startswith("panel-") else None)
         names = [panel_name(x) for x in panels]

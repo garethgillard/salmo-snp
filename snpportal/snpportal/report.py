@@ -71,9 +71,9 @@ def report(request, key):
     """/snp/results/<key>/report/?trait=[&table filters][&panel=<hash>]: the printable report."""
     job = finished(key)
     d = jobs.folder(key)
-    ov = overview(request, key, job)
-    trait = ov["trait"]
-    best = results.top(request, key, job, TOP)
+    ov = overview(request, key, job)  # the whole list
+    best = results.top(request, key, job, TOP)  # the Table selection in the URL
+    trait = best["chosen"]["trait"]
     filters = {k: v for k, v in best["chosen"].items() if k != "trait"}
     finemap = None
     if job.get("input_kind") == "gwas" and (d / "gwas.parquet").exists():  # the Association page's settings (kept in its links)

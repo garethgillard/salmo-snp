@@ -122,6 +122,7 @@ class ToolsTest(SimpleTestCase):
         self.assertNotIn(h, heading)  # named by its markers, never by a hash
 
     def test_panel_parameters(self):
+        self.client.get(self.url, {"tab": "table"})  # the Panel designs from the Table selection: the whole list
         con = jobs.connect([self.d])
         must = con.execute(f"SELECT id FROM read_parquet('{self.d / 'result.parquet'}') WHERE id IS NOT NULL AND id <> '.' "
                            "ORDER BY pos DESC LIMIT 1").fetchone()[0]
@@ -244,10 +245,12 @@ class ToolsTest(SimpleTestCase):
         n = con.execute(f"SELECT count(*) FROM read_parquet('{self.d / 'tiers.parquet'}') WHERE tier__all <= 2").fetchone()[0]
         filtered = body(self.client.get(download, {"scope": "filtered", "format": "tsv", "tier": "1-2", "plain": "1"})).decode()
         self.assertEqual(len(filtered.splitlines()) - 1, n)
-        page = self.client.get(self.url, {"tab": "export", "tier": "1-2"})
-        self.assertContains(page, f'value="filtered" checked> Filtered table ({n:,})')  # the default when the Table has filters
+        self.client.get(self.url, {"tab": "table", "tier": "1-2"})  # the Table keeps its selection
+        page = self.client.get(self.url, {"tab": "export"})
+        self.assertContains(page, f'value="filtered" checked> Table selection ({n:,})')  # the default when the Table has filters
         self.assertContains(page, f"of {n:,} included")
         self.assertEqual(boosted_links(page.content.decode()), {"?"})
+        self.client.get(self.url, {"tab": "table"})  # the whole list again
         # A panel, Parquet with its provenance, and the bundle
         html = self.client.get(self.url + "?tab=panel").content.decode()
         h = re.search(r'scope=panel-([0-9a-f]{16})', html).group(1)
@@ -279,7 +282,7 @@ class ToolsTest(SimpleTestCase):
         self.assertRedirects(response, f"{url}?tab=panel&trait=all#chip", fetch_redirect_response=False)
         self.assertTrue((d / "chip.parquet").exists())
         page = self.client.get(url + "?tab=panel")
-        self.assertContains(page, "Compared with the demo chip (synthetic)")
+        self.assertContains(page, "Your selection compared with the demo chip")
         self.assertContains(page, "novel functional")
         self.assertContains(page, "Largest chip gaps")
         s = jobs.read_json(d / "chip.json")["results"]["all"]["summary"]
@@ -319,7 +322,7 @@ class ToolsTest(SimpleTestCase):
         info = jobs.read_json(d / "chip.json")
         self.assertEqual(info["kept"], 40)
         self.assertTrue(info["synthetic"])  # SYNTHETIC in its name
-        self.assertContains(self.client.get(url + "?tab=panel"), "Compared with the uploaded chip (synthetic)")  # SYNTHETIC in its name
+        self.assertContains(self.client.get(url + "?tab=panel"), "Your selection compared with the uploaded chip")
         wrong = self.client.post(chip, {"chip": SimpleUploadedFile("chip.pdf", b"%PDF")})
         self.assertIn("chip_error=type", wrong.url)
         with override_settings(SNPPORTAL_MAX_CHIP_SNPS=39):  # longer chips are refused with the cap in the message

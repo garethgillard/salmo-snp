@@ -23,7 +23,7 @@
     <ul class="nav nav-tabs" hx-boost="true">
       {% if gwas %}<li class="nav-item"><a class="nav-link" hx-boost="false" href="{% url 'snpportal:association' key %}?{{ query }}">Association</a></li>{% endif %}
       <li class="nav-item"><a class="nav-link{% if tab == 'overview' %} active{% endif %}"{% if tab == 'overview' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=overview">Overview</a></li>
-      <li class="nav-item"><a class="nav-link{% if tab == 'table' %} active{% endif %}"{% if tab == 'table' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=table">Table</a></li>
+      <li class="nav-item"><a class="nav-link{% if tab == 'table' %} active{% endif %}"{% if tab == 'table' %} aria-current="page"{% endif %} href="?{{ table_query }}&amp;tab=table">Table</a></li>
       {% if not gwas %}<li class="nav-item"><a class="nav-link{% if tab == 'panel' %} active{% endif %}"{% if tab == 'panel' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=panel">Panel</a></li>{% endif %}
       <li class="nav-item"><a class="nav-link{% if tab == 'export' %} active{% endif %}"{% if tab == 'export' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=export">Export</a></li>
     </ul>

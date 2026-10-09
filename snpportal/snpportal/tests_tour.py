@@ -125,7 +125,7 @@ class TourTest(SimpleTestCase):
         page = Page(html)  # 'Try it': real pages, or the Score page's example buttons
         for link in page.links:  # (the locus browser asks salmobase for live signal: tests_locus covers it offline)
             if link.startswith("/snp/") and not link.startswith((tour, reverse("snpportal:locus"))):
-                self.assertEqual(self.client.get(link).status_code, 200, link)
+                self.assertEqual(self.client.get(link, follow=True).status_code, 200, link)  # Score: the current results or the Score page
         examples = views.examples()
         for action, fields in page.forms:
             self.assertIn(action, (reverse("snpportal:upload"), reverse("snpportal:gwas_score")))
@@ -140,8 +140,9 @@ class TourTest(SimpleTestCase):
         rows = explore.public_rows([("25", 28_945_075, 29_049_268)])  # public variants within 50 kb of vgll3: over 20
         key = jobs.create_from_rows(rows, "Public variants near vgll3", "maturation")
         results, report = reverse("snpportal:results", args=[key]), reverse("snpportal:report", args=[key])
-        overview = self.client.get(results, {"trait": "maturation"})
-        self.assertContains(overview, f"{report}?trait=maturation")  # the results header links the report
+        self.client.get(results, {"tab": "table", "trait": "maturation"})  # the Table keeps its selection
+        overview = self.client.get(results)
+        self.assertContains(overview, f"{report}?trait=maturation")  # the results header links the report of the selection
         page = self.client.get(report, {"trait": "maturation"})
         self.assertEqual(page.status_code, 200)
         self.assertEqual(page["Cache-Control"], "no-store, private")

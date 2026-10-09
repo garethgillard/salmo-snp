@@ -9,6 +9,7 @@ app_name = "snpportal"
 urlpatterns = [
     path("", explore.landing, name="landing"),
     path("score/", views.score, name="upload"),
+    path("score/current/", views.current, name="current"),
     path("search/", search.search, name="search"),
     path("search/suggest/", search.suggest, name="suggest"),
     path("tour/", explore.tour, name="tour"),

@@ -8,9 +8,10 @@ from __future__ import annotations
 import os
 import re
 import uuid
+from types import SimpleNamespace
 from urllib.parse import urlencode
 
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, QueryDict
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 
@@ -489,6 +490,7 @@ def table(request, key, job=None):
         params.update(changes)
         return "?" + urlencode({k: v for k, v in params.items() if v not in ("", None, [])}, doseq=True)
 
+    keep_selection(jobs.folder(key), urlencode({k: v for k, v in base.items() if k != "tab" and v not in ("", None, [])}, doseq=True))
     here = page if page > 1 else None
     snp = int(get("snp")) if get("snp", "").isdecimal() else None
     for r in rows:
@@ -1004,17 +1006,33 @@ def _figure_context(key, job, trait, summary, d):
             "chip": jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}}
 
 
-def _trait(request, d, summary):
-    """(the request's trait, summary.json with that trait's parts): a named preset or an Active-in selection."""
-    w = jobs.weights(d)
-    if not w:
-        return "all", summary
-    trait = jobs.requested_trait(request.GET.get, request.GET.getlist, w["presets"])
-    return trait, jobs.trait_summary(d, w, trait, summary)
+# ---- the Table's selection: its filters (Active in among them) and view, kept per job ----
+
+def selection(d):
+    """The Table's current selection of a job as a query string ('' = the whole list): the Panel designs from it, the
+    Export tab offers it and the Table tab link returns to it. selection.json in the job folder, so it lasts."""
+    return jobs.read_json(d / "selection.json").get("query", "")
 
 
-def table_link(trait):
-    """Overview marks link to the Table tab with their filter (plus the trait)."""
+def keep_selection(d, query):
+    if selection(d) != query:
+        jobs._write_json(d / "selection.json", {"query": query, "updated_utc": jobs.utc()})
+
+
+def selection_request(query):
+    """A stand-in request whose GET is a saved selection, for filters() and requested_trait()."""
+    return SimpleNamespace(GET=QueryDict(query))
+
+
+def selection_filters(d, types, weights):
+    """(trait, filters [(params, label, SQL)]) of a job's saved selection."""
+    req = selection_request(selection(d))
+    trait = jobs.requested_trait(req.GET.get, req.GET.getlist, weights["presets"]) if weights else "all"
+    return trait, filters(req, types, weights)
+
+
+def table_link(trait="all"):
+    """Overview and Panel marks link to the Table tab with only their filter: a new selection (Active in reset)."""
     def link(**params):
         return "?" + urlencode({k: v for k, v in {"tab": "table", "trait": trait, **params}.items() if v is not None})
     return link
@@ -1029,10 +1047,11 @@ def figure_card(c, name, svg):
 
 
 def overview(request, key, job):
-    """Context for the Overview tab: the summary (key numbers and how the SNPs split), the other figures whose data
-    exist, upload warnings and the upload QC line. Reads summary.json and validation.json (GWAS jobs: their loci)."""
+    """Context for the Overview tab, the landing page of the whole list (no Table filters, tiers for all conditions):
+    the summary (key numbers and how the SNPs split), the other figures whose data exist, upload warnings and the
+    upload QC line. Reads summary.json and validation.json (GWAS jobs: their loci)."""
     d = jobs.folder(key)
-    trait, s = _trait(request, d, summary_of(d))
+    trait, s = "all", summary_of(d)
     gwas = job.get("input_kind") == "gwas"
     c = _figure_context(key, job, trait, s, d)
     if gwas:  # the summary's headline counts the loci and links the Association tab
@@ -1107,7 +1126,7 @@ def figure(request, key, name, job):
     if name not in FIGURES:
         raise Http404("No such figure")
     d = jobs.folder(key)
-    trait, s = _trait(request, d, summary_of(d))
+    trait, s = "all", summary_of(d)  # the Overview's figures: the whole list, all conditions
     lines = [] if request.GET.get("plain") else jobs.provenance(job, trait)
     built = FIGURES[name][2](_figure_context(key, job, trait, s, d), None, "\n".join(lines) or FIGURES[name][1])
     if built is None:
