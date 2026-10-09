@@ -58,6 +58,7 @@ TERMS = {"active": "active in the chosen conditions", "active_elsewhere": "activ
          "weak": "weak state in the chosen conditions", "coding": "CDS (protein change or unknown)", "synonymous": "CDS (synonymous)",
          "splice": "splice region", "utr": "UTR",
          "constrained": "GERP constrained", "regbuild": "Ensembl regulatory", "molqtl": "molQTL lead (display only)"}
+GROUP_STARTS = ("dd-region", "dd-maf", "dd-more")  # the filter bar's groups: what tiers count, where, genotyping, more
 CHROMATIN_TERMS = ("active", "active_elsewhere", "weak")  # evidence the Chromatin column shows
 TERM_SHORT = {"active": "active", "active_elsewhere": "active elsewhere", "weak": "weak", "coding": "CDS", "synonymous": "synonymous",
               "splice": "splice", "utr": "UTR", "constrained": "constrained", "regbuild": "Ensembl reg.", "molqtl": "molQTL"}
@@ -532,12 +533,12 @@ def table(request, key, job=None):
         dd("list", "region", "Region", ", ".join(REGION_LABELS.get(x) or CODING_FILTERS[x][0] for x in ticked["region"]) or "any",
            bool(ticked["region"]), "Genic region (Ensembl 116); any of the ticked ones", name="region", any="Any region",
            options=[(v, text, v in ticked["region"], "") for v, text in regions[:1] + coding + regions[1:]])
-    dds.append({"kind": "gene"})
     chroms = sorted((summary.get("chrom_tiers", {}).get(chosen["trait"]) or {}), key=_chrom_key) or \
         sorted((c for c, in con.execute("SELECT DISTINCT chrom FROM r").fetchall()), key=_chrom_key)
     where_text = next((label for params, label, _ in conds if "chrom" in params), "any")
     dd("location", "where", "Location", where_text.replace("Chromosome ", "chr"), "chrom" in chosen,
        "A chromosome, or a range on it (start exclusive, end inclusive)", chroms=[(c, c == chosen.get("chrom")) for c in chroms])
+    dds.append({"kind": "gene"})
     if maf:
         dd("radio", "maf", "MAF", f"≥ {chosen['min_maf']}" if "min_maf" in chosen else "any", "min_maf" in chosen,
            MAF_TIP if maf_source == "public" else "Your maf/af column", name="min_maf",
@@ -563,14 +564,14 @@ def table(request, key, job=None):
         on = k == sort
         href = link(sort=k, desc="1" if on and not desc else "", page=None) if sorts else None
         headers.append((k, label, tip, href, ("descending" if desc else "ascending") if on else ""))
-    picked = ticked["tier"]
-    tier_links = [(x, k, not picked or str(x) in picked, link(tier=",".join(sorted(set(picked) ^ {str(x)})) or None, page=None))
-                  for x, k in tier_counts if x is not None]  # a click adds or removes that tier
+    shown_tiers = tier_counts if not ticked["tier"] else \
+        [(x, k) for x, k in tier_counts if str(x) in ticked["tier"]]  # the tiers of the rows the table shows
     filtered = urlencode(chosen)
     return {
         "total": total, "matching": matching, "first": (page - 1) * size + 1 if matching else 0,
         "last": min(page * size, matching), "chosen": chosen, "query": urlencode({"trait": chosen["trait"], **settings}),
-        "dds": dds, "tier_links": tier_links, "active_set": any(x["kind"] == "active" for x in dds),
+        "dds": dds, "shown_tiers": [(x, k) for x, k in shown_tiers if x is not None and k],
+        "active_set": any(x["kind"] == "active" for x in dds), "groups": GROUP_STARTS,
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
         "start": chosen.get("start", ""), "end": chosen.get("end", ""),
         "hidden": [(k, base[k]) for k in ("sort", "desc") if base[k]]  # and filters with no control on the form

@@ -3,7 +3,7 @@
 {# Every portal page extends this: sub-nav, page header, footer, portal.css + palette, htmx and portal.js. #}
 
 {% block head %}{{ block.super }}
-<link rel="stylesheet" href="{% static 'snpportal/portal.css' %}">
+<link rel="stylesheet" href="{% asset 'snpportal/portal.css' %}">
 <style>{% palette_css %}</style>
 {% block portal_head %}{% endblock portal_head %}
 {% endblock head %}
@@ -43,5 +43,5 @@
 
 {% block scripts %}{{ block.super }}
 <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
-<script src="{% static 'snpportal/portal.js' %}"></script>
+<script src="{% asset 'snpportal/portal.js' %}"></script>
 {% endblock scripts %}

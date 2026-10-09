@@ -192,14 +192,16 @@ class ResultsTest(SimpleTestCase):
         self.assertIn('id="card-body"', drawer)  # the full card
         self.assertIn("Tier ", drawer[drawer.index('id="drawer"'):])
         self.assertIn('<input type="radio" name="size" value="25" checked>', page)  # Rows: 25, under More
-        self.assertIn('<details class="sp-dd" id="dd-region">', page)  # no region filter: the Region pill is plain
+        region = page[page.index('id="dd-region"'):]
+        self.assertIn('class="btn btn-sm btn-outline-secondary"', region[:200])  # no region filter: a plain button
         both = self.client.get(self.url + "?tab=table&region=coding&region=UTR").content.decode()  # ticked: any of them
-        self.assertIn('<details class="sp-dd on" id="dd-region">', both)
-        self.assertIn("Region <b>coding (CDS, splice), UTR</b>", both)
+        self.assertIn("Region: <b>coding (CDS, splice), UTR</b>", both)
         self.assertEqual(int(re.search(r"of ([\d,]+) shown", both).group(1).replace(",", "")),
                          self.direct("region_class IN ('CDS', 'splice_region') OR region_class LIKE '%UTR'"))
-        tiers = re.findall(r'<a(?: class="off")? href="[^"]*"[^>]*><span class="sp-badge sp-tier-(\d)">Tier \d: ([\d,]+)', both)
+        tiers = re.findall(r'<span class="sp-badge sp-tier-(\d)" title="[^"]*">Tier \d: ([\d,]+)', both)  # the shown rows' tiers
         self.assertEqual(sum(int(n.replace(",", "")) for _, n in tiers), int(re.search(r"of ([\d,]+) shown", both).group(1).replace(",", "")))
+        one = self.client.get(self.url + "?tab=table&region=coding&region=UTR&tier=1").content.decode()
+        self.assertEqual({t for t, _ in re.findall(r'<span class="sp-badge sp-tier-(\d)" title="[^"]*">Tier \d: ([\d,]+)', one)}, {"1"})
 
         by_maf = self.client.get(self.url + "?tab=table&sort=maf&desc=1").content.decode()
         first = float(re.search(r'<td class="sp-num">(0\.\d\d)</td>', by_maf).group(1))

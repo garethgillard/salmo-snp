@@ -1,12 +1,23 @@
-"""Template helpers: the palette as CSS, the current release, number formatting."""
+"""Template helpers: the palette as CSS, the current release, number formatting, versioned asset URLs."""
+import os
 import time
 
 from django import template
+from django.contrib.staticfiles import finders
+from django.templatetags.static import static
 from django.utils.safestring import mark_safe
 
 from .. import jobs, palette
 
 register = template.Library()
+
+
+@register.simple_tag
+def asset(path):
+    """A static file's URL with its modification time (?v=), so browsers fetch portal.css or portal.js again when they
+    change instead of keeping a stale copy."""
+    found = finders.find(path)
+    return f"{static(path)}?v={int(os.path.getmtime(found))}" if found else static(path)
 
 
 @register.simple_tag
