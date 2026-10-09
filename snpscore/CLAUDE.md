@@ -69,6 +69,10 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
 - Ss4R duplicates (2026-10-07): `ss4r` layer from the AQUA-FAANG SalmonTroutOrthologs.tsv on salmobase: the other
   salmon genes of a gene's clade on the paired chromosome of its syntenic quartet (any other chromosome when the quartet
   is unknown); class AORe/LORe from the clade or its neighbours; Ens106 gene ids used as Ens116 ids.
+- Active in (2026-10-09): in the portal Table, a chosen set of conditions also filters: a SNP stays when it is in an
+  element of at least one of them, by default inside an AQUA-FAANG robust ATAC peak (any chromatin state; no peak = no
+  state), optionally only in an active state (Active_TSS, Active_enhancer). Links from the Overview carry the trait, so
+  the Table can then show fewer SNPs than the Overview's whole-list counts.
 - Locus browser redesign (2026-10-08): no trait on the browser; signal tracks are the mean over a condition's replicates;
   combined tracks stack the tissue means; RNA-seq per-condition rows on a shared log scale.
 
