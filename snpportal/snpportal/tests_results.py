@@ -68,6 +68,23 @@ class ResultsTest(SimpleTestCase):
     def direct(self, sql):
         return jobs.connect([self.d]).execute(f"SELECT count(*) FROM '{self.d / 'result.parquet'}' WHERE {sql}").fetchone()[0]
 
+    def test_active_in_sets_the_tiers(self):
+        same = self.client.get(self.url + "?tab=table&active_set=1&tissue=Gonad&tissue=Brain").content.decode()
+        self.assertIn("Tiers for <strong>maturation: Brain, Gonad</strong>", same)  # the preset with these conditions: stored tiers
+        self.assertFalse(list(self.d.glob("tiers_*")))
+        own = self.client.get(self.url + "?tab=overview&trait=Brain.Mature.Female").content.decode()
+        self.assertIn("Tiers for <strong>brain (mature females)</strong>", own)
+        self.assertTrue((self.d / "tiers_Brain.Mature.Female.parquet").exists())  # scored once, kept with the job
+        parts = json.loads((self.d / "summary_Brain.Mature.Female.json").read_text())
+        self.assertEqual(sum(parts["tiers"]["Brain.Mature.Female"].values()), self.summary["n_rows"])
+        if "tier_terms" not in self.columns:  # several evidence terms: SNPs with any of them
+            terms = jobs.connect([self.d]).execute(
+                f"SELECT count(*) FROM '{self.d / 'tiers.parquet'}' WHERE list_has_any(list_transform(tier_terms__maturation, x -> x.term), "
+                "['coding', 'utr'])").fetchone()[0]
+            page = self.client.get(self.url + "?tab=table&trait=maturation&term=coding&term=utr").content.decode()
+            self.assertIn("Evidence: CDS (protein change or unknown), UTR", page)
+            self.assertIn(f"of {terms:,} shown" if terms > 50 else f"&ndash;{terms} of {terms} shown", page)
+
     def test_summary_holds_every_panel(self):
         s, n = self.summary, self.summary["n_rows"]
         self.assertEqual(s["version"], jobs.SUMMARY_VERSION)
@@ -172,7 +189,7 @@ class ResultsTest(SimpleTestCase):
         row = re.search(r'href="\?[^"]*snp=(\d+)"', page).group(1)
         drawer = self.client.get(self.url + f"?tab=table&trait=brain&snp={row}").content.decode()
         self.assertIn('id="drawer"', drawer)
-        self.assertIn(f"/snp/{row}/?trait=brain", drawer)  # 'Open full card'
+        self.assertIn('id="card-body"', drawer)  # the full card
         self.assertIn("Tier ", drawer[drawer.index('id="drawer"'):])
         self.assertIn('<details class="sp-more" open><summary>More filters (1 active)</summary>', page)  # Rows: 25
         self.assertIn('<details class="sp-more"><summary>More filters</summary>', self.client.get(self.url + "?tab=table").content.decode())

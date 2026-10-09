@@ -70,7 +70,7 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 
 | URL | What |
 | --- | --- |
-| `results/<key>/?tab=overview\|table\|panel\|export&trait=` | the results tabs; Table filters (`tier`, `region`, `chrom/start/end`, `gene`, `min_maf`, `assay`, `known`, `active`, `term`, `hide_*`) carry over to the Export tab, and `&snp=<row>` opens the Table's evidence drawer; changing Trait keeps the filters, the panel and the Export scope (each tab's `keep` list); GWAS jobs have Association, Overview, Table and Export (no Panel), and every link of theirs keeps the fine-mapping settings (`sig`, `sugg`, `window`, `prior_sd`, `lam`, `trait_sd`) |
+| `results/<key>/?tab=overview\|table\|panel\|export&trait=` | the results tabs. `trait` is a weights.yaml preset or an Active-in key (tissues joined by `+`, then `.Immature`/`.Mature` and `.Female`/`.Male`, e.g. `Brain+Gonad.Mature`), which the Table's Active in sets (its form sends `active_set`, `tissue`, `maturity`, `sex`); a key with a preset's conditions becomes that preset, any other is scored on first view (`tiers_<key>.parquet`, `summary_<key>.json` in the job folder). Table filters (`tier`, `region`, `chrom/start/end`, `gene`, `min_maf`, `assay`, `known`, `active` (one condition), `active_only`, `term` (several, comma-joined: any of them), `hide_*`) carry over to the Export tab, and `&snp=<row>` opens the SNP's card in the Table's drawer; GWAS jobs have Association, Overview, Table and Export (no Panel), and every link of theirs keeps the fine-mapping settings (`sig`, `sugg`, `window`, `prior_sd`, `lam`, `trait_sd`) |
 | `results/<key>/?tab=panel&design=1&n=&spacing_kb=&spacing_cm=&cm_map=&backbone=&maf=&per_gene=&per_element=&assay=&exclude=&gap_mb=` | panel designer as a link (blank or invalid values fall back to weights.yaml `design`; `spacing_cm` and `cm_map` (mean, female, male) only with the `cm` columns) |
 | `results/<key>/panel/` (POST) | the designer's form, the same fields plus `must` (must-include ids, which never go in a URL): designs the panel and redirects to `?tab=panel&panel=<hash>`, which shows a saved panel with its parameters (for another trait: the same parameters) |
 | `results/<key>/chip/` (POST) | `chip` file, `demo=1` or `remove=1` |
@@ -78,7 +78,7 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 | `results/<key>/report/?trait=[&filters][&panel=<hash>]` | one-page printable report (two A4 pages) |
 | `results/<key>/figure/<name>.svg`, `results/<key>/tools/<name>.svg` | overview and Panel-tab figures (`&format=tsv` for their data) |
 | `results/<key>/association/` (+ `<name>.svg`, `download/`, `region/`) | GWAS jobs: QC, Manhattan, QQ, loci, fine-mapping, regional plot |
-| `results/<key>/snp/<row>/`, `variant/<chrom>-<pos>[-ref-alt]/`, `locus/?r=[&key=]`, `gene/<id>/` | evidence card, variant page, locus browser (with a GWAS job's key it draws the association lane), gene page |
+| `results/<key>/snp/<row>/`, `variant/<chrom>-<pos>[-ref-alt]/`, `locus/?r=[&key=]`, `gene/<id>/` | a job's SNP (opens its card in the Table's drawer, `?snp=`), variant page, locus browser (with a GWAS job's key it draws the association lane), gene page |
 | `score/`, `score/gwas/`, `candidates/`, `tour/`, `known-loci/`, `search/`, `about/data/`, `about/methods/`, `help/`, `run-locally/` | the other pages |
 | `colours/?name=portal\|aquafaang` | the locus browser's chromatin-colour toggle (Display options): sets the `snpportal_palette` cookie, back to the (same-site) referring page |
 

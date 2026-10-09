@@ -19,7 +19,7 @@ from django.conf import settings
 from django.core.cache import caches
 from django.core.cache.backends.locmem import LocMemCache
 from django.http import Http404, HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.template import engines
 from django.urls import reverse
 from django.utils.safestring import mark_safe
@@ -468,28 +468,39 @@ def card_context(request, ev, presets, switch_url, mini_url, locus_url, keep=Non
             "mini_url": mini_url, "locus_url": locus_url, "trait": ev["trait"], "keep": sorted((keep or {}).items())}
 
 
-@private
-def card(request, key, row):
-    """Evidence card for one SNP of a job, a page of its own (htmx swaps only the card when the trait changes). A GWAS
-    job's card adds the SNP's p, beta and fine-mapping (association.snp_line)."""
+def job_card(request, key, row, job):
+    """Card context for one SNP of a job, for the request's trait (the Table's drawer shows it); a GWAS job's card adds
+    the SNP's p, beta and fine-mapping (association.snp_line). None when the row doesn't exist."""
     from . import association
-    job = finished(key)
     con, types, _, chosen = results.open_result(request, key)
     hit = con.execute(results.CARD_SQL, [row]).fetchone()
     if hit is None:
-        raise Http404("No such SNP")
+        return None
     d = jobs.folder(key)
     synthetic = bool(job.get("synthetic_input") or job.get("synthetic_layers"))
     ev = evidence(dict(zip(types, hit)), jobs.weights(d), chosen["trait"], synthetic)
     ev["gwas"] = association.snp_line(request, key, row, job)
     gwas_query = association.query_of(request)  # a GWAS job's fine-mapping settings
     q = urlencode({"trait": chosen["trait"], **gwas_query})
-    ctx = card_context(request, ev, jobs.presets(d), reverse("snpportal:card", args=[key, row]),
-                       f"{reverse('snpportal:card_locus', args=[key, row])}?{q}",
+    ctx = card_context(request, ev, jobs.presets(d), None, f"{reverse('snpportal:card_locus', args=[key, row])}?{q}",
                        f"{reverse('snpportal:locus')}?{urlencode({'key': key, 'row': row, 'trait': chosen['trait'], **gwas_query})}",
                        gwas_query)
-    ctx.update(job=job, synthetic=synthetic, crumbs=[("Results", f"{reverse('snpportal:results', args=[key])}?{q}"), ("SNP", None)])
-    return render(request, "snpportal/card.html" if ctx["hx"] else "snpportal/card_page.html", ctx)
+    ctx.update(job=job, synthetic=synthetic)
+    return ctx
+
+
+@private
+def card(request, key, row):
+    """A job's SNP: its card is the Table's evidence drawer (?snp=), where this link leads; an htmx request gets the
+    card itself."""
+    job = finished(key)
+    if not request.headers.get("HX-Request"):
+        params = {k: v for k, v in request.GET.items() if k not in ("tab", "snp")}
+        return redirect(f"{reverse('snpportal:results', args=[key])}?{urlencode({'tab': 'table', **params, 'snp': row})}")
+    ctx = job_card(request, key, row, job)
+    if ctx is None:
+        raise Http404("No such SNP")
+    return render(request, "snpportal/card.html", ctx)
 
 
 @private

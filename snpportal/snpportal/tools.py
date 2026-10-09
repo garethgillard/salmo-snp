@@ -97,8 +97,9 @@ def _columns(con, rel):
 
 
 def _trait(request, weights):
+    """The request's trait (a named preset or an Active-in key), 'all' when it is neither."""
     trait = request.GET.get("trait") or request.POST.get("trait") or "all"
-    return trait if trait in (weights or {}).get("presets", {}) else "all"
+    return jobs.canonical(trait, weights["presets"]) if weights else "all"
 
 
 def _open(d, trait, weights):
@@ -606,7 +607,6 @@ def panel(request, key, job):
         "reset": "?" + urlencode({"tab": "panel", "trait": trait}),
     }
     return {"designer": designer, "readiness": assay_readiness(d, _synthetic(job), link),
-            "keep": [("panel", pv["hash"])] + ([("gap_mb", f"{gap:g}")] if gap else []),  # another trait: the same parameters
             "chip": _chip_context(request, key, job, d, trait, con, weights, chip, link)}
 
 
@@ -883,7 +883,7 @@ def _bundle_svgs(key, job, d, trait, con, panel_hash, synthetic):
         c["panel"] = _panel_view(d, _saved(d, panel_hash))
         names = [n for n in FIGURES if n.startswith("panel")]
     else:
-        rc = results._figure_context(key, job, trait, results.summary_of(d), d)
+        rc = results._figure_context(key, job, trait, jobs.trait_summary(d, jobs.weights(d), trait, results.summary_of(d)), d)
         for name, (_, _, build) in results.FIGURES.items():
             built = build(rc, None, lines)
             if built:
@@ -1006,7 +1006,7 @@ def exports(request, key, job):
         if "sidecars" in inspect.signature(snp_export.export).parameters:
             more += [(f"{fmt.upper() if fmt == 'kasp' else fmt.capitalize()} {part} file", tip, href(f"{fmt}.{part}"))
                      for fmt in (("kasp",) if gwas else vendor) for part, tip in (("provenance", "how it was made"), ("lookup", "your ids, TOP/BOT and assay status"))]
-    return {"query": urlencode({"trait": trait, **chosen, **settings}), "keep": sorted(chosen.items()) + [("scope", value)] + list(settings.items()),
+    return {"query": urlencode({"trait": trait, **chosen, **settings}),
             "exports": {
         "scopes": [(v, f"{lab} ({k:,})" if v != "credible" else lab, v == value) for v, lab, k, _, _ in scopes], "gwas": gwas,
         "trait": trait, "hidden": sorted(chosen.items()), "rows": rows, "more": more, "n": n,

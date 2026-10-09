@@ -1,6 +1,7 @@
 {% load snpportal_tags %}
-{% comment %}Evidence card for one SNP (context: ev from locus.evidence, presets, switch_url, hx, mini_url, locus_url, keep:
-   other parameters the trait form keeps), the body of card_page.html and variant.html (their H1 is the title); an htmx
+{% comment %}Evidence card for one SNP (context: ev from locus.evidence, presets, switch_url (none: no trait form; a job's
+   card follows the Table's Active in), hx, mini_url, locus_url, keep: other parameters the trait form keeps): the Table's
+   drawer and the body of variant.html (their heading is the title); an htmx
    swap also brings the breadcrumb, whose links carry the trait. Parts render only when their columns exist;
    expression, the user's own columns and details are closed. On wide pages (.sp-wide-card) the figures
    (.sp-card-side) sit to the right of the text; narrower, everything stacks in this order.{% endcomment %}
@@ -10,7 +11,7 @@
     <p class="mb-0"><span class="sp-mono">{{ ev.position }}{% if ev.alleles %} {{ ev.alleles }}{% endif %}</span>
       <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-copy="{{ ev.spec }}">Copy {{ ev.spec }}</button>
       {% if ev.gene %}· nearest gene <a href="{{ ev.gene.url }}"{% if ev.gene.tip %} title="{{ ev.gene.tip }}"{% endif %}>{% if ev.gene.named %}<em>{{ ev.gene.label }}</em>{% else %}{{ ev.gene.label }}{% endif %}</a> ({{ ev.gene.where }}){% endif %}</p>
-    <form class="d-flex align-items-center gap-1 ms-auto sp-noprint" method="get" action="{{ switch_url }}"
+    {% if switch_url %}<form class="d-flex align-items-center gap-1 ms-auto sp-noprint" method="get" action="{{ switch_url }}"
           hx-get="{{ switch_url }}" hx-trigger="change" hx-target="#card-body" hx-select="#card-body" hx-swap="outerHTML" hx-push-url="true">
       {% for name, value in keep %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
       <label class="sp-muted" for="card-trait">Trait</label>
@@ -18,7 +19,7 @@
         {% for value, label in presets %}<option value="{{ value }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
       </select>
       <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Apply</button></noscript>
-    </form>
+    </form>{% endif %}
   </div>
 
   <div class="sp-card-top">

@@ -17,6 +17,7 @@ from unittest import mock, skipUnless
 import duckdb
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
+from django.http import QueryDict
 from django.test import Client, SimpleTestCase, override_settings
 from django.urls import reverse
 from django.views.debug import ExceptionReporter
@@ -144,17 +145,20 @@ class PortalTest(SimpleTestCase):
         self.assertContains(page, "Tier 1:")
         filtered = self.client.get(url + "?tab=table&trait=maturation&max_tier=2&hide_lore=1")
         self.assertContains(filtered, "shown")
-        trait_form = filtered.content.decode().split('<label for="trait">')[0].rsplit("<form", 1)[1]  # changing Trait keeps them
-        self.assertIn('name="tier" value="1-2"', trait_form)
-        self.assertIn('name="hide_lore" value="1"', trait_form)
-        self.assertContains(filtered, '<option value="maturation" title="maturation: Brain, Gonad" selected>')  # the Trait tooltip
+        form = filtered.content.decode().split('id="tf"')[1].split("</form>")[0]  # Active in sits in the filter form: changing it keeps them
+        self.assertIn('name="active_set" value="1"', form)
+        self.assertIn('<option value="1-2" selected>', form)
+        self.assertIn('name="hide_lore" value="1"', form)
+        self.assertContains(filtered, "Tiers for <strong>maturation: Brain, Gonad</strong>")  # the trait's conditions
 
         card = self.client.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain", HTTP_HX_REQUEST="true")
         self.assertTrue("Chromatin state per condition" in card.content.decode() or "conditions sampled" in card.content.decode())
-        self.assertContains(card, '<option value="brain" selected>')
+        self.assertNotContains(card, 'id="card-trait"')  # a job's card follows the Table's Active in
         self.assertContains(card, 'rel="noreferrer noopener"')
         self.assertEqual(card["Cache-Control"], "no-store, private")
-        self.assertContains(self.client.get(reverse("snpportal:card", args=[key, 0])), "sp-nav")  # standalone page
+        page = self.client.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain")  # no page of its own: the Table's drawer
+        self.assertEqual(page.status_code, 302)
+        self.assertTrue(page["Location"].endswith("?tab=table&trait=brain&snp=0"))
         d = jobs.folder(key)  # resolved, as DuckDB's sandbox wants
         in_peak = jobs.connect([d]).execute(f"SELECT file_row_number FROM read_parquet('{d / 'result.parquet'}', file_row_number=true) "
                                             "WHERE chromatin_id IS NOT NULL LIMIT 1").fetchone()
@@ -311,7 +315,7 @@ class PortalTest(SimpleTestCase):
             weights.write_text(original.replace("active: 3", "active: 0"))
             page = self.client.get(reverse("snpportal:results", args=[key]) + "?tab=table")
             self.assertContains(page, "The release has changed since")
-            tiers = dict((t, n) for t, n in results.open_result(mock.Mock(GET={}), key)[0].execute(
+            tiers = dict((t, n) for t, n in results.open_result(mock.Mock(GET=QueryDict()), key)[0].execute(
                 "SELECT tier, count(*) FROM v GROUP BY 1").fetchall())
             self.assertEqual({str(t): n for t, n in tiers.items()}, before["all"])
         finally:

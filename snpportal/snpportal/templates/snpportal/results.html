@@ -15,9 +15,10 @@
   {% if release_changed %}<div class="sp-status sp-status-warn" role="status">&#9888; The release has changed since these results were made;
     they still use release {{ job.release }} as it was. <a href="{% url 'snpportal:upload' %}">Score the list again</a> to update them.</div>{% endif %}
 
-  {% comment %}Links and forms that stay on this page (trait, tabs, table filters, sort, pages, the drawer) swap in the new
+  {% comment %}Links and forms that stay on this page (tabs, table filters, sort, pages, the drawer) swap in the new
      #results and the header actions (#sp-actions, so Report follows the trait). Only those: a boosted link to another page
-     or a file would swap in nothing. The trait applies on change; everything also works without JavaScript.{% endcomment %}
+     or a file would swap in nothing. The trait (the conditions tiers use) is set by Active in on the Table tab and
+     travels in every link; everything also works without JavaScript.{% endcomment %}
   <div id="results" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-select-oob="#sp-actions">
     <ul class="nav nav-tabs" hx-boost="true">
       {% if gwas %}<li class="nav-item"><a class="nav-link" hx-boost="false" href="{% url 'snpportal:association' key %}?{{ query }}">Association</a></li>{% endif %}
@@ -25,17 +26,7 @@
       <li class="nav-item"><a class="nav-link{% if tab == 'table' %} active{% endif %}"{% if tab == 'table' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=table">Table</a></li>
       {% if not gwas %}<li class="nav-item"><a class="nav-link{% if tab == 'panel' %} active{% endif %}"{% if tab == 'panel' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=panel">Panel</a></li>{% endif %}
       <li class="nav-item"><a class="nav-link{% if tab == 'export' %} active{% endif %}"{% if tab == 'export' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=export">Export</a></li>
-      <li class="ms-auto align-self-center" hx-boost="false">
-        <form method="get" class="d-flex align-items-center gap-2 sp-small" hx-get="{% url 'snpportal:results' key %}" hx-trigger="change" hx-push-url="true">
-          <input type="hidden" name="tab" value="{{ tab }}">
-          {% for name, value in keep %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}{# the tab's view: filters, sort, panel, scope #}
-          <label for="trait">Trait</label>
-          <select class="form-select form-select-sm w-auto" id="trait" name="trait" title="{{ trait_tip }}">
-            {% for value, label, tip in presets %}<option value="{{ value }}" title="{{ tip }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
-          </select>
-          <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Apply</button></noscript>
-        </form>
-      </li>
+      <li class="ms-auto align-self-center sp-small sp-muted" title="Set with Active in on the Table tab">Tiers for <strong>{{ trait_tip }}</strong></li>
     </ul>
     {% include 'snpportal/_caveat.html' with synthetic=synthetic %}
 

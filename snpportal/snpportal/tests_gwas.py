@@ -208,7 +208,8 @@ class GwasTest(SimpleTestCase):
         credible = html[html.index('id="credible"'):]
         self.assertIn(causal, credible)  # the credible-set SNPs under both priors, linked to their cards
         card = re.search(rf'href="(/snp/results/{self.key}/snp/\d+/\?trait=maturation)">{re.escape(causal)}<', credible).group(1)
-        card = self.client.get(card).content.decode()
+        card = self.client.get(card, follow=True).content.decode()  # the card opens in the Table's drawer
+        card = card[card.index('id="drawer"'):]
         self.assertIn("GWAS: p ", card)  # the card's GWAS line, with its qualifier
         self.assertIn("(one causal variant, no LD)", card)
         download = self.client.get(f"{url}?trait=maturation&locus=1&download=1")

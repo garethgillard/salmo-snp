@@ -252,13 +252,10 @@ def results(request, key):
                "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers"))}
     if job["state"] == "done":
         d = jobs.folder(key)
-        presets = jobs.presets(d)
-        trait = request.GET.get("trait", "all")
-        trait = trait if trait in dict(presets) else "all"
         weights = jobs.weights(d)
+        trait = jobs.requested_trait(request.GET.get, request.GET.getlist, weights["presets"]) if weights else "all"
         settings = result_views.gwas_settings(request) if gwas else {}
         context.update(trait=trait, query=urlencode({"trait": trait, **settings}), release_changed=jobs.release_changed(job),
-                       presets=[(value, label, result_views.trait_tip(weights, value)) for value, label in presets],
                        trait_tip=result_views.trait_tip(weights, trait))
         if tab == "table":
             context.update(result_views.table(request, key, job))
@@ -267,7 +264,7 @@ def results(request, key):
         elif tab == "panel":
             context.update(tools.panel(request, key, job))
         else:
-            context.update(tools.exports(request, key, job))  # each tab's 'keep': what a trait change keeps of its view
+            context.update(tools.exports(request, key, job))
         context["actions"] = [{"label": "Report", "url": f"{reverse('snpportal:report', args=[key])}?{context['query']}"},
                               {"label": "Score another list", "url": reverse("snpportal:upload")}]
     context.setdefault("actions", []).append(

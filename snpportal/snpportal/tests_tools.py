@@ -120,7 +120,6 @@ class ToolsTest(SimpleTestCase):
         self.assertIn(tools.panel_line(info["summary"]), report)
         heading = html[html.index('id="panel-h"'):html.index("</h2>", html.index('id="panel-h"'))]
         self.assertNotIn(h, heading)  # named by its markers, never by a hash
-        self.assertIn(f'name="panel" value="{h}"', html.split('<label for="trait">')[0])  # a trait change keeps the design
 
     def test_panel_parameters(self):
         con = jobs.connect([self.d])

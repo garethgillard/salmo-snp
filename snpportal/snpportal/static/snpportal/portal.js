@@ -169,6 +169,27 @@
 })();
 /* end tour */
 
+/* table: the filter dropdowns (details.sp-dd) stay open while their ticks apply (each change swaps #results); a click
+   outside one closes it. Escape closes the card drawer. */
+(function () {
+  "use strict";
+  var open = [];
+  document.addEventListener("htmx:beforeSwap", function () {
+    open = Array.prototype.map.call(document.querySelectorAll("details.sp-dd[open]"), function (d) { return d.id; });
+  });
+  document.addEventListener("htmx:afterSettle", function () {
+    open.forEach(function (id) { var d = document.getElementById(id); if (d) d.open = true; });
+    open = [];
+  });
+  document.addEventListener("click", function (e) {
+    document.querySelectorAll("details.sp-dd[open]").forEach(function (d) { if (!d.contains(e.target)) d.open = false; });
+  });
+  document.addEventListener("keydown", function (e) {  // Escape closes the card drawer
+    var close = e.key === "Escape" && document.querySelector("#drawer .btn-close");
+    if (close) close.click();
+  });
+})();
+/* end table */
 /* browser: the locus browser's groups open and close in place; Expand all / Collapse all reach every group. The open
    groups go into the URL (?open=), the region form and every move, so a link or a move keeps them. */
 (function () {

@@ -181,8 +181,9 @@ class LocusTest(SimpleTestCase):
     def test_card_and_variant_page(self):
         key = jobs.create_from_rows([("25", 28996360, "vgll3_Met54Thr", "C", "T"), ("26", 19138923, "bco1l", "A", "G"),
                                      ("25", 28964518, "mq", None, None)], "Card rows")
-        card = self.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain")
-        self.assertIn("sp-caveat", card)  # the page's one caveat line
+        page = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&trait=brain&snp=0")  # the card, in the drawer
+        self.assertIn("sp-caveat", page)  # the page's one caveat line
+        card = page[page.index('id="drawer"'):]
         d = jobs.folder(key)
         scores = dict(jobs.connect([d]).execute(f"SELECT file_row_number, tier_score__brain FROM read_parquet('{d / 'tiers.parquet'}')").fetchall())
         line = re.search(r'class="sp-badge sp-tier-\d"[^>]*>Tier \d</span>\s*&middot;(.*?)</p>', card, re.S).group(1)
@@ -199,8 +200,8 @@ class LocusTest(SimpleTestCase):
         self.assertIn("https://salmobase.org/genes/id/ENSSSAG00000053708?assembly=Ssal_v3.1", card)
         self.assertIn("VGLL3", card)
         self.assertIn("Copy 25-28996360-C-T", card)
-        self.assertEqual(card.count("<h2"), 0)  # the page header is the only title
-        mq = self.get(reverse("snpportal:card", args=[key, 2]) + "?trait=brain")
+        self.assertEqual(card.count("<h2"), 1)  # the drawer's heading is the only title
+        mq = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&trait=brain&snp=2")
         self.assertIn("caQTL (chromatin accessibility)", mq)  # the molQTL section (R4): the peak shown 1-based
         self.assertIn("25:28,963,214-28,965,045", mq)
         self.assertIn("no direction is implied", mq)

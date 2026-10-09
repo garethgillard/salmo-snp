@@ -122,7 +122,12 @@ def sha256(path):
 @lru_cache(maxsize=64)
 def _cached(kind, path, mtime):
     p = Path(path)
-    return sha256(p) if kind == "sha256" else json.loads(p.read_text()) if kind == "json" else snpscore.load_weights(p.parent)
+    if kind == "weights":
+        w = snpscore.load_weights(p.parent)
+        if w and "presets" in w:
+            w["presets"] = Presets(w["presets"])
+        return w
+    return sha256(p) if kind == "sha256" else json.loads(p.read_text())
 
 
 def _file(kind, path):
@@ -136,7 +141,8 @@ def manifest(where=None):
 
 
 def weights(where=None):
-    """weights.yaml of a job's snapshot folder, or of the current release (None if missing)."""
+    """weights.yaml of a job's snapshot folder, or of the current release (None if missing); its presets also take
+    Active-in keys (Presets)."""
     return _file("weights", Path(where or release()) / "weights.yaml")
 
 
@@ -161,8 +167,152 @@ def presets(where=None):
 
 
 def trait_label(trait):
-    """A trait preset as people read it: 'growth and fillet', 'all conditions'."""
+    """A trait as people read it: 'growth and fillet', 'all conditions', 'brain + gonad (mature females)'."""
+    sel = selection(trait)
+    if sel:
+        tissues, maturity, sex = sel
+        who = " ".join(x.lower() for x in (maturity, sex and f"{sex}s") if x)
+        return " + ".join(t.lower() for t in tissues) + (f" ({who})" if who else "")
     return "all conditions" if trait == "all" else trait.replace("_", " ")
+
+
+# ---- traits: the conditions tiers score against. A weights.yaml preset, or the Table's Active-in selection of
+# tissues, maturity and sex, written as a key: tissues joined by '+', then optionally '.Immature' or '.Mature' and
+# '.Female' or '.Male' ('Brain+Gonad.Mature.Female'). URLs carry ?trait=; a key with the same conditions as a named
+# preset becomes that preset, whose tiers are stored; other keys are scored once per job (trait_tiers). ----
+
+TISSUES = ("Brain", "Gonad", "Liver", "Muscle", "Embryo")  # Embryo: the 5 DevMap stages (no maturity or sex)
+MATURITIES, SEXES = ("Immature", "Mature"), ("Female", "Male")
+STAGES = ("LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomitogenesis", "LateSomitogenesis")
+CONDITIONS = tuple(f"{t}_{m}_{s}" for t in TISSUES[:-1] for m in MATURITIES for s in SEXES) + STAGES
+
+
+def selection(key):
+    """(tissues, maturity, sex) of an Active-in key (None = both), or None when `key` is not one. A typed URL's '+'
+    arrives as a space: either joins tissues."""
+    head, *rest = str(key or "").replace(" ", "+").split(".")
+    tissues = head.split("+")
+    maturity, sex = next((x for x in rest if x in MATURITIES), None), next((x for x in rest if x in SEXES), None)
+    if not head or not set(tissues) <= set(TISSUES) or len(set(tissues)) < len(tissues) \
+            or len(rest) != (maturity is not None) + (sex is not None):
+        return None
+    return [t for t in TISSUES if t in tissues], maturity, sex
+
+
+def selection_key(tissues, maturity=None, sex=None):
+    """The Active-in key of a selection; no tissue means all of them."""
+    tissues = [t for t in TISSUES if t in tissues] or list(TISSUES)
+    return "+".join(tissues) + "".join(f".{x}" for x in (maturity, sex) if x in MATURITIES + SEXES)
+
+
+def selection_prefixes(key):
+    """An Active-in key's condition prefixes, as weights.yaml presets list them; None when `key` is not one."""
+    sel = selection(key)
+    if sel is None:
+        return None
+    tissues, maturity, sex = sel
+    out = []
+    for t in tissues:
+        if t == "Embryo":
+            out += STAGES
+        elif sex:
+            out += [f"{t}_{m}_{sex}" for m in ([maturity] if maturity else MATURITIES)]
+        else:
+            out.append(f"{t}_{maturity}" if maturity else t)
+    return out
+
+
+class Presets(dict):
+    """weights.yaml presets that also take Active-in keys (as their condition prefixes, so snpscore scores them like
+    any preset); iterating gives only the named presets."""
+
+    def __contains__(self, key):
+        return dict.__contains__(self, key) or selection(key) is not None
+
+    def __missing__(self, key):
+        prefixes = selection_prefixes(key)
+        if prefixes is None:
+            raise KeyError(key)
+        return prefixes
+
+    def get(self, key, default=None):
+        return self[key] if key in self else default
+
+
+def conditions_in(prefixes):
+    return {c for c in CONDITIONS if not prefixes or c.startswith(tuple(prefixes))}
+
+
+def canonical(trait, presets):
+    """`trait` as URLs carry it: a named preset with the same conditions as an Active-in key (single tissues first, so
+    Liver is 'liver', not 'disease_resistance'), else the key; 'all' when it is neither."""
+    if trait not in presets:
+        return "all"
+    if dict.__contains__(presets, trait):
+        return trait
+    key = selection_key(*selection(trait))  # tissues in order, one spelling
+    wanted = conditions_in(presets[key])
+    names = sorted(presets, key=lambda p: p.capitalize() not in TISSUES)
+    return next((p for p in names if conditions_in(presets[p]) == wanted), key)
+
+
+def selection_of(trait, presets):
+    """(tissues, maturity, sex) the Active-in controls show for `trait`; a named preset covers whole tissues."""
+    sel = selection(trait)
+    if sel:
+        return sel
+    conditions = conditions_in(presets.get(trait, []))
+    return [t for t in TISSUES if conditions & conditions_in(selection_prefixes(t))], None, None
+
+
+def requested_trait(get, getlist, presets):
+    """A request's trait: the Table's Active-in fields when its form sent them (active_set), else ?trait=."""
+    if get("active_set"):
+        return canonical(selection_key(getlist("tissue"), get("maturity"), get("sex")), presets)
+    return canonical(get("trait") or "all", presets)
+
+
+def trait_tiers(d, w, trait):
+    """The file holding a job's tier columns for `trait` (<column>__<trait>): tiers.parquet for a named preset, else
+    tiers_<key>.parquet, scored once for an Active-in selection. None for jobs made before tiers.parquet."""
+    if not (d / "tiers.parquet").exists():
+        return None
+    if dict.__contains__(w["presets"], trait):
+        return d / "tiers.parquet"
+    path = d / f"tiers_{trait}.parquet"
+    if not path.exists():
+        con = connect([d], d)
+        con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
+        columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
+        sql = scored_sql("r", w, columns, trait, d)
+        picked = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE ({sql}))").fetchall() if c in TIER_COLUMNS]
+        tmp = d / f"tiers_{trait}.{uuid.uuid4().hex}.tmp"
+        con.execute(f"COPY (SELECT file_row_number, {', '.join(f'{c} AS {ident(c + chr(95) * 2 + trait)}' for c in picked)} "
+                    f"FROM ({sql})) TO '{tmp}' (FORMAT parquet)")
+        con.close()
+        tmp.chmod(0o600)
+        os.replace(tmp, path)
+    return path
+
+
+def trait_summary(d, w, trait, s):
+    """summary.json `s` with the per-trait parts of `trait` added when it has none (an Active-in selection): from its
+    tiers file, computed once and kept in summary_<key>.json."""
+    if not w or trait in s.get("tiers", {}) or trait not in w["presets"]:
+        return s
+    path = d / f"summary_{trait}.json"
+    parts = read_json(path) if path.exists() else None
+    if not parts:
+        tiers = trait_tiers(d, w, trait)
+        if tiers is None:
+            return s
+        con = connect([d], d)
+        con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
+        columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
+        parts = _trait_parts(con, tiers, [trait], columns)
+        con.close()
+        _write_json(path, parts)
+    return {**s, **{k: {**s.get(k, {}), **v} for k, v in parts.items()}}
 
 
 # ---- job.json ----
@@ -419,39 +569,10 @@ def summarise(con, d, columns, w):
     file_row_number) and tiers.parquet."""
     n = con.execute("SELECT count(*) FROM r").fetchone()[0]
     s = {"version": SUMMARY_VERSION, "n_rows": n, "tiers": {}}
-    tiers = d / "tiers.parquet"
-    stored = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet('{tiers}'))").fetchall()] if tiers.exists() else []
-    presets = [p for p in (w or {}).get("presets", {}) if f"tier__{p}" in stored]
-    if presets:
-        for key in ("region_tiers", "chrom_tiers", "bins", "terms"):
-            s[key] = {}
-        con.execute(f"CREATE TEMP TABLE s AS SELECT r.chrom, (r.pos - 1) // 1000000 AS bin, {region_sql(columns)} AS region, "
-                    + ", ".join(f"t.{ident('tier__' + p)}" for p in presets)
-                    + f" FROM r JOIN read_parquet('{tiers}') t USING (file_row_number)")
-        for p in presets:
-            t = ident("tier__" + p)
-            rows = con.execute(f"SELECT GROUPING(region, chrom, bin), region, chrom, bin, {t}, count(*) FROM s GROUP BY GROUPING SETS "
-                               f"(({t}), (region, {t}), (chrom, {t}), (chrom, bin, {t})) ORDER BY TRY_CAST(chrom AS INTEGER), chrom, bin, {t}").fetchall()
-            bins = {}
-            s["tiers"][p], s["region_tiers"][p], s["chrom_tiers"][p] = {}, {}, {}
-            for g, region, chrom, b, tier, k in rows:  # GROUPING bits: region, chrom, bin (1 = summed over)
-                if g == 7:
-                    s["tiers"][p][str(tier)] = k
-                elif g == 3:
-                    if region:  # NULL without a region_class column
-                        s["region_tiers"][p].setdefault(region, {})[str(tier)] = k
-                elif g == 5:
-                    s["chrom_tiers"][p].setdefault(chrom, {})[str(tier)] = k
-                else:
-                    bins.setdefault((chrom, b), [chrom, b, 0, 0, 0, 0])[1 + min(max(tier, 1), 4)] = k
-            s["bins"][p] = list(bins.values())
-            if f"tier_terms__{p}" in stored:  # group by the list of terms first: few distinct lists, then unnest
-                s["terms"][p] = {}
-                for term, tier, k in con.execute(
-                        f"SELECT term, tier, sum(k)::BIGINT FROM (SELECT unnest(terms) AS term, tier, k FROM ("
-                        f"SELECT list_transform({ident('tier_terms__' + p)}, x -> x.term) AS terms, {t} AS tier, count(*) AS k "
-                        f"FROM read_parquet('{tiers}') GROUP BY ALL)) GROUP BY ALL ORDER BY ALL").fetchall():
-                    s["terms"][p].setdefault(term, {})[str(tier)] = k
+    if (d / "tiers.parquet").exists() and (w or {}).get("presets"):
+        parts = _trait_parts(con, d / "tiers.parquet", list(w["presets"]), columns)
+        if parts["tiers"]:
+            s.update(parts)
 
     # One pass over the result for the per-condition activity, known loci and molQTL leads.
     counts = []  # (summary key, name, SQL condition)
@@ -484,6 +605,45 @@ def summarise(con, d, columns, w):
                     FROM r WHERE assay_reasons IS NOT NULL AND coalesce(assay_status, '') <> 'pass') GROUP BY ALL ORDER BY ALL""").fetchall():
             s["assay_reasons"].setdefault(reason, {})[status] = k
     return s
+
+
+def _trait_parts(con, tiers, names, columns):
+    """summary.json's per-trait parts for the traits `names` whose tier columns (<column>__<name>) the `tiers` file
+    has: tier counts, region group x tier, chromosome x tier, 1 Mb bins ([chrom, bin, n tier 1..4], bin = (pos - 1)
+    // 1e6) and evidence term x tier. Needs view `r`."""
+    out = {k: {} for k in ("tiers", "region_tiers", "chrom_tiers", "bins", "terms")}
+    stored = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet('{tiers}'))").fetchall()]
+    names = [p for p in names if f"tier__{p}" in stored]
+    if not names:
+        return out
+    con.execute(f"CREATE OR REPLACE TEMP TABLE s AS SELECT r.chrom, (r.pos - 1) // 1000000 AS bin, {region_sql(columns)} AS region, "
+                + ", ".join(f"t.{ident('tier__' + p)}" for p in names)
+                + f" FROM r JOIN read_parquet('{tiers}') t USING (file_row_number)")
+    for p in names:
+        t = ident("tier__" + p)
+        rows = con.execute(f"SELECT GROUPING(region, chrom, bin), region, chrom, bin, {t}, count(*) FROM s GROUP BY GROUPING SETS "
+                           f"(({t}), (region, {t}), (chrom, {t}), (chrom, bin, {t})) ORDER BY TRY_CAST(chrom AS INTEGER), chrom, bin, {t}").fetchall()
+        bins = {}
+        out["tiers"][p], out["region_tiers"][p], out["chrom_tiers"][p] = {}, {}, {}
+        for g, region, chrom, b, tier, k in rows:  # GROUPING bits: region, chrom, bin (1 = summed over)
+            if g == 7:
+                out["tiers"][p][str(tier)] = k
+            elif g == 3:
+                if region:  # NULL without a region_class column
+                    out["region_tiers"][p].setdefault(region, {})[str(tier)] = k
+            elif g == 5:
+                out["chrom_tiers"][p].setdefault(chrom, {})[str(tier)] = k
+            else:
+                bins.setdefault((chrom, b), [chrom, b, 0, 0, 0, 0])[1 + min(max(tier, 1), 4)] = k
+        out["bins"][p] = list(bins.values())
+        if f"tier_terms__{p}" in stored:  # group by the list of terms first: few distinct lists, then unnest
+            out["terms"][p] = {}
+            for term, tier, k in con.execute(
+                    f"SELECT term, tier, sum(k)::BIGINT FROM (SELECT unnest(terms) AS term, tier, k FROM ("
+                    f"SELECT list_transform({ident('tier_terms__' + p)}, x -> x.term) AS terms, {t} AS tier, count(*) AS k "
+                    f"FROM read_parquet('{tiers}') GROUP BY ALL)) GROUP BY ALL ORDER BY ALL").fetchall():
+                out["terms"][p].setdefault(term, {})[str(tier)] = k
+    return out
 
 
 def refresh_summary(d):
