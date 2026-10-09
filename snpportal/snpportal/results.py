@@ -43,7 +43,7 @@ HIDE = {  # checkbox -> (label, column it needs, SQL condition a SNP must meet t
     "hide_flank": ("variants within 35 bp", "flank_variants", "flank_variants = 0"),
     "hide_near_chip": ("near the chip", "near_chip", "NOT near_chip"),  # with a chip on the Panel tab (P6.6)
 }
-TIER_FILTERS = {"1": "tier = 1", "1-2": "tier <= 2", "1-3": "tier <= 3", "2": "tier = 2", "3": "tier = 3", "4": "tier = 4"}
+TIER_SETS = {"1-2": ("1", "2"), "1-3": ("1", "2", "3"), "1-4": ("1", "2", "3", "4")}  # tier ranges of older links
 ASSAY = {"pass": ("✓", "ok"), "warn": ("⚠", "warn"), "fail": ("✗", "fail"), "not_checked": ("–", "not_checked")}
 CHECKED = "coalesce(assay_status, 'not_checked') IN ('pass', 'warn')"
 ASSAY_FILTERS = {  # the Assay select of the Table and the Panel -> (label, SQL); older links' single statuses still work
@@ -126,8 +126,6 @@ EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tie
          "gene": ("gene_ortholog_human",), "region": ("gene_distance", "coding_consequence", "coding_hgvsp", "coding_transcript", "coding_note"), "beta": ("se",), "pip": ("pip_functional",),
          "assay": ("assay_reasons", "blacklist", "lore", "strand_ambiguous", "flank_variants"),
          "molqtl": ("molqtl_tissues", "molqtl_kinds", "molqtl_features"), "cm": ("cm_male",)}  # also fetched
-MORE = ("region", "known", "molqtl", "hide_blacklist", "hide_ambiguous", "hide_flank", "hide_near_chip",
-        "hide_reason")  # filters under 'More filters'
 
 
 # ---- opening a result with filters ----
@@ -211,18 +209,30 @@ def _number(text):
         return None
 
 
+def picks(request, name):
+    """The values of a multi-choice filter: ticked boxes send one each, links carry them comma-joined."""
+    return list(dict.fromkeys(x for v in request.GET.getlist(name) for x in v.split(",") if x))
+
+
+def tier_text(tiers):
+    """'1–3' for a run of tiers, else '1, 3'."""
+    t = [int(x) for x in tiers]
+    return f"{t[0]}–{t[-1]}" if len(t) > 2 and t == list(range(t[0], t[-1] + 1)) else ", ".join(map(str, t))
+
+
 def filters(request, types, weights):
     """[(URL parameters, chip label, SQL)] for the whitelisted filters in the request whose columns exist. Other
     parameters are ignored; values are checked or quoted before they reach SQL."""
     get, out = request.GET.get, []
-    tier = get("tier", "") or {"1": "1", "2": "1-2", "3": "1-3"}.get(get("max_tier", ""), "")  # max_tier: older links
-    if tier in TIER_FILTERS and "tier" in types:
-        out.append(({"tier": tier}, f"Tier {tier.replace('-', '–')}", TIER_FILTERS[tier]))
-    region = get("region", "")
-    if region in REGIONS and "region_class" in types:
-        out.append(({"region": region}, f"Region: {REGION_LABELS[region]}", REGIONS[region]))
-    elif region in CODING_FILTERS and "coding_consequence" in types:
-        out.append(({"region": region}, f"Region: {CODING_FILTERS[region][0]}", CODING_FILTERS[region][1]))
+    tiers = sorted({t for x in picks(request, "tier") or [{"1": "1", "2": "1-2", "3": "1-3"}.get(get("max_tier", ""), "")]
+                    for t in TIER_SETS.get(x, [x]) if t in TIER_SETS["1-4"]})  # max_tier, 1-2: older links
+    if tiers and len(tiers) < 4 and "tier" in types:
+        out.append(({"tier": ",".join(tiers)}, f"Tier {tier_text(tiers)}", f"tier IN ({', '.join(tiers)})"))
+    regions = [x for x in picks(request, "region") if (x in REGIONS and "region_class" in types)
+               or (x in CODING_FILTERS and "coding_consequence" in types)]
+    if regions:  # any of them
+        out.append(({"region": ",".join(regions)}, "Region: " + ", ".join(REGION_LABELS.get(x) or CODING_FILTERS[x][0] for x in regions),
+                    " OR ".join(f"({REGIONS[x] if x in REGIONS else CODING_FILTERS[x][1]})" for x in regions)))
     chrom, start, end = get("chrom", ""), get("start", ""), get("end", "")
     if re.fullmatch(r"[\w.]{1,40}", chrom):
         if start.isdecimal() and end.isdecimal() and int(start) < int(end):  # start < pos <= end, as for layers
@@ -239,11 +249,12 @@ def filters(request, types, weights):
         value = _number(get(param, ""))
         if maf and value is not None and 0 <= value <= 0.5:
             out.append(({param: get(param)}, f"{label} {value:g}", f"{maf} {op} {value!r}"))
-    assay = get("assay", "")
-    if "assay_status" in types and assay in ASSAY_FILTERS and (assay != "ok_nolore" or "lore" in types):
-        out.append(({"assay": assay}, f"Assay: {ASSAY_FILTERS[assay][0]}", ASSAY_FILTERS[assay][1]))
-    elif "assay_status" in types and assay in ASSAY:  # one status (older links, Assay readiness bars)
-        out.append(({"assay": assay}, f"Assay: {assay.replace('_', ' ')}", f"coalesce(assay_status, 'not_checked') = {lit(assay)}"))
+    statuses = {s for x in picks(request, "assay") for s in (("pass", "warn") if x in ("ok", "ok_nolore") else (x,))}  # ok: older links
+    statuses = [s for s in ASSAY if s in statuses]
+    if "assay_status" in types and statuses and len(statuses) < len(ASSAY):  # any of them
+        out.append(({"assay": ",".join(statuses)}, "Assay: " + ", ".join(s.replace("_", " ") for s in statuses),
+                    f"coalesce(assay_status, 'not_checked') IN ({', '.join(lit(s) for s in statuses)})"))
+    nolore = "ok_nolore" in picks(request, "assay")
     if get("known") == "1" and "known_locus" in types:
         out.append(({"known": "1"}, "Known loci only", "known_locus IS NOT NULL"))
     if get("molqtl") == "1" and "molqtl" in types:
@@ -258,12 +269,12 @@ def filters(request, types, weights):
         mine = snpscore.score.preset_conditions(weights, list(types), trait)[0]
         out.append(({"active_only": "1"}, f"Active in {jobs.trait_label(trait)}",
                     " OR ".join(f"{ident('chromatin_' + c)} IN ({states})" for c in mine) or "false"))
-    terms = [t for t in dict.fromkeys(x for v in request.GET.getlist("term") for x in v.split(",")) if t in (weights or {}).get("weights", {})]
+    terms = [t for t in picks(request, "term") if t in (weights or {}).get("weights", {})]
     if terms and "tier_terms" in types:  # several: any of them (links carry them comma-joined)
         out.append(({"term": ",".join(terms)}, "Evidence: " + ", ".join(TERMS.get(t, t) for t in terms),
                     f"list_has_any(list_transform(tier_terms, x -> x.term), [{', '.join(lit(t) for t in terms)}])"))
     for name, (label, column, condition) in HIDE.items():
-        if get(name) and column in types:
+        if (get(name) or name == "hide_lore" and nolore) and column in types:
             out.append(({name: "1"}, f"Hide {label}", condition))
     reason = get("hide_reason", "")[:80]
     if reason and "assay_reasons" in types:  # 'hide in table' of the Panel tab's Assay readiness reasons
@@ -397,6 +408,17 @@ def _assay_tip(g):
 
 # ---- the Table tab ----
 
+def tier_facets(con, view, conds, types, summary, trait):
+    """[(tier, SNPs)] under every filter but the tier one, so each tier's count says what ticking it would show (the
+    whole list's from summary.json when nothing else filters)."""
+    if "tier" not in types:
+        return []
+    others = [c for c in conds if "tier" not in c[0]]
+    if not others and (summary.get("tiers") or {}).get(trait):
+        return sorted((int(x), k) for x, k in summary["tiers"][trait].items())
+    return con.execute(f"SELECT tier, count(*) FROM {view} {_where(others)} GROUP BY tier ORDER BY tier").fetchall()
+
+
 def table(request, key, job=None):
     """Context for the Table tab: one page of rows sorted and paged on the server, the filters (one row, the rest under
     'More filters'), chips, the column chooser, an empty-state hint and the evidence drawer (?snp=<row>). Fast on 1.6M
@@ -474,47 +496,64 @@ def table(request, key, job=None):
         if counts[best]:
             suggest = (conds[best][1], counts[best], chips[best][1])
 
-    selects, more = [], []  # (name, label, [(value, text)], current value, tooltip)
+    # The filter bar: dropdowns (a summary of the choice, a panel applied on change) in this order. 'list' panels tick
+    # any of several values ('Any' clears them), 'radio' panels pick one; Active in, Location and More have their own.
+    tier_counts = tier_facets(con, view, conds, types, summary, chosen["trait"])
+    ticked = {k: [x for x in chosen.get(k, "").split(",") if x] for k in ("tier", "region", "assay", "term")}
+    dds = []
 
-    def select(into, name, label, values, current=None, any_label="any", tip=""):
-        current = chosen.get(name, "") if current is None else current
-        values = [("", any_label)] * bool(any_label) + list(values)
-        if current and current not in [v for v, _ in values]:
-            values.append((current, current))
-        into.append((name, label, values, current, tip))
+    def dd(kind, key, label, summary, active, tip="", **more):
+        ticks = more.get("tissues") or (more.get("options") if kind == "list" else ())
+        dds.append({"kind": kind, "id": f"dd-{key}", "label": label, "summary": summary, "on": active, "tip": tip,
+                    "anyon": not any(x[2 if len(x) > 2 else 1] for x in ticks), **more})  # 'Any' ticked: nothing else is
 
-    chroms = sorted((summary.get("chrom_tiers", {}).get(chosen["trait"]) or {}), key=_chrom_key) or \
-        sorted((c for c, in con.execute("SELECT DISTINCT chrom FROM r").fetchall()), key=_chrom_key)
-    if "tier" in types:
-        select(selects, "tier", "Tier", [(t, t.replace("-", "–")) for t in TIER_FILTERS])
-    select(selects, "chrom", "Chromosome", [(c, c) for c in chroms])
-    if maf:
-        select(selects, "min_maf", "Min MAF", [(m, m) for m in MAFS], tip=MAF_TIP if maf_source == "public" else "Your maf/af column")
-    if "assay_status" in types:
-        select(selects, "assay", "Assay", [(k, label) for k, (label, _) in ASSAY_FILTERS.items() if k != "ok_nolore" or "lore" in types],
-               any_label="All", tip="LORe: region where the duplicated chromosomes still pair; probes may cross-hybridise")
-    if "region_class" in types:
-        regions = [(r, REGION_LABELS[r]) for r in REGIONS]  # coding, then its protein-changing and synonymous parts
-        coding = [(k, label) for k, (label, _) in CODING_FILTERS.items()] if "coding_consequence" in types else []
-        select(more, "region", "Region", regions[:1] + coding + regions[1:])
-    active_in = None  # the conditions tiers score against: tissues, maturity and sex, or a trait preset
-    if weights and conditions:
+    if weights and conditions:  # the conditions tiers score against: tissues, maturity and sex, or a trait preset
         tissues, maturity, sex = jobs.selection_of(chosen["trait"], weights["presets"])
         named = [p for p in weights["presets"] if p.capitalize() not in jobs.TISSUES]  # single tissues are ticks already
-        active_in = {"label": jobs.trait_label(chosen["trait"]), "tissues": [(t, t in tissues) for t in jobs.TISSUES],
-                     "maturity": maturity or "", "sex": sex or "", "only": "active_only" in chosen,
-                     "maturities": jobs.MATURITIES, "sexes": jobs.SEXES,
-                     "picks": [(jobs.trait_label(p), " + ".join(t.lower() for t in jobs.selection_of(p, weights["presets"])[0]),
-                                link(trait=p, page=None, active_only=None), p == chosen["trait"]) for p in named]}
-    picked_terms = chosen.get("term", "").split(",")
-    evidence = [(t, TERMS.get(t, t), t in picked_terms) for t in weights.get("weights", {})] \
-        if weights and "tier_terms" in types else None
-    evidence_label = ", ".join(TERM_SHORT.get(t, t) for t, _, on in evidence or () if on) or "any"
-    select(more, "size", "Rows", [(str(s), str(s)) for s in PAGE_SIZES], str(size), None)
-    checks = ([("known", "known loci only", "known" in chosen)] if "known_locus" in types else []) + \
+        every = len(tissues) == len(jobs.TISSUES)
+        dd("active", "active", "Active in", jobs.trait_label(chosen["trait"]), chosen["trait"] != "all" or "active_only" in chosen,
+           "The conditions tiers count chromatin activity in", tissues=[(x, x in tissues and not every) for x in jobs.TISSUES],
+           maturity=[("", "any", not maturity)] + [(x, x.lower(), x == maturity) for x in jobs.MATURITIES],
+           sex=[("", "any", not sex)] + [(x, x.lower(), x == sex) for x in jobs.SEXES], only="active_only" in chosen,
+           picks=[(jobs.trait_label(p), " + ".join(x.lower() for x in jobs.selection_of(p, weights["presets"])[0]),
+                   link(trait=p, page=None, active_only=None), p == chosen["trait"]) for p in named])
+    if "tier" in types:
+        counts = dict(tier_counts)
+        dd("list", "tier", "Tier", f"{tier_text(ticked['tier'])}" if ticked["tier"] else "any", bool(ticked["tier"]),
+           "1 = strongest functional evidence for these conditions; 4 = no evidence found", name="tier", any="Any tier",
+           options=[(str(x), f"Tier {x}", str(x) in ticked["tier"], f"{counts.get(x, 0):,}") for x in (1, 2, 3, 4)])
+    if weights and "tier_terms" in types:
+        dd("list", "term", "Evidence", ", ".join(TERM_SHORT.get(x, x) for x in ticked["term"]) or "any", bool(ticked["term"]),
+           "SNPs with any of the ticked evidence terms", name="term", any="Any evidence",
+           options=[(x, TERMS.get(x, x), x in ticked["term"], "") for x in weights.get("weights", {})])
+    if "region_class" in types:
+        regions = [(x, REGION_LABELS[x]) for x in REGIONS]  # coding, then its protein-changing and synonymous parts
+        coding = [(k, f"– {label}") for k, (label, _) in CODING_FILTERS.items()] if "coding_consequence" in types else []
+        dd("list", "region", "Region", ", ".join(REGION_LABELS.get(x) or CODING_FILTERS[x][0] for x in ticked["region"]) or "any",
+           bool(ticked["region"]), "Genic region (Ensembl 116); any of the ticked ones", name="region", any="Any region",
+           options=[(v, text, v in ticked["region"], "") for v, text in regions[:1] + coding + regions[1:]])
+    dds.append({"kind": "gene"})
+    chroms = sorted((summary.get("chrom_tiers", {}).get(chosen["trait"]) or {}), key=_chrom_key) or \
+        sorted((c for c, in con.execute("SELECT DISTINCT chrom FROM r").fetchall()), key=_chrom_key)
+    where_text = next((label for params, label, _ in conds if "chrom" in params), "any")
+    dd("location", "where", "Location", where_text.replace("Chromosome ", "chr"), "chrom" in chosen,
+       "A chromosome, or a range on it (start exclusive, end inclusive)", chroms=[(c, c == chosen.get("chrom")) for c in chroms])
+    if maf:
+        dd("radio", "maf", "MAF", f"≥ {chosen['min_maf']}" if "min_maf" in chosen else "any", "min_maf" in chosen,
+           MAF_TIP if maf_source == "public" else "Your maf/af column", name="min_maf",
+           options=[("", "any", "min_maf" not in chosen)] + [(m, f"≥ {m}", chosen.get("min_maf") == m) for m in MAFS])
+    if "assay_status" in types:
+        extras = [("hide_lore", "not in LORe regions", "hide_lore" in chosen)] if "lore" in types else []
+        dd("list", "assay", "Assay", ", ".join(x.replace("_", " ") for x in ticked["assay"]) + (" · no LORe" if "hide_lore" in chosen else "")
+           or "any", bool(ticked["assay"]) or "hide_lore" in chosen,
+           "Assay design check of the probe flanks. LORe: duplicated chromosomes still pair, probes may cross-hybridise",
+           name="assay", any="Any status", options=[(x, x.replace("_", " "), x in ticked["assay"], "") for x in ASSAY], extras=extras)
+    checks = ([("known", "near a known locus", "known" in chosen)] if "known_locus" in types else []) + \
         ([("molqtl", "molQTL lead SNPs", "molqtl" in chosen)] if "molqtl" in types else []) + \
         [(name, f"hide {label}", name in chosen) for name, (label, column, _) in HIDE.items() if column in types and name != "hide_lore"]
-    n_more = sum(k in chosen for k in MORE) + (size != PAGE_SIZE) + custom_cols
+    n_on = sum(c for _, _, c in checks)
+    dd("more", "more", "More", f"{n_on} on" if n_on else "", bool(n_on), extras=checks,
+       sizes=[(str(s), str(s), s == size) for s in PAGE_SIZES])
 
     headers = []
     for k in shown:
@@ -524,18 +563,18 @@ def table(request, key, job=None):
         on = k == sort
         href = link(sort=k, desc="1" if on and not desc else "", page=None) if sorts else None
         headers.append((k, label, tip, href, ("descending" if desc else "ascending") if on else ""))
-    tier_counts = sorted((summary.get("tiers") or {}).get(chosen["trait"], {}).items()) or (
-        con.execute(f"SELECT tier, count(*) FROM {view} GROUP BY tier ORDER BY tier").fetchall() if "tier" in types else [])
+    picked = ticked["tier"]
+    tier_links = [(x, k, not picked or str(x) in picked, link(tier=",".join(sorted(set(picked) ^ {str(x)})) or None, page=None))
+                  for x, k in tier_counts if x is not None]  # a click adds or removes that tier
     filtered = urlencode(chosen)
     return {
         "total": total, "matching": matching, "first": (page - 1) * size + 1 if matching else 0,
-        "last": min(page * size, matching), "tiers": tier_counts, "chosen": chosen, "query": urlencode({"trait": chosen["trait"], **settings}),
-        "selects": selects, "more": more, "checks": checks, "n_more": n_more, "active_in": active_in, "evidence": evidence,
-        "evidence_label": evidence_label,
+        "last": min(page * size, matching), "chosen": chosen, "query": urlencode({"trait": chosen["trait"], **settings}),
+        "dds": dds, "tier_links": tier_links, "active_set": any(x["kind"] == "active" for x in dds),
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
         "start": chosen.get("start", ""), "end": chosen.get("end", ""),
         "hidden": [(k, base[k]) for k in ("sort", "desc") if base[k]]  # and filters with no control on the form
-        + [(k, chosen[k]) for k in ("hide_lore", "hide_reason", "max_maf", "active") if k in chosen] + list(settings.items()),
+        + [(k, chosen[k]) for k in ("hide_reason", "max_maf", "active") if k in chosen] + list(settings.items()),
         "columns": [(k, COLUMNS[k][0], k in shown) for k in available if k != "id"], "chips": chips,
         "clear": link(drop=filter_keys, page=None) if conds else None, "suggest": suggest,
         "headers": headers, "shown": shown, "rows": rows, "page": page, "pages": pages,

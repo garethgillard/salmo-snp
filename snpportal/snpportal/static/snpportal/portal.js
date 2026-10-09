@@ -170,7 +170,7 @@
 /* end tour */
 
 /* table: the filter dropdowns (details.sp-dd) stay open while their ticks apply (each change swaps #results); a click
-   outside one closes it. Escape closes the card drawer. */
+   outside one closes it; a list's 'Any' box and its ticks exclude each other. Escape closes the card drawer. */
 (function () {
   "use strict";
   var open = [];
@@ -184,6 +184,17 @@
   document.addEventListener("click", function (e) {
     document.querySelectorAll("details.sp-dd[open]").forEach(function (d) { if (!d.contains(e.target)) d.open = false; });
   });
+  document.addEventListener("change", function (e) {  // 'Any' clears a list's ticks, a tick clears 'Any' (capture: before htmx sends)
+    var box = e.target, list = box.type === "checkbox" && box.closest && box.closest(".sp-dd-list");
+    if (!list) return;
+    var ticks = list.querySelectorAll("input[type=checkbox][name]"), any = list.querySelector("[data-any]");
+    if (box === any) {
+      any.checked = true;
+      ticks.forEach(function (b) { b.checked = false; });
+    } else if (any) {
+      any.checked = !list.querySelector("input[type=checkbox][name]:checked");
+    }
+  }, true);
   document.addEventListener("keydown", function (e) {  // Escape closes the card drawer
     var close = e.key === "Escape" && document.querySelector("#drawer .btn-close");
     if (close) close.click();

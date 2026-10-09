@@ -147,8 +147,9 @@ class PortalTest(SimpleTestCase):
         self.assertContains(filtered, "shown")
         form = filtered.content.decode().split('id="tf"')[1].split("</form>")[0]  # Active in sits in the filter form: changing it keeps them
         self.assertIn('name="active_set" value="1"', form)
-        self.assertIn('<option value="1-2" selected>', form)
-        self.assertIn('name="hide_lore" value="1"', form)
+        self.assertIn('name="tier" value="1" checked', form)  # max_tier=2 (older links): tiers 1 and 2 ticked
+        self.assertIn('name="tier" value="2" checked', form)
+        self.assertIn('name="hide_lore" value="1" checked', form)
         self.assertContains(filtered, "Tiers for <strong>maturation: Brain, Gonad</strong>")  # the trait's conditions
 
         card = self.client.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain", HTTP_HX_REQUEST="true")

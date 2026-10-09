@@ -794,5 +794,7 @@ def provenance(job, trait=None, filters=None):
     ]
     if job.get("synthetic_input") or job.get("synthetic_layers"):
         lines.append("SYNTHETIC: built from synthetic test data, not real results")
-    lines.append(f"equivalent command: snpscore annotate <your list> --release <release {job.get('release')}> --trait {trait}")
+    custom = selection(trait) is not None  # an Active-in selection: no snpscore preset has its conditions
+    lines.append(f"equivalent command: snpscore annotate <your list> --release <release {job.get('release')}> --trait "
+                 + (f"all (the portal scored tiers for {trait_label(trait)}, which has no preset)" if custom else trait))
     return ["# " + line for line in lines]
