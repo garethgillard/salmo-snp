@@ -282,6 +282,18 @@ a.sp-card:hover { border-color: var(--sp-accent); }
   border-bottom: 1px solid var(--sp-grey-200); padding-top: .2rem; padding-bottom: .1rem; }
 .sp-results .sp-groups th + th { border-left: 1px solid var(--sp-grey-200); }
 .sp-results tbody tr { cursor: pointer; }
+.sp-results th, .sp-results td { vertical-align: middle; }
+.sp-results th.sp-num, .sp-results th.sp-ctr { text-align: right; }
+.sp-results th.sp-ctr, .sp-results td.sp-ctr { text-align: center; }
+.sp-results .sp-clip { max-width: 15rem; }  /* long gene names and ids: cut, the tooltip has them */
+.sp-results .sp-clip.sp-wide { max-width: 22rem; }
+/* the selector column: + in the selection (no colour), − taken out (the row dimmed) */
+.sp-results .sp-pickcol { width: 2.6rem; text-align: center; padding-left: .25rem; padding-right: .25rem; }
+.sp-pick { display: inline-flex; align-items: center; justify-content: center; width: 1.35rem; height: 1.35rem; border: 1px solid var(--sp-grey-300);
+  border-radius: .25rem; color: var(--sp-grey-700); font-weight: 600; line-height: 1; text-decoration: none; background: var(--sp-white); }
+.sp .sp-pick:hover { border-color: var(--sp-grey-700); color: var(--sp-grey-900); }
+.sp-results tr.sp-out .sp-pick { background: var(--sp-grey-100); color: var(--sp-grey-900); border-color: var(--sp-grey-500); }
+.sp-results tr.sp-out > td:not(.sp-pickcol) { opacity: .45; }
 .sp-drawer { z-index: 1040; border-radius: 0; }  /* the Table's card drawer: the card inside without its own frame */
 .sp-drawer #card-body { border: 0; padding: 0; }
 .sp-results tbody tr.sp-selected > * { background: var(--sp-grey-100); }

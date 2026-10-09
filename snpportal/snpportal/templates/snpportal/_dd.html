@@ -35,6 +35,13 @@
         {% for name, label, ticked in dd.extras %}<label><input class="form-check-input" type="checkbox" name="{{ name }}" value="1"{% if ticked %} checked{% endif %}> {{ label }}</label>{% endfor %}
       </fieldset>
     {% endif %}
+    {% if dd.kind == 'pick' %}
+      <fieldset class="sp-dd-list"><legend>Show</legend>
+        {% for v, text, sel in dd.views %}<label><input class="form-check-input" type="radio" name="picked" value="{{ v }}"{% if sel %} checked{% endif %}> {{ text }}</label>{% endfor %}
+      </fieldset>
+      {% if dd.reset %}<p class="sp-dd-foot mb-0"><a href="{{ dd.reset }}" hx-boost="true">Reset: select all</a></p>{% endif %}
+      <p class="sp-dd-note mb-0">The Panel, Export and downloads take only the + rows.</p>
+    {% endif %}
     {% if dd.kind == 'gene' %}
       <label class="sp-dd-row">Gene <input class="form-control form-control-sm sp-gene" type="search" name="gene" value="{{ dd.value }}" maxlength="40" placeholder="name, id or ortholog"></label>
       <p class="sp-dd-note mb-0">Press Enter to apply.</p>

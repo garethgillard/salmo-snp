@@ -92,7 +92,7 @@
     if (!rows.length) return;
     var i = rows.indexOf(document.activeElement.closest && document.activeElement.closest("tr[data-card]"));
     var next = rows[Math.max(0, Math.min(rows.length - 1, i + (e.key === "j" ? 1 : -1)))];
-    var link = next.querySelector("a");
+    var link = next.querySelector("a.sp-snp") || next.querySelector("a");
     if (link) link.focus();
   });
 })();
@@ -103,7 +103,7 @@
   "use strict";
   document.addEventListener("click", function (e) {
     var row = e.target.closest && e.target.closest("tr[data-card]");
-    var link = row && row.querySelector("a[hx-get]");
+    var link = row && (row.querySelector("a.sp-snp") || row.querySelector("a[hx-get]"));  // the SNP's link, not the selector
     if (!link) return;
     if (!e.target.closest("a, button, input, select, label, summary")) link.click();
     document.querySelectorAll("tr.sp-selected").forEach(function (r) { r.classList.remove("sp-selected"); });

@@ -87,6 +87,31 @@ class ResultsTest(SimpleTestCase):
             self.assertIn("Evidence: CDS (protein change or unknown), UTR", page)
             self.assertIn(f"of {terms:,} shown" if terms > 50 else f"&ndash;{terms} of {terms} shown", page)
 
+    def test_selector_column(self):
+        page = self.client.get(self.url + "?tab=table").content.decode()
+        rows = re.findall(r'href="\?[^"]*exclude=(\d+)"', page)  # every row starts +
+        self.assertEqual(page.count('class="sp-pick"'), page.count("<tr data-card"))
+        self.assertNotIn('id="dd-pick"', page)  # nothing taken out: no options yet
+        out = self.client.get(self.url + f"?tab=table&exclude={rows[0]}&exclude={rows[1]}").content.decode()  # the last wins
+        self.client.get(self.url + f"?tab=table&exclude={rows[0]}")
+        page = self.client.get(self.url + "?tab=table").content.decode()
+        n = self.summary["n_rows"]
+        self.assertIn(f"2 unselected (&minus;)", page)
+        self.assertIn(f"Add to panel ({n - 2:,})", page)  # the selection leaves the − rows out
+        self.assertEqual(page.count('class=" sp-out"'), 2)  # still listed, dimmed
+        self.assertIn('id="dd-pick"', page)
+        only = self.client.get(self.url + "?tab=table&picked=out").content.decode()
+        self.assertEqual(only.count("<tr data-card"), 2)
+        self.assertEqual(self.client.get(self.url + "?tab=table&picked=in").content.decode().count("<tr data-card"), min(n - 2, 50))
+        got = self.client.get(reverse("snpportal:download", args=[self.key]), {"plain": "1"})
+        tsv = b"".join(got.streaming_content) if got.streaming else got.content
+        self.assertEqual(len(tsv.decode().splitlines()) - 1, n - 2)  # downloads take the + rows
+        self.client.get(self.url + f"?tab=table&include={rows[0]}")
+        self.assertIn("1 unselected", self.client.get(self.url + "?tab=table").content.decode())
+        reset = self.client.get(self.url + "?tab=table&include_all=1").content.decode()
+        self.assertNotIn("unselected", reset)
+        self.assertFalse(results.unselected(self.d))
+
     def test_summary_holds_every_panel(self):
         s, n = self.summary, self.summary["n_rows"]
         self.assertEqual(s["version"], jobs.SUMMARY_VERSION)
@@ -177,15 +202,14 @@ class ResultsTest(SimpleTestCase):
 
     def test_table_page_sort_columns_and_barcode(self):
         page = self.client.get(self.url + "?tab=table&size=100&trait=brain").content.decode()
-        rows = page.count("<tr data-card>")
+        rows = page.count("<tr data-card")
         self.assertEqual(rows, 100)
         self.assertEqual(page.count('class="sp-bc"'), rows)  # a barcode on every row
         barcode = re.search(r'<span class="sp-bc".*?</span></span>', page, re.S).group(0)
         self.assertEqual(barcode.count("<i "), 21)
         self.assertEqual(len(re.findall(r'class="st-\w+ in"|class=" in"', barcode)), 4)  # the brain conditions are underlined
         headers = re.findall(r'<th scope="col"[^>]*><span class="sp-th">(?:<a [^>]*>|<span [^>]*>)([^<&]+)', page)
-        self.assertEqual([h.strip() for h in headers if h.strip() != "Position"],
-                         [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS])  # 9 default columns
+        self.assertEqual([h.strip() for h in headers], ["+/"] + [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS])  # the selector, then 9
         self.assertIn('aria-sort="ascending"', page)  # tier, the default
         head = page[page.index("<thead"):page.index("</thead>")]  # each filter on its column; the others above the table
         self.assertTrue(all(f'id="dd-{d}"' in head for d in ("tier", "region", "gene", "active", "assay")))

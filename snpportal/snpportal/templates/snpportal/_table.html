@@ -15,12 +15,12 @@
   </div>
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2 sp-small">
-  <span role="status">{% if matching == total %}Showing {{ first|thousands }}&ndash;{{ last|thousands }} of {{ total|thousands }} SNPs{% else %}{% if matching %}{{ first|thousands }}&ndash;{{ last|thousands }} of {{ matching|thousands }} shown{% else %}None shown{% endif %} (filtered from {{ total|thousands }} SNPs){% endif %}</span>
+  <span role="status">{% if n_out %}{{ n_out|thousands }} unselected (&minus;) &middot; {% endif %}{% if matching == total %}Showing {{ first|thousands }}&ndash;{{ last|thousands }} of {{ total|thousands }} SNPs{% else %}{% if matching %}{{ first|thousands }}&ndash;{{ last|thousands }} of {{ matching|thousands }} shown{% else %}None shown{% endif %} (filtered from {{ total|thousands }} SNPs){% endif %}</span>
   {% for tier, n in shown_tiers %}<span class="sp-badge sp-tier-{{ tier }}" title="SNPs of tier {{ tier }} in this table">Tier {{ tier }}: {{ n|thousands }}</span>{% endfor %}
   <span class="spinner-border sp-spin htmx-indicator" id="tf-busy" role="status" aria-label="Loading"></span>
   <span class="ms-auto d-flex flex-wrap align-items-center gap-2">
-    {% if download and matching %}<a href="{{ download }}">Download these {{ matching|thousands }} (TSV)</a>{% if vendor %} · <a href="{{ vendor }}" hx-boost="true">Vendor files for these {{ matching|thousands }} &rarr;</a>{% endif %}{% endif %}
-    {% if matching %}<button class="btn btn-sm btn-primary" type="submit" form="add-panel" title="Copy this whole selection into your Design panel">Add to panel ({{ matching|thousands }})</button>{% endif %}
+    {% if download and matching %}<a href="{{ download }}">Download these {{ n_selected|thousands }} (TSV)</a>{% if vendor %} · <a href="{{ vendor }}" hx-boost="true">Vendor files for these {{ n_selected|thousands }} &rarr;</a>{% endif %}{% endif %}
+    {% if n_selected %}<button class="btn btn-sm btn-primary" type="submit" form="add-panel" title="Copy this selection (the + rows) into your Design panel">Add to panel ({{ n_selected|thousands }})</button>{% endif %}
     <details class="sp-dd" id="dd-cols"><summary class="btn btn-sm btn-outline-secondary">Columns</summary>
       <div class="sp-dd-panel sp-dd-right"><fieldset class="sp-dd-list"><legend class="visually-hidden">Columns to show</legend><input type="hidden" name="cols" value="1">
         {% for key, label, checked in columns %}<label><input class="form-check-input" type="checkbox" name="col" value="{{ key }}"{% if checked %} checked{% endif %}> {{ label }}</label>{% endfor %}
@@ -40,24 +40,24 @@
 <div class="sp-scroll">
   <table class="table table-sm table-hover sp-table sp-results mb-0">
     <thead hx-boost="true">
-      <tr>{% for key, label, tip, url, order, dd in headers %}<th scope="col"{% if order %} aria-sort="{{ order }}"{% endif %}><span class="sp-th">{% if url %}<a href="{{ url }}" title="{{ tip }}">{{ label }}{% if order == 'ascending' %} &#9650;{% elif order %} &#9660;{% endif %}</a>{% else %}<span title="{{ tip }}">{{ label }}</span>{% endif %}
+      <tr><th scope="col" class="sp-pickcol"><span class="sp-th"><span title="+ in the selection, − taken out by hand: click a row's mark to switch it">+/&minus;</span>
+        {% if pick.views %}{% include 'snpportal/_dd.html' with dd=pick col=1 %}{% endif %}</span>{% if pick.on %}<span class="sp-colf-val">{{ pick.summary }}</span>{% endif %}</th>{% for key, label, tip, url, order, dd, align in headers %}<th scope="col"{% if align %} class="{{ align }}"{% endif %}{% if order %} aria-sort="{{ order }}"{% endif %}><span class="sp-th">{% if url %}<a href="{{ url }}" title="{{ tip }}">{{ label }}{% if order == 'ascending' %} &#9650;{% elif order %} &#9660;{% endif %}</a>{% else %}<span title="{{ tip }}">{{ label }}</span>{% endif %}
         {% if dd %}{% include 'snpportal/_dd.html' with col=1 right=forloop.last %}{% endif %}</span>{% if dd.on %}<span class="sp-colf-val" title="{{ dd.summary }}">{{ dd.summary }}</span>{% endif %}</th>{% endfor %}</tr>
     </thead>
     <tbody>
-      {% for r in rows %}<tr data-card{% if r.n == snp %} class="sp-selected"{% endif %}>
+      {% for r in rows %}<tr data-card class="{% if r.n == snp %}sp-selected{% endif %}{% if r.out %} sp-out{% endif %}">
+        <td class="sp-pickcol"><a class="sp-pick" href="{{ r.pick }}" hx-get="{{ r.pick }}" hx-push-url="false" role="button" aria-pressed="{% if r.out %}false{% else %}true{% endif %}"
+          title="{% if r.out %}Taken out of the selection: click to put it back{% else %}In the selection: click to take it out{% endif %}">{% if r.out %}&minus;{% else %}+{% endif %}</a></td>
         {% for col in shown %}{% if col == 'id' %}
-        <td><a href="{{ r.href }}" hx-get="{{ r.href }}">{% if r.id %}{{ r.id }}{% else %}{{ r.chrom }}:{{ r.pos }}{% endif %}</a>{% if r.alleles %} <span class="sp-muted">&middot; {{ r.alleles }}</span>{% endif %}</td>
-        {% elif col == 'position' %}<td class="sp-mono">{{ r.chrom }}:{{ r.pos }}</td>
-        {% elif col == 'alleles' %}<td class="sp-mono">{{ r.alleles }}</td>
+        <td class="sp-clip sp-wide"><a class="sp-snp" href="{{ r.href }}" hx-get="{{ r.href }}">{% if r.id %}{{ r.id }}{% else %}{{ r.chrom }}:{{ r.pos }}{% endif %}</a>{% if r.note %} <span class="sp-muted">&middot; {{ r.note }}</span>{% endif %}</td>
         {% elif col == 'p' %}<td class="sp-num">{{ r.p }}</td>
         {% elif col == 'beta' %}<td class="sp-num">{{ r.beta }}</td>
         {% elif col == 'pip' %}<td class="sp-num">{{ r.pip }}</td>
-        {% elif col == 'tier' %}<td title="{{ r.evidence|default:'no evidence found' }}">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
+        {% elif col == 'tier' %}<td class="sp-ctr" title="{{ r.evidence|default:'no evidence found' }}">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
         {% elif col == 'score' %}<td class="sp-num">{{ r.score|default_if_none:"" }}</td>
-        {% elif col == 'known' %}<td>{% if r.known %}<span class="sp-known" title="{% if r.known_dist == 0 %}At{% else %}{{ r.known_dist|thousands }} bp from{% endif %} the published SNP {{ r.known }}{% if r.caveat %}; caveat: {{ r.caveat }}{% endif %}">&#9733; {{ r.known }}{% if r.caveat %} ({{ r.caveat }}){% endif %}</span>{% endif %}</td>
-        {% elif col == 'gene' %}<td title="{{ r.gene_tip }}">{{ r.gene }}</td>
+        {% elif col == 'known' %}<td class="sp-clip">{% if r.known %}<span class="sp-known" title="{% if r.known_dist == 0 %}This SNP is{% else %}{{ r.known_dist|thousands }} bp from{% endif %} the published SNP {{ r.known }}{% if r.caveat %}; caveat: {{ r.caveat }}{% endif %}">&#9733; {% if r.known_dist == 0 %}this SNP{% else %}{{ r.known }} <span class="sp-muted">&middot; {{ r.known_where }}</span>{% endif %}{% if r.caveat %} <span class="sp-muted">*</span>{% endif %}</span>{% endif %}</td>
+        {% elif col == 'gene' %}<td class="sp-clip" title="{{ r.gene_tip }}">{{ r.gene }}{% if r.distance %} <span class="sp-muted">&middot; {{ r.distance }}</span>{% endif %}</td>
         {% elif col == 'region' %}<td{% if r.region_tip %} title="{{ r.region_tip }}"{% endif %}>{{ r.region }}</td>
-        {% elif col == 'distance' %}<td class="sp-num">{{ r.distance }}</td>
         {% elif col == 'chromatin' %}<td>{% if r.barcode %}<span class="sp-bc" role="img" aria-label="{{ r.barcode_label }}">{% for cells in r.barcode %}<span>{% for cls, title in cells %}<i class="{{ cls }}" title="{{ title }}"></i>{% endfor %}</span>{% endfor %}</span>{% endif %}</td>
         {% elif col == 'molqtl' %}<td title="{{ r.molqtl.1 }}">{{ r.molqtl.0 }}</td>
         {% elif col == 'cm' %}<td class="sp-num">{{ r.cm }}</td>

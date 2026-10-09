@@ -109,20 +109,21 @@ COLUMNS = {
              ("tier",), [("tier", True), ("tier_score", False)]),
     "score": ("Score", "Tier score: the summed weights of the SNP's evidence (its card lists them)", ("tier_score",),
               [("tier_score", False)]),
-    "id": ("SNP locus", "SNP id and alleles (ref > alt): click for its card", (), [("id", True)]),
-    "position": ("Position", "Chromosome:position (1-based, Ssal_v3.1)", ("pos",), [("length(chrom)", True), ("chrom", True), ("pos", True)]),
+    "id": ("SNP locus", "SNP id, its position (Ssal_v3.1, 1-based) when the id doesn't say it, and alleles (ref > alt): "
+           "click for its card", (), [("length(chrom)", True), ("chrom", True), ("pos", True)]),
     "p": ("p", "GWAS p value", ("neglog10p",), [("neglog10p", False)]),
     "beta": ("beta (se)", "GWAS effect of the alt allele (standard error)", ("beta",), [("beta", False)]),
     "pip": ("PIP", "Posterior inclusion probability, uniform → functional prior; one causal variant per locus, no LD. "
             "Blank outside loci", ("pip_uniform",), [("pip_functional", False)]),
-    "gene": ("Gene", "Nearest Ensembl 116 gene; ~NAME: unnamed in Ensembl, named by its human ortholog", ("gene_name", "gene_id"),
+    "gene": ("Gene", "Nearest Ensembl 116 gene (and how far, when the SNP is outside it); ~NAME: unnamed in Ensembl, named "
+             "by its human ortholog", ("gene_name", "gene_id"),
              [("coalesce(gene_name, gene_ortholog_human, gene_id)", True)]),
-    "distance": ("To gene", "Distance to the nearest gene", ("gene_distance",), [("gene_distance", True)]),
     "region": ("Consequence", "Where the SNP falls in the nearest gene and, in coding sequence, its effect on the protein "
                "(Ensembl 116 gene models)", ("region_class",), [("region_class", True)]),
     "chromatin": ("Chromatin", "AQUA-FAANG chromatin state in 21 conditions: Brain, Gonad, Liver, Muscle (immature F, M; "
                   "mature F, M), then 5 embryo stages. Underlined: the chosen conditions", ("chromatin",), []),
-    "known": ("Known locus", "Near a published locus of the known-loci catalogue", ("known_locus",), [("known_locus_dist", True)]),
+    "known": ("Known locus", "A published locus of the known-loci catalogue within the window: this SNP, or one nearby (how "
+              "far); * a caveat (hover)", ("known_locus",), [("known_locus_dist", True)]),
     "molqtl": ("molQTL", "Lead SNP of an eQTL (e) or caQTL (ca) in 12 fish; display only, never counted in tiers",
                ("molqtl",), [("molqtl_best_bf", True)]),
     "gerp": ("GERP", "GERP constrained-element score (65 fish)", ("gerp_score",), [("gerp_score", True)]),
@@ -133,14 +134,14 @@ COLUMNS = {
     "assay": ("Assay", "Assay design check of the probe flanks; hover for the reasons", ("assay_status",), [("assay_status", True)]),
     "flags": ("Flags", "Blacklisted region, LORe, A/T or C/G, public variants within 35 bp",
               ("blacklist", "lore", "strand_ambiguous", "flank_variants"), []),
-    "alleles": ("Alleles", "Reference > alternative allele", ("ref", "alt"), []),
     "ref_check": ("Ref. check", "Input ref allele against the Ssal_v3.1 genome", ("ref_check",), [("ref_check", True)]),
 }  # in display order: the score, the SNP, where it is, what it is, then genotyping
+NUMERIC = ("score", "p", "beta", "pip", "gerp", "maf", "cm")  # right-aligned, header and cells
 DEFAULT_COLUMNS = ("tier", "score", "id", "gene", "region", "chromatin", "known", "maf", "assay")
 GWAS_COLUMNS = ("tier", "score", "id", "p", "beta", "pip", "gene", "region", "chromatin")
 EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tier_evidence", "tier_terms", "coding_hgvsp", "known_locus",
                                                                 "known_locus_dist"), "known": ("known_locus_dist",),
-         "gene": ("gene_ortholog_human",), "region": ("gene_distance", "coding_consequence", "coding_hgvsp", "coding_transcript", "coding_note"), "beta": ("se",), "pip": ("pip_functional",),
+         "gene": ("gene_ortholog_human", "gene_distance"), "region": ("gene_distance", "coding_consequence", "coding_hgvsp", "coding_transcript", "coding_note"), "beta": ("se",), "pip": ("pip_functional",),
          "assay": ("assay_reasons", "blacklist", "lore", "strand_ambiguous", "flank_variants"),
          "molqtl": ("molqtl_tissues", "molqtl_kinds", "molqtl_features"), "cm": ("cm_male",)}  # also fetched
 
@@ -201,7 +202,7 @@ def _open(request, key, write=False, chip=False):
     chipped = chip and chip_view(con, d, "v1", weights)  # the Panel tab's chip (P6.6), for the pages that use its columns
     con.execute(f"CREATE VIEW v AS {chipped or 'SELECT * FROM v1'}")
     types = dict(con.execute("SELECT column_name, column_type FROM (DESCRIBE v)").fetchall())
-    conds = filters(request, types, weights)
+    conds = filters(request, types, weights) + [m for m in [manual(d)] if m]  # the − rows: out of the selection
     chosen = {"trait": trait}
     for params, _, _ in conds:
         chosen.update(params)
@@ -459,6 +460,15 @@ def table(request, key, job=None):
     rows: page row numbers are found first using only the filter and sort columns, then only that page's columns are
     read. GWAS jobs show p, beta and the PIPs of association.analyse()."""
     gwas = (job or {}).get("input_kind") == "gwas"
+    d, ask = jobs.folder(key), request.GET.get
+    picks_out = unselected(d)  # the selector column: exclude=<row> marks it −, include=<row> + again, include_all=1 all +
+    changed = picks_out | ({int(ask("exclude"))} if ask("exclude", "").isdecimal() else set())
+    changed -= {int(ask("include"))} if ask("include", "").isdecimal() else set()
+    if ask("include_all"):
+        changed = set()
+    if changed != picks_out:
+        keep_unselected(d, changed)
+        picks_out = changed
     if gwas:  # association.analyse's connection: view v plus the fine-mapping (table fm) of the loci, for the PIPs
         from . import association
         a = association.analyse(request, key)
@@ -467,7 +477,7 @@ def table(request, key, job=None):
                 if a["loci"] else "SELECT NULL::BIGINT AS file_row_number, NULL::DOUBLE AS pip_uniform, NULL::DOUBLE AS pip_functional")
         con.execute(f"CREATE VIEW vt AS SELECT v.*, f.pip_uniform, f.pip_functional FROM v LEFT JOIN ({pips}) f USING (file_row_number)")
         types = dict(con.execute("SELECT column_name, column_type FROM (DESCRIBE vt)").fetchall())
-        conds = filters(request, types, weights)
+        conds = filters(request, types, weights) + [m for m in [manual(d)] if m]
         settings = a["query"]  # the fine-mapping settings travel with every link, as the PIPs depend on them
         chosen = {"trait": a["trait"], **{k: v for params, _, _ in conds for k, v in params.items()}}
     else:
@@ -480,7 +490,7 @@ def table(request, key, job=None):
     available = [k for k, (_, _, needs, _) in COLUMNS.items() if not needs or any(c in types for c in needs)]
     default = [k for k in (GWAS_COLUMNS if gwas else DEFAULT_COLUMNS) if k in available]
     picked = [k for k in available if k == "id" or k in request.GET.getlist("col")] if get("cols") else default  # the SNP always
-    custom_cols = set(picked) - {"position"} != set(default)  # the chooser sends every ticked column: short URLs for the default
+    custom_cols = set(picked) != set(default)  # the chooser sends every ticked column: short URLs for the default
     shown = list(picked if custom_cols else default)
     sort = get("sort", "")
     explicit = sort in available and bool(COLUMNS[sort][3])
@@ -489,6 +499,11 @@ def table(request, key, job=None):
     size = int(get("size")) if get("size", "").isdecimal() and int(get("size")) in PAGE_SIZES else PAGE_SIZE
 
     total = con.execute("SELECT count(*) FROM r").fetchone()[0]
+    every, mark = [c for c in conds if c[1] != UNSELECTED], next((c for c in conds if c[1] == UNSELECTED), None)
+    view_picks = get("picked") if get("picked") in ("in", "out") and mark else "all"
+    shown_conds = every + ([mark] if view_picks == "in" else [({}, "Unselected only", mark[2].replace("NOT IN", "IN"))]
+                           if view_picks == "out" else [])
+    selection_conds, conds = conds, shown_conds  # the selection leaves the − rows out; the table shows what the selector asks
     where = _where(conds)
     order = [f"{sql.format(maf=maf)} {'ASC' if asc != desc else 'DESC'} NULLS LAST" for sql, asc in (COLUMNS[sort][3] if sort else [])]
     # Count and page on the raw result r (no tiers join) unless the filters or the sort use a column only v has right
@@ -496,6 +511,9 @@ def table(request, key, job=None):
     uses_v = any(re.search(rf"\b{re.escape(c)}\b", sql) for c in only_v for sql in [where] + order)
     src = view if gwas or uses_v else "r"
     matching = con.execute(f"SELECT count(*) FROM {src} {where}").fetchone()[0] if conds else total
+    n_out = con.execute(f"SELECT count(*) FROM {view} {_where(every + [({}, '', mark[2].replace('NOT IN', 'IN'))])}").fetchone()[0] \
+        if mark else 0  # − rows among the filtered ones
+    n_every = matching if view_picks == "all" else con.execute(f"SELECT count(*) FROM {view} {_where(every)}").fetchone()[0]
     pages = max(1, -(-matching // size))
     page = min(int(get("page")) if get("page", "").isdecimal() else 1, pages) or 1
     ids = [i for i, in con.execute(f"SELECT file_row_number FROM {src} {where} ORDER BY {', '.join(order + ['file_row_number'])} "
@@ -504,12 +522,10 @@ def table(request, key, job=None):
     in_preset = set(snpscore.score.preset_conditions(weights, list(types), chosen["trait"])[0]) if weights and conditions else set()
     caveats = _known_caveats() if "known" in shown else {}
     rows = _page(con, view, ids, types, shown, maf, conditions, in_preset, (weights or {}).get("active_states", []), caveats)
-    if not custom_cols and any(r["id"] and str(r["pos"]) not in r["id"] for r in rows):
-        shown.insert(shown.index("id") + 1, "position")  # ids such as rs or AX numbers don't say where the SNP is
 
     base = {"tab": "table", **chosen, **settings, "sort": sort if explicit else "", "desc": "1" if desc else "",
             "size": str(size) if size != PAGE_SIZE else "", "cols": "1" if custom_cols else "",
-            "col": [k for k in shown if k != "id"] if custom_cols else []}
+            "col": [k for k in shown if k != "id"] if custom_cols else [], "picked": "" if view_picks == "all" else view_picks}
 
     def link(drop=(), **changes):
         params = {k: v for k, v in base.items() if k not in drop}
@@ -521,6 +537,8 @@ def table(request, key, job=None):
     snp = int(get("snp")) if get("snp", "").isdecimal() else None
     for r in rows:
         r["href"] = link(page=here, snp=r["n"])
+        r["out"] = r["n"] in picks_out  # the selector: + in the selection, − taken out (one click each way)
+        r["pick"] = link(page=here, **({"include": r["n"]} if r["out"] else {"exclude": r["n"]}))
     filter_keys = [k for params, _, _ in conds for k in params]
     chips = [(label, link(drop=list(params), page=None)) for params, label, _ in conds]
     suggest = None
@@ -573,7 +591,7 @@ def table(request, key, job=None):
     where_text = next((label for params, label, _ in conds if "chrom" in params), "any")
     dd("location", "where", "Location", where_text.replace("Chromosome ", "chr"), "chrom" in chosen,
        "A chromosome, or a range on it (start exclusive, end inclusive)", chroms=[(c, c == chosen.get("chrom")) for c in chroms],
-       column="position" if "position" in shown else "id")
+       column="id")
     if any(c in types for c in ("gene_name", "gene_id")):
         dd("gene", "gene", "Gene", chosen.get("gene", ""), bool(chosen.get("gene")), "A gene's name, Ensembl id or ortholog",
            value=chosen.get("gene", ""), column="gene")
@@ -598,6 +616,11 @@ def table(request, key, job=None):
     n_on = sum(c for _, _, c in checks)
     if checks:
         dd("more", "more", "Flags", f"{n_on} hidden" if n_on else "", bool(n_on), "Leave out flagged SNPs", extras=checks, column="flags")
+    pick = {"kind": "pick", "id": "dd-pick", "label": "Selected", "on": view_picks != "all",
+            "summary": {"all": "", "in": "+ only", "out": "− only"}[view_picks],
+            "views": [("", f"all rows ({n_every:,})", view_picks == "all"), ("in", f"selected, + ({n_every - n_out:,})", view_picks == "in"),
+                      ("out", f"unselected, − ({n_out:,})", view_picks == "out")] if n_out else [],
+            "reset": link(include_all=1, picked=None, page=None) if n_out else None}
     for x in dds:  # a filter sits on its column when the table shows it, else in the bar above
         x["header"] = x.get("column") in shown
     on_column = {x["column"]: x for x in dds if x["header"]}
@@ -609,7 +632,8 @@ def table(request, key, job=None):
             tip = "Minor allele frequency from your maf or af column"
         on = k == sort
         href = link(sort=k, desc="1" if on and not desc else "", page=None) if sorts else None
-        headers.append((k, label, tip, href, ("descending" if desc else "ascending") if on else "", on_column.get(k)))
+        headers.append((k, label, tip, href, ("descending" if desc else "ascending") if on else "", on_column.get(k),
+                        "sp-num" if k in NUMERIC else "sp-ctr" if k == "tier" else ""))
     shown_tiers = tier_counts if not ticked["tier"] else \
         [(x, k) for x, k in tier_counts if str(x) in ticked["tier"]]  # the tiers of the rows the table shows
     filtered = urlencode(chosen)
@@ -620,7 +644,8 @@ def table(request, key, job=None):
         "panel_error": {"empty": "No SNPs in this selection to add.",
                         "many": f"Narrow the selection to at most {int(jobs.setting('SNPPORTAL_MAX_PANEL_SNPS', 50_000)):,} SNPs to add it to the panel."
                         }.get(get("panel_error", "")),
-        "dds": dds, "shown_tiers": [(x, k) for x, k in shown_tiers if x is not None and k],
+        "dds": dds, "pick": pick, "n_selected": n_every - n_out, "n_out": n_out,
+        "shown_tiers": [(x, k) for x, k in shown_tiers if x is not None and k],
         "active_set": any(x["kind"] == "active" for x in dds), "groups": GROUP_STARTS,
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
         "start": chosen.get("start", ""), "end": chosen.get("end", ""),
@@ -631,8 +656,8 @@ def table(request, key, job=None):
         "headers": headers, "shown": shown, "rows": rows, "page": page, "pages": pages,
         "prev": link(page=page - 1) if page > 1 else None, "next": link(page=page + 1) if page < pages else None,
         "sizes": [(s, link(size=str(s) if s != PAGE_SIZE else None, page=None), s == size) for s in PAGE_SIZES],
-        "download": f"{reverse('snpportal:download', args=[key])}?{filtered}" if conds else None,
-        "vendor": f"?{urlencode({'tab': 'export', 'scope': 'filtered', **chosen})}" if conds and not gwas else None,
+        "download": f"{reverse('snpportal:download', args=[key])}?{filtered}" if selection_conds else None,
+        "vendor": f"?{urlencode({'tab': 'export', 'scope': 'filtered', **chosen})}" if selection_conds and not gwas else None,
         "snp": snp, "drawer": _drawer(request, key, job, snp, link(page=here)) if snp is not None else None,
     }
 
@@ -641,7 +666,7 @@ def _page(con, view, ids, types, shown, maf, conditions, in_preset, active_state
     """Display-ready rows for the row numbers `ids`, in that order. Reads only the shown columns."""
     if not ids:
         return []
-    wanted = {"file_row_number"} | {c for k in shown + ["position"] for c in COLUMNS[k][2] + EXTRA.get(k, ()) if c in types}
+    wanted = {"file_row_number"} | {c for k in shown for c in COLUMNS[k][2] + EXTRA.get(k, ()) if c in types}
     if "chromatin" in shown:
         wanted |= {f"chromatin_{c}" for c in conditions}
     select = ", ".join(map(ident, sorted(wanted))) + (f", {maf} AS _maf" if maf and "maf" in shown else "")
@@ -650,6 +675,19 @@ def _page(con, view, ids, types, shown, maf, conditions, in_preset, active_state
     found = {r["file_row_number"]: r for r in (dict(zip(names, x)) for x in cur.fetchall())}
     groups = condition_groups(conditions)
     return [_row(found[i], groups, in_preset, set(active_states), caveats) for i in ids if i in found]
+
+
+def _dist(bp):
+    return f"{bp:,} bp" if bp < 1000 else f"{bp / 1000:,.1f} kb"
+
+
+def locus_note(g):
+    """The SNP locus cell's grey note: the position when the id doesn't hold it, and the alleles when it doesn't
+    ('28_15139512_A_C' needs none; 'vgll3_Met54Thr' gets '25:28,996,360 · C>T')."""
+    name, pos, ref, alt = g("id") if g("id") not in (None, ".") else "", g("pos"), g("ref"), g("alt")
+    where = f"{g('chrom')}:{pos:,}" if name and str(pos) not in name else ""
+    alleles = _alleles(g) if not (ref and alt and any(f"{ref}{s}{alt}" in name for s in "_>/:")) else ""
+    return " · ".join(x for x in (where, alleles) if x)
 
 
 def _row(r, groups, in_preset, active_states, caveats):
@@ -662,9 +700,9 @@ def _row(r, groups, in_preset, active_states, caveats):
            "evidence": with_published(evidence_text(g("tier_evidence"), g("tier_terms")), g),  # the Tier cell's tooltip
            "known": g("known_locus"), "known_dist": g("known_locus_dist"), "caveat": caveats.get(g("known_locus")),
            "gene": gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")), "gene_id": g("gene_id") or "",
+           "note": locus_note(g), "known_where": "this SNP" if not g("known_locus_dist") else _dist(g("known_locus_dist")),
            "region": region_text(g), "region_tip": coding_tip(g),
-           "distance": "" if distance is None else "in gene" if distance == 0 else
-           f"{distance:,} bp" if distance < 1000 else f"{distance / 1000:,.1f} kb",
+           "distance": _dist(distance) if distance else "",  # outside the gene only
            "gerp": "" if g("gerp_score") is None else f"{g('gerp_score'):.1f}", "regbuild": g("regbuild_type") or "",
            "maf": "" if g("_maf") is None else f"{g('_maf'):.2f}", "ref_check": g("ref_check") or "",
            "cm": "" if g("cm_female") is None else f"{g('cm_female'):.1f} / {g('cm_male'):.1f}" if g("cm_male") is not None else f"{g('cm_female'):.1f}",
@@ -1042,6 +1080,23 @@ def _figure_context(key, job, trait, summary, d):
 
 # ---- the Table's selection: its filters (Active in among them) and view, kept per job ----
 
+UNSELECTED = "Unselected SNPs (−)"
+
+
+def unselected(d):
+    """The rows taken out of the selection by hand (the Table's − marks), kept in unselected.json of the job."""
+    return set(jobs.read_json(d / "unselected.json").get("rows", []))
+
+
+def keep_unselected(d, rows):
+    jobs._write_json(d / "unselected.json", {"rows": sorted(rows)})
+
+
+def manual(d):
+    """The filter that leaves the − rows out of the selection, or None when there are none."""
+    rows = unselected(d)
+    return ({}, UNSELECTED, f"file_row_number NOT IN ({', '.join(map(str, sorted(rows)))})") if rows else None
+
 def selection(d):
     """The Table's current selection of a job as a query string ('' = the whole list): the Panel designs from it, the
     Export tab offers it and the Table tab link returns to it. selection.json in the job folder, so it lasts."""
@@ -1056,13 +1111,6 @@ def keep_selection(d, query):
 def selection_request(query):
     """A stand-in request whose GET is a saved selection, for filters() and requested_trait()."""
     return SimpleNamespace(GET=QueryDict(query))
-
-
-def selection_filters(d, types, weights):
-    """(trait, filters [(params, label, SQL)]) of a job's saved selection."""
-    req = selection_request(selection(d))
-    trait = jobs.requested_trait(req.GET.get, req.GET.getlist, weights["presets"]) if weights else "all"
-    return trait, filters(req, types, weights)
 
 
 def table_link(trait="all"):
