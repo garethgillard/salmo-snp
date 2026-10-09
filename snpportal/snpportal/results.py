@@ -34,9 +34,22 @@ CONSEQUENCES = {"missense_variant": "missense", "synonymous_variant": "synonymou
                 "stop_lost": "stop lost", "start_lost": "start lost", "stop_retained_variant": "stop retained",
                 "incomplete_terminal_codon_variant": "incomplete last codon", "coding_sequence_variant": "CDS",
                 "splice_donor_variant": "splice donor", "splice_acceptor_variant": "splice acceptor"}  # snpscore.coding
-CODING_FILTERS = {  # Region filter values that need coding_consequence -> (label, SQL)
-    "missense": ("protein-changing", "coding_consequence IN ('missense_variant', 'stop_gained', 'stop_lost', 'start_lost')"),
-    "synonymous": ("synonymous", "coding_consequence IN ('synonymous_variant', 'stop_retained_variant')")}
+PROTEIN = "('missense_variant', 'stop_gained', 'stop_lost', 'start_lost')"
+SAME = "('synonymous_variant', 'stop_retained_variant')"
+CONSEQUENCE_FILTERS = {  # the Consequence filter, as the column reads -> (label, SQL, columns it needs)
+    "missense": ("protein-changing", f"coding_consequence IN {PROTEIN}", ("coding_consequence",)),
+    "synonymous": ("synonymous", f"coding_consequence IN {SAME}", ("coding_consequence",)),
+    "cds": ("coding (effect unknown)", f"region_class = 'CDS' AND coalesce(coding_consequence, '') NOT IN {PROTEIN[:-1]}, "
+            f"{SAME[1:-1]}, 'splice_donor_variant', 'splice_acceptor_variant')", ("region_class", "coding_consequence")),
+    "splice": ("splice site or region", "region_class = 'splice_region' OR coalesce(coding_consequence, '') IN "
+               "('splice_donor_variant', 'splice_acceptor_variant')", ("region_class", "coding_consequence")),
+    "utr5": ("5′ UTR", "region_class = 'five_prime_UTR'", ("region_class",)),
+    "utr3": ("3′ UTR", "region_class = 'three_prime_UTR'", ("region_class",)),
+    "exon": ("non-coding exon", "region_class = 'exon'", ("region_class",)),
+    "intron": ("intron", "region_class = 'intron'", ("region_class",)),
+    "intergenic": ("intergenic", "region_class IS NULL", ("region_class",)),
+}
+CONSEQUENCE_GROUPS = {"coding": ("missense", "synonymous", "cds", "splice"), "UTR": ("utr5", "utr3")}  # the Overview's groups
 HIDE = {  # checkbox -> (label, column it needs, SQL condition a SNP must meet to stay); hide_lore: older links (now in Assay)
     "hide_blacklist": ("blacklisted", "blacklist", "NOT blacklist"),
     "hide_lore": ("LORe", "lore", "NOT lore"),
@@ -63,7 +76,6 @@ GROUP_STARTS = ("dd-maf", "dd-more")  # gaps in the bar above the table (filters
 ACTIVITY = {  # Active in: what a SNP must be in, in at least one of the chosen conditions (PROVISIONAL, CLAUDE.md)
     "peak": ("Regulatory element", "inside an AQUA-FAANG robust ATAC peak (any chromatin state)"),
     "active": ("Active element", "inside a peak in an active state (Active_TSS or Active_enhancer: the +3 tier term)")}
-CHROMATIN_TERMS = ("active", "active_elsewhere", "weak")  # evidence the Chromatin column shows
 TERM_SHORT = {"active": "active", "active_elsewhere": "active elsewhere", "weak": "weak", "coding": "CDS", "synonymous": "synonymous",
               "splice": "splice", "utr": "UTR", "constrained": "constrained", "regbuild": "Ensembl reg.", "molqtl": "molQTL"}
 QUIET = ("unknown_chromosomes", "aliases_applied", "alias_warnings", "columns_renamed", "columns_dropped",
@@ -93,41 +105,41 @@ CARD_SQL = "SELECT * FROM v WHERE file_row_number = ?"  # the card reads one row
 # ascending)]; ?desc=1 reverses every term). ?col= and the column chooser accept only these keys; {maf} in a sort is
 # the MAF expression. p, beta and PIP exist for GWAS jobs only.
 COLUMNS = {
-    "id": ("SNP", "SNP id and alleles (ref > alt): click for its evidence", (), [("id", True)]),
+    "tier": ("Tier", "1 = strongest functional evidence for the chosen conditions; 4 = no evidence found (not evidence of no effect)",
+             ("tier",), [("tier", True), ("tier_score", False)]),
+    "score": ("Score", "Tier score: the summed weights of the SNP's evidence (its card lists them)", ("tier_score",),
+              [("tier_score", False)]),
+    "id": ("SNP locus", "SNP id and alleles (ref > alt): click for its card", (), [("id", True)]),
     "position": ("Position", "Chromosome:position (1-based, Ssal_v3.1)", ("pos",), [("length(chrom)", True), ("chrom", True), ("pos", True)]),
     "p": ("p", "GWAS p value", ("neglog10p",), [("neglog10p", False)]),
     "beta": ("beta (se)", "GWAS effect of the alt allele (standard error)", ("beta",), [("beta", False)]),
-    "tier": ("Tier", "1 = strongest functional evidence for the chosen conditions; 4 = no evidence found (not evidence of no effect)",
-             ("tier",), [("tier", True), ("tier_score", False)]),
     "pip": ("PIP", "Posterior inclusion probability, uniform → functional prior; one causal variant per locus, no LD. "
             "Blank outside loci", ("pip_uniform",), [("pip_functional", False)]),
     "gene": ("Gene", "Nearest Ensembl 116 gene; ~NAME: unnamed in Ensembl, named by its human ortholog", ("gene_name", "gene_id"),
              [("coalesce(gene_name, gene_ortholog_human, gene_id)", True)]),
-    "region": ("Region", "Genic region class, or the coding consequence (Ensembl 116 gene models)", ("region_class",),
-               [("region_class", True)]),
     "distance": ("To gene", "Distance to the nearest gene", ("gene_distance",), [("gene_distance", True)]),
-    "score": ("Score", "Tier score: the summed weights of the evidence terms", ("tier_score",), [("tier_score", True)]),
-    "evidence": ("Evidence", "The evidence behind the tier", ("tier_evidence",), []),
+    "region": ("Consequence", "Where the SNP falls in the nearest gene and, in coding sequence, its effect on the protein "
+               "(Ensembl 116 gene models)", ("region_class",), [("region_class", True)]),
     "chromatin": ("Chromatin", "AQUA-FAANG chromatin state in 21 conditions: Brain, Gonad, Liver, Muscle (immature F, M; "
                   "mature F, M), then 5 embryo stages. Underlined: the chosen conditions", ("chromatin",), []),
     "known": ("Known locus", "Near a published locus of the known-loci catalogue", ("known_locus",), [("known_locus_dist", True)]),
-    "maf": ("MAF", MAF_TIP, ("maf", "af", "public_af_maf"), [("{maf}", True)]),
-    "assay": ("Assay", "Assay design check of the probe flanks; hover for the reasons", ("assay_status",), [("assay_status", True)]),
-    "alleles": ("Alleles", "Reference > alternative allele", ("ref", "alt"), []),
     "molqtl": ("molQTL", "Lead SNP of an eQTL (e) or caQTL (ca) in 12 fish; display only, never counted in tiers",
                ("molqtl",), [("molqtl_best_bf", True)]),
-    "cm": ("cM (F/M)", "Genetic map position, female / male cM (Brekke et al. 2023 linkage map, interpolated)",
-           ("cm_female",), [("cm_female", True)]),
     "gerp": ("GERP", "GERP constrained-element score (65 fish)", ("gerp_score",), [("gerp_score", True)]),
     "regbuild": ("Ensembl reg.", "Ensembl 116 regulatory build feature", ("regbuild_type",), [("regbuild_type", True)]),
+    "maf": ("MAF", MAF_TIP, ("maf", "af", "public_af_maf"), [("{maf}", True)]),
+    "cm": ("cM (F/M)", "Genetic map position, female / male cM (Brekke et al. 2023 linkage map, interpolated)",
+           ("cm_female",), [("cm_female", True)]),
+    "assay": ("Assay", "Assay design check of the probe flanks; hover for the reasons", ("assay_status",), [("assay_status", True)]),
     "flags": ("Flags", "Blacklisted region, LORe, A/T or C/G, public variants within 35 bp",
               ("blacklist", "lore", "strand_ambiguous", "flank_variants"), []),
+    "alleles": ("Alleles", "Reference > alternative allele", ("ref", "alt"), []),
     "ref_check": ("Ref. check", "Input ref allele against the Ssal_v3.1 genome", ("ref_check",), [("ref_check", True)]),
-}
-DEFAULT_COLUMNS = ("id", "gene", "region", "tier", "evidence", "chromatin", "known", "maf", "assay")
-GWAS_COLUMNS = ("id", "p", "beta", "tier", "pip", "gene", "region", "chromatin")
-EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tier_evidence", "tier_terms"), "known": ("known_locus_dist",),
-         "evidence": ("tier_terms", "coding_hgvsp", "known_locus", "known_locus_dist"),
+}  # in display order: the score, the SNP, where it is, what it is, then genotyping
+DEFAULT_COLUMNS = ("tier", "score", "id", "gene", "region", "chromatin", "known", "maf", "assay")
+GWAS_COLUMNS = ("tier", "score", "id", "p", "beta", "pip", "gene", "region", "chromatin")
+EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tier_evidence", "tier_terms", "coding_hgvsp", "known_locus",
+                                                                "known_locus_dist"), "known": ("known_locus_dist",),
          "gene": ("gene_ortholog_human",), "region": ("gene_distance", "coding_consequence", "coding_hgvsp", "coding_transcript", "coding_note"), "beta": ("se",), "pip": ("pip_functional",),
          "assay": ("assay_reasons", "blacklist", "lore", "strand_ambiguous", "flank_variants"),
          "molqtl": ("molqtl_tissues", "molqtl_kinds", "molqtl_features"), "cm": ("cm_male",)}  # also fetched
@@ -225,6 +237,21 @@ def tier_text(tiers):
     return f"{t[0]}–{t[-1]}" if len(t) > 2 and t == list(range(t[0], t[-1] + 1)) else ", ".join(map(str, t))
 
 
+def consequences(values, types):
+    """The Consequence filter's values in the column's order, the Overview's groups ('coding', 'UTR') spelled out;
+    those whose columns the result lacks are dropped (without coding_consequence, CDS stands for all of coding)."""
+    wanted = {y for x in values for y in CONSEQUENCE_GROUPS.get(x, (x,))}
+    if "coding_consequence" not in types and wanted & {"missense", "synonymous"}:
+        wanted |= {"cds"}
+    return [k for k, (_, _, needs) in CONSEQUENCE_FILTERS.items()
+            if k in wanted and needs[0] in types and (k not in ("missense", "synonymous") or "coding_consequence" in types)]
+
+
+def consequence_sql(key, types):
+    sql = CONSEQUENCE_FILTERS[key][1]
+    return sql if "coding_consequence" in types else sql.split(" AND coalesce(coding_consequence")[0].split(" OR coalesce(coding_consequence")[0]
+
+
 def filters(request, types, weights):
     """[(URL parameters, chip label, SQL)] for the whitelisted filters in the request whose columns exist. Other
     parameters are ignored; values are checked or quoted before they reach SQL."""
@@ -233,11 +260,10 @@ def filters(request, types, weights):
                     for t in TIER_SETS.get(x, [x]) if t in TIER_SETS["1-4"]})  # max_tier, 1-2: older links
     if tiers and len(tiers) < 4 and "tier" in types:
         out.append(({"tier": ",".join(tiers)}, f"Tier {tier_text(tiers)}", f"tier IN ({', '.join(tiers)})"))
-    regions = [x for x in picks(request, "region") if (x in REGIONS and "region_class" in types)
-               or (x in CODING_FILTERS and "coding_consequence" in types)]
+    regions = [x for x in consequences(picks(request, "region"), types)]
     if regions:  # any of them
-        out.append(({"region": ",".join(regions)}, "Region: " + ", ".join(REGION_LABELS.get(x) or CODING_FILTERS[x][0] for x in regions),
-                    " OR ".join(f"({REGIONS[x] if x in REGIONS else CODING_FILTERS[x][1]})" for x in regions)))
+        out.append(({"region": ",".join(regions)}, "Consequence: " + ", ".join(CONSEQUENCE_FILTERS[x][0] for x in regions),
+                    " OR ".join(f"({consequence_sql(x, types)})" for x in regions)))
     chrom, start, end = get("chrom", ""), get("start", ""), get("end", "")
     if re.fullmatch(r"[\w.]{1,40}", chrom):
         if start.isdecimal() and end.isdecimal() and int(start) < int(end):  # start < pos <= end, as for layers
@@ -337,12 +363,12 @@ def gene_label(name, gene_id, human):
     return explore.display_name(name, explore.aliases().get(gene_id), human, gene_id) if name or gene_id or human else ""
 
 
-def evidence_text(evidence, terms=None, skip=()):
-    """tier_evidence as shown: without the terms that count nothing (weight 0, e.g. molQTL leads: display only) or are
-    in `skip`, and with condition lists spelled out ('active: Brain, E somit., Gonad')."""
+def evidence_text(evidence, terms=None):
+    """tier_evidence as shown: without the terms that count nothing (weight 0, e.g. molQTL leads: display only) and
+    with condition lists spelled out ('active: Brain, E somit., Gonad')."""
     parts = [x for x in (evidence or "").split("; ") if x]
     if terms is not None and len(terms) == len(parts):  # both list the fired terms in the same order
-        parts = [x for x, t in zip(parts, terms) if t["weight"] and t["term"] not in skip]
+        parts = [x for x, t in zip(parts, terms) if t["weight"]]
     out = []
     for x in parts:
         head, sep, items = x.partition(": ")
@@ -453,7 +479,7 @@ def table(request, key, job=None):
     maf, maf_source = jobs.maf_sql(types)
     available = [k for k, (_, _, needs, _) in COLUMNS.items() if not needs or any(c in types for c in needs)]
     default = [k for k in (GWAS_COLUMNS if gwas else DEFAULT_COLUMNS) if k in available]
-    picked = ["id"] + [k for k in available if k != "id" and k in request.GET.getlist("col")] if get("cols") else default
+    picked = [k for k in available if k == "id" or k in request.GET.getlist("col")] if get("cols") else default  # the SNP always
     custom_cols = set(picked) - {"position"} != set(default)  # the chooser sends every ticked column: short URLs for the default
     shown = list(picked if custom_cols else default)
     sort = get("sort", "")
@@ -479,11 +505,11 @@ def table(request, key, job=None):
     caveats = _known_caveats() if "known" in shown else {}
     rows = _page(con, view, ids, types, shown, maf, conditions, in_preset, (weights or {}).get("active_states", []), caveats)
     if not custom_cols and any(r["id"] and str(r["pos"]) not in r["id"] for r in rows):
-        shown.insert(1, "position")  # ids such as rs or AX numbers don't say where the SNP is
+        shown.insert(shown.index("id") + 1, "position")  # ids such as rs or AX numbers don't say where the SNP is
 
     base = {"tab": "table", **chosen, **settings, "sort": sort if explicit else "", "desc": "1" if desc else "",
             "size": str(size) if size != PAGE_SIZE else "", "cols": "1" if custom_cols else "",
-            "col": shown[1:] if custom_cols else []}
+            "col": [k for k in shown if k != "id"] if custom_cols else []}
 
     def link(drop=(), **changes):
         params = {k: v for k, v in base.items() if k not in drop}
@@ -534,14 +560,14 @@ def table(request, key, job=None):
            options=[(str(x), f"Tier {x}", str(x) in ticked["tier"], f"{counts.get(x, 0):,}") for x in (1, 2, 3, 4)])
     if weights and "tier_terms" in types:
         dd("list", "term", "Evidence", ", ".join(TERM_SHORT.get(x, x) for x in ticked["term"]) or "any", bool(ticked["term"]),
-           "SNPs with any of the ticked evidence terms", name="term", any="Any evidence", column="evidence",
+           "SNPs with any of the ticked evidence terms (the score sums their weights)", name="term", any="Any evidence", column="score",
            options=[(x, TERMS.get(x, x), x in ticked["term"], "") for x in weights.get("weights", {})])
     if "region_class" in types:
-        regions = [(x, REGION_LABELS[x]) for x in REGIONS]  # coding, then its protein-changing and synonymous parts
-        coding = [(k, f"– {label}") for k, (label, _) in CODING_FILTERS.items()] if "coding_consequence" in types else []
-        dd("list", "region", "Region", ", ".join(REGION_LABELS.get(x) or CODING_FILTERS[x][0] for x in ticked["region"]) or "any",
-           bool(ticked["region"]), "Genic region (Ensembl 116); any of the ticked ones", name="region", any="Any region", column="region",
-           options=[(v, text, v in ticked["region"], "") for v, text in regions[:1] + coding + regions[1:]])
+        offered = consequences(CONSEQUENCE_FILTERS, types)
+        dd("list", "region", "Consequence", ", ".join(CONSEQUENCE_FILTERS[x][0] for x in ticked["region"]) or "any",
+           bool(ticked["region"]), "Where the SNP falls in the nearest gene, and its effect on the protein; any of the ticked ones",
+           name="region", any="Any consequence", column="region",
+           options=[(x, CONSEQUENCE_FILTERS[x][0], x in ticked["region"], "") for x in offered])
     chroms = sorted((summary.get("chrom_tiers", {}).get(chosen["trait"]) or {}), key=_chrom_key) or \
         sorted((c for c, in con.execute("SELECT DISTINCT chrom FROM r").fetchall()), key=_chrom_key)
     where_text = next((label for params, label, _ in conds if "chrom" in params), "any")
@@ -623,11 +649,7 @@ def _page(con, view, ids, types, shown, maf, conditions, in_preset, active_state
     names = [x[0] for x in cur.description]
     found = {r["file_row_number"]: r for r in (dict(zip(names, x)) for x in cur.fetchall())}
     groups = condition_groups(conditions)
-    rows = [_row(found[i], groups, in_preset, set(active_states), caveats) for i in ids if i in found]
-    if "chromatin" not in shown:  # the Evidence column names the chromatin terms only when the Chromatin column is hidden
-        for row in rows:
-            row["evidence"] = row["evidence_full"]
-    return rows
+    return [_row(found[i], groups, in_preset, set(active_states), caveats) for i in ids if i in found]
 
 
 def _row(r, groups, in_preset, active_states, caveats):
@@ -637,8 +659,7 @@ def _row(r, groups, in_preset, active_states, caveats):
     distance = g("gene_distance")
     out = {"n": r["file_row_number"], "id": g("id") if g("id") not in (None, ".") else None, "chrom": g("chrom"), "pos": g("pos"),
            "alleles": _alleles(g), "tier": g("tier"), "score": g("tier_score"),
-           "evidence_full": with_published(evidence_text(g("tier_evidence"), g("tier_terms")), g),
-           "evidence": with_published(evidence_text(g("tier_evidence"), g("tier_terms"), CHROMATIN_TERMS), g),
+           "evidence": with_published(evidence_text(g("tier_evidence"), g("tier_terms")), g),  # the Tier cell's tooltip
            "known": g("known_locus"), "known_dist": g("known_locus_dist"), "caveat": caveats.get(g("known_locus")),
            "gene": gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")), "gene_id": g("gene_id") or "",
            "region": region_text(g), "region_tip": coding_tip(g),

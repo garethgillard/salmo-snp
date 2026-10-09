@@ -199,9 +199,9 @@ class ResultsTest(SimpleTestCase):
         self.assertIn("Tier ", drawer[drawer.index('id="drawer"'):])
         self.assertIn('aria-current="true">100</a>', page)  # rows per page, under the table
         region = page[page.index('id="dd-region"'):]
-        self.assertIn('<summary class="sp-colf" title="Filter Region"', region[:200])  # no region filter: a plain funnel
+        self.assertIn('<summary class="sp-colf" title="Filter Consequence"', region[:200])  # no region filter: a plain funnel
         both = self.client.get(self.url + "?tab=table&region=coding&region=UTR").content.decode()  # ticked: any of them
-        self.assertIn('<summary class="sp-colf on" title="Filter Region: coding (CDS, splice), UTR"', both)
+        self.assertIn('<summary class="sp-colf on" title="Filter Consequence: protein-changing, synonymous, coding (effect unknown), splice site or region, 5′ UTR, 3′ UTR"', both)
         self.assertEqual(int(re.search(r"of ([\d,]+) shown", both).group(1).replace(",", "")),
                          self.direct("region_class IN ('CDS', 'splice_region') OR region_class LIKE '%UTR'"))
         tiers = re.findall(r'<span class="sp-badge sp-tier-(\d)" title="[^"]*">Tier \d: ([\d,]+)', both)  # the shown rows' tiers
@@ -225,8 +225,8 @@ class ResultsTest(SimpleTestCase):
     def test_empty_state_names_the_most_restrictive_filter(self):
         page = self.client.get(self.url + "?tab=table&region=coding&tier=4").content.decode()  # coding is never tier 4
         self.assertIn("No SNPs match these filters", page)
-        self.assertIn("most restrictive one is <strong>Region: coding (CDS, splice)</strong>", page)
-        self.assertIn("Remove &ldquo;Region: coding (CDS, splice)&rdquo;", page)
+        self.assertIn("most restrictive one is <strong>Consequence: protein-changing, synonymous, coding (effect unknown), splice site or region</strong>", page)
+        self.assertIn("Remove &ldquo;Consequence: protein-changing, synonymous, coding (effect unknown), splice site or region&rdquo;", page)
 
     def test_panels_and_filters_need_their_columns(self):
         """A job whose result lacks the assay, AF and known-locus columns (e.g. an older release): no KPI, panel,

@@ -52,9 +52,8 @@
         {% elif col == 'p' %}<td class="sp-num">{{ r.p }}</td>
         {% elif col == 'beta' %}<td class="sp-num">{{ r.beta }}</td>
         {% elif col == 'pip' %}<td class="sp-num">{{ r.pip }}</td>
-        {% elif col == 'tier' %}<td title="{{ r.evidence_full|default:'no evidence found' }}">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
+        {% elif col == 'tier' %}<td title="{{ r.evidence|default:'no evidence found' }}">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
         {% elif col == 'score' %}<td class="sp-num">{{ r.score|default_if_none:"" }}</td>
-        {% elif col == 'evidence' %}<td title="{{ r.evidence_full }}">{% if r.evidence %}{{ r.evidence }}{% elif r.evidence_full %}<span class="sp-muted">chromatin only</span>{% endif %}</td>
         {% elif col == 'known' %}<td>{% if r.known %}<span class="sp-known" title="{% if r.known_dist == 0 %}At{% else %}{{ r.known_dist|thousands }} bp from{% endif %} the published SNP {{ r.known }}{% if r.caveat %}; caveat: {{ r.caveat }}{% endif %}">&#9733; {{ r.known }}{% if r.caveat %} ({{ r.caveat }}){% endif %}</span>{% endif %}</td>
         {% elif col == 'gene' %}<td title="{{ r.gene_tip }}">{{ r.gene }}</td>
         {% elif col == 'region' %}<td{% if r.region_tip %} title="{{ r.region_tip }}"{% endif %}>{{ r.region }}</td>
