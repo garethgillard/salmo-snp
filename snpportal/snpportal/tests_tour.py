@@ -155,7 +155,8 @@ class TourTest(SimpleTestCase):
         table = self.client.get(results, {"trait": "maturation", "tab": "table"}).content.decode()
         drawers = list(dict.fromkeys(re.findall(r"snp=(\d+)", table)))  # the table's rows, in order
         self.assertEqual(card_rows(html, key), drawers[:20])
-        self.assertEqual(len(card_rows(html, key)), 20)
+        self.assertEqual(len(card_rows(html, key)), min(20, len(drawers)))  # Active in: only SNPs in a brain or gonad element
+        self.assertIn("Only SNPs in an element of these conditions", html)
         self.assertEqual(card_rows(overview.content.decode(), key), [])  # the Overview lists no SNPs: the Table does
         self.assertIn("SNPs were annotated with snpscore", html)
         self.assertIn(jobs.read(key)["manifest_sha256"][:12], html)  # provenance, 12-character hashes

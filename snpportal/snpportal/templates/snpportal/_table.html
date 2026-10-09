@@ -15,14 +15,15 @@
       <summary class="btn btn-sm {% if dd.on %}btn-outline-primary sp-on{% else %}btn-outline-secondary{% endif %}"{% if dd.tip %} title="{{ dd.tip }}"{% endif %}>{{ dd.label }}{% if dd.on and dd.summary %}: <b>{{ dd.summary }}</b>{% endif %}</summary>
       <div class="sp-dd-panel{% if forloop.revcounter < 4 %} sp-dd-right{% endif %}">
       {% if dd.kind == 'active' %}
+        <div class="sp-dd-head"><span>SNPs active in these conditions</span>{% if dd.reset %}<a href="{{ dd.reset }}" hx-boost="true">Reset</a>{% endif %}</div>
         <fieldset class="sp-dd-list"><legend>Tissue</legend>
           <label class="sp-any"><input class="form-check-input" type="checkbox" data-any{% if dd.anyon %} checked{% endif %}> All tissues</label>
           {% for t, ticked in dd.tissues %}<label><input class="form-check-input" type="checkbox" name="tissue" value="{{ t }}"{% if ticked %} checked{% endif %}> {{ t }}{% if t == 'Embryo' %} <span class="sp-muted ms-auto ps-3">5 stages</span>{% endif %}</label>{% endfor %}
         </fieldset>
         <fieldset class="sp-seg"><legend>Maturity</legend>{% for v, text, sel in dd.maturity %}<label><input type="radio" name="maturity" value="{{ v }}"{% if sel %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</fieldset>
         <fieldset class="sp-seg"><legend>Sex</legend>{% for v, text, sel in dd.sex %}<label><input type="radio" name="sex" value="{{ v }}"{% if sel %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</fieldset>
-        <label class="sp-dd-extra"><input class="form-check-input" type="checkbox" name="active_only" value="1"{% if dd.only %} checked{% endif %}> only SNPs active there</label>
-        <div class="sp-dd-foot"><p class="sp-dd-note">Tiers count chromatin activity in these conditions (+3), elsewhere less. Presets:</p>
+        <fieldset class="sp-seg"><legend>Active means</legend>{% for v, text, tip, sel in dd.levels %}<label title="{{ tip }}"><input type="radio" name="act" value="{{ v }}"{% if sel %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</fieldset>
+        <div class="sp-dd-foot"><p class="sp-dd-note">In at least one of the conditions; tiers count activity there (+3), elsewhere less. Presets:</p>
           <ul class="sp-dd-picks" hx-boost="true">{% for label, tissues, href, on in dd.picks %}<li><a href="{{ href }}"{% if on %} aria-current="true"{% endif %}>{{ label }}</a>{% if tissues and label != tissues %} <span class="sp-muted">{{ tissues }}</span>{% endif %}</li>{% endfor %}</ul></div>
       {% elif dd.kind == 'list' %}
         <fieldset class="sp-dd-list"><legend class="visually-hidden">{{ dd.label }}</legend>

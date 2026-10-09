@@ -15,7 +15,7 @@
   <section class="sp-card" aria-labelledby="top-h">
     <div class="sp-card-head"><h2 id="top-h">Top {{ top.rows|length }} SNPs for {{ preset }}</h2>
       <a class="ms-auto sp-small sp-noprint" href="{{ table_url }}">All {{ top.matching|thousands }} in the table</a></div>
-    <p class="sp-small sp-muted mb-1">{% if top.gwas %}Ordered by p.{% else %}Ordered by tier, then score.{% endif %}{% if top.ties %} {{ top.ties }}{% endif %}{% if filters %}
+    <p class="sp-small sp-muted mb-1">{% if trait != 'all' %}Only SNPs in an element of these conditions (Active in). {% endif %}{% if top.gwas %}Ordered by p.{% else %}Ordered by tier, then score.{% endif %}{% if top.ties %} {{ top.ties }}{% endif %}{% if filters %}
       Filters: {% for k, v in filters.items %}{{ k }}={{ v }}{% if not forloop.last %}, {% endif %}{% endfor %} ({{ top.matching|thousands }} SNPs match).{% endif %}</p>
     {% if top.rows %}<div class="table-responsive"><table class="table table-sm sp-small mb-0">
       <thead><tr><th scope="col">SNP</th><th scope="col">Position</th>{% if top.gwas %}<th scope="col" class="sp-num">p</th>{% endif %}

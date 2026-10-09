@@ -59,6 +59,9 @@ TERMS = {"active": "active in the chosen conditions", "active_elsewhere": "activ
          "splice": "splice region", "utr": "UTR",
          "constrained": "GERP constrained", "regbuild": "Ensembl regulatory", "molqtl": "molQTL lead (display only)"}
 GROUP_STARTS = ("dd-region", "dd-maf", "dd-more")  # the filter bar's groups: what tiers count, where, genotyping, more
+ACTIVITY = {  # Active in: what a SNP must be in, in at least one of the chosen conditions (PROVISIONAL, CLAUDE.md)
+    "peak": ("Regulatory element", "inside an AQUA-FAANG robust ATAC peak (any chromatin state)"),
+    "active": ("Active element", "inside a peak in an active state (Active_TSS or Active_enhancer: the +3 tier term)")}
 CHROMATIN_TERMS = ("active", "active_elsewhere", "weak")  # evidence the Chromatin column shows
 TERM_SHORT = {"active": "active", "active_elsewhere": "active elsewhere", "weak": "weak", "coding": "CDS", "synonymous": "synonymous",
               "splice": "splice", "utr": "UTR", "constrained": "constrained", "regbuild": "Ensembl reg.", "molqtl": "molQTL"}
@@ -264,12 +267,15 @@ def filters(request, types, weights):
     if weights and active and f"chromatin_{active}" in types and f"chromatin_{active}" not in snpscore.score.NOT_CONDITIONS:
         states = ", ".join(lit(s) for s in weights.get("active_states", [])) or "NULL"
         out.append(({"active": active}, f"Active in {condition_label(active)}", f"{ident('chromatin_' + active)} IN ({states})"))
-    if get("active_only") and weights and conditions_of(types):  # active in any of the conditions tiers score against
-        trait = jobs.requested_trait(get, request.GET.getlist, weights["presets"])
+    trait = jobs.requested_trait(get, request.GET.getlist, weights["presets"]) if weights else "all"
+    if trait != "all" and conditions_of(types):  # Active in: SNPs in an element of at least one of its conditions
+        level = get("act") if get("act") in ACTIVITY else "peak"
         states = ", ".join(lit(s) for s in weights.get("active_states", [])) or "NULL"
+        test = "IS NOT NULL" if level == "peak" else f"IN ({states})"  # a peak has a state; active: TSS or enhancer
         mine = snpscore.score.preset_conditions(weights, list(types), trait)[0]
-        out.append(({"active_only": "1"}, f"Active in {jobs.trait_label(trait)}",
-                    " OR ".join(f"{ident('chromatin_' + c)} IN ({states})" for c in mine) or "false"))
+        out.append(({"trait": trait, **({"act": level} if level != "peak" else {})},
+                    f"Active in {jobs.trait_label(trait)}" + (" (active state)" if level != "peak" else ""),
+                    " OR ".join(f"{ident('chromatin_' + c)} {test}" for c in mine) or "false"))
     terms = [t for t in picks(request, "term") if t in (weights or {}).get("weights", {})]
     if terms and "tier_terms" in types:  # several: any of them (links carry them comma-joined)
         out.append(({"term": ",".join(terms)}, "Evidence: " + ", ".join(TERMS.get(t, t) for t in terms),
@@ -510,14 +516,18 @@ def table(request, key, job=None):
 
     if weights and conditions:  # the conditions tiers score against: tissues, maturity and sex, or a trait preset
         tissues, maturity, sex = jobs.selection_of(chosen["trait"], weights["presets"])
-        named = [p for p in weights["presets"] if p.capitalize() not in jobs.TISSUES]  # single tissues are ticks already
+        named = [p for p in weights["presets"] if p != "all" and p.capitalize() not in jobs.TISSUES]  # all: Reset; tissues: ticks
         every = len(tissues) == len(jobs.TISSUES)
-        dd("active", "active", "Active in", jobs.trait_label(chosen["trait"]), chosen["trait"] != "all" or "active_only" in chosen,
-           "The conditions tiers count chromatin activity in", tissues=[(x, x in tissues and not every) for x in jobs.TISSUES],
+        level = chosen.get("act", "peak")
+        dd("active", "active", "Active in", jobs.trait_label(chosen["trait"]) + (" · active state" if level != "peak" else ""),
+           chosen["trait"] != "all", "SNPs active in at least one of these conditions; tiers count activity there",
+           tissues=[(x, x in tissues and not every) for x in jobs.TISSUES],
            maturity=[("", "any", not maturity)] + [(x, x.lower(), x == maturity) for x in jobs.MATURITIES],
-           sex=[("", "any", not sex)] + [(x, x.lower(), x == sex) for x in jobs.SEXES], only="active_only" in chosen,
+           sex=[("", "any", not sex)] + [(x, x.lower(), x == sex) for x in jobs.SEXES],
+           levels=[(k, label, tip, k == level) for k, (label, tip) in ACTIVITY.items()],
+           reset=link(trait=None, act=None, page=None) if chosen["trait"] != "all" else None,
            picks=[(jobs.trait_label(p), " + ".join(x.lower() for x in jobs.selection_of(p, weights["presets"])[0]),
-                   link(trait=p, page=None, active_only=None), p == chosen["trait"]) for p in named])
+                   link(trait=p, page=None), p == chosen["trait"]) for p in named])
     if "tier" in types:
         counts = dict(tier_counts)
         dd("list", "tier", "Tier", f"{tier_text(ticked['tier'])}" if ticked["tier"] else "any", bool(ticked["tier"]),
