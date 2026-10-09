@@ -98,11 +98,12 @@ class ResultsTest(SimpleTestCase):
         n = self.summary["n_rows"]
         self.assertIn(f"2 unselected (&minus;)", page)
         self.assertIn(f"Add to panel ({n - 2:,})", page)  # the selection leaves the − rows out
-        self.assertEqual(page.count('class=" sp-out"'), 2)  # still listed, dimmed
+        self.assertEqual(page.count('class=" sp-out"'), 0)  # out of the table too, unless asked
+        self.assertEqual(self.client.get(self.url + "?tab=table&picked=all").content.decode().count('class=" sp-out"'), 2)  # all: dimmed
         self.assertIn('id="dd-pick"', page)
         only = self.client.get(self.url + "?tab=table&picked=out").content.decode()
         self.assertEqual(only.count("<tr data-card"), 2)
-        self.assertEqual(self.client.get(self.url + "?tab=table&picked=in").content.decode().count("<tr data-card"), min(n - 2, 50))
+        self.assertEqual(page.count("<tr data-card"), min(n - 2, 50))  # + only, the default
         got = self.client.get(reverse("snpportal:download", args=[self.key]), {"plain": "1"})
         tsv = b"".join(got.streaming_content) if got.streaming else got.content
         self.assertEqual(len(tsv.decode().splitlines()) - 1, n - 2)  # downloads take the + rows

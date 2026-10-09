@@ -41,7 +41,7 @@
   <table class="table table-sm table-hover sp-table sp-results mb-0">
     <thead hx-boost="true">
       <tr><th scope="col" class="sp-pickcol"><span class="sp-th"><span title="+ in the selection, − taken out by hand: click a row's mark to switch it">+/&minus;</span>
-        {% if pick.views %}{% include 'snpportal/_dd.html' with dd=pick col=1 %}{% endif %}</span>{% if pick.on %}<span class="sp-colf-val">{{ pick.summary }}</span>{% endif %}</th>{% for key, label, tip, url, order, dd, align in headers %}<th scope="col"{% if align %} class="{{ align }}"{% endif %}{% if order %} aria-sort="{{ order }}"{% endif %}><span class="sp-th">{% if url %}<a href="{{ url }}" title="{{ tip }}">{{ label }}{% if order == 'ascending' %} &#9650;{% elif order %} &#9660;{% endif %}</a>{% else %}<span title="{{ tip }}">{{ label }}</span>{% endif %}
+        {% if pick.views %}{% include 'snpportal/_dd.html' with dd=pick col=1 %}{% endif %}</span></th>{% for key, label, tip, url, order, dd, align in headers %}<th scope="col"{% if align %} class="{{ align }}"{% endif %}{% if order %} aria-sort="{{ order }}"{% endif %}><span class="sp-th">{% if url %}<a href="{{ url }}" title="{{ tip }}">{{ label }}{% if order == 'ascending' %} &#9650;{% elif order %} &#9660;{% endif %}</a>{% else %}<span title="{{ tip }}">{{ label }}</span>{% endif %}
         {% if dd %}{% include 'snpportal/_dd.html' with col=1 right=forloop.last %}{% endif %}</span>{% if dd.on %}<span class="sp-colf-val" title="{{ dd.summary }}">{{ dd.summary }}</span>{% endif %}</th>{% endfor %}</tr>
     </thead>
     <tbody>

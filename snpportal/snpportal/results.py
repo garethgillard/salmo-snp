@@ -500,8 +500,8 @@ def table(request, key, job=None):
 
     total = con.execute("SELECT count(*) FROM r").fetchone()[0]
     every, mark = [c for c in conds if c[1] != UNSELECTED], next((c for c in conds if c[1] == UNSELECTED), None)
-    view_picks = get("picked") if get("picked") in ("in", "out") and mark else "all"
-    shown_conds = every + ([mark] if view_picks == "in" else [({}, "Unselected only", mark[2].replace("NOT IN", "IN"))]
+    view_picks = get("picked") if get("picked") in ("all", "out") and mark else "in"  # the + rows unless asked
+    shown_conds = every + ([mark] if view_picks == "in" and mark else [({}, "Unselected only", mark[2].replace("NOT IN", "IN"))]
                            if view_picks == "out" else [])
     selection_conds, conds = conds, shown_conds  # the selection leaves the − rows out; the table shows what the selector asks
     where = _where(conds)
@@ -513,7 +513,7 @@ def table(request, key, job=None):
     matching = con.execute(f"SELECT count(*) FROM {src} {where}").fetchone()[0] if conds else total
     n_out = con.execute(f"SELECT count(*) FROM {view} {_where(every + [({}, '', mark[2].replace('NOT IN', 'IN'))])}").fetchone()[0] \
         if mark else 0  # − rows among the filtered ones
-    n_every = matching if view_picks == "all" else con.execute(f"SELECT count(*) FROM {view} {_where(every)}").fetchone()[0]
+    n_every = matching if view_picks == "all" or not mark else con.execute(f"SELECT count(*) FROM {view} {_where(every)}").fetchone()[0]
     pages = max(1, -(-matching // size))
     page = min(int(get("page")) if get("page", "").isdecimal() else 1, pages) or 1
     ids = [i for i, in con.execute(f"SELECT file_row_number FROM {src} {where} ORDER BY {', '.join(order + ['file_row_number'])} "
@@ -525,7 +525,7 @@ def table(request, key, job=None):
 
     base = {"tab": "table", **chosen, **settings, "sort": sort if explicit else "", "desc": "1" if desc else "",
             "size": str(size) if size != PAGE_SIZE else "", "cols": "1" if custom_cols else "",
-            "col": [k for k in shown if k != "id"] if custom_cols else [], "picked": "" if view_picks == "all" else view_picks}
+            "col": [k for k in shown if k != "id"] if custom_cols else [], "picked": "" if view_picks == "in" else view_picks}
 
     def link(drop=(), **changes):
         params = {k: v for k, v in base.items() if k not in drop}
@@ -616,10 +616,9 @@ def table(request, key, job=None):
     n_on = sum(c for _, _, c in checks)
     if checks:
         dd("more", "more", "Flags", f"{n_on} hidden" if n_on else "", bool(n_on), "Leave out flagged SNPs", extras=checks, column="flags")
-    pick = {"kind": "pick", "id": "dd-pick", "label": "Selected", "on": view_picks != "all",
-            "summary": {"all": "", "in": "+ only", "out": "− only"}[view_picks],
-            "views": [("", f"all rows ({n_every:,})", view_picks == "all"), ("in", f"selected, + ({n_every - n_out:,})", view_picks == "in"),
-                      ("out", f"unselected, − ({n_out:,})", view_picks == "out")] if n_out else [],
+    pick = {"kind": "pick", "id": "dd-pick", "label": "Selected", "on": view_picks != "in", "summary": "",
+            "views": [("", f"+ selected ({n_every - n_out:,})", view_picks == "in"), ("out", f"− unselected ({n_out:,})", view_picks == "out"),
+                      ("all", f"all rows ({n_every:,})", view_picks == "all")] if n_out else [],
             "reset": link(include_all=1, picked=None, page=None) if n_out else None}
     for x in dds:  # a filter sits on its column when the table shows it, else in the bar above
         x["header"] = x.get("column") in shown
