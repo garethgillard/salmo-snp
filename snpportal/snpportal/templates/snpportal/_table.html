@@ -47,7 +47,8 @@
     <tbody>
       {% for r in rows %}<tr data-card class="{% if r.n == snp %}sp-selected{% endif %}{% if r.out %} sp-out{% endif %}">
         <td class="sp-pickcol"><a class="sp-pick" href="{{ r.pick }}" hx-get="{{ r.pick }}" hx-push-url="false" role="button" aria-pressed="{% if r.out %}false{% else %}true{% endif %}"
-          title="{% if r.out %}Taken out of the selection: click to put it back{% else %}In the selection: click to take it out{% endif %}">{% if r.out %}&minus;{% else %}+{% endif %}</a></td>
+          title="{% if r.out %}Taken out of the selection: click to put it back{% else %}In the selection: click to take it out{% endif %}"
+          aria-label="{% if r.out %}Put back into the selection{% else %}Take out of the selection{% endif %}"><span class="sp-pick-now" aria-hidden="true">{% if r.out %}&minus;{% else %}+{% endif %}</span><span class="sp-pick-next" aria-hidden="true">{% if r.out %}+{% else %}&minus;{% endif %}</span></a></td>
         {% for col in shown %}{% if col == 'id' %}
         <td class="sp-clip sp-wide"><a class="sp-snp" href="{{ r.href }}" hx-get="{{ r.href }}">{% if r.id %}{{ r.id }}{% else %}{{ r.chrom }}:{{ r.pos }}{% endif %}</a>{% if r.note %} <span class="sp-muted">&middot; {{ r.note }}</span>{% endif %}</td>
         {% elif col == 'p' %}<td class="sp-num">{{ r.p }}</td>
