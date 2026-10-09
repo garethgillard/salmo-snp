@@ -56,6 +56,7 @@
   <span class="spinner-border sp-spin htmx-indicator" id="tf-busy" role="status" aria-label="Loading"></span>
   <span class="ms-auto d-flex flex-wrap align-items-center gap-2">
     {% if download and matching %}<a href="{{ download }}">Download these {{ matching|thousands }} (TSV)</a>{% if vendor %} · <a href="{{ vendor }}" hx-boost="true">Vendor files for these {{ matching|thousands }} &rarr;</a>{% endif %}{% endif %}
+    {% if matching %}<button class="btn btn-sm btn-primary" type="submit" form="add-panel" title="Copy this whole selection into your Design panel">Add to panel ({{ matching|thousands }})</button>{% endif %}
     <details class="sp-dd" id="dd-cols"><summary class="btn btn-sm btn-outline-secondary">Columns</summary>
       <div class="sp-dd-panel sp-dd-right"><fieldset class="sp-dd-list"><legend class="visually-hidden">Columns to show</legend><input type="hidden" name="cols" value="1">
         {% for key, label, checked in columns %}<label><input class="form-check-input" type="checkbox" name="col" value="{{ key }}"{% if checked %} checked{% endif %}> {{ label }}</label>{% endfor %}
@@ -64,6 +65,9 @@
   </span>
 </div>
 </form>
+<form id="add-panel" method="post" action="{% url 'snpportal:panel_add' key %}">{% csrf_token %}</form>
+{% if added %}<div class="sp-status sp-status-ok mb-2" role="status">&#10003; {{ added|thousands }} SNPs added to your panel. <a href="{% url 'snpportal:design_panel' %}">Open Design panel &rarr;</a></div>
+{% elif panel_error %}<div class="sp-status sp-status-warn mb-2" role="status">&#9888; {{ panel_error }}</div>{% endif %}
 
 {% if not matching %}<div class="sp-status sp-status-not_checked" role="status">
   <p>No SNPs match these filters.{% if suggest %} The most restrictive one is <strong>{{ suggest.0 }}</strong>: without it, {{ suggest.1|thousands }} SNPs match.{% endif %}</p>

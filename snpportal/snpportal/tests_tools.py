@@ -15,13 +15,13 @@ from unittest import skipUnless
 
 import duckdb
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import SimpleTestCase, override_settings
+from django.test import Client, SimpleTestCase, override_settings
 from django.urls import reverse
 
 import snpscore
 from snpscore.fasta import Fasta
 
-from . import jobs, tools
+from . import jobs, panel, tools
 from .tests import boosted_links
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
@@ -120,6 +120,32 @@ class ToolsTest(SimpleTestCase):
         self.assertIn(tools.panel_line(info["summary"]), report)
         heading = html[html.index('id="panel-h"'):html.index("</h2>", html.index('id="panel-h"'))]
         self.assertNotIn(h, heading)  # named by its markers, never by a hash
+
+    def test_design_panel(self):
+        table = self.client.get(self.url, {"tab": "table", "tier": "1-2"}).content.decode()  # the Table keeps the selection
+        n = int(re.search(r"Add to panel \(([\d,]+)\)", table).group(1).replace(",", ""))
+        added = self.client.post(reverse("snpportal:panel_add", args=[self.key]))  # the cart: the whole selection
+        self.assertIn(f"added={n}", added.url)
+        cookie = added.cookies[panel.COOKIE]
+        self.assertTrue(cookie["httponly"])
+        page = self.client.get(reverse("snpportal:design_panel")).content.decode()
+        self.assertIn(f"<strong>{n:,}</strong> SNPs in the panel", page)
+        self.assertIn("Tier 1, 2", page)  # the source's selection
+        self.assertNotIn(cookie.value, page)  # the panel is named by its cookie only, never in a page or URL
+        self.assertIn("Your panel is empty", Client().get(reverse("snpportal:design_panel")).content.decode())  # another browser
+        self.assertEqual(Client().get(reverse("snpportal:panel_download"), {"format": "tsv"}).status_code, 404)
+        tsv = body(self.client.get(reverse("snpportal:panel_download"), {"format": "tsv", "plain": "1"})).decode()
+        self.assertEqual(len([x for x in tsv.splitlines() if x and not x.startswith("#")]) - 1, n)
+        self.assertNotIn("panel_source", tsv.splitlines()[0])  # the panel's own columns stay out
+        self.client.post(reverse("snpportal:panel_add", args=[self.key]))  # the same selection again: no SNP twice
+        self.assertIn(f"<strong>{n:,}</strong> SNPs in the panel; {n:,} in more than one source",
+                      self.client.get(reverse("snpportal:design_panel")).content.decode())
+        d = jobs.results_dir() / f"panel-{cookie.value}"
+        os.utime(d / "created", (1, 1))  # 24 hours on: gone for its browser too, and cleanup removes it
+        self.assertIn("Your panel is empty", self.client.get(reverse("snpportal:design_panel")).content.decode())
+        jobs.cleanup()
+        self.assertFalse(d.exists())
+        self.client.get(self.url, {"tab": "table"})  # the whole list again, for the other tests
 
     def test_panel_parameters(self):
         self.client.get(self.url, {"tab": "table"})  # the Panel designs from the Table selection: the whole list

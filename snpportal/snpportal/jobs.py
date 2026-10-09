@@ -792,13 +792,15 @@ def delete(key):
 
 
 def cleanup():
-    """Delete job folders whose job.json is older than SNPPORTAL_KEEP_HOURS (default 24), and stray upload files.
-    Safe to run concurrently: anything already gone is skipped. Returns the number of entries removed."""
+    """Delete job folders whose job.json is older than SNPPORTAL_KEEP_HOURS (default 24), Design panel folders whose
+    'created' marker is, and stray upload files. Safe to run concurrently: anything already gone is skipped. Returns
+    the number of entries removed."""
     cutoff = time.time() - 3600 * float(setting("SNPPORTAL_KEEP_HOURS", 24))
     removed = 0
     for p in results_dir().iterdir():
         try:
-            age = (p / "job.json").stat().st_mtime if (p / "job.json").exists() else p.stat().st_mtime
+            mark = next((p / m for m in ("created", "job.json") if (p / m).exists()), p)  # a panel's age: from its start
+            age = mark.stat().st_mtime
             if age >= cutoff:
                 continue
             if p.is_dir():

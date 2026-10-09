@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import about, explore, search, tools, views
+from . import about, explore, panel, search, tools, views
 from . import browser, locus  # AGENT locus (stage 2)
 from . import report  # AGENT tour (stage 3)
 from . import association  # AGENT gwas (stage 3)
@@ -10,6 +10,11 @@ urlpatterns = [
     path("", explore.landing, name="landing"),
     path("score/", views.score, name="upload"),
     path("score/current/", views.current, name="current"),
+    path("panel/", panel.page, name="design_panel"),
+    path("panel/change/", panel.change, name="panel_change"),
+    path("panel/download/", panel.download, name="panel_download"),
+    path("panel/count/", panel.count, name="panel_count"),
+    path("results/<uuid:key>/add-to-panel/", panel.add, name="panel_add"),
     path("search/", search.search, name="search"),
     path("search/suggest/", search.suggest, name="suggest"),
     path("tour/", explore.tour, name="tour"),

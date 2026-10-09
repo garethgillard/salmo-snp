@@ -28,7 +28,7 @@ from . import jobs, results as result_views, tools
 
 SUFFIXES = (".vcf.gz", ".vcf", ".tsv.gz", ".tsv", ".csv.gz", ".csv", ".txt.gz", ".txt", ".bim", ".map")
 PASTE_LINES = 10_000
-TABS = ("overview", "table", "panel", "export")
+TABS = ("overview", "table", "panel", "export")  # panel: the automatic designer, unlinked (testing only; the Design panel page is curated)
 CURRENT = "snpportal_current"  # cookie: the results this browser last opened, for the nav's Score
 EXAMPLES = {  # the release's demo/ files (name without extension) -> (title, what it is; {n}: its rows)
     "known_loci": ("Known loci", "{n:,} from published studies"),

@@ -578,6 +578,10 @@ def table(request, key, job=None):
     return {
         "total": total, "matching": matching, "first": (page - 1) * size + 1 if matching else 0,
         "last": min(page * size, matching), "chosen": chosen, "query": urlencode({"trait": chosen["trait"], **settings}),
+        "added": int(get("added")) if get("added", "").isdecimal() else None,
+        "panel_error": {"empty": "No SNPs in this selection to add.",
+                        "many": f"Narrow the selection to at most {int(jobs.setting('SNPPORTAL_MAX_PANEL_SNPS', 50_000)):,} SNPs to add it to the panel."
+                        }.get(get("panel_error", "")),
         "dds": dds, "shown_tiers": [(x, k) for x, k in shown_tiers if x is not None and k],
         "active_set": any(x["kind"] == "active" for x in dds), "groups": GROUP_STARTS,
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
