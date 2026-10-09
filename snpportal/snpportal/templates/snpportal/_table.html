@@ -43,7 +43,6 @@
         <fieldset class="sp-dd-list"><legend class="visually-hidden">More filters</legend>
           {% for name, label, ticked in dd.extras %}<label><input class="form-check-input" type="checkbox" name="{{ name }}" value="1"{% if ticked %} checked{% endif %}> {{ label }}</label>{% endfor %}
         </fieldset>
-        <fieldset class="sp-seg"><legend>Rows per page</legend>{% for v, text, sel in dd.sizes %}<label><input type="radio" name="size" value="{{ v }}"{% if sel %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</fieldset>
       {% endif %}
       </div>
     </details>{% endif %}{% endfor %}
@@ -111,6 +110,8 @@
   {% if prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ prev }}">Previous</a>{% endif %}
   <span class="sp-small">Page {{ page|thousands }} of {{ pages|thousands }}</span>
   {% if next %}<a class="btn btn-sm btn-outline-secondary" href="{{ next }}">Next</a>{% endif %}
+  <span class="sp-small sp-muted ms-auto">Rows per page</span>
+  <span class="btn-group btn-group-sm" role="group" aria-label="Rows per page">{% for s, href, on in sizes %}<a class="btn {% if on %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="{{ href }}"{% if on %} aria-current="true"{% endif %}>{{ s }}</a>{% endfor %}</span>
 </nav>
 {% endif %}
 

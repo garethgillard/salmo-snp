@@ -26,7 +26,6 @@
       <li class="nav-item"><a class="nav-link{% if tab == 'table' %} active{% endif %}"{% if tab == 'table' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=table">Table</a></li>
       {% if not gwas %}<li class="nav-item"><a class="nav-link{% if tab == 'panel' %} active{% endif %}"{% if tab == 'panel' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=panel">Panel</a></li>{% endif %}
       <li class="nav-item"><a class="nav-link{% if tab == 'export' %} active{% endif %}"{% if tab == 'export' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=export">Export</a></li>
-      <li class="ms-auto align-self-center sp-small sp-muted" title="Set with Active in on the Table tab">Tiers for <strong>{{ trait_tip }}</strong></li>
     </ul>
     {% include 'snpportal/_caveat.html' with synthetic=synthetic %}
 

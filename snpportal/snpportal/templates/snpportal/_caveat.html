@@ -1,1 +1,2 @@
-<p class="sp-caveat sp-small" role="note">{% if synthetic %}<strong class="sp-badge sp-badge-syn">SYNTHETIC data</strong> &middot; {% endif %}Prototype: tiers rank annotated evidence, not proven effects; rules are provisional. <a href="{% url 'snpportal:methods' %}">Methods &rarr;</a></p>
+{% comment %}The prototype caveat, as a warning line, on every page that shows tiers. Synthetic data is named once, in
+   the results title.{% endcomment %}<p class="sp-caveat sp-small" role="note"><span class="sp-warn-icon" aria-hidden="true">&#9888;</span> Prototype: tiers rank annotated evidence, not proven effects; rules are provisional. <a href="{% url 'snpportal:methods' %}">Methods &rarr;</a></p>

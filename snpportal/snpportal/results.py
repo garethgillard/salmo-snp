@@ -23,7 +23,7 @@ from . import figures, jobs, palette
 from .jobs import ident
 
 PAGE_SIZE = 50
-PAGE_SIZES = (25, 50, 100, 500)
+PAGE_SIZES = (50, 100, 250, 500)  # rows per page, under the table
 REGIONS = jobs.REGION_GROUPS
 REGION_LABELS = {"coding": "coding (CDS, splice)", "UTR": "UTR", "exon": "non-coding exon", "intron": "intron",
                  "intergenic": "intergenic", "other": "other"}
@@ -553,8 +553,7 @@ def table(request, key, job=None):
         ([("molqtl", "molQTL lead SNPs", "molqtl" in chosen)] if "molqtl" in types else []) + \
         [(name, f"hide {label}", name in chosen) for name, (label, column, _) in HIDE.items() if column in types and name != "hide_lore"]
     n_on = sum(c for _, _, c in checks)
-    dd("more", "more", "More", f"{n_on} on" if n_on else "", bool(n_on), extras=checks,
-       sizes=[(str(s), str(s), s == size) for s in PAGE_SIZES])
+    dd("more", "more", "More", f"{n_on} on" if n_on else "", bool(n_on), extras=checks)
 
     headers = []
     for k in shown:
@@ -574,12 +573,13 @@ def table(request, key, job=None):
         "active_set": any(x["kind"] == "active" for x in dds), "groups": GROUP_STARTS,
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
         "start": chosen.get("start", ""), "end": chosen.get("end", ""),
-        "hidden": [(k, base[k]) for k in ("sort", "desc") if base[k]]  # and filters with no control on the form
+        "hidden": [(k, base[k]) for k in ("sort", "desc", "size") if base[k]]  # and filters with no control on the form
         + [(k, chosen[k]) for k in ("hide_reason", "max_maf", "active") if k in chosen] + list(settings.items()),
         "columns": [(k, COLUMNS[k][0], k in shown) for k in available if k != "id"], "chips": chips,
         "clear": link(drop=filter_keys, page=None) if conds else None, "suggest": suggest,
         "headers": headers, "shown": shown, "rows": rows, "page": page, "pages": pages,
         "prev": link(page=page - 1) if page > 1 else None, "next": link(page=page + 1) if page < pages else None,
+        "sizes": [(s, link(size=str(s) if s != PAGE_SIZE else None, page=None), s == size) for s in PAGE_SIZES],
         "download": f"{reverse('snpportal:download', args=[key])}?{filtered}" if conds else None,
         "vendor": f"?{urlencode({'tab': 'export', 'scope': 'filtered', **chosen})}" if conds and not gwas else None,
         "snp": snp, "drawer": _drawer(request, key, job, snp, link(page=here)) if snp is not None else None,

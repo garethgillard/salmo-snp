@@ -6,7 +6,7 @@ Conventions every figure follows:
 - Every label goes through html.escape. Tooltips are SVG <title> elements.
 - Marks link to the results table when given a link (an href string, or a function returning one); downloads
   leave links out.
-- Figures built from synthetic data carry a watermark that can't be switched off.
+- Figures built from synthetic data say so in their <desc> (the results title says it on screen).
 - No Django imports, so this module can move into snpscore later.
 """
 from __future__ import annotations
@@ -25,18 +25,13 @@ IDEOGRAM_OTHER = palette.GREY[300]  # bins whose SNPs are all in tier 3-4
 
 
 def svg(width, height, title, desc, body, synthetic=False):
-    """A complete standalone SVG document. A synthetic figure gets a faint SYNTHETIC watermark under its marks (so it
-    never hides a label) and, below the figure, a line saying so that nothing covers."""
-    mark = ""
+    """A complete standalone SVG document. A synthetic figure says so in its <desc>, which downloads keep; on screen
+    only the results title says it."""
     if synthetic:
-        mark = (f'<text x="{width / 2:.0f}" y="{height / 2:.0f}" text-anchor="middle" dominant-baseline="middle" '
-                f'font-size="{min(48, height // 2)}" font-weight="700" fill="{palette.SYNTHETIC[0]}" opacity="0.18" '
-                f'transform="rotate(-12 {width / 2:.0f} {height / 2:.0f})" pointer-events="none">SYNTHETIC</text>')
-        body += _text(4, height + 11, "SYNTHETIC test data: not real results", font_size=10, font_weight=600, fill=palette.SYNTHETIC[0])
-        height += 16
+        desc = f"{desc} SYNTHETIC test data: not real results.".strip()
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" '
             f'role="img" font-family="{escape(FONT)}" font-size="12" fill="{palette.GREY[900]}">'
-            f'<title>{escape(title)}</title><desc>{escape(desc)}</desc>{mark}{body}</svg>')
+            f'<title>{escape(title)}</title><desc>{escape(desc)}</desc>{body}</svg>')
 
 
 def share_label(n, total):

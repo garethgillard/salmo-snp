@@ -6,7 +6,7 @@
 <div class="sp-report sp-stack">
   <p class="sp-noprint sp-small sp-muted mb-0"><button type="button" class="btn btn-sm btn-primary" onclick="window.print()">Print or save as PDF</button>
     Two A4 pages; choose &lsquo;Save as PDF&rsquo; in the print dialog for a PDF.</p>
-  <div class="sp-status sp-status-not_checked" role="note">{% if synthetic %}<strong>SYNTHETIC data</strong> &middot; {% endif %}Prototype scoring:
+  <div class="sp-status sp-status-not_checked" role="note">Prototype scoring:
     tiers rank annotated evidence, not proven effects; rules are provisional.</div>
 
   {% if warnings %}<div class="sp-status sp-status-warn" role="note">&#9888; Upload warnings: {{ warnings|join:"; " }}</div>{% endif %}

@@ -244,19 +244,20 @@ def results(request, key):
         return redirect(f"{reverse('snpportal:association', args=[key])}?{urlencode({'trait': request.GET.get('trait', 'all'), **result_views.gwas_settings(request)})}")
     tab = request.GET.get("tab", "overview")
     tab = tab if tab in TABS and not (gwas and tab == "panel") else "overview"
+    synthetic = bool(job.get("synthetic_input") or job.get("synthetic_layers"))
+    label = job.get("label") or "Results"
     context = {"nav": "score", "job": job, "key": key, "tab": tab, "gwas": gwas,
-               "title": " · ".join(x for x in [job.get("label") or "Results",
+               "title": " · ".join(x for x in [label + (" (synthetic data)" if synthetic and "synthetic" not in label.lower() else ""),
                                                f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None] if x),
                "crumbs": [("Score SNPs", reverse("snpportal:upload")), ("Results", None)],
                "meta": f"Deleted after {jobs.utc(jobs.expires(key))}",
-               "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers"))}
+               "synthetic": synthetic}
     if job["state"] == "done":
         d = jobs.folder(key)
         weights = jobs.weights(d)
         trait = jobs.requested_trait(request.GET.get, request.GET.getlist, weights["presets"]) if weights else "all"
         settings = result_views.gwas_settings(request) if gwas else {}
-        context.update(trait=trait, query=urlencode({"trait": trait, **settings}), release_changed=jobs.release_changed(job),
-                       trait_tip=result_views.trait_tip(weights, trait))
+        context.update(trait=trait, query=urlencode({"trait": trait, **settings}), release_changed=jobs.release_changed(job))
         if tab == "table":
             context.update(result_views.table(request, key, job))
         elif tab == "overview":

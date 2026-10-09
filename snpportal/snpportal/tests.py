@@ -150,7 +150,7 @@ class PortalTest(SimpleTestCase):
         self.assertIn('name="tier" value="1" checked', form)  # max_tier=2 (older links): tiers 1 and 2 ticked
         self.assertIn('name="tier" value="2" checked', form)
         self.assertIn('name="hide_lore" value="1" checked', form)
-        self.assertContains(filtered, "Tiers for <strong>maturation: Brain, Gonad</strong>")  # the trait's conditions
+        self.assertContains(filtered, "Active in: <b>maturation</b>")  # the trait's conditions
 
         card = self.client.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain", HTTP_HX_REQUEST="true")
         self.assertTrue("Chromatin state per condition" in card.content.decode() or "conditions sampled" in card.content.decode())
@@ -228,7 +228,9 @@ class PortalTest(SimpleTestCase):
         chip =self.client.post(reverse("snpportal:upload"), {"example": "chip_demo_SYNTHETIC"})
         job = jobs.read(self.key(chip))
         self.assertEqual((job["state"], job["label"], job["synthetic_input"]), ("done", "Example: SNP chip (synthetic)", True))
-        self.assertContains(self.client.get(chip.url), "SYNTHETIC data")  # the caveat line of synthetic jobs
+        page = self.client.get(chip.url).content.decode()  # synthetic: said once, in the title
+        self.assertIn("(synthetic)", page[page.index("<h1>"):page.index("</h1>")])
+        self.assertNotIn("SYNTHETIC data", page)  # no badge (figures keep it in their <desc>, for downloads)
         response = self.client.post(reverse("snpportal:upload"), {"example": "known_loci"})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(jobs.read(self.key(response))["state"], "done")

@@ -57,8 +57,10 @@
 a.sp-card { display: block; text-decoration: none; color: var(--sp-grey-900); }
 a.sp-card:hover { border-color: var(--sp-accent); }
 /* one caveat line under the header of pages that show tiers (_caveat.html), and closed 'More ...' sections */
-.sp-caveat { color: var(--sp-grey-700); margin: -.5rem 0 1rem; }
-.sp-caveat .sp-badge-syn { font-size: .8125rem; }
+.sp-caveat { display: table; color: var(--sp-warn-text); background: var(--sp-warn-bg); border: 1px solid var(--sp-warn-border);
+  border-radius: .25rem; padding: .2rem .65rem; margin: .5rem 0 .9rem; }  /* the prototype warning: fits its text */
+.sp .sp-caveat a { color: var(--sp-warn-text); font-weight: 600; }
+.sp-warn-icon { font-size: 1.05em; margin-right: .2rem; }
 .sp-more > summary { cursor: pointer; color: var(--sp-link); font-size: .875rem; margin: .25rem 0; }
 .sp-faq > details { border-top: 1px solid var(--sp-grey-200); padding: .35rem 0; }
 .sp-faq > details:last-child { border-bottom: 1px solid var(--sp-grey-200); }

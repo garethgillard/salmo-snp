@@ -287,11 +287,11 @@ class ToolsTest(SimpleTestCase):
         self.assertGreater(s["shared"], 0)
         self.assertGreaterEqual(s["gaps"], 1)  # the planted gap
         svg = re.search(r'<svg .*?</svg>', page.content.decode().split('id="fig-chip-coverage"')[1], re.S).group(0)
-        self.assertIn(">SYNTHETIC</text>", svg)  # the watermark
+        self.assertIn("SYNTHETIC test data", svg)  # said in the figure's description (downloads keep it)
         overview = self.client.get(url).content.decode()
         self.assertNotIn("SYNTHETIC data", overview)  # only the chip is synthetic: no page line, but the figure says so
         self.assertIn("demo chip markers", overview)  # chip ticks on the ideogram
-        self.assertIn(">SYNTHETIC</text>", overview.split('id="fig-ideogram"')[1])
+        self.assertIn("SYNTHETIC test data", overview.split('id="fig-ideogram"')[1])  # the ideogram's <desc>
         # The Table tab's 'not near the chip' filter keeps fewer SNPs
         table = self.client.get(url, {"tab": "table", "hide_near_chip": "1"}).content.decode()
         self.assertIn("filtered from", table)

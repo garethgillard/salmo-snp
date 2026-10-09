@@ -70,10 +70,10 @@ class ResultsTest(SimpleTestCase):
 
     def test_active_in_sets_the_tiers(self):
         same = self.client.get(self.url + "?tab=table&active_set=1&tissue=Gonad&tissue=Brain").content.decode()
-        self.assertIn("Tiers for <strong>maturation: Brain, Gonad</strong>", same)  # the preset with these conditions: stored tiers
+        self.assertIn("Active in: <b>maturation</b>", same)  # the preset with these conditions: stored tiers
         self.assertFalse(list(self.d.glob("tiers_*")))
         own = self.client.get(self.url + "?tab=overview&trait=Brain.Mature.Female").content.decode()
-        self.assertIn("Tiers for <strong>brain (mature females)</strong>", own)
+        self.assertIn("Tier for brain (mature females)", own)  # the summary figure
         self.assertTrue((self.d / "tiers_Brain.Mature.Female.parquet").exists())  # scored once, kept with the job
         parts = json.loads((self.d / "summary_Brain.Mature.Female.json").read_text())
         self.assertEqual(sum(parts["tiers"]["Brain.Mature.Female"].values()), self.summary["n_rows"])
@@ -174,9 +174,9 @@ class ResultsTest(SimpleTestCase):
         self.assertEqual(self.count("?gene=it's"), 0)  # quoted, not SQL
 
     def test_table_page_sort_columns_and_barcode(self):
-        page = self.client.get(self.url + "?tab=table&size=25&trait=brain").content.decode()
+        page = self.client.get(self.url + "?tab=table&size=100&trait=brain").content.decode()
         rows = page.count("<tr data-card>")
-        self.assertEqual(rows, 25)
+        self.assertEqual(rows, 100)
         self.assertEqual(page.count('class="sp-bc"'), rows)  # a barcode on every row
         barcode = re.search(r'<span class="sp-bc".*?</span></span>', page, re.S).group(0)
         self.assertEqual(barcode.count("<i "), 21)
@@ -191,7 +191,7 @@ class ResultsTest(SimpleTestCase):
         self.assertIn('id="drawer"', drawer)
         self.assertIn('id="card-body"', drawer)  # the full card
         self.assertIn("Tier ", drawer[drawer.index('id="drawer"'):])
-        self.assertIn('<input type="radio" name="size" value="25" checked>', page)  # Rows: 25, under More
+        self.assertIn('aria-current="true">100</a>', page)  # rows per page, under the table
         region = page[page.index('id="dd-region"'):]
         self.assertIn('class="btn btn-sm btn-outline-secondary"', region[:200])  # no region filter: a plain button
         both = self.client.get(self.url + "?tab=table&region=coding&region=UTR").content.decode()  # ticked: any of them

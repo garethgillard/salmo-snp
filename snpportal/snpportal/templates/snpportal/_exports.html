@@ -13,7 +13,6 @@
       <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Apply</button></noscript>
     </fieldset>
   </form>{% endif %}
-  {% if exports.synthetic %}<div class="sp-status sp-status-warn" role="status">&#9888; The demo chip (synthetic) contributes to these files; each says so.</div>{% endif %}
   <div class="table-responsive"><table class="table table-sm align-middle mb-2">
     <tbody>{% for label, notes, href in exports.rows %}<tr>
       <th scope="row" class="fw-normal">{{ label }}</th>
