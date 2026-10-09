@@ -32,6 +32,9 @@ Decided:
 - Sperm ChIP is ignored (2026-10-08; salmobase answers 403 for its files).
 - No Bgee expression in the locus browser (2026-10-08); the release keeps bgee.parquet (Bgee 16.0, bgee.org, Ssal_v3.1
   ids; salmobase's copy is 15.2 on ICSASG_v2) for a gene card later.
+- No phenotypic traits in the portal (2026-10-09): it names sample conditions only (tissues, maturity, sex, embryo
+  stages), never maturation, growth and so on; users map conditions to traits themselves. weights.yaml presets stay as
+  snpscore's CLI names and the portal's cache of precomputed condition sets (to rename to tissue names later).
 - Trait = Active in (2026-10-09): the portal Table's Active in (tissues, maturity, sex) sets the conditions tiers score
   against; the trait presets are quick picks in it. A selection with a preset's conditions uses its stored tiers, any
   other is scored on first view and kept with the job (the same weights). One SNP's card opens in the Table's drawer.
