@@ -89,6 +89,7 @@
   // to the next or previous row's card instead, and x takes the card's SNP out of the selection (or puts it back).
   document.addEventListener("keydown", function (e) {
     if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest("input, select, textarea") || ["j", "k", "x"].indexOf(e.key) < 0) return;
+    if (document.querySelector("#drawer.sp-wide")) return;  // the card's locus browser is open over the page
     var step = document.querySelector({j: "#drawer [data-next]", k: "#drawer [data-prev]", x: "#drawer [data-pick]"}[e.key]);
     if (step || document.getElementById("drawer")) { if (step) step.click(); return; }
     if (e.key === "x") return;
@@ -234,9 +235,64 @@
   }, true);
   document.addEventListener("htmx:afterSwap", refold);
   refold();
-  document.addEventListener("keydown", function (e) {  // Escape closes the card drawer
-    var close = e.key === "Escape" && document.querySelector("#drawer [data-close]");
+  document.addEventListener("keydown", function (e) {  // Escape closes the card's locus browser, else the card drawer
+    if (e.key !== "Escape") return;
+    if (wide()) { back(); return; }
+    var close = document.querySelector("#drawer [data-close]");
     if (close) close.click();
+  });
+  /* The card's 'Open in the locus browser' opens it over the whole page, in the drawer (base_embed.html in a frame).
+     'Back to the card', Esc (here or in the frame) and the browser's Back all return to the card as it was; a lollipop
+     of another SNP of the list opens that SNP's card. Opening adds one Back step; the frame adds none. */
+  var pending = null;  // what to do once that Back step has been taken
+  function wide() { var d = document.getElementById("drawer"); return d && d.classList.contains("sp-wide") ? d : null; }
+  function shut(d) {
+    d.classList.remove("sp-wide");
+    var pane = d.querySelector(".sp-locus-pane"), link = d.querySelector("[data-locus]");
+    if (pane) pane.hidden = true;
+    if (link) link.focus();
+  }
+  function back(then) {
+    var d = wide();
+    if (d) shut(d);
+    if (history.state && history.state.spLocus) { pending = then || function () {}; history.back(); } else if (then) then();
+  }
+  window.addEventListener("popstate", function (e) {
+    var d = wide();
+    if (!d && !pending) return;
+    e.stopImmediatePropagation();  // not htmx's history restore: the page under the card has not changed
+    if (d) shut(d);
+    var then = pending;
+    pending = null;
+    if (then) then();
+  }, true);
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest && e.target.closest("#drawer [data-locus], #drawer [data-back]");
+    if (!t || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (t.hasAttribute("data-back")) { back(); return; }
+    var d = t.closest("#drawer"), pane = d.querySelector(".sp-locus-pane"), frame = pane && pane.querySelector("iframe");
+    if (!frame) return;
+    e.preventDefault();
+    if (!frame.getAttribute("src")) frame.setAttribute("src", frame.getAttribute("data-src"));  // kept when it is opened again
+    pane.hidden = false;
+    d.classList.add("sp-wide");
+    history.pushState({spLocus: true}, "");
+    pane.querySelector("[data-back]").focus();
+  });
+  window.addEventListener("message", function (e) {
+    var m = e.data || {};
+    if (e.origin !== location.origin || !wide()) return;
+    if (m.sp === "back") back();
+    if (m.sp === "card") {  // another SNP's card: in this drawer when it belongs to these results
+      var here = location.pathname.match(/\/results\/([0-9a-f-]+)\//);
+      if (!here || here[1] !== m.key || !window.htmx) { location.href = m.url; return; }
+      back(function () {
+        var u = new URL(location.href);
+        u.searchParams.set("snp", m.row);
+        htmx.ajax("GET", u.pathname + u.search, {target: "#results", select: "#results", swap: "outerHTML"})
+          .then(function () { history.replaceState(history.state, "", u.pathname + u.search); });  // a reload keeps this card
+      });
+    }
   });
 })();
 /* end table */
@@ -326,3 +382,32 @@
   buttons();
 })();
 /* end browser */
+
+/* the embedded locus browser (base_embed.html, in the Table's card drawer): locus links and the region form stay in the
+   frame without adding Back steps; another SNP's card opens in the drawer; other pages open in a new tab, so the table
+   stays as it is; Esc returns to the card */
+(function () {
+  "use strict";
+  if (window.parent === window || !document.querySelector(".sp-embed")) return;
+  function tell(m) { window.parent.postMessage(m, location.origin); }
+  function stay(url) { url.searchParams.set("embed", "1"); location.replace(url.href); }
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("a[href]");
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey
+        || a.getAttribute("target") === "_blank" || a.hasAttribute("download")) return;  // htmx moves prevent their own
+    var url = new URL(a.getAttribute("href"), location.href), card = url.pathname.match(/\/results\/([0-9a-f-]+)\/snp\/(\d+)\/$/);
+    if (url.origin !== location.origin) return;
+    e.preventDefault();
+    if (url.pathname === location.pathname) stay(url);
+    else if (card) tell({sp: "card", key: card[1], row: +card[2], url: url.href});
+    else window.open(url.href, "_blank", "noopener");  // a gene page and the like: a new tab, the table stays as it is
+  });
+  document.addEventListener("submit", function (e) {
+    if (!e.target.matches || !e.target.matches(".sp-bctl")) return;
+    e.preventDefault();
+    var url = new URL(e.target.getAttribute("action"), location.href);
+    new FormData(e.target).forEach(function (v, k) { url.searchParams.append(k, v); });
+    stay(url);
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") tell({sp: "back"}); });
+})();

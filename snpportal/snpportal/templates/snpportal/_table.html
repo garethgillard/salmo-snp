@@ -100,4 +100,12 @@
     </div>
     {% include 'snpportal/card.html' with heading=1 ev=drawer.ev hx=drawer.hx locus_url=drawer.locus_url panel=drawer.panel crumbs=None %}
   </div>
+  {% if drawer.locus_url %}<div class="sp-locus-pane shadow" hidden>
+    <div class="sp-locus-bar">
+      <button type="button" class="btn btn-sm btn-primary" data-back title="Back to the card (Esc)">&lsaquo; Back to the card</button>
+      <span class="sp-locus-what">{% if drawer.ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=drawer.ev.tier %} {% endif %}<strong>{{ drawer.ev.title }}</strong>{% if drawer.ev.gene %} &middot; <em>{{ drawer.ev.gene.label }}</em>{% endif %} <span class="sp-muted">in the locus browser</span></span>
+      <a class="ms-auto sp-small" href="{{ drawer.locus_url }}" target="_blank" rel="noopener">Open in a new tab &#8599;</a>
+    </div>
+    <iframe class="sp-locus-frame" title="Locus browser around {{ drawer.ev.title }}" data-src="{{ drawer.locus_url }}&amp;embed=1"></iframe>
+  </div>{% endif %}
 </aside>{% endif %}

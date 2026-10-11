@@ -36,7 +36,7 @@ from snpscore.score import NOT_CONDITIONS, preset_conditions
 from . import explore, figures, jobs, locus_svg, palette, results, search
 from .views import finished, private
 
-DEFAULT_WIDTH = 10_000  # a single position opens this wide
+DEFAULT_WIDTH = 20_000  # a single position (a card's SNP) opens this wide: the card's mini browser (+- MINI_FLANK), larger
 DEFAULT_REGION = "25:28985000-29010000"  # the locus browser opens here (vgll3) when no region is given
 FULL = {"published", "molqtl", "regbuild", "gerp", "variants", "signal", "snps"}  # the locus browser's optional lanes
 REGION_LANES = {"published", "gerp"}  # the regional association plot (its association lane is drawn on top)

@@ -485,8 +485,9 @@ def context(request, s, layout):
 
 @private
 def page(request):
-    """The locus browser page."""
-    return render(request, "snpportal/locus.html", context(request, locus.view_state(request), "snpportal/base_portal.html"))
+    """The locus browser page; ?embed=1: without the site's chrome, for the Table's card drawer (base_embed.html)."""
+    layout = "snpportal/base_embed.html" if request.GET.get("embed") == "1" else "snpportal/base_portal.html"
+    return render(request, "snpportal/locus.html", context(request, locus.view_state(request), layout))
 
 
 @private

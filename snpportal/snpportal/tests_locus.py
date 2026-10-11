@@ -171,7 +171,7 @@ class LocusTest(SimpleTestCase):
             self.assertNotIn(str(key), k)
         self.assertEqual(self.client.get(f"{reverse('snpportal:locus')}?key=00000000-0000-0000-0000-000000000000").status_code, 404)
         centred = self.get(f"{reverse('snpportal:locus')}?key={key}&row=1")  # opened from a card: no coordinates in the URL
-        self.assertIn('value="25:28,993,410-29,003,409"', centred)
+        self.assertIn('value="25:28,988,410-29,008,409"', centred)
         self.assertIn(">28,998,410</text>", centred)  # the centre: the SNP, in red on the ruler
         bare = Path(self.tmp.name) / "bare.tsv"  # a list with no id, ref or alt column (e.g. a chip of chrom, pos)
         bare.write_text("chrom\tpos\n25\t28996360\n")
@@ -195,14 +195,19 @@ class LocusTest(SimpleTestCase):
         self.assertNotIn(">score ", card)  # no score chip, and no consequence chip: the block says it
         self.assertNotIn(">missense · ", card)
         self.assertIn(">T1<title>tier 1: 5 points or more</title>", blocks)  # the cut-offs the blocks reach
-        self.assertEqual(card.count('class="sp-badge sp-tier-'), 1)  # the tier once, beside the heading
+        self.assertEqual(card[:card.index("sp-locus-pane")].count('class="sp-badge sp-tier-'), 1)  # the tier once, beside the heading
         self.assertIn('class="sp-fact" title="Known locus vgll3_Met54Thr', card)  # the key facts
         mini = svg_of(card[card.index('id="cs-locus"'):])  # the mini locus browser, inline (no peak: no tiles under it)
         self.assertIn("<title>Mini locus browser</title>", mini)  # the list's SNPs in the window, linked to their cards
         self.assertIn(f'href="/snp/results/{key}/snp/0/', mini)
         self.assertNotIn('<g opacity="0.3">', mini)  # in the selection: not faded
         self.assertIn(">GERP<title>", mini)  # lane names explain themselves on hover
-        self.assertIn(f'href="/snp/locus/?key={key}&amp;row=0"', card)  # its link to the locus browser
+        self.assertIn(f'href="/snp/locus/?key={key}&amp;row=0" data-locus', card)  # its link to the locus browser, which
+        self.assertIn(f'data-src="/snp/locus/?key={key}&amp;row=0&amp;embed=1"', card)  # opens over the page, in the drawer
+        embedded = self.get(f"{reverse('snpportal:locus')}?key={key}&row=0&embed=1")
+        self.assertNotIn('class="sp-nav"', embedded)  # no site chrome, and moves add no Back steps
+        self.assertIn('"historyEnabled": false', embedded)
+        self.assertIn('id="locus-view"', embedded)
         self.assertIn("exclude=0", card[:card.index('id="card-body"')])  # the +/− switch
         every = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&snp=0")
         self.assertIn(" of 3</span>", every)  # its place in the table, and the rows either side

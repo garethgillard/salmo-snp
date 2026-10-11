@@ -18,7 +18,7 @@
   {% if ev.caveats %}<ul class="sp-status sp-status-warn sp-caveats" aria-label="Caveats">{% for text in ev.caveats %}<li>{{ text }}</li>{% endfor %}</ul>{% endif %}
 
   {% if ev.mini or ev.no_peak or ev.function or ev.molqtl or locus_url %}<details class="sp-cs" id="cs-locus" open><summary><h3 class="sp-cs-h">Functional evidence at the locus</h3>
-      {% if locus_url %}<a class="sp-cs-act" href="{{ locus_url }}">Open in the locus browser &rarr;</a>{% endif %}</summary>
+      {% if locus_url %}<a class="sp-cs-act" href="{{ locus_url }}" data-locus>Open in the locus browser &rarr;</a>{% endif %}</summary>
     {% if ev.mini %}<div class="sp-figure mb-2">{{ ev.mini }}</div>{% endif %}
     {% if ev.no_peak %}<p class="mb-2">{{ ev.no_peak }}</p>{% endif %}
     {% if ev.function %}<dl class="sp-dl mb-2">{% for label, value in ev.function %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}

@@ -289,7 +289,15 @@ a.sp-card:hover { border-color: var(--sp-accent); }
   color: var(--sp-grey-900); border-color: var(--sp-grey-700); background: var(--sp-white); }
 .sp-results tr.sp-out .sp-pick { background: var(--sp-grey-100); color: var(--sp-grey-900); border-color: var(--sp-grey-500); }
 .sp-results tr.sp-out > td:not(.sp-pickcol) { opacity: .45; }
-.sp-drawer { z-index: 1040; }  /* the Table's card drawer: the card inside without its own frame */
+.sp-drawer { z-index: 1040; transition: width .2s ease; }
+.sp-drawer.sp-wide { width: 100%; max-width: none; }  /* the card's locus browser: the drawer over the whole page */
+.sp-drawer.sp-wide > .sp-drawer-body, .sp-drawer.sp-wide > .sp-drawer-tab { display: none; }
+.sp-locus-pane { display: flex; flex-direction: column; height: 100%; background: var(--sp-white); }
+.sp-locus-pane[hidden] { display: none; }
+.sp-locus-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: .5rem 1rem; border-bottom: 1px solid var(--sp-grey-200);
+  background: var(--sp-grey-50); }
+.sp-locus-frame { flex: 1; width: 100%; border: 0; }
+.sp-embed .sp-main { padding-top: .75rem; }  /* the Table's card drawer: the card inside without its own frame */
 .sp-drawer-body { border-radius: 0; }
 .sp-drawer-tab { position: absolute; left: -2rem; top: 1rem; display: flex; align-items: center; justify-content: center; width: 2rem;
   height: 3.25rem; background: var(--sp-white); border: 1px solid var(--sp-grey-300); border-right: 0; border-radius: .5rem 0 0 .5rem;
