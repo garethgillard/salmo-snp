@@ -101,7 +101,7 @@ class TourTest(SimpleTestCase):
             self.assertLessEqual(len(s["text"].split()), 40, s["slug"])
             self.assertLessEqual(len(re.findall(r"[.?!](\s|$)", s["text"])), 2, s["slug"])
             self.assertContains(first, s["title"])
-            self.assertContains(first, f'/static/snpportal/tour/{s["slug"]}.webp')
+            self.assertContains(first, f'/static/snpportal/tour/{s["slug"]}.webp?v=')  # a new image is fetched again
             self.assertTrue((TOUR_DIR / f'{s["slug"]}.webp').exists(), s["slug"])
             for i in range(1, len(s["callouts"]) + 1):
                 self.assertIn(f'#tour-{s["slug"]}-{i} {{', css)
@@ -114,7 +114,7 @@ class TourTest(SimpleTestCase):
         last = self.client.get(tour, {"slide": n}).content.decode()
         self.assertEqual(shown(last), explore.TOUR[-1]["title"])
         self.assertIn(f'href="{reverse("snpportal:upload")}" data-tour-next', last)  # 'Start scoring'
-        self.assertIn("Start scoring</a>", last)
+        self.assertIn('aria-label="Start scoring"', last)
         for bad in ("0", "99", "x"):
             self.assertEqual(shown(self.client.get(tour, {"slide": bad}).content.decode()), explore.TOUR[0]["title"])
 

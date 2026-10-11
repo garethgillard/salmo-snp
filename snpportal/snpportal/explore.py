@@ -1,4 +1,4 @@
-"""Explore without an upload: the landing page, gene pages with candidate public variants, the known-loci catalogue
+"""Explore without an upload: gene pages with candidate public variants, the known-loci catalogue
 and candidate jobs from genes or intervals (P5.1-P5.3). Candidates come from the release's public pool
 (pool/pool.parquet) or, without one, from the public sites in public_af.parquet annotated on the fly; their tiers are
 computed for the chosen preset with snpscore.scored(). The locus browser and variant page live in locus.py; the
@@ -34,7 +34,6 @@ MAX_TARGETS = 200  # genes, positions or intervals in one candidate list
 STAGES = ("LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomitogenesis", "LateSomitogenesis")
 SORTS = {"tier": ("tier", "tier, tier_score DESC, pos"), "pos": ("pos", "pos"),  # ?sort= -> (column it needs, ORDER BY)
          "maf": ("public_af_maf", "public_af_maf DESC NULLS LAST, pos")}
-EXAMPLES = ["vgll3", "rs863754587", "25:28996360", "25:28,990,000-29,000,000"]  # landing-page search chips
 ENSEMBL_GENE = "https://www.ensembl.org/Salmo_salar/Gene/Summary?g={}"
 SALMOBASE_GENE = "https://salmobase.org/genes/id/{}?assembly=Ssal_v3.1"
 TRAITS = {"age_at_maturity": "Age at maturity", "flesh_colour": "Flesh colour", "ipn_resistance": "IPN resistance",
@@ -44,8 +43,6 @@ CAVEATS = [  # (word in the catalogue's evidence or caveat, badge): why a row ne
     ("suggestive", "suggestive"), ("not genome-wide", "suggestive"), ("strain", "strain-specific"),
     ("disputed", "disputed"), ("position", "position inferred"), ("A/B alleles", "A/B alleles only"),
     ("QTL only in", "one challenge group")]
-HERO = ("25", 28_978_000, 29_002_000)  # landing thumbnail: vgll3 with its tag SNP, Met54Thr and Asn323Lys (BED start, end)
-_hero = {}
 JBROWSE = ("https://salmobase.org/jbrowse/?assembly=Ssal_v3.1&loc={}:{}..{}"
            "&tracks=Ssal_v3.1-Ensembl-FeatureTrack,Ssal_v3.1-NCBI-FeatureTrack")
 
@@ -114,7 +111,7 @@ def by_trait(rows):
 
 
 def catalogue_counts(rows=None):
-    """The one count of the known-loci catalogue (landing page, Known loci header and intro): {entries, traits, snps,
+    """The one count of the known-loci catalogue (Known loci header and intro): {entries, traits, snps,
     regions (gene regions and intervals), alleles (effect allele stated), caveats, window (bp, the known-locus badge)}."""
     rows = catalogue() if rows is None else rows
     regions = sum(1 for r in rows if r["kind"] == "region" or not (r.get("pos") or "").isdecimal())
@@ -199,36 +196,6 @@ def gene_rows(ids):
         g["alias"] = aliases().get(g["id"])
         g["label"] = display_name(g["name"], g["alias"], g["human"], g["id"])
     return rows
-
-
-def hero():
-    """A small locus figure of vgll3 (genes, published associations, molQTL leads, chromatin states, public variants;
-    no live signal) for the landing page, drawn once per release and state palette. None without a chromatin layer."""
-    from . import locus  # locus imports this module
-    info = jobs.release_info()
-    key = (info.get("sha256"), palette.states_name())
-    if key not in _hero:
-        if _file("chromatin") is None:
-            return None
-        chrom, start, end = HERO
-        data = locus.lanes(chrom, start, end)
-        svg = locus.locus_svg.locus(data, title="vgll3, chromosome 25", desc="Published associations (diamonds), Ensembl 116 "
-                                    "genes, AQUA-FAANG chromatin states in 21 conditions, 504-fish panel variants.",
-                                    compact=True, width=locus.COMPACT_WIDTH, gutter=118, synthetic=bool(info.get("synthetic")),
-                                    uid="hero", legend_on=False)  # drawn at about its column's width, so its text is not shrunk
-        if len(_hero) >= 4:  # one per release and palette
-            _hero.clear()
-        _hero[key] = svg
-    return _hero[key]
-
-
-def landing(request):
-    """/snp/: what the portal does, 'Score your SNPs' and 'Take the tour', a quick search box with example chips and the
-    vgll3 thumbnail."""
-    figure = hero()
-    return render(request, "snpportal/landing.html", {
-        "nav": "home", "title": "Functional SNP portal", "hero": mark_safe(figure) if figure else None,
-        "examples": EXAMPLES})
 
 
 def ss4r(ids):
@@ -589,12 +556,12 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
      "shot": {"path": "results/{snps}/", "width": 1200, "crop": [".nav-tabs", "#fig-summary", "#fig-ideogram"]}},
     {"slug": "score", "title": "Score your list",
      "text": "Upload a VCF, SNP table, PLINK or chip file, paste positions, name genes or regions, or upload GWAS "
-             "results. Your results are listed beside the forms until they are deleted, after 24 hours.",
-     "alt": "The Score page: the Try it examples, the Upload SNPs, Paste positions, Genes or regions and GWAS tabs, and "
-            "Your results.",
-     "callouts": [("No list? Try an example", ".sp-try"),
-                  ("Upload, paste, genes or regions, or GWAS", "section[aria-label='Your data'] .nav-tabs"),
+             "results. Without a list, try an example; your results stay listed beside the forms for 24 hours.",
+     "alt": "The Score page, also the home page: the Upload SNPs, Paste positions, Genes or regions and GWAS tabs, the "
+            "examples under them, and Your results.",
+     "callouts": [("Upload, paste, genes or regions, or GWAS", "section[aria-label='Your data'] .nav-tabs"),
                   ("Drop your file, then Score", ["#pane-file .sp-drop", "#pane-file button"]),
+                  ("No list? Try an example", ".sp-try"),
                   ("Your results: open or delete", ["#mine-h", ".sp-mine"])],
      "try": ("Try it: open Score", "score/"),
      "shot": {"path": "score/", "width": 1200, "crop": [".sp-lead", "section[aria-label='Your data']", ".sp-mine"]}},
@@ -654,15 +621,15 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
      "try": ("Try it: the synthetic maturation GWAS", {"example": "gwas_maturation_SYNTHETIC"}),
      "shot": {"path": "results/{gwas}/association/", "width": 1280,
               "crop": [".sp-caveat", "#loci-h ~ * tbody tr:nth-child(3)"]}},
-    {"slug": "more", "title": "Search, browse and get help",
-     "text": "Quick search finds one gene, SNP or region, and Known loci lists the published SNPs. For a confidential "
-             "list, Help → Run locally scores it on your own computer.",
-     "alt": "The front page with Quick search and the open Help menu: Guided tour, Help, Data, Methods and Run locally.",
-     "callouts": [("Quick search", "form[role=search]"), ("Known loci", ".sp-nav a[href$='known-loci/']"),
+    {"slug": "more", "title": "Browse and get help",
+     "text": "Known loci lists the published SNPs, and the locus browser shows any region. For a confidential list, "
+             "Help → Run locally scores it on your own computer.",
+     "alt": "The Known loci page with the open Help menu: Help, Guided tour, Data, Methods and Run locally.",
+     "callouts": [("Published SNPs", ".sp-nav a[href$='known-loci/']"), ("Any region, with live data", ".sp-nav a[href*='locus/']"),
                   ("Help, this tour and Run locally", ".sp-menu ul")],
-     "try": ("Try it: search vgll3", "search/?q=vgll3"),
-     "shot": {"path": "", "width": 1100, "click": ".sp-menu > summary", "wait": ".sp-menu[open] ul",
-              "crop": [".sp-brand", ".sp-release", "form[role=search]"]}},
+     "try": ("Try it: the known loci", "known-loci/"),
+     "shot": {"path": "known-loci/", "width": 1100, "click": ".sp-menu > summary", "wait": ".sp-menu[open] ul",
+              "crop": [".sp-brand", ".sp-release", ".sp-loci-tabs .nav-tabs", ".sp-loci tbody tr:nth-child(2)"]}},
 ]
 
 

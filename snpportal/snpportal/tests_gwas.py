@@ -92,7 +92,7 @@ class GwasTest(SimpleTestCase):
 
     def test_score_page_gwas_tab_and_example(self):
         html = self.client.get(reverse("snpportal:upload")).content.decode()
-        box = html[html.index('id="try-it"'):html.index('aria-label="Your data"')]  # the 'Try it' box
+        box = html[html.index('id="try-it"'):html.index('id="privacy"')]  # the examples under the tabs
         self.assertEqual(re.findall(r'name="example" value="(\w+)"', box), ["known_loci", "chip_demo_SYNTHETIC", STEM])
         form = box[box.rindex("<form", 0, box.index(f'value="{STEM}"')):]  # the GWAS example's form
         self.assertTrue(form.startswith(f'<form method="post" action="{reverse("snpportal:gwas_score")}">'))

@@ -16,7 +16,7 @@ from django.urls import reverse
 
 import snpscore
 
-from . import explore, jobs, palette, search
+from . import explore, jobs, locus_svg, palette, search
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
@@ -102,13 +102,11 @@ class ExploreTest(SimpleTestCase):
         self.assertEqual(len(search.resolve("c", limit=10)), 10)
 
     def test_landing_and_known_loci(self):
-        landing = self.client.get(reverse("snpportal:landing"))
-        counts = explore.catalogue_counts()  # the one count helper: landing, Known loci header and intro agree
-        self.assertContains(landing, "Quick search")
-        self.assertNotContains(landing, "published entries")  # known loci: top nav and Score's example, not the landing page
-        self.assertContains(landing, f'href="{reverse("snpportal:upload")}"')  # 'Score your SNPs'
-        self.assertContains(landing, 'class="sp-card sp-hero"')  # the vgll3 thumbnail
-        self.assertContains(landing, "?q=rs863754587")  # search chips
+        landing = self.client.get(reverse("snpportal:landing"))  # the home page is the Score page
+        counts = explore.catalogue_counts()  # the one count helper: Known loci header and intro agree
+        self.assertContains(landing, 'aria-label="Your data"')
+        self.assertNotContains(landing, "published entries")  # known loci: top nav and Score's example
+        self.assertContains(landing, f'class="sp-card sp-hero" href="{reverse("snpportal:tour")}"')  # the tour, with a screenshot
         score = self.client.get(reverse("snpportal:upload"), {"input": "regions"})  # genes or regions: a tab on Score
         self.assertContains(score, f'action="{reverse("snpportal:candidates")}"')
         self.assertContains(score, 'class="tab-pane active" id="pane-regions"')
@@ -279,8 +277,8 @@ class ExploreTest(SimpleTestCase):
             self.assertEqual(switch.cookies[palette.COOKIE].value, "aquafaang")
             page = self.client.get(help_url)  # the client sends the cookie back
             self.assertContains(page, ".st-Active_TSS{background:#BF2026")
-            only = set(palette.STATE_PALETTES["aquafaang"].values()) - set(palette.STATE_PALETTES["portal"].values()) - {"#FFFFFF"}
-            self.assertTrue(any(colour in explore.hero() for colour in only))  # figures too
+            self.assertIn(palette.STATE_PALETTES["aquafaang"]["Active_TSS"],  # figures too
+                          locus_svg.chromatin_grid({"Brain_Immature_Female": "Active_TSS"}))
             away = self.client.get(reverse("snpportal:state_palette"), {"name": "nope"}, HTTP_REFERER="https://elsewhere.example/")
             self.assertEqual(away.url, reverse("snpportal:landing"))  # other sites' referers are not followed
             self.assertNotIn(palette.COOKIE + "=nope", str(away.cookies))

@@ -7,7 +7,7 @@ from . import association  # AGENT gwas (stage 3)
 
 app_name = "snpportal"
 urlpatterns = [
-    path("", explore.landing, name="landing"),
+    path("", views.score, name="landing"),  # the home page is the Score page
     path("score/", views.score, name="upload"),
     path("score/current/", views.current, name="current"),
     path("panel/", panel.page, name="design_panel"),

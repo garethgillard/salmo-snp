@@ -134,18 +134,19 @@ def _rows(path, mtime_ns):
 
 
 def score_page(request, error=None, status=200, tab=None, targets=""):
-    """The Score page: the 'Try it' examples (TRY) and one card with the tabs Upload SNPs | Paste positions | Genes or
-    regions | GWAS (?input=, or `tab` after an error, so each form's errors come back on its own tab)."""
+    """The Score page, also the home page: one card with the tabs Upload SNPs | Paste positions | Genes or regions |
+    GWAS (?input=, or `tab` after an error, so each form's errors come back on its own tab) and the examples (TRY) under
+    them; beside it this browser's results and the tour."""
     from .explore import FLANK, FLANKS  # the gene/region flank choices (explore.candidate_job reads them)
     tab = tab if tab in INPUTS else request.GET.get("input") if request.GET.get("input") in INPUTS else "file"
-    found = examples()
-    return render(request, "snpportal/score.html", {
-        "nav": "score", "title": "Score SNPs", "error": error, "tabs": INPUTS.items(), "tab": tab, "mine": mine(request),
+    found, listed = examples(), mine(request)
+    return no_store(listed, render(request, "snpportal/score.html", {
+        "nav": "score", "title": "Score your SNPs", "error": error, "tabs": INPUTS.items(), "tab": tab, "mine": listed,
         "tries": [dict(found[name], name=name, gwas=name.startswith("gwas_")) for name in TRY if name in found],
         "targets": targets, "flanks": FLANKS, "flank": FLANK, "paste_lines": PASTE_LINES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}",
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}",
-    }, status=status)
+    }, status=status))
 
 
 @csrf_exempt  # so the upload handler can be set before the body is read; _score checks the CSRF token
@@ -348,6 +349,13 @@ def _mine_keys(request):
 def keep_mine(response, keys):
     response.set_cookie(MINE, ",".join(keys[:MAX_MINE]), max_age=int(3600 * float(jobs.setting("SNPPORTAL_KEEP_HOURS", 24))),
                         httponly=True, samesite="Lax")
+    return response
+
+
+def no_store(listed, response):
+    """A page that lists this browser's results (their names can be file names) is never cached."""
+    if listed:
+        response["Cache-Control"] = "no-store, private"
     return response
 
 

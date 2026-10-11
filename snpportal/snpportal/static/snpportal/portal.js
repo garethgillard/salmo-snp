@@ -124,8 +124,9 @@
 })();
 /* end results */
 
-/* tour: Previous, Next, the dots and the arrow keys switch slides without reloading (they are ?slide=N links, which
-   work without JavaScript). The counter is a live region; focus inside a slide that goes moves to the new slide's title. */
+/* tour: the arrows, the dots, the arrow keys and a click on the slide (its right half goes on, its left half back)
+   switch slides without reloading (the arrows and dots are ?slide=N links, which work without JavaScript). Hovering a
+   half lights its arrow. The counter is a live region; focus inside a slide that goes moves to the new slide's title. */
 (function () {
   "use strict";
   var tour = document.querySelector("[data-tour]");
@@ -133,6 +134,7 @@
   var slides = Array.prototype.slice.call(tour.querySelectorAll(".sp-slide"));
   var dots = Array.prototype.slice.call(tour.querySelectorAll(".sp-tour-dots a"));
   var prev = tour.querySelector("[data-tour-prev]"), next = tour.querySelector("[data-tour-next]");
+  var stage = tour.querySelector(".sp-tour-stage"), deck = tour.querySelector("[data-tour-deck]");
   var count = tour.querySelector("[data-tour-count]");
   var at = Math.max(0, slides.findIndex(function (s) { return !s.hidden; }));
 
@@ -142,6 +144,9 @@
     slides[at].hidden = true;
     dots[at].removeAttribute("aria-current");
     slides[i].hidden = false;
+    slides[i].classList.remove("sp-in");
+    void slides[i].offsetWidth;  // restart the fade-in
+    slides[i].classList.add("sp-in");
     dots[i].setAttribute("aria-current", "step");
     at = i;
     if (first) {
@@ -154,18 +159,36 @@
     }
     prev.classList.toggle("disabled", first);
     next.href = last ? next.getAttribute("data-end-href") : "?slide=" + (i + 2);
-    next.textContent = next.getAttribute(last ? "data-end" : "data-next");
+    next.setAttribute("aria-label", last ? "Start scoring" : "Next slide");
+    next.classList.toggle("sp-tour-end", last);
     count.textContent = "Slide " + (i + 1) + " of " + slides.length;
     history.replaceState(null, "", "?slide=" + (i + 1));
     if (focusIn) slides[i].querySelector("h2").focus();
   }
 
+  function side(e) {  // the half of the slide under the pointer, if there is a slide that way
+    var box = deck.getBoundingClientRect(), right = e.clientX > box.left + box.width / 2;
+    return right ? (at < slides.length - 1 ? 1 : 0) : (at > 0 ? -1 : 0);
+  }
+  function plain(e) {  // a click on the slide itself, not on a link, button or form, nor ending a text selection
+    return !e.target.closest("a, button, input, select, textarea, label, summary") && !String(window.getSelection());
+  }
+
   tour.addEventListener("click", function (e) {
     var a = e.target.closest("[data-tour-prev], [data-tour-next], .sp-tour-dots a");
-    if (!a || (a.getAttribute("href") || "").charAt(0) !== "?" || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-    e.preventDefault();
-    show(a === prev ? at - 1 : a === next ? at + 1 : dots.indexOf(a));
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    if (a && (a.getAttribute("href") || "").charAt(0) === "?") {
+      e.preventDefault();
+      show(a === prev ? at - 1 : a === next ? at + 1 : dots.indexOf(a));
+    } else if (!a && deck.contains(e.target) && plain(e) && side(e)) {
+      show(at + side(e));
+    }
   });
+  deck.addEventListener("mousemove", function (e) {
+    var way = plain(e) ? side(e) : 0;
+    stage.setAttribute("data-side", way > 0 ? "next" : way < 0 ? "prev" : "");
+  });
+  deck.addEventListener("mouseleave", function () { stage.setAttribute("data-side", ""); });
   document.addEventListener("keydown", function (e) {
     if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest("input, select, textarea, [contenteditable]")) return;
     if (e.key === "ArrowLeft") show(at - 1);
