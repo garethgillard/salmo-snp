@@ -305,8 +305,8 @@ TIPS = {"LORe region": "region where the duplicated chromosomes still pair; prob
 def evidence(snp, weights, trait, synthetic=False, snps=()):
     """The evidence card for one annotated row (a dict of its columns), each part only when its columns exist: the key
     facts and the caveats; the score breakdown; the functional evidence at the locus (a mini locus browser with the
-    job's `snps` in its window and the SNP's peak per condition, or one line when no condition has a peak; Ensembl
-    regulatory, molQTL); as a marker (assay, flank, duplicates); context (known association; expression, the user's own
+    job's `snps` in its window and the SNP's peak per condition, or one line when no condition has a peak;
+    molQTL); as a marker (assay, flank, duplicates); context (known association; expression, the user's own
     columns and details closed). Shared by the job card and the variant page."""
     chrom, pos = snp.get("chrom"), snp.get("pos")
     ref, alt = snp.get("ref"), snp.get("alt")
@@ -358,7 +358,6 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
         ev["maf"] = {"value": None, "other": snp.get("public_af_alleles") == "other"}
     ev["duplicates"] = duplicates(snp)
     ev["marker"] = marker_chips(snp, ev)
-    ev["function"] = function(snp)
     ev["facts"] = facts(snp, ev, states, chosen, set((weights or {}).get("active_states", [])))
     ev["caveats"] = caveats(snp, ev)
     ev["details"] = details(snp)
@@ -527,16 +526,6 @@ def duplicates(snp):
     return {"lore": (snp.get("lore_label") or "region") if snp.get("lore") else None, "gene": gene,
             "chrom": snp.get("ss4r_ohnolog_chrom"), "kind": snp.get("ss4r_class"), "tip": tips.get(snp.get("ss4r_class"), ""),
             "url": search.locus_url(copy["chrom"], max(1, copy["start"] + 1 - 5000), copy["end"] + 5000) if copy else None}
-
-
-def function(snp):
-    """[(label, value)] of the functional layers neither the tier line nor the mini browser shows: the Ensembl regulatory
-    build."""
-    out = []
-    if snp.get("regbuild"):
-        out.append(("Ensembl regulatory", " ".join(str(x) for x in ((snp.get("regbuild_type") or "").replace("_", " "), snp.get("regbuild_id")) if x)
-                    + (f", promoter of {snp['regbuild_gene_id']}" if snp.get("regbuild_gene_id") else "")))
-    return out
 
 
 IUPAC = {"R": "A/G", "Y": "C/T", "S": "C/G", "W": "A/T", "K": "G/T", "M": "A/C", "B": "C/G/T", "D": "A/G/T", "H": "A/C/T",

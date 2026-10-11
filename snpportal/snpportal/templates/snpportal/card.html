@@ -6,7 +6,7 @@
    and caveats. Then sections that fold under a
    grey header like the locus browser's groups (portal.js keeps a fold from card to card): the functional evidence
    at the locus (its header links to the locus browser; a mini locus browser with the SNP's peak per condition under
-   it; Ensembl regulatory, molQTL); as a marker (assay and flank, duplicates, the Design panel); context (published
+   it; molQTL); as a marker (assay and flank, duplicates, the Design panel); context (published
    association; expression, the user's own columns and details closed). Parts render only when their columns exist.
    The drawer and variant.html give the heading.{% endcomment %}
 {% if hx and crumbs %}{% include 'snpportal/_crumbs.html' with oob=1 %}{% endif %}
@@ -17,11 +17,10 @@
     {% if panel.sources %}<span class="sp-fact sp-fact-ok" title="Your Design panel holds this SNP ({{ panel.sources|join:', ' }})">in your panel</span>{% endif %}</p>
   {% if ev.caveats %}<ul class="sp-status sp-status-warn sp-caveats" aria-label="Caveats">{% for text in ev.caveats %}<li>{{ text }}</li>{% endfor %}</ul>{% endif %}
 
-  {% if ev.mini or ev.no_peak or ev.function or ev.molqtl or locus_url %}<details class="sp-cs" id="cs-locus" open><summary><h3 class="sp-cs-h">Functional evidence at the locus</h3>
+  {% if ev.mini or ev.no_peak or ev.molqtl or locus_url %}<details class="sp-cs" id="cs-locus" open><summary><h3 class="sp-cs-h">Functional evidence at the locus</h3>
       {% if locus_url %}<a class="sp-cs-act" href="{{ locus_url }}" data-locus>Open locus browser &rarr;</a>{% endif %}</summary>
     {% if ev.mini %}<div class="sp-figure mb-2">{{ ev.mini }}</div>{% endif %}
     {% if ev.no_peak %}<p class="mb-2">{{ ev.no_peak }}</p>{% endif %}
-    {% if ev.function %}<dl class="sp-dl mb-2">{% for label, value in ev.function %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
 
     {% if ev.molqtl %}<h4 class="sp-cs-h4">molQTL leads (nf-RASQUAL, 12 fish)</h4>
     <div class="table-responsive"><table class="table table-sm mb-1">
