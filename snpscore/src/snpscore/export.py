@@ -127,12 +127,15 @@ def methods_text(manifest, weights, preset="all", release_dir=None, finemap=None
     ]
     if weights.get("weights"):
         w, presets = weights["weights"], weights.get("presets") or {}
-        conds = ", ".join(presets.get(preset) or []) or "all 21 conditions"
+        conds = ", ".join(presets.get(preset) or [])
+        some = bool(conds) and preset != "all"  # a subset of the conditions; else all of them, so nothing is active elsewhere
         text.append(
-            f"Each SNP was given a functional tier (1 best to 4) for the '{preset}' preset ({conds}). tier_score adds "
+            "Each SNP was given a functional tier (1 best to 4) "
+            + (f"for the '{preset}' preset ({conds})" if some else "counting all AQUA-FAANG conditions") + ". tier_score adds "
             f"the weights of the evidence it has: an active chromatin state ({', '.join(weights.get('active_states', []))}) "
-            f"in a preset condition ({w.get('active')}), active only in other conditions ({w.get('active_elsewhere')}), "
-            f"a weak state ({w.get('weak')}), a CDS change to the protein or of unknown effect ({w.get('coding')}), a "
+            + (f"in a preset condition ({w.get('active')}), active only in other conditions ({w.get('active_elsewhere')}), "
+               if some else f"in any condition ({w.get('active')}), ")
+            + f"a weak state ({w.get('weak')}), a CDS change to the protein or of unknown effect ({w.get('coding')}), a "
             f"synonymous CDS change ({w.get('synonymous', w.get('coding'))}), splice region ({w.get('splice')}), UTR "
             f"({w.get('utr')}), a GERP constrained element ({w.get('constrained')}) and an Ensembl regulatory feature "
             f"outside AQUA-FAANG peaks ({w.get('regbuild')}); tiers 1-3 need a score of at least "

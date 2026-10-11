@@ -180,6 +180,12 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [x] S8 Gene and known loci pages: word budgets, 10/25-row lists
 - [x] S9 Help, Methods, Data, Tour (5 steps) and Report: definitions in one place
 
+### Results refresh (to 2026-10-11)
+- [x] Tiers count all 21 conditions everywhere (no Active in); the Table filters on its columns (Chromatin: a peak or an active state in the picked conditions, a filter only) and takes single SNPs out with +/-
+- [x] Evidence card in the Table's drawer: score blocks against the tier cut-offs, a mini locus browser (+-10 kb) with chromatin tiles, the marker section; 'Open locus browser' widens the drawer over the page
+- [x] Score page lists this browser's results; Design panel page (Add to panel from the Table, chip comparison, problems-first SNP list with drops by hand, vendor files; this browser only, 24 h)
+- [x] Guided tour (8 slides, new screenshots), Help, Methods, Run locally, report, READMEs and methods text match the above
+
 ### Review pass (2026-10-07)
 - [x] Six-lens review (correctness, security/privacy, Python 3.8 + performance, UI/UX, science, tests/docs): 49 findings, 48 confirmed by two skeptics, fixed (commits e246d89 / 59c27b0)
 - [x] Final check: snpscore 100 + portal 57 tests, dev and live suites, 953-URL smoke test on release/dev
