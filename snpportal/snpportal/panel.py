@@ -33,7 +33,7 @@ from .views import UploadToResults, accepted_suffix, finished, private
 
 COOKIE = "snpportal_panel"
 BIN = 250_000  # the figure's marks: one per 250 kb, coloured by the best tier in it
-SHOWN, LISTED = 100, 2000  # SNPs listed, then with 'Show all'
+SHOWN, LISTED = 50, 2000  # SNPs listed, then with 'Show all'
 SCOPES = {"all": "all panel SNPs", "new": "SNPs not on the chip"}
 
 

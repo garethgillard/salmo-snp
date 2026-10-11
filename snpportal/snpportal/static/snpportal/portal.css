@@ -512,3 +512,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-mine-name { font-weight: 600; overflow-wrap: anywhere; }
 .sp-mine-current { background: var(--sp-grey-50); box-shadow: inset 3px 0 0 var(--sp-accent); }
 .sp .sp-mine-del { color: var(--sp-fail-text); }
+
+/* the Design panel page: two columns as tall as each other; each one's last card takes up the slack */
+.sp-eq > div > :last-child { flex: 1 1 auto; }
+.sp-eq .sp-card, .sp-eq .sp-figure { margin: 0; }

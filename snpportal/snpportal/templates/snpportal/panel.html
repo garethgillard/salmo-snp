@@ -20,6 +20,8 @@
     <p class="mt-2 mb-0"><a class="btn btn-sm btn-primary" href="{% url 'snpportal:current' %}">Go to your results</a></p>
   </section>
   {% else %}
+  <div class="row g-3 sp-eq">
+    <div class="col-lg-6 d-flex flex-column gap-3">
   <section class="sp-card" aria-labelledby="src-h">
     <div class="sp-card-head"><h2 id="src-h">Sources</h2>
       <form class="ms-auto" method="post" action="{% url 'snpportal:panel_change' %}" onsubmit="return confirm('Remove every source and the chip from your panel?')">{% csrf_token %}
@@ -33,10 +35,8 @@
     {% if n %}<p class="sp-small mb-0"><strong>{{ n|thousands }}</strong> SNPs in the panel{% if several %}; {{ several|thousands }} in more than one source{% endif %}.
       Tiers here count all 21 conditions, so sources scored for other conditions compare.</p>{% endif %}
   </section>
-
   {% if n %}
-  <div class="row g-3">
-    <div class="col-xl-6"><section class="sp-card h-100" aria-labelledby="chip-h">
+    <section class="sp-card" aria-labelledby="chip-h">
       <div class="sp-card-head"><h2 id="chip-h">{% if chip %}Compared with {{ chip.label|lower }}{% else %}Your chip{% endif %}</h2>
         {% if chip %}<form class="ms-auto" method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0" type="submit" name="chip_remove" value="1">Remove chip</button></form>{% endif %}</div>
       {% if chip_error %}<div class="sp-status sp-status-warn sp-small" role="status">&#9888; {{ chip_error }}</div>{% endif %}
@@ -48,16 +48,7 @@
         <button class="btn btn-sm btn-primary" type="submit">Compare</button>
         {% if chip_demo %}<button class="btn btn-sm btn-outline-secondary" type="submit" name="demo" value="1">Use the demo chip</button>{% endif %}
       </form>{% endif %}
-    </section></div>
-    <div class="col-xl-6"><section class="sp-card h-100" aria-labelledby="glance-h">
-      <h2 id="glance-h">At a glance</h2>
-      <p class="sp-small mb-2">{% for tier, k in tiers %}<span class="sp-badge sp-tier-{{ tier }}">Tier {{ tier }}: {{ k|thousands }}</span> {% endfor %}</p>
-      {% if readiness %}<div class="sp-figure">{{ readiness.svg }}</div><p class="sp-small sp-muted mb-0">{{ readiness.line }}</p>{% endif %}
-    </section></div>
-  </div>
-
-  <figure class="sp-card sp-figure" id="fig-panel"><div class="sp-card-head"><h2>Panel SNPs along the genome</h2></div>{{ fig }}</figure>
-
+    </section>
   <section class="sp-card" aria-labelledby="dl-h">
     <h2 id="dl-h">Download</h2>
     <form method="get" action="{{ downloads.url }}" class="d-flex flex-wrap gap-2 align-items-center sp-small">
@@ -68,7 +59,19 @@
     <p class="sp-small mt-2 mb-0"><a href="{{ downloads.tsv }}">Download the panel (TSV)</a> &middot; score that file again to keep the
       panel beyond 24 hours. Vendor files leave out SNPs that fail the assay check.</p>
   </section>
+  {% endif %}
+    </div>
+    {% if n %}<div class="col-lg-6 d-flex flex-column gap-3">
+    <section class="sp-card" aria-labelledby="glance-h">
+      <h2 id="glance-h">At a glance</h2>
+      <p class="sp-small mb-2">{% for tier, k in tiers %}<span class="sp-badge sp-tier-{{ tier }}">Tier {{ tier }}: {{ k|thousands }}</span> {% endfor %}</p>
+      {% if readiness %}<div class="sp-figure">{{ readiness.svg }}</div><p class="sp-small sp-muted mb-0">{{ readiness.line }}</p>{% endif %}
+    </section>
+  <figure class="sp-card sp-figure" id="fig-panel"><div class="sp-card-head"><h2>Panel SNPs along the genome</h2></div>{{ fig }}</figure>
+    </div>{% endif %}
+  </div>
 
+  {% if n %}
   <section class="sp-card" aria-labelledby="list-h">
     <div class="sp-card-head"><h2 id="list-h">Panel SNPs</h2></div>
     <div class="table-responsive"><table class="table table-sm sp-table sp-small mb-1">
