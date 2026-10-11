@@ -667,6 +667,7 @@ def table(request, key, job=None):
         "hidden": [(k, base[k]) for k in ("sort", "desc", "size") if base[k]]  # and filters with no control on the form
         + [(k, chosen[k]) for k in ("hide_reason", "max_maf") if k in chosen] + list(settings.items()),
         "columns": [(k, COLUMNS[k][0], k in shown) for k in available if k != "id"], "chips": chips,
+        "columns_default": link(cols="", col=[], page=None) if custom_cols else None,
         "clear": link(drop=filter_keys, page=None) if conds else None, "suggest": suggest,
         "headers": headers, "shown": shown, "rows": rows, "page": page, "pages": pages,
         "prev": link(page=page - 1) if page > 1 else None, "next": link(page=page + 1) if page < pages else None,

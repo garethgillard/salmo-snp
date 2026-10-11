@@ -216,6 +216,8 @@ class ResultsTest(SimpleTestCase):
         self.assertTrue(all(f'id="dd-{d}"' in head for d in ("tier", "region", "gene", "active", "assay")))  # active: Chromatin
         few = self.client.get(self.url + "?tab=table&cols=1&col=tier").content.decode()
         self.assertNotIn('id="dd-region"', few)  # Region hidden: no filter for it (Columns shows it)
+        self.assertRegex(few, r'href="\?tab=table[^"]*" hx-boost="true">Default</a>')  # back to the default columns
+        self.assertNotIn(">Default</a>", page)  # already the default
         filtered = self.client.get(self.url + "?tab=table&cols=1&col=tier&region=intron").content.decode()
         self.assertIn('id="dd-region"', filtered[filtered.index("<thead"):filtered.index("</thead>")])  # filtered: it shows
         self.assertNotIn('id="drawer"', page)  # the evidence drawer opens only on a click

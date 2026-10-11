@@ -18,7 +18,8 @@
     {% if download and matching %}<a href="{{ download }}">Download these {{ n_selected|thousands }} (TSV)</a>{% if vendor %} · <a href="{{ vendor }}" hx-boost="true">Vendor files for these {{ n_selected|thousands }} &rarr;</a>{% endif %}{% endif %}
     {% if n_selected %}<button class="btn btn-sm btn-primary" type="submit" form="add-panel" title="Copy this selection (the + rows) into your Design panel">Add to panel ({{ n_selected|thousands }})</button>{% endif %}
     <details class="sp-dd" id="dd-cols"><summary class="btn btn-sm btn-outline-secondary">Columns</summary>
-      <div class="sp-dd-panel sp-dd-right"><fieldset class="sp-dd-list"><legend class="visually-hidden">Columns to show</legend><input type="hidden" name="cols" value="1">
+      <div class="sp-dd-panel sp-dd-right"><div class="sp-dd-head"><span>Columns to show</span>{% if columns_default %}<a href="{{ columns_default }}" hx-boost="true">Default</a>{% endif %}</div>
+        <fieldset class="sp-dd-list"><legend class="visually-hidden">Columns to show</legend><input type="hidden" name="cols" value="1">
         {% for key, label, checked in columns %}<label><input class="form-check-input" type="checkbox" name="col" value="{{ key }}"{% if checked %} checked{% endif %}> {{ label }}</label>{% endfor %}
       </fieldset></div>
     </details>
