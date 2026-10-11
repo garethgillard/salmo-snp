@@ -503,8 +503,8 @@ def _fit(text, px, size):
 
 
 def score_blocks(parts, cutoffs, score, synthetic=False, unit=76, width=640):
-    """The card's score: one block per evidence term, as wide as its points (largest first), its label as short as a
-    chip (with +points when it fits; the full text on hover), dashed lines at the tier cut-offs (tier 3, 2 and 1 at
+    """The card's score: one block per evidence term, as wide as its points (largest first, notched at each point like
+    a ruler), its label as short as a chip (with +points when it fits; the full text on hover), dashed lines at the tier cut-offs (tier 3, 2 and 1 at
     cutoffs[2], [1] and [0] points) to show which the blocks reach, and '= score' at the right edge, in the same place
     on every card. A label too long for its block drops ' in', then all but its first word. parts: [(label, weight,
     colour, full text)]."""
@@ -513,7 +513,9 @@ def score_blocks(parts, cutoffs, score, synthetic=False, unit=76, width=640):
     body, words, x = [], [], 0  # blocks, then the cut-off lines, then the words on top
     for label, w, colour, tip in parts:
         bw, ink = w * u - 4, palette.text_on(colour)
-        body.append(f'<rect x="{x:.1f}" y="14" width="{bw:.1f}" height="28" rx="4" fill="{colour}"><title>{escape(tip)}</title></rect>')
+        body.append(f'<rect x="{x:.1f}" y="14" width="{bw:.1f}" height="28" rx="4" fill="{colour}"><title>{escape(tip)}</title></rect>'
+                    + "".join(f'<path d="M{x + i * u - 2:.1f} 14v5M{x + i * u - 2:.1f} 42v-5" stroke="{palette.WHITE}" stroke-width="1.5" '
+                              'stroke-opacity="0.8" pointer-events="none"/>' for i in range(1, w)))  # a ruler: a notch per point
         text = next((t for t in (label, label.replace(" in ", " "), label.split(" ")[0]) if 6.2 * len(t) <= bw - 12), label)
         halo = f' stroke="{colour}" stroke-width="3" paint-order="stroke"'  # hides the cut-off lines behind the letters
         words.append(f'<g pointer-events="none">{_t(x + 6, 32, _fit(text, bw - 12, 10.5), 10.5, ink, "start", "600", halo)}'
@@ -532,13 +534,16 @@ def score_blocks(parts, cutoffs, score, synthetic=False, unit=76, width=640):
     return figures.svg(width, 46, f"Score {score}", f"{desc}. Weights and tier cut-offs are provisional.", "".join(body), synthetic)
 
 
+GRID = {"cw": 58, "ch": 22, "gap": 4, "left": 70, "top": 18}  # the tiles: cell size, gap, label column, header row
+
+
 def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="cg", legend=True):
     """Tissue rows x immature/mature female/male columns, plus an embryo row: the state of each of the 21 conditions
     at one SNP. states: {condition: state or None}. Preset cells are outlined; blacklisted cells without a state are
     hatched 'n/a'. legend=False: no legend of its own (the card shares one with its mini browser)."""
-    cw, ch, gap, left = 58, 22, 4, 70
+    cw, ch, gap, left = GRID["cw"], GRID["ch"], GRID["gap"], GRID["left"]
     defs = f"<defs>{_hatch(uid, 'na', G[500])}</defs>"
-    parts, y, present = [], 18, set()
+    parts, y, present = [], GRID["top"], set()
     for i, (_, _, short) in enumerate(COLUMNS):
         parts.append(_t(left + i * (cw + gap) + cw / 2, 12, short, 9.5, G[700], "middle"))
 
@@ -676,10 +681,12 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
     left, right = (pos - 1 - data["start"]) / 1000, (data["end"] - pos) / 1000
     body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="12" y2="{y}" stroke="{G[900]}" stroke-opacity="0.45"/>' + _t(x, 9, "SNP", 9.5, G[900], "middle", "600")
                 + _t(ax.x0, 9, f"−{left:g} kb", 9, G[700]) + _t(ax.x1, 9, f"+{right:g} kb", 9, G[700], "end"))
-    if tiles:  # the SNP's peak per condition, in a wedge from the SNP: the same size and place on every card
-        gw, gh = (float(v) for v in re.search(r' width="([\d.]+)" height="([\d.]+)"', tiles).groups())
-        gx, gy = min(max(x - gw / 2, 0), width - gw), y + 16
-        body.insert(0, f'<path d="M{x:.1f} {y:.1f} L{gx + gw:.1f} {gy:.1f} L{gx:.1f} {gy:.1f}Z" fill="{G[100]}"/>')  # under everything else
+    if tiles:  # the SNP's peak per condition: the tiles centred under the SNP (their labels to the left), in a wedge
+        gw, gh = (float(v) for v in re.search(r' width="([\d.]+)" height="([\d.]+)"', tiles).groups())  # from it to them
+        t0, t1 = GRID["left"], GRID["left"] + 4 * (GRID["cw"] + GRID["gap"]) - GRID["gap"]  # the tiles' span in the grid
+        gx, gy = min(max(x - (t0 + t1) / 2, 0), width - gw), y + 8
+        body.insert(0, f'<path d="M{x:.1f} {y:.1f} L{gx + t1:.1f} {gy + GRID["top"]:.1f} L{gx + t0:.1f} {gy + GRID["top"]:.1f}Z" '
+                       f'fill="{G[100]}"/>')  # under everything else
         body.append(tiles.replace("<svg ", f'<svg x="{gx:.1f}" y="{gy:.1f}" ', 1))
         y = gy + gh
     desc = (f"Chromosome {data['chrom']}: {data['start'] + 1:,}-{data['end']:,} around the SNP at {pos:,}: genes, public variants, "

@@ -294,51 +294,11 @@ def selection_of(trait, presets):
 
 
 def trait_tiers(d, w, trait):
-    """(file, suffix) holding a job's tier columns for `trait` (<column>__<suffix>): tiers.parquet under the stored
-    preset with the same conditions, else tiers_<key>.parquet, scored once. (None, None) for jobs made before
-    tiers.parquet."""
+    """(file, suffix) holding a job's tier columns (<column>__<suffix>): tiers.parquet under the stored preset with the
+    conditions of `trait` (always 'all' in the portal). (None, None) for jobs made before tiers.parquet."""
     if not (d / "tiers.parquet").exists():
         return None, None
-    stored = stored_preset(trait, w["presets"])
-    if stored:
-        return d / "tiers.parquet", stored
-    path = d / f"tiers_{trait}.parquet"
-    if not path.exists():
-        con = connect([d], d)
-        con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
-        columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
-        sql = scored_sql("r", w, columns, trait, d)
-        picked = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE ({sql}))").fetchall() if c in TIER_COLUMNS]
-        tmp = d / f"tiers_{trait}.{uuid.uuid4().hex}.tmp"
-        con.execute(f"COPY (SELECT file_row_number, {', '.join(f'{c} AS {ident(c + chr(95) * 2 + trait)}' for c in picked)} "
-                    f"FROM ({sql})) TO '{tmp}' (FORMAT parquet)")
-        con.close()
-        tmp.chmod(0o600)
-        os.replace(tmp, path)
-    return path, trait
-
-
-def trait_summary(d, w, trait, s):
-    """summary.json `s` with the per-trait parts of `trait` added when it has none (an Active-in selection): from its
-    tiers file, computed once and kept in summary_<key>.json."""
-    if not w or trait in s.get("tiers", {}) or trait not in w["presets"]:
-        return s
-    stored = stored_preset(trait, w["presets"])
-    if stored in s.get("tiers", {}):  # a stored preset's parts, under the key
-        return {**s, **{k: {**s[k], trait: s[k][stored]} for k in ("tiers", "region_tiers", "chrom_tiers", "bins", "terms") if stored in s.get(k, {})}}
-    path = d / f"summary_{trait}.json"
-    parts = read_json(path) if path.exists() else None
-    if not parts:
-        tiers, _ = trait_tiers(d, w, trait)
-        if tiers is None:
-            return s
-        con = connect([d], d)
-        con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
-        columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
-        parts = _trait_parts(con, tiers, [trait], columns)
-        con.close()
-        _write_json(path, parts)
-    return {**s, **{k: {**s.get(k, {}), **v} for k, v in parts.items()}}
+    return d / "tiers.parquet", stored_preset(trait, w["presets"]) or "all"
 
 
 # ---- job.json ----
