@@ -237,7 +237,7 @@ class LocusTest(SimpleTestCase):
         table = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&molqtl=1")
         self.assertIn("1&ndash;1 of 1 shown", table)
         columns = [c[0] for c in jobs.connect([d]).execute(f"DESCRIBE SELECT * FROM read_parquet('{d / 'result.parquet'}')").fetchall()]
-        self.assertEqual(bool(re.search(r"</span> assay \w", card)), "assay_status" in columns)  # in the As a marker header, with assay columns
+        self.assertEqual(bool(re.search(r"assay (pass|warn|fail|not checked)</span>", card)), "assay_status" in columns)  # in the As a marker header, with assay columns
         bare = locus.evidence({"chrom": "25", "pos": 1, "tier": 4, "tier_score": 0, "tier_terms": []}, jobs.weights(), "all")
         self.assertEqual((bare.get("assay"), bare.get("grid"), bare.get("gene"), bare["terms"]), (None, None, None, None))
         two = locus.evidence({"chrom": "25", "pos": 1, "tier": 1, "tier_score": 6, "tier_evidence": "active: Brain; CDS",
@@ -253,7 +253,9 @@ class LocusTest(SimpleTestCase):
                          [("active", 3, "active: Brain, embryo (1 stage) +3"), ("CDS", 3, "CDS (amino-acid effect not computed) +3")])
         self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)</title>", svg_of(two["blocks"]))), 6)
         ET.fromstring(mini)
-        self.assertEqual(locus.flank_parts("ACGYT[A/G]NNA"), [("ACG", ""), ("Y", "var"), ("T", ""), ("[A/G]", "snp"), ("NN", "n"), ("A", "")])
+        parts = locus.flank_parts("ACGYT[A/G]NNAAAAAAAC", 100, {98: {"maf": 0.21}}, 6)
+        self.assertEqual([p[:2] for p in parts], [("ACG", ""), ("Y", "var"), ("T", ""), ("[A/G]", "snp"), ("NN", "n"), ("AAAAAAA", "run"), ("C", "")])
+        self.assertEqual(parts[1][2], "Public variant −2 bp: C/T, MAF 0.21")  # its offset, alleles and MAF on hover
 
         variant = self.get(reverse("snpportal:variant", args=["25-28996360-C-T"]))
         self.assertIn("vgll3_Met54Thr", variant)  # no upload: annotated on the fly

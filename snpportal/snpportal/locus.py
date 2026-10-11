@@ -33,7 +33,7 @@ from snpscore import tracks as st
 from snpscore.formats import lit
 from snpscore.score import NOT_CONDITIONS, preset_conditions
 
-from . import explore, figures, jobs, locus_svg, palette, results
+from . import explore, figures, jobs, locus_svg, palette, results, search
 from .views import finished, private
 
 DEFAULT_WIDTH = 10_000  # a single position opens this wide
@@ -317,6 +317,7 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
           "score": snp.get("tier_score"), "samples": results.SAMPLES}
     ev["terms"] = results.tier_parts(snp.get) or None  # 'Missense p.Thr46Met (...)', 3; the blocks' hover text
     states = {c[len("chromatin_"):]: snp[c] for c in snp if c.startswith("chromatin_") and c not in NOT_CONDITIONS}
+    data = None  # the mini browser's lanes, when there is a chromatin layer
     chosen = set()  # tiers count all 21 conditions: none stands out in the tiles or the counts
     if weights and "tier_terms" in snp:
         ev["blocks"] = mark_safe(locus_svg.score_blocks(score_parts(snp, states, chosen, weights), weights["tiers"], snp.get("tier_score") or 0,
@@ -339,14 +340,16 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
     if snp.get("molqtl"):
         ev["molqtl"] = molqtl(snp)
     if snp.get("assay_status"):
+        cfg = (weights or {}).get("assay") or {}
         reasons = [r for r in (snp.get("assay_reasons") or "").split("; ") if r]
-        reasons += [label for flag, label in (("lore", "LORe region"), ("strand_ambiguous", "A/T or C/G SNP"))
-                    if snp.get(flag) and not any(r.startswith(label[:5]) for r in reasons)]
         icon, cls = results.ASSAY.get(snp["assay_status"], ("?", "not_checked"))
-        ev["assay"] = {"status": snp["assay_status"].replace("_", " "), "icon": icon, "cls": cls,
-                       "reasons": "; ".join(map(results.reason_text, reasons)), "flank": snp.get("assay_flank"),
-                       "flank_parts": flank_parts(snp.get("assay_flank")),
-                       "tip": "; ".join(f"{k}: {v}" for k, v in TIPS.items() if any(r.startswith(k[:5]) for r in reasons))}
+        gc, (lo, hi) = snp.get("assay_gc"), cfg.get("gc", [0.3, 0.7])
+        variants = {v["pos"]: v for v in (data or {}).get("variants", [])}
+        ev["assay"] = {"status": snp["assay_status"].replace("_", " "), "icon": icon, "cls": cls, "all": "; ".join(map(results.reason_text, reasons)),
+                       "reasons": "; ".join(results.reason_text(r) for r in reasons if not r.startswith(ELSEWHERE)),  # not shown elsewhere
+                       "flank": snp.get("assay_flank"), "flank_parts": flank_parts(snp.get("assay_flank"), pos, variants, cfg.get("max_homopolymer", 6)),
+                       "gc": None if gc is None else (f"GC {gc:.0%}", "" if lo <= gc <= hi else "warn",
+                                                     f"GC share of the flanks; {lo:.0%}–{hi:.0%} passes (provisional)")}
     min_maf = float(snp_panel.settings(weights)["min_maf"])
     if snp.get("public_af"):
         maf = snp.get("public_af_maf")
@@ -355,6 +358,7 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
     elif "public_af" in snp:  # 'other': the panel has a different variant at this position (no MAF for these alleles)
         ev["maf"] = {"value": None, "other": snp.get("public_af_alleles") == "other"}
     ev["duplicates"] = duplicates(snp)
+    ev["marker"] = marker_chips(snp, ev)
     ev["function"] = function(snp)
     ev["facts"] = facts(snp, ev, states, chosen, set((weights or {}).get("active_states", [])))
     ev["caveats"] = caveats(snp, ev)
@@ -409,7 +413,7 @@ def conditions_text(items):
     return ", ".join([x for x in names if x not in results.STAGES] + embryo)
 
 
-FACT_ORDER = ("gene", "region", "gwas", "rank", "chromatin", "known", "molqtl", "assay", "maf", "lore", "strand")
+FACT_ORDER = ("gene", "region", "gwas", "rank", "chromatin", "known", "molqtl")
 
 
 def chip(text, cls="", tip="", key="", url=None):
@@ -418,15 +422,15 @@ def chip(text, cls="", tip="", key="", url=None):
 
 
 def ordered(chips):
-    """The key facts by group: the SNP (gene, region), its evidence (GWAS, rank, chromatin, known locus, molQTL), then
-    how it would work as a marker (assay, MAF, LORe, A/T or C/G), so warnings sit together."""
+    """The key facts by group: the SNP (gene, region), then its evidence (GWAS, rank, chromatin, known locus, molQTL).
+    How it would work as a marker sits in the As a marker header (marker_chips)."""
     return sorted(chips, key=lambda c: FACT_ORDER.index(c[3]) if c[3] in FACT_ORDER else len(FACT_ORDER))
 
 
 def facts(snp, ev, states, chosen, active_states):
     """The card's key facts, one chip each (chip()): the gene (the drawer's heading has it), the region where no score
-    block says it (its distance outside the gene), chromatin where it didn't score, known locus, molQTL, MAF and
-    the marker risks (LORe, A/T or C/G). Job cards add the rank and a GWAS job's p, beta and PIP (job_card)."""
+    block says it (its distance outside the gene), chromatin where it didn't score, known locus and molQTL. Job
+    cards add the rank and a GWAS job's p, beta and PIP (job_card)."""
     out, g = [], snp.get
     fired = {t["term"] for t in g("tier_terms") or [] if t["weight"]}  # what the score blocks already say
     gene = ev.get("gene")
@@ -450,18 +454,28 @@ def facts(snp, ev, states, chosen, active_states):
                         f"Known locus {k['id']}" + (f" ({k['trait']})" if k["trait"] else ""), "known"))
     if g("molqtl"):
         out.append(chip("molQTL lead", "", f"{(g('molqtl_tissues') or '').replace(',', ', ')}: display only, not counted in tiers", "molqtl"))
+    return ordered(out)
+
+
+def marker_chips(snp, ev):
+    """The As a marker header's chips, seen when it is folded: [(text, class, tooltip)]: the assay check, MAF ('low'
+    below the panel designer's minimum), LORe and A/T or C/G."""
+    out = []
+    if ev.get("assay"):
+        a = ev["assay"]
+        out.append((f"{a['icon']} assay {a['status']}", a["cls"], "Assay design check of the probe flanks" + (f": {a['all']}" if a["all"] else "")))
     m = ev.get("maf")
     if m and m["value"] is not None:
-        out.append(chip(f"MAF {m['value']}" + (" · low" if m["low"] else ""), "warn" if m["low"] else "",
-                        results.MAF_TIP + (f"; below the panel designer's minimum ({m['min']}, provisional)" if m["low"] else ""), "maf"))
+        out.append((f"MAF {m['value']}" + (" · low" if m["low"] else ""), "warn" if m["low"] else "plain",
+                    results.MAF_TIP + (f"; below the panel designer's minimum ({m['min']}, provisional)" if m["low"] else "")))
     elif m:
-        out.append(chip("no public MAF", "muted", "Not a site of the 504-fish public panel" if not m.get("other") else
-                        "The 504-fish public panel has a different variant at this position", "maf"))
-    if g("lore"):
-        out.append(chip("LORe", "warn", TIPS["LORe region"], "lore"))
-    if g("strand_ambiguous"):
-        out.append(chip("A/T or C/G", "warn", TIPS["A/T or C/G SNP"], "strand"))
-    return ordered(out)
+        out.append(("no public MAF", "not_checked", "Not a site of the 504-fish public panel" if not m.get("other") else
+                    "The 504-fish public panel has a different variant at this position"))
+    if snp.get("lore"):
+        out.append(("LORe", "warn", TIPS["LORe region"]))
+    if snp.get("strand_ambiguous"):
+        out.append(("A/T or C/G", "warn", TIPS["A/T or C/G SNP"]))
+    return out
 
 
 def gwas_chips(line):
@@ -514,17 +528,17 @@ def caveats(snp, ev):
 
 
 def duplicates(snp):
-    """Sentences on copies of this region elsewhere in the genome (salmon's whole-genome duplication, Ss4R), where probes
-    may also bind: [(text, gene id to link or None, text after)]."""
-    out = []
-    if snp.get("lore"):
-        pair = f" ({snp['lore_label']})" if snp.get("lore_label") else ""
-        out.append((f"LORe region{pair}: the duplicate copy is nearly identical, so probes may bind both.", None, ""))
-    if snp.get("ss4r_ohnolog"):
-        kind = {"LORe": "LORe: a recent split, more similar", "AORe": "AORe: split before the salmonid species"}
-        out.append(("Ss4R duplicate of its gene: ", snp["ss4r_ohnolog"], f" on chr{snp.get('ss4r_ohnolog_chrom') or '?'}"
-                    + (f" ({kind.get(snp.get('ss4r_class'), snp.get('ss4r_class'))})" if snp.get("ss4r_class") else "") + "."))
-    return out
+    """One line on copies of this region elsewhere in the genome (salmon's whole-genome duplication, Ss4R), where probes
+    may also bind: {lore (its chromosome pair or ''), gene (the Ss4R copy of its gene), chrom, kind, tip, url (that
+    copy in the locus browser)}; None without either."""
+    gene = snp.get("ss4r_ohnolog")
+    if not snp.get("lore") and not gene:
+        return None
+    copy = explore.gene_rows([gene]).get(gene) if gene else None
+    tips = {"LORe": "LORe: a recent split, so the copies are more similar", "AORe": "AORe: split before the salmonid species"}
+    return {"lore": (snp.get("lore_label") or "region") if snp.get("lore") else None, "gene": gene,
+            "chrom": snp.get("ss4r_ohnolog_chrom"), "kind": snp.get("ss4r_class"), "tip": tips.get(snp.get("ss4r_class"), ""),
+            "url": search.locus_url(copy["chrom"], max(1, copy["start"] + 1 - 5000), copy["end"] + 5000) if copy else None}
 
 
 def function(snp):
@@ -537,15 +551,45 @@ def function(snp):
     return out
 
 
-def flank_parts(flank):
-    """The probe flank as [(text, kind)]: kind 'snp' for the [ref/alt], 'var' for a public variant in the flank (an
-    IUPAC code), 'n' for an unknown base, '' for the rest."""
-    if not flank:
+IUPAC = {"R": "A/G", "Y": "C/T", "S": "C/G", "W": "A/T", "K": "G/T", "M": "A/C", "B": "C/G/T", "D": "A/G/T", "H": "A/C/T",
+         "V": "A/C/G"}
+ELSEWHERE = ("GC", "homopolymer", "flank variants", "LORe", "A/T", "blacklisted")  # assay reasons the card shows elsewhere
+
+
+def flank_parts(flank, pos=None, variants=None, max_run=6):
+    """The probe flanks as [(text, kind, tooltip)]: kind 'snp' for the [ref/alt]; 'var' for a public variant in a flank
+    (an IUPAC code: its offset from the SNP, alleles and MAF on hover; variants: {pos: lanes() variant}); 'run' for a
+    single-base run longer than max_run; 'n' for unknown bases; '' for the rest."""
+    if not flank or "[" not in flank:
         return []
-    out = []
-    for part in re.split(r"(\[[^\]]*\]|[^ACGTacgt\[\]]+)", flank):
-        if part:
-            out.append((part, "snp" if part.startswith("[") else "n" if set(part) <= set("Nn") else "var" if not re.fullmatch(r"[ACGTacgt]+", part) else ""))
+    left, rest = flank.split("[", 1)
+    allele, right = rest.split("]", 1)
+    variants, out = variants or {}, []
+    runs = re.compile("|".join(f"{b}{{{max_run + 1},}}" for b in "ACGTacgt"))
+
+    def side(seq, offset):  # offset(i): bp from the SNP of the base at index i
+        for m in re.finditer(r"[ACGTacgt]+|[Nn]+|.", seq):
+            text = m.group(0)
+            if text[0] in "Nn":
+                out.append((text, "n", "unknown bases"))
+            elif text[0] in "ACGTacgt":
+                last = 0
+                for r in runs.finditer(text):
+                    if r.start() > last:
+                        out.append((text[last:r.start()], "", ""))
+                    out.append((r.group(0), "run", f"{len(r.group(0))} × {r.group(0)[0].upper()}: longer than {max_run}"))
+                    last = r.end()
+                if last < len(text):
+                    out.append((text[last:], "", ""))
+            else:
+                d = offset(m.start())
+                v = variants.get(pos + d) if pos else None
+                out.append((text, "var", f"Public variant {'+' if d > 0 else '−'}{abs(d)} bp: {IUPAC.get(text.upper(), text)}"
+                            + (f", MAF {_fmt(v.get('maf'))}" if v and v.get("maf") is not None else "")))
+
+    side(left, lambda i: i - len(left))
+    out.append((f"[{allele}]", "snp", "the SNP"))
+    side(right, lambda i: i + 1)
     return out
 
 

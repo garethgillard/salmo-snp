@@ -32,12 +32,14 @@
     <p class="sp-muted mb-2">Low power: not fine-mapped, not counted in tiers, no direction implied. {{ ev.molqtl.citation }}{% if ev.molqtl.licence %} Licence: {{ ev.molqtl.licence }}.{% endif %}</p>{% endif %}
   </details>{% endif %}
 
-  {% if ev.assay or ev.duplicates or panel %}<details class="sp-cs" id="cs-marker" open><summary><h3 class="sp-cs-h">As a marker</h3>
-      {% if ev.assay %}<span class="sp-as sp-as-{{ ev.assay.cls }}" title="Assay design check of the probe flanks{% if ev.assay.reasons %}: {{ ev.assay.reasons }}{% endif %}"><span aria-hidden="true">{{ ev.assay.icon }}</span> assay {{ ev.assay.status }}</span>{% endif %}</summary>
-    {% if ev.assay.reasons %}<p class="mb-1"{% if ev.assay.tip %} title="{{ ev.assay.tip }}"{% endif %}>{{ ev.assay.reasons|capfirst }}.</p>{% endif %}
-    {% if ev.assay.flank_parts %}<p class="sp-mono sp-flank mb-0">{% for text, kind in ev.assay.flank_parts %}{% if kind %}<mark class="sp-flank-{{ kind }}">{{ text }}</mark>{% else %}{{ text }}{% endif %}{% endfor %}</p>
-    <p class="sp-muted mb-2">35 bp flanks; <mark class="sp-flank-var">public variants</mark> as IUPAC codes &middot; <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-copy="{{ ev.assay.flank }}">Copy</button></p>{% endif %}
-    {% for text, gene, after in ev.duplicates %}<p class="mb-1">{{ text }}{% if gene %}<a href="{% url 'snpportal:gene' gene %}">{{ gene }}</a>{% endif %}{{ after }}</p>{% endfor %}
+  {% if ev.assay or ev.duplicates or ev.marker or panel %}<details class="sp-cs" id="cs-marker" open><summary><h3 class="sp-cs-h">As a marker</h3>
+      {% for text, cls, tip in ev.marker %}<span class="sp-as sp-as-{{ cls }}" title="{{ tip }}">{{ text }}</span>{% endfor %}</summary>
+    {% if ev.assay.reasons %}<p class="mb-1">{{ ev.assay.reasons|capfirst }}.</p>{% endif %}
+    {% if ev.assay.flank_parts %}<p class="mb-2 d-flex flex-wrap align-items-center gap-2"><button type="button" class="sp-fact sp-copy-chip sp-flank" data-copy="{{ ev.assay.flank }}"
+        title="Probe flanks, 35 bp each side: the SNP in black, public variants as IUPAC codes (hover one), long single-base runs underlined. Click to copy."><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="sp-mono">{% for text, kind, tip in ev.assay.flank_parts %}{% if kind %}<mark class="sp-flank-{{ kind }}" title="{{ tip }}">{{ text }}</mark>{% else %}{{ text }}{% endif %}{% endfor %}</span></button>
+      {% if ev.assay.gc %}<span class="sp-as sp-as-{{ ev.assay.gc.1|default:'plain' }}" title="{{ ev.assay.gc.2 }}">{{ ev.assay.gc.0 }}</span>{% endif %}</p>{% endif %}
+    {% with dup=ev.duplicates %}{% if dup %}<p class="mb-1">Duplicate copy:{% if dup.lore %} <span title="Region where the duplicated chromosomes still pair">LORe ({{ dup.lore }})</span>, nearly identical, so probes may bind both{% endif %}{% if dup.lore and dup.gene %};{% endif %}
+      {% if dup.gene %}its gene&rsquo;s Ss4R copy <a href="{% url 'snpportal:gene' dup.gene %}">{{ dup.gene }}</a> on chr{{ dup.chrom|default:'?' }}{% if dup.kind %} <span title="{{ dup.tip }}">({{ dup.kind }})</span>{% endif %}{% if dup.url %} &middot; <a href="{{ dup.url }}">view it</a>{% endif %}{% endif %}.</p>{% endif %}{% endwith %}
     {% if panel %}<p class="mb-1">{% if panel.sources %}In your <a href="{% url 'snpportal:design_panel' %}">Design panel</a> ({{ panel.sources|join:", " }}).{% else %}Not in your <a href="{% url 'snpportal:design_panel' %}">Design panel</a>.{% endif %}
       {% if panel.chip %}{{ panel.chip }}{% endif %}</p>{% endif %}
   </details>{% endif %}

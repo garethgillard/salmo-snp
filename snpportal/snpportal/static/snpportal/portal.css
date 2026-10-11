@@ -333,6 +333,10 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-fact .sp-copy { font-size: inherit; }
 .sp-cs-h4 { margin: .6rem 0 .3rem; font-size: .875rem; font-weight: 600; }
 .sp-flank { font-size: .8rem; line-height: 1.7; word-break: break-all; }
+.sp .sp-copy-chip.sp-flank { display: inline-block; max-width: 100%; text-align: left; white-space: normal; }
+.sp .sp-copy-chip.sp-flank svg { margin-right: .3rem; vertical-align: -.1rem; }
+.sp-cs mark.sp-flank-run { background: none; color: inherit; text-decoration: underline 2px var(--sp-warn-border); text-underline-offset: 3px; }
+.sp-as-plain { color: var(--sp-grey-900); background: var(--sp-white); border-color: var(--sp-grey-300); }
 .sp-flank mark, .sp-cs mark { padding: 0 .1rem; border-radius: .15rem; }
 .sp-cs mark.sp-flank-snp { background: var(--sp-grey-900); color: var(--sp-white); font-weight: 600; }
 .sp-cs mark.sp-flank-var { background: var(--sp-warn-bg); color: var(--sp-warn-text); box-shadow: inset 0 0 0 1px var(--sp-warn-border); }
