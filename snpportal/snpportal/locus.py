@@ -11,6 +11,7 @@
 - /snp/variant/<chrom>-<pos>[-ref-alt]/ annotates one position against the release on the fly, without a job."""
 from __future__ import annotations
 
+import math
 import re
 import time
 import uuid
@@ -314,7 +315,8 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
     spec = f"{chrom}-{pos}" + (f"-{ref}-{alt}" if ref and alt else "")
     ev = {"trait": trait, "title": snp.get("id") or f"{chrom}:{pos:,}", "position": f"{chrom}:{pos}",
           "alleles": f"{ref}>{alt}" if ref and alt else "", "spec": spec, "synthetic": synthetic, "tier": snp.get("tier"),
-          "score": snp.get("tier_score"), "samples": results.SAMPLES}
+          "score": snp.get("tier_score"), "samples": results.SAMPLES,
+          "note": results.locus_note(snp.get)}  # the position and alleles when the title doesn't hold them
     ev["terms"] = results.tier_parts(snp.get) or None  # 'Missense p.Thr46Met (...)', 3; the blocks' hover text
     states = {c[len("chromatin_"):]: snp[c] for c in snp if c.startswith("chromatin_") and c not in NOT_CONDITIONS}
     chosen = set(preset_conditions(weights, list(snp), trait)[0]) if weights and states else set()
@@ -375,7 +377,8 @@ CHROMATIN_TERMS = ("active", "active_elsewhere", "weak")  # their blocks say wha
 def score_parts(snp, states=None, chosen=(), weights=None):
     """The evidence terms that count, largest first, for the score blocks: [(label, weight, colour, full text)] with
     labels as short as the key facts' chips: 'active in 5/21' (of the chosen conditions), 'weak in 3/21', 'missense',
-    'conserved', '5′ UTR', 'Ensembl enhancer'; the full text (conditions, protein change) on hover."""
+    'conserved', '5′ UTR', 'Ensembl enhancer'; the full text (conditions, protein change) on hover. A chromatin block
+    has the colour of its strongest state there, as in the tiles."""
     g, fired, states = snp.get, snp.get("tier_terms") or [], states or {}
     raw = [x for x in (g("tier_evidence") or "").split("; ") if x]
     raw = raw if len(raw) == len(fired) else [""] * len(fired)
@@ -388,8 +391,14 @@ def score_parts(snp, states=None, chosen=(), weights=None):
                  results.CONSEQUENCES.get(g("coding_consequence") or "") or "CDS" if k == "coding" else
                  results.CLASS_LABELS.get(g("region_class")) or "UTR" if k == "utr" else
                  f"Ensembl {(g('regbuild_type') or '').replace('_', ' ')}".strip() if k == "regbuild" else SCORE_LABELS.get(k, k))
-        tip = (f"{k.replace('_', ' ')}: {conditions_text(r.partition(': ')[2])}" if k in CHROMATIN_TERMS and r else text)
-        out.append((label, t["weight"], locus_svg._colour(locus_svg.TERMS.get(k, (palette.GREY[500], k))[0]), f"{tip} +{w}"))
+        kind = (weights or {}).get(f"{'active' if k == 'active_elsewhere' else k}_states", ())
+        where = [c for c in states if c not in among] if k == "active_elsewhere" else among
+        found = [states[c] for c in where if states[c] in kind] if k in CHROMATIN_TERMS else []
+        state = locus_svg.strongest(found) if found else None  # its strongest state, coloured as in the tiles
+        tip = (f"{k.replace('_', ' ')}" + (f" ({state.replace('_', ' ')})" if state else "") + f": {conditions_text(r.partition(': ')[2])}"
+               if k in CHROMATIN_TERMS and r else text)
+        colour = palette.state(state)[0] if state else locus_svg._colour(locus_svg.TERMS.get(k, (palette.GREY[500], k))[0])
+        out.append((label, t["weight"], colour, f"{tip} +{w}"))
     return sorted(out, key=lambda p: -p[1])
 
 
@@ -402,18 +411,32 @@ def conditions_text(items):
     return ", ".join([x for x in names if x not in results.STAGES] + embryo)
 
 
+FACT_ORDER = ("gene", "region", "gwas", "rank", "chromatin", "known", "molqtl", "assay", "maf", "lore", "strand")
+
+
+def chip(text, cls="", tip="", key="", url=None):
+    """One key fact: (text, class ok/warn/fail/muted or '', tooltip, group (FACT_ORDER), link or None)."""
+    return text, cls, tip, key, url
+
+
+def ordered(chips):
+    """The key facts by group: the SNP (gene, region), its evidence (GWAS, rank, chromatin, known locus, molQTL), then
+    how it would work as a marker (assay, MAF, LORe, A/T or C/G), so warnings sit together."""
+    return sorted(chips, key=lambda c: FACT_ORDER.index(c[3]) if c[3] in FACT_ORDER else len(FACT_ORDER))
+
+
 def facts(snp, ev, states, chosen, active_states):
-    """The card's key facts, one chip each: [(text, class, tooltip)]: consequence and gene, chromatin, known locus,
-    molQTL, assay, MAF and the marker risks (LORe, A/T or C/G); not what a score block says (the consequence of a
-    coding or UTR SNP: just its gene; chromatin when it scored). Class ok, warn, fail or muted ('' plain)."""
+    """The card's key facts, one chip each (chip()): the gene (the drawer's heading has it), the region where no score
+    block says it (its distance outside the gene), chromatin where it didn't score, known locus, molQTL, assay, MAF and
+    the marker risks (LORe, A/T or C/G). Job cards add the rank and a GWAS job's p, beta and PIP (job_card)."""
     out, g = [], snp.get
     fired = {t["term"] for t in g("tier_terms") or [] if t["weight"]}  # what the score blocks already say
-    region = results.region_text(g) if "region_class" in snp and not fired & {"coding", "synonymous", "splice", "utr"} else ""
     gene = ev.get("gene")
-    if region or gene:
-        where = f" · {locus_svg.fmt_bp(g('gene_distance'))} from {gene['label']}" if gene and g("gene_distance") else \
-            f" · {gene['label']}" if gene else ""
-        out.append((region + where if region else gene["label"], "", results.coding_tip(g) or (gene or {}).get("where", "")))
+    if gene:
+        out.append(chip(gene["label"], "", gene.get("where", ""), "gene"))
+    if "region_class" in snp and not fired & {"coding", "synonymous", "splice", "utr"}:
+        out.append(chip(results.region_text(g) + (f" · {locus_svg.fmt_bp(g('gene_distance'))} away" if g("gene_distance") else ""), "",
+                        results.coding_tip(g) or (gene or {}).get("where", ""), "region"))
     if states and not fired & set(CHROMATIN_TERMS):
         peak = [c for c, s in states.items() if s]
         active = [c for c in peak if states[c] in active_states]
@@ -421,29 +444,59 @@ def facts(snp, ev, states, chosen, active_states):
         mine = f"; in the chosen conditions: a peak in {len(chosen & set(peak))} of {len(chosen)}, active in {len(chosen & set(active))}" \
             if chosen and len(chosen) < n else ""
         tip = f"A robust ATAC peak in {len(peak)} of {n} conditions, active (Active TSS or enhancer) in {len(active)}{mine}"
-        out.append((f"active in {len(active)}/{n}" if active else f"peak in {len(peak)}/{n}, not active" if peak
-                    else "no ATAC peak", "" if peak else "muted", tip))
+        out.append(chip(f"active in {len(active)}/{n}" if active else f"peak in {len(peak)}/{n}, not active" if peak
+                        else "no ATAC peak", "" if peak else "muted", tip, "chromatin"))
     if ev.get("known"):
         k = ev["known"]
-        out.append(("★ published SNP" if not g("known_locus_dist") else f"★ {k['where'].replace(' away', '')} from {k['id']}", "",
-                    f"Known locus {k['id']}" + (f" ({k['trait']})" if k["trait"] else "")))
+        out.append(chip("★ published SNP" if not g("known_locus_dist") else f"★ {k['where'].replace(' away', '')} from {k['id']}", "",
+                        f"Known locus {k['id']}" + (f" ({k['trait']})" if k["trait"] else ""), "known"))
     if g("molqtl"):
-        out.append(("molQTL lead", "", f"{(g('molqtl_tissues') or '').replace(',', ', ')}: display only, not counted in tiers"))
+        out.append(chip("molQTL lead", "", f"{(g('molqtl_tissues') or '').replace(',', ', ')}: display only, not counted in tiers", "molqtl"))
     if ev.get("assay"):
         a = ev["assay"]
-        out.append((f"{a['icon']} assay {a['status']}", a["cls"], a["reasons"] or "Assay design check of the probe flanks"))
+        out.append(chip(f"{a['icon']} assay {a['status']}", a["cls"], a["reasons"] or "Assay design check of the probe flanks", "assay"))
     m = ev.get("maf")
     if m and m["value"] is not None:
-        out.append((f"MAF {m['value']}" + (" · low" if m["low"] else ""), "warn" if m["low"] else "",
-                    results.MAF_TIP + (f"; below the panel designer's minimum ({m['min']}, provisional)" if m["low"] else "")))
+        out.append(chip(f"MAF {m['value']}" + (" · low" if m["low"] else ""), "warn" if m["low"] else "",
+                        results.MAF_TIP + (f"; below the panel designer's minimum ({m['min']}, provisional)" if m["low"] else ""), "maf"))
     elif m:
-        out.append(("no public MAF", "muted", "Not a site of the 504-fish public panel" if not m.get("other") else
-                    "The 504-fish public panel has a different variant at this position"))
+        out.append(chip("no public MAF", "muted", "Not a site of the 504-fish public panel" if not m.get("other") else
+                        "The 504-fish public panel has a different variant at this position", "maf"))
     if g("lore"):
-        out.append(("LORe", "warn", TIPS["LORe region"]))
+        out.append(chip("LORe", "warn", TIPS["LORe region"], "lore"))
     if g("strand_ambiguous"):
-        out.append(("A/T or C/G", "warn", TIPS["A/T or C/G SNP"]))
+        out.append(chip("A/T or C/G", "warn", TIPS["A/T or C/G SNP"], "strand"))
+    return ordered(out)
+
+
+def gwas_chips(line):
+    """A GWAS job's chips from association.snp_line: p, beta (se) and, inside a locus, its PIPs linked to the locus."""
+    if not line:
+        return []
+    out = [chip(f"p {line['p']}", "", "GWAS p value", "gwas")]
+    if line.get("beta") is not None:
+        out.append(chip(f"β {line['beta']:.3f}" + (f" ({line['se']:.3f})" if line.get("se") is not None else ""), "",
+                        "GWAS effect of the alt allele (standard error)", "gwas"))
+    if line.get("locus") and line.get("pip_u") is not None:
+        out.append(chip(f"PIP {line['pip_u']:.2f} → {line['pip_f']:.2f}", "",
+                        f"Locus {line['locus']}: posterior inclusion probability, uniform → functional prior; {line['cs']}; "
+                        "one causal variant per locus, no LD", "gwas", line.get("region")))
+    elif line.get("locus"):
+        out.append(chip(f"locus {line['locus']}", "", "The GWAS locus window this SNP falls in", "gwas", line.get("region")))
     return out
+
+
+def rank_chip(con, score):
+    """'top 3%' (of the whole list, by tier score; ties share the best rank) or 'highest score'; None for a score of 0
+    or in the lower half."""
+    if not score:
+        return None
+    better, total = con.execute("SELECT count(*) FILTER (WHERE tier_score > ?), count(*) FROM v", [score]).fetchone()
+    share = (better + 1) / max(total, 1)
+    if share > 0.5:
+        return None
+    return chip("highest score in your list" if not better else f"top {max(1, math.ceil(100 * share))}% by score", "",
+                f"{better:,} of the {total:,} SNPs in your list score higher", "rank")
 
 
 def caveats(snp, ev):
@@ -628,7 +681,8 @@ def job_card(request, key, row, job):
     for p in snps:
         p["out"] = p["row"] not in selected  # filtered out or taken out (−): hollow in the mini browser
     ev = evidence(snp, jobs.weights(d), chosen["trait"], synthetic, snps)
-    ev["gwas"] = association.snp_line(request, key, row, job)
+    ev["facts"] = ordered(ev["facts"] + gwas_chips(association.snp_line(request, key, row, job))
+                          + [c for c in [rank_chip(con, snp.get("tier_score"))] if c])
     ctx = card_context(request, ev, jobs.presets(d), None,
                        f"{reverse('snpportal:locus')}?{urlencode({'key': key, 'row': row, 'trait': chosen['trait'], **gwas_query})}",
                        gwas_query)

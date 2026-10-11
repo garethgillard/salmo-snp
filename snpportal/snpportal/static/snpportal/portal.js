@@ -29,9 +29,9 @@
     var copy = e.target.closest("[data-copy]");  // <button data-copy="text">: copy to the clipboard
     if (copy && navigator.clipboard) {
       navigator.clipboard.writeText(copy.getAttribute("data-copy")).then(function () {
-        var label = copy.textContent;
+        var label = copy.innerHTML;  // text or an icon
         copy.textContent = "Copied";
-        setTimeout(function () { copy.textContent = label; }, 1200);
+        setTimeout(function () { copy.innerHTML = label; }, 1200);
       });
     }
     var png = e.target.closest("[data-png]");

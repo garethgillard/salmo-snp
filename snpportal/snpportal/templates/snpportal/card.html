@@ -1,9 +1,10 @@
 {% load snpportal_tags %}
 {% comment %}Evidence card for one SNP, laid out to decide whether to keep it (context: ev from locus.evidence, presets,
    switch_url (none: no conditions form; a job's card follows the Table's Active in), hx, locus_url, keep: other
-   parameters the conditions form keeps; a job's card also panel (panel.holds); tier_in_heading: the drawer's heading
-   shows the tier, so the key facts don't). Always shown: the score (a block per evidence term, = score on the right),
-   the key facts under it (not what a block says), caveats and a GWAS job's line. Then sections that fold under a
+   parameters the conditions form keeps; a job's card also panel (panel.holds); heading: the drawer's heading shows the
+   tier, gene and Copy, so the key facts don't). Always shown: the score (a block per evidence term, = score on the
+   right), the key facts under it (locus.facts: not what a block or the heading says; a GWAS job's p, beta and PIP),
+   and caveats. Then sections that fold under a
    grey header like the locus browser's groups (portal.js keeps a fold from card to card): the functional evidence
    at the locus (its header links to the locus browser; a mini locus browser with the SNP's peak per condition under
    it; Ensembl regulatory, molQTL); as a marker (assay and flank, duplicates, the Design panel); context (published
@@ -24,14 +25,12 @@
   </div>{% endif %}
 
   {% if ev.blocks %}<div class="sp-figure mb-1">{{ ev.blocks }}</div>{% endif %}
-  <p class="sp-facts"><span class="sp-fact"><span class="sp-mono">{{ ev.position }}{% if ev.alleles %} {{ ev.alleles }}{% endif %}</span>
-    <button type="button" class="btn btn-link btn-sm p-0 align-baseline sp-copy" data-copy="{{ ev.spec }}" title="Copy {{ ev.spec }}">Copy</button></span>{% if ev.tier and not tier_in_heading %}{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %}{% endif %}
-    {% for text, cls, tip in ev.facts %}<span class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</span>{% endfor %}
+  <p class="sp-facts">{% if heading %}{% if ev.note %}<span class="sp-fact sp-mono">{{ ev.note }}</span>{% endif %}
+    {% else %}<span class="sp-fact"><span class="sp-mono">{{ ev.position }}{% if ev.alleles %} {{ ev.alleles }}{% endif %}</span>
+    <button type="button" class="btn btn-link btn-sm p-0 align-baseline sp-copy" data-copy="{{ ev.spec }}" title="Copy {{ ev.spec }}">Copy</button></span>{% if ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %}{% endif %}{% endif %}
+    {% for text, cls, tip, key, url in ev.facts %}{% if not heading or key != 'gene' %}{% if url %}<a class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}" href="{{ url }}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</a>{% else %}<span class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</span>{% endif %}{% endif %}{% endfor %}
     {% if panel.sources %}<span class="sp-fact sp-fact-ok" title="Your Design panel holds this SNP ({{ panel.sources|join:', ' }})">in your panel</span>{% endif %}</p>
   {% if ev.caveats %}<ul class="sp-status sp-status-warn sp-caveats" aria-label="Caveats">{% for text in ev.caveats %}<li>{{ text }}</li>{% endfor %}</ul>{% endif %}
-  {% if ev.gwas %}<p class="mb-2">GWAS: p {{ ev.gwas.p }}{% if ev.gwas.beta is not None %} &middot; beta {{ ev.gwas.beta|floatformat:3 }}{% if ev.gwas.se is not None %} ({{ ev.gwas.se|floatformat:3 }}){% endif %}{% endif %}
-    {% if ev.gwas.locus %}&middot; <a href="{{ ev.gwas.region }}">locus {{ ev.gwas.locus }}</a>{% if ev.gwas.pip_u is not None %} &middot; PIP {{ ev.gwas.pip_u|floatformat:2 }} &rarr; {{ ev.gwas.pip_f|floatformat:2 }} (functional prior)
-    &middot; {{ ev.gwas.cs }} (one causal variant, no LD){% endif %}{% endif %}</p>{% endif %}
 
   {% if ev.mini or ev.no_peak or ev.function or ev.molqtl or locus_url %}<details class="sp-cs" id="cs-locus" open><summary><h3 class="sp-cs-h">Functional evidence at the locus</h3>
       {% if locus_url %}<a class="sp-cs-act" href="{{ locus_url }}">Open in the locus browser &rarr;</a>{% endif %}</summary>

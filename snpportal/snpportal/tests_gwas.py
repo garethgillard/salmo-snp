@@ -210,8 +210,9 @@ class GwasTest(SimpleTestCase):
         card = re.search(rf'href="(/snp/results/{self.key}/snp/\d+/\?trait=[^"]*)">{re.escape(causal)}<', credible).group(1)
         card = self.client.get(card, follow=True).content.decode()  # the card opens in the Table's drawer
         card = card[card.index('id="drawer"'):]
-        self.assertIn("GWAS: p ", card)  # the card's GWAS line, with its qualifier
-        self.assertIn("(one causal variant, no LD)", card)
+        self.assertRegex(card, r'class="sp-fact" title="GWAS p value">p ')  # the card's GWAS chips, the PIP's with its qualifier
+        self.assertIn("one causal variant per locus, no LD", card)
+        self.assertIn(">PIP ", card)
         download = self.client.get(f"{url}?trait=maturation&locus=1&download=1")
         self.assertIn("attachment", download["Content-Disposition"])
         self.assertNotIn(b"<a ", download.content)

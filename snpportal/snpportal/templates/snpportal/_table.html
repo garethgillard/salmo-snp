@@ -89,14 +89,17 @@
   <div class="sp-drawer-body sp-card shadow h-100 overflow-auto">
     <div class="sp-card-bar">
       <a class="btn btn-sm sp-keep{% if drawer.out %} sp-keep-out{% endif %}" href="{{ drawer.pick }}" hx-get="{{ drawer.pick }}" data-pick role="button"
-         aria-pressed="{% if drawer.out %}false{% else %}true{% endif %}" title="{% if drawer.out %}Put it back into the selection{% else %}Take it out of the selection{% endif %} (x)"><span class="sp-pick-now">{% if drawer.out %}&minus; Not selected{% else %}+ Selected{% endif %}</span><span class="sp-pick-next">{% if drawer.out %}+ Put back{% else %}&minus; Take out{% endif %}</span></a>
+         aria-pressed="{% if drawer.out %}false{% else %}true{% endif %}" aria-label="{% if drawer.out %}Put it back into the selection{% else %}Take it out of the selection{% endif %}"
+         title="{% if drawer.out %}Not in the selection: click to put it back{% else %}In the selection: click to take it out{% endif %} (x)"><span class="sp-pick-now">{% if drawer.out %}&minus;{% else %}+{% endif %}</span><span class="sp-pick-next">{% if drawer.out %}+{% else %}&minus;{% endif %}</span></a>
+      <h2 class="h5 mb-0" id="drawer-h">{% if drawer.ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=drawer.ev.tier %} {% endif %}{{ drawer.ev.title }}{% if drawer.ev.gene %}
+        <span class="sp-muted">&middot;</span> <a href="{{ drawer.ev.gene.url }}"{% if drawer.ev.gene.tip %} title="{{ drawer.ev.gene.tip }}"{% endif %}>{% if drawer.ev.gene.named %}<em>{{ drawer.ev.gene.label }}</em>{% else %}{{ drawer.ev.gene.label }}{% endif %}</a>{% endif %}</h2>
+      <button type="button" class="sp-copy-icon" data-copy="{{ drawer.ev.spec }}" title="Copy {{ drawer.ev.spec }}" aria-label="Copy {{ drawer.ev.spec }}"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
       {% if drawer.steps %}<nav class="ms-auto d-flex align-items-center gap-1" aria-label="Other SNPs of the table">
-        {% if drawer.steps.prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ drawer.steps.prev }}" hx-get="{{ drawer.steps.prev }}" data-prev title="Previous row (k)">&lsaquo; Previous</a>{% endif %}
+        {% if drawer.steps.prev %}<a class="btn btn-sm btn-outline-secondary" href="{{ drawer.steps.prev }}" hx-get="{{ drawer.steps.prev }}" data-prev title="Previous row (k)" aria-label="Previous row">&lsaquo;</a>{% endif %}
         <span class="sp-muted px-1">{{ drawer.steps.rank|thousands }} of {{ drawer.steps.of|thousands }}</span>
-        {% if drawer.steps.next %}<a class="btn btn-sm btn-outline-secondary" href="{{ drawer.steps.next }}" hx-get="{{ drawer.steps.next }}" data-next title="Next row (j)">Next &rsaquo;</a>{% endif %}
+        {% if drawer.steps.next %}<a class="btn btn-sm btn-outline-secondary" href="{{ drawer.steps.next }}" hx-get="{{ drawer.steps.next }}" data-next title="Next row (j)" aria-label="Next row">&rsaquo;</a>{% endif %}
       </nav>{% endif %}
     </div>
-    <h2 class="h5 mb-2" id="drawer-h">{% if drawer.ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=drawer.ev.tier %} {% endif %}{{ drawer.ev.title }}</h2>
-    {% include 'snpportal/card.html' with tier_in_heading=1 ev=drawer.ev presets=drawer.presets switch_url=None hx=drawer.hx locus_url=drawer.locus_url trait=drawer.trait keep=drawer.keep panel=drawer.panel crumbs=None %}
+    {% include 'snpportal/card.html' with heading=1 ev=drawer.ev presets=drawer.presets switch_url=None hx=drawer.hx locus_url=drawer.locus_url trait=drawer.trait keep=drawer.keep panel=drawer.panel crumbs=None %}
   </div>
 </aside>{% endif %}

@@ -300,10 +300,15 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 /* the card (card.html): a bar with the +/− switch and Previous/Next (the drawer), key facts, caveats, then sections */
 .sp-card-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .75rem; padding-bottom: .6rem;
   border-bottom: 1px solid var(--sp-grey-200); }
-.sp .sp-keep { min-width: 7.5rem; border: 1px solid var(--sp-grey-500); background: var(--sp-white); color: var(--sp-grey-900); font-weight: 600; }
+.sp .sp-keep { min-width: 2rem; padding: 0 .45rem; border: 1px solid var(--sp-grey-500); background: var(--sp-white); color: var(--sp-grey-900);
+  font-size: 1rem; font-weight: 600; }  /* the card's +/−: as the table's selector column */
 .sp .sp-keep:hover, .sp .sp-keep:focus-visible { color: var(--sp-fail-text); border-color: var(--sp-fail-border); background: var(--sp-fail-bg); }
 .sp .sp-keep-out { border-style: dashed; background: var(--sp-grey-100); color: var(--sp-grey-700); }
 .sp .sp-keep-out:hover, .sp .sp-keep-out:focus-visible { color: var(--sp-ok-text); border-color: var(--sp-ok-border); background: var(--sp-ok-bg); }
+.sp-card-bar h2 { margin: 0; }
+.sp .sp-copy-icon { padding: 0 .2rem; border: 0; background: none; color: var(--sp-grey-700); line-height: 1; }
+.sp .sp-copy-icon:hover { color: var(--sp-grey-900); }
+.sp a.sp-fact { text-decoration: none; }
 .sp-facts { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-bottom: .6rem; }
 .sp-fact { padding: .05rem .5rem; border: 1px solid var(--sp-grey-300); border-radius: 1rem; background: var(--sp-white); font-size: .8rem; white-space: nowrap; }
 .sp-fact-ok { color: var(--sp-ok-text); background: var(--sp-ok-bg); border-color: var(--sp-ok-border); }

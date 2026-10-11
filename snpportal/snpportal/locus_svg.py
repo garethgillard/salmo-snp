@@ -520,12 +520,13 @@ def score_blocks(parts, cutoffs, score, synthetic=False, unit=76, width=640):
                      + (_t(x + bw - 6, 32, f"+{w}", 10.5, ink, "end", "700", halo) if bw - 12 - 6.2 * len(text) > 20 else "") + "</g>")
         x += w * u
     if not parts:
-        body.append(_t(4, 32, "no evidence found (not evidence of no effect)", 10.5, G[700]))
+        words.append(_t(4, 32, "no evidence found (not evidence of no effect)", 10.5, G[700], "start", "",
+                        f' stroke="{palette.WHITE}" stroke-width="4" paint-order="stroke"'))
     for i, c in enumerate(cutoffs):  # the cut-offs over the blocks: after c points
         cx = c * u - 2
         body.append(f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="14" y2="42" stroke="{palette.WHITE}" stroke-width="3" stroke-opacity="0.6"/>'  # seen on dark blocks
                     f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="12" y2="44" stroke="{G[900]}" stroke-dasharray="3 2"/>'
-                    + _t(cx, 9, f"tier {i + 1}", 9, G[700], "middle"))
+                    + _t(cx, 9, f"T{i + 1}", 9, G[700], "middle").replace("</text>", f"<title>tier {i + 1}: {c} points or more</title></text>"))
     body += words + [_t(width - 2, 33, f"= {score}", 14, G[900], "end", "700")]
     desc = "; ".join(p[3] for p in parts) or "no evidence counted"
     return figures.svg(width, 46, f"Score {score}", f"{desc}. Weights and tier cut-offs are provisional.", "".join(body), synthetic)
