@@ -267,7 +267,7 @@ class LocusTest(SimpleTestCase):
         self.assertIn("sp-tier-", variant)
         self.assertIn("conditions sampled", variant)
         self.assertIn("<title>Mini locus browser</title>", variant)
-        self.assertIn("Open in the locus browser", variant)
+        self.assertIn("Open locus browser", variant)
         self.assertIn('data-copy="25-28996360"', self.get(reverse("snpportal:variant", args=["ssa25-28996360"])))
         self.assertEqual(self.client.get(reverse("snpportal:variant", args=["ssa99-1"])).status_code, 404)
         self.assertFalse([p for p in (Path(self.tmp.name) / "results").iterdir() if p.name.startswith(".")])

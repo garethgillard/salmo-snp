@@ -505,11 +505,10 @@ def _fit(text, px, size):
 def score_blocks(parts, cutoffs, score, synthetic=False, unit=76, width=640):
     """The card's score: one block per evidence term, as wide as its points (largest first, notched at each point like
     a ruler), its label as short as a chip (with +points when it fits; the full text on hover), dashed lines at the tier cut-offs (tier 3, 2 and 1 at
-    cutoffs[2], [1] and [0] points) to show which the blocks reach, and '= score' at the right edge, in the same place
-    on every card. A label too long for its block drops ' in', then all but its first word. parts: [(label, weight,
+    cutoffs[2], [1] and [0] points) to show which the blocks reach, and '= score' just after the bar. A label too long for its block drops ' in', then all but its first word. parts: [(label, weight,
     colour, full text)]."""
     span = max(sum(p[1] for p in parts), cutoffs[0])
-    u = min(unit, (width - 44) / max(span, 1))
+    u = min(unit, (width - 50) / max(span, 1))
     body, words, x = [], [], 0  # blocks, then the cut-off lines, then the words on top
     for label, w, colour, tip in parts:
         bw, ink = w * u - 4, palette.text_on(colour)
@@ -529,9 +528,9 @@ def score_blocks(parts, cutoffs, score, synthetic=False, unit=76, width=640):
         body.append(f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="14" y2="42" stroke="{palette.WHITE}" stroke-width="3" stroke-opacity="0.6"/>'  # seen on dark blocks
                     f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="12" y2="44" stroke="{G[900]}" stroke-dasharray="3 2"/>'
                     + _t(cx, 9, f"T{i + 1}", 9, G[700], "middle").replace("</text>", f"<title>tier {i + 1}: {c} points or more</title></text>"))
-    body += words + [_t(width - 2, 33, f"= {score}", 14, G[900], "end", "700")]
+    body += words + [_t(span * u + 8, 33, f"= {score}", 14, G[900], "start", "700")]  # just after the bar
     desc = "; ".join(p[3] for p in parts) or "no evidence counted"
-    return figures.svg(width, 46, f"Score {score}", f"{desc}. Weights and tier cut-offs are provisional.", "".join(body), synthetic)
+    return figures.svg(round(span * u + 50), 46, f"Score {score}", f"{desc}. Weights and tier cut-offs are provisional.", "".join(body), synthetic)
 
 
 GRID = {"cw": 58, "ch": 22, "gap": 4, "left": 70, "top": 18}  # the tiles: cell size, gap, label column, header row

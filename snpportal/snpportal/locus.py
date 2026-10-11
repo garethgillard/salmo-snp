@@ -11,7 +11,6 @@
 - /snp/variant/<chrom>-<pos>[-ref-alt]/ annotates one position against the release on the fly, without a job."""
 from __future__ import annotations
 
-import math
 import re
 import time
 import uuid
@@ -413,7 +412,7 @@ def conditions_text(items):
     return ", ".join([x for x in names if x not in results.STAGES] + embryo)
 
 
-FACT_ORDER = ("gene", "region", "gwas", "rank", "chromatin", "known", "molqtl")
+FACT_ORDER = ("gene", "region", "gwas", "chromatin", "known", "molqtl")
 
 
 def chip(text, cls="", tip="", key="", url=None):
@@ -422,7 +421,7 @@ def chip(text, cls="", tip="", key="", url=None):
 
 
 def ordered(chips):
-    """The key facts by group: the SNP (gene, region), then its evidence (GWAS, rank, chromatin, known locus, molQTL).
+    """The key facts by group: the SNP (gene, region), then its evidence (GWAS, chromatin, known locus, molQTL).
     How it would work as a marker sits in the As a marker header (marker_chips)."""
     return sorted(chips, key=lambda c: FACT_ORDER.index(c[3]) if c[3] in FACT_ORDER else len(FACT_ORDER))
 
@@ -430,7 +429,7 @@ def ordered(chips):
 def facts(snp, ev, states, chosen, active_states):
     """The card's key facts, one chip each (chip()): the gene (the drawer's heading has it), the region where no score
     block says it (its distance outside the gene), chromatin where it didn't score, known locus and molQTL. Job
-    cards add the rank and a GWAS job's p, beta and PIP (job_card)."""
+    cards add a GWAS job's p, beta and PIP (job_card)."""
     out, g = [], snp.get
     fired = {t["term"] for t in g("tier_terms") or [] if t["weight"]}  # what the score blocks already say
     gene = ev.get("gene")
@@ -493,19 +492,6 @@ def gwas_chips(line):
     elif line.get("locus"):
         out.append(chip(f"locus {line['locus']}", "", "The GWAS locus window this SNP falls in", "gwas", line.get("region")))
     return out
-
-
-def rank_chip(con, score):
-    """'top 3%' (of the whole list, by tier score; ties share the best rank) or 'highest score', the rest on hover;
-    None for a score of 0 or in the lower half."""
-    if not score:
-        return None
-    better, total = con.execute("SELECT count(*) FILTER (WHERE tier_score > ?), count(*) FROM v", [score]).fetchone()
-    share = (better + 1) / max(total, 1)
-    if share > 0.5:
-        return None
-    return chip("highest score" if not better else f"top {max(1, math.ceil(100 * share))}%", "",
-                f"Rank by score in your list: {better:,} of its {total:,} SNPs score higher", "rank")
 
 
 def caveats(snp, ev):
@@ -718,8 +704,7 @@ def job_card(request, key, row, job):
     for p in snps:
         p["out"] = p["row"] not in selected  # filtered out or taken out (−): hollow in the mini browser
     ev = evidence(snp, jobs.weights(d), chosen["trait"], synthetic, snps)
-    ev["facts"] = ordered(ev["facts"] + gwas_chips(association.snp_line(request, key, row, job))
-                          + [c for c in [rank_chip(con, snp.get("tier_score"))] if c])
+    ev["facts"] = ordered(ev["facts"] + gwas_chips(association.snp_line(request, key, row, job)))
     ctx = card_context(request, ev, f"{reverse('snpportal:locus')}?{urlencode({'key': key, 'row': row, **gwas_query})}")
     ctx.update(job=job, synthetic=synthetic, panel=panel.holds(request, snp))
     return ctx
