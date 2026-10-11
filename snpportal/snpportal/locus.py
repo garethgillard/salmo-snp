@@ -425,7 +425,7 @@ def ordered(chips):
 
 def facts(snp, ev, states, chosen, active_states):
     """The card's key facts, one chip each (chip()): the gene (the drawer's heading has it), the region where no score
-    block says it (its distance outside the gene), chromatin where it didn't score, known locus, molQTL, assay, MAF and
+    block says it (its distance outside the gene), chromatin where it didn't score, known locus, molQTL, MAF and
     the marker risks (LORe, A/T or C/G). Job cards add the rank and a GWAS job's p, beta and PIP (job_card)."""
     out, g = [], snp.get
     fired = {t["term"] for t in g("tier_terms") or [] if t["weight"]}  # what the score blocks already say
@@ -450,9 +450,6 @@ def facts(snp, ev, states, chosen, active_states):
                         f"Known locus {k['id']}" + (f" ({k['trait']})" if k["trait"] else ""), "known"))
     if g("molqtl"):
         out.append(chip("molQTL lead", "", f"{(g('molqtl_tissues') or '').replace(',', ', ')}: display only, not counted in tiers", "molqtl"))
-    if ev.get("assay"):
-        a = ev["assay"]
-        out.append(chip(f"{a['icon']} assay {a['status']}", a["cls"], a["reasons"] or "Assay design check of the probe flanks", "assay"))
     m = ev.get("maf")
     if m and m["value"] is not None:
         out.append(chip(f"MAF {m['value']}" + (" · low" if m["low"] else ""), "warn" if m["low"] else "",

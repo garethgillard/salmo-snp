@@ -237,7 +237,7 @@ class LocusTest(SimpleTestCase):
         table = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&molqtl=1")
         self.assertIn("1&ndash;1 of 1 shown", table)
         columns = [c[0] for c in jobs.connect([d]).execute(f"DESCRIBE SELECT * FROM read_parquet('{d / 'result.parquet'}')").fetchall()]
-        self.assertEqual("Assay: " in card, "assay_status" in columns)  # only with assay columns
+        self.assertEqual(bool(re.search(r"</span> assay \w", card)), "assay_status" in columns)  # in the As a marker header, with assay columns
         bare = locus.evidence({"chrom": "25", "pos": 1, "tier": 4, "tier_score": 0, "tier_terms": []}, jobs.weights(), "all")
         self.assertEqual((bare.get("assay"), bare.get("grid"), bare.get("gene"), bare["terms"]), (None, None, None, None))
         two = locus.evidence({"chrom": "25", "pos": 1, "tier": 1, "tier_score": 6, "tier_evidence": "active: Brain; CDS",

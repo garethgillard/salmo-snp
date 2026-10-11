@@ -32,10 +32,11 @@
     <p class="sp-muted mb-2">Low power: not fine-mapped, not counted in tiers, no direction implied. {{ ev.molqtl.citation }}{% if ev.molqtl.licence %} Licence: {{ ev.molqtl.licence }}.{% endif %}</p>{% endif %}
   </details>{% endif %}
 
-  {% if ev.assay or ev.duplicates or panel %}<details class="sp-cs" id="cs-marker" open><summary><h3 class="sp-cs-h">As a marker</h3></summary>
-    {% if ev.assay %}<p class="mb-1"{% if ev.assay.tip %} title="{{ ev.assay.tip }}"{% endif %}>Assay: <span class="sp-as sp-as-{{ ev.assay.cls }}"><span aria-hidden="true">{{ ev.assay.icon }}</span> {{ ev.assay.status }}</span>{% if ev.assay.reasons %} {{ ev.assay.reasons }}{% endif %}</p>
+  {% if ev.assay or ev.duplicates or panel %}<details class="sp-cs" id="cs-marker" open><summary><h3 class="sp-cs-h">As a marker</h3>
+      {% if ev.assay %}<span class="sp-as sp-as-{{ ev.assay.cls }}" title="Assay design check of the probe flanks{% if ev.assay.reasons %}: {{ ev.assay.reasons }}{% endif %}"><span aria-hidden="true">{{ ev.assay.icon }}</span> assay {{ ev.assay.status }}</span>{% endif %}</summary>
+    {% if ev.assay.reasons %}<p class="mb-1"{% if ev.assay.tip %} title="{{ ev.assay.tip }}"{% endif %}>{{ ev.assay.reasons|capfirst }}.</p>{% endif %}
     {% if ev.assay.flank_parts %}<p class="sp-mono sp-flank mb-0">{% for text, kind in ev.assay.flank_parts %}{% if kind %}<mark class="sp-flank-{{ kind }}">{{ text }}</mark>{% else %}{{ text }}{% endif %}{% endfor %}</p>
-    <p class="sp-muted mb-2">35 bp flanks; <mark class="sp-flank-var">public variants</mark> as IUPAC codes &middot; <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-copy="{{ ev.assay.flank }}">Copy</button></p>{% endif %}{% endif %}
+    <p class="sp-muted mb-2">35 bp flanks; <mark class="sp-flank-var">public variants</mark> as IUPAC codes &middot; <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-copy="{{ ev.assay.flank }}">Copy</button></p>{% endif %}
     {% for text, gene, after in ev.duplicates %}<p class="mb-1">{{ text }}{% if gene %}<a href="{% url 'snpportal:gene' gene %}">{{ gene }}</a>{% endif %}{{ after }}</p>{% endfor %}
     {% if panel %}<p class="mb-1">{% if panel.sources %}In your <a href="{% url 'snpportal:design_panel' %}">Design panel</a> ({{ panel.sources|join:", " }}).{% else %}Not in your <a href="{% url 'snpportal:design_panel' %}">Design panel</a>.{% endif %}
       {% if panel.chip %}{{ panel.chip }}{% endif %}</p>{% endif %}
