@@ -39,6 +39,7 @@ DEFAULT_WIDTH = 10_000  # a single position opens this wide
 DEFAULT_REGION = "25:28985000-29010000"  # the locus browser opens here (vgll3) when no region is given
 FULL = {"published", "molqtl", "regbuild", "gerp", "variants", "signal", "snps"}  # the locus browser's optional lanes
 REGION_LANES = {"published", "gerp"}  # the regional association plot (its association lane is drawn on top)
+MINI_FLANK = 10_000  # the card's mini locus browser: the SNP +- this
 COMPACT_WIDTH = 640  # the landing figure: about the width it is shown at (no shrunk text)
 ASSAYS = ("ATAC", "H3K27ac", "H3K4me3")
 MAX_SNPS = 5_000  # user SNPs drawn per view
@@ -304,10 +305,10 @@ TIPS = {"LORe region": "region where the duplicated chromosomes still pair; prob
 
 def evidence(snp, weights, trait, synthetic=False, snps=()):
     """The evidence card for one annotated row (a dict of its columns), each part only when its columns exist: the key
-    facts and the caveats; the score breakdown; the regulatory state (chromatin per condition, or one line when no
-    condition has a peak, beside a mini locus browser with the job's `snps` in its window; conservation, molQTL); as a
-    marker (assay, flank, duplicates, MAF); context (known association, gene; expression, the user's own columns and
-    details closed). Shared by the job card and the variant page."""
+    facts and the caveats; the score breakdown; the functional evidence at the locus (a mini locus browser with the
+    job's `snps` in its window and the SNP's peak per condition, or one line when no condition has a peak; Ensembl
+    regulatory, molQTL); as a marker (assay, flank, duplicates); context (known association; expression, the user's own
+    columns and details closed). Shared by the job card and the variant page."""
     chrom, pos = snp.get("chrom"), snp.get("pos")
     ref, alt = snp.get("ref"), snp.get("alt")
     spec = f"{chrom}-{pos}" + (f"-{ref}-{alt}" if ref and alt else "")
@@ -322,15 +323,17 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
     states = {c[len("chromatin_"):]: snp[c] for c in snp if c.startswith("chromatin_") and c not in NOT_CONDITIONS}
     chosen = set(preset_conditions(weights, list(snp), trait)[0]) if weights and states else set()
     if states:
-        if any(states.values()):
-            ev["grid"] = mark_safe(locus_svg.chromatin_grid(states, chosen, bool(snp.get("blacklist")), synthetic))
-        else:
+        tiles = locus_svg.chromatin_grid(states, chosen, bool(snp.get("blacklist")), synthetic, legend=False) if any(states.values()) else None
+        if not tiles:
             ev["no_peak"] = (results.NO_PEAK if len(states) == 21 else
                              f"No AQUA-FAANG peak in the {len(states)} conditions sampled. No immune tissue, gill or skin.")
-        start, end = mini_window(pos, weights)
-        ev["mini"] = mark_safe(locus_svg.mini_browser(lanes(chrom, start, end), pos, snps, lambda gid: reverse("snpportal:gene", args=[gid]),
-                                                      synthetic))
-        ev["mini_flank"] = locus_svg.fmt_bp(pos - 1 - start).replace(".0 ", " ")
+        data = lanes(chrom, *mini_window(pos))
+        ev["mini"] = mark_safe(locus_svg.mini_browser(data, pos, snps, lambda gid: reverse("snpportal:gene", args=[gid]), synthetic,
+                                                      tiles=tiles))
+        ev["mini_flank"] = f"{MINI_FLANK // 1000} kb"
+        drawn = set(states.values()) | {locus_svg.strongest(p["states"].values()) for p in data.get("peaks", [])}
+        ev["legend"] = ([(f"st-{x}", x.replace("_", " ")) for x in locus_svg.STATE_ORDER + ("Quiescent",) if x in drawn]
+                        + [("", "no peak")] + ([("sp-lg-chosen", "a chosen condition")] if chosen and len(chosen) < len(states) else []))
     if snp.get("gene_id"):
         ev["gene"] = gene_context(snp)
     expression = {c[len("expression_"):]: snp[c] for c in snp if c.startswith("expression_")}
@@ -466,11 +469,9 @@ def flank_parts(flank):
     return out
 
 
-def mini_window(pos, weights):
-    """The card's mini locus browser window, BED coordinates: the SNP +- the panel designer's minimum spacing (weights.yaml
-    design.min_spacing, 20 kb), so it shows the list's SNPs too close to keep both."""
-    flank = int(snp_panel.settings(weights)["min_spacing"])
-    return max(0, pos - 1 - flank), pos + flank
+def mini_window(pos):
+    """The card's mini locus browser window, BED coordinates: the SNP +- MINI_FLANK."""
+    return max(0, pos - 1 - MINI_FLANK), pos + MINI_FLANK
 
 
 def details(snp):
@@ -588,7 +589,7 @@ def job_card(request, key, row, job):
     synthetic = bool(job.get("synthetic_input") or job.get("synthetic_layers"))
     snp = dict(zip(types, hit))
     gwas_query = association.query_of(request)  # a GWAS job's fine-mapping settings
-    start, end = mini_window(snp["pos"], jobs.weights(d))
+    start, end = mini_window(snp["pos"])
     snps = user_snps(request, {"key": str(key), "chrom": snp["chrom"], "start": start, "end": end, "trait": chosen["trait"], "gwas": gwas_query})
     near = f"chrom = {lit(snp['chrom'])} AND pos > {start} AND pos <= {end}"
     selected = {i for i, in con.execute(f"SELECT file_row_number FROM v {where} {'AND' if where else 'WHERE'} {near}").fetchall()}

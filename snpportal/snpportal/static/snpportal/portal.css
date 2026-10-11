@@ -312,8 +312,15 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-fact-muted { color: var(--sp-grey-700); background: var(--sp-grey-100); }
 .sp-caveats { list-style: none; margin: 0 0 .6rem; padding: .35rem .6rem; }
 .sp-caveats li::before { content: "\26A0\00a0"; }
-.sp-cs { margin-top: .9rem; padding-top: .6rem; border-top: 1px solid var(--sp-grey-200); }
-.sp-cs-h { margin-bottom: .5rem; font-size: .75rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--sp-grey-700); }
+.sp-cs { margin-top: .6rem; }  /* a foldable section, its header like the locus browser's groups (.sp-grp-h) */
+.sp-cs > summary { display: flex; align-items: baseline; gap: 10px; margin-bottom: .4rem; padding: 3px 6px; border-radius: 3px;
+  background: var(--sp-grey-50); list-style: none; cursor: pointer; }
+.sp-cs > summary::-webkit-details-marker { display: none; }
+.sp-cs > summary::after { content: "\25BE"; margin-left: auto; font-size: 15px; line-height: 1; color: var(--sp-grey-700); }
+.sp-cs:not([open]) > summary::after { content: "\25B8"; }
+.sp-cs > summary:hover { background: var(--sp-grey-100); }
+.sp .sp-cs-h { margin: 0; font-size: 12.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.sp-blegend i.sp-lg-chosen { border: 2px solid var(--sp-grey-900); }
 .sp-cs-h4 { margin: .6rem 0 .3rem; font-size: .875rem; font-weight: 600; }
 .sp-flank { font-size: .8rem; line-height: 1.7; word-break: break-all; }
 .sp-flank mark, .sp-cs mark { padding: 0 .1rem; border-radius: .15rem; }

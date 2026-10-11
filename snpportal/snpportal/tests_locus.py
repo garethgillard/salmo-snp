@@ -190,12 +190,11 @@ class LocusTest(SimpleTestCase):
         self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)", line)), scores[0])  # the tier line sums to tier_score
         self.assertEqual(int(score), scores[0])
         self.assertIn('class="sp-fact" title="Known locus vgll3_Met54Thr', card)  # the key facts
-        mini = svg_of(card[card.index("Locus &plusmn;20 kb"):])  # the mini locus browser, inline: the SNP +- the minimum spacing
-        self.assertIn("<title>Mini locus browser</title>", mini)
-        self.assertIn(">Your SNPs</text>", mini)  # the list's SNPs in the window, linked to their cards
+        mini = svg_of(card[card.index('id="cs-locus"'):])  # the mini locus browser, inline (no peak: no tiles under it)
+        self.assertIn("<title>Mini locus browser</title>", mini)  # the list's SNPs in the window, linked to their cards
         self.assertIn(f'href="/snp/results/{key}/snp/0/', mini)
         self.assertIn('<g opacity="0.3">', mini)  # no peak in Brain: out of the selection, so faded
-        self.assertIn(">GERP</text>", mini)
+        self.assertIn(">GERP<title>", mini)  # lane names explain themselves on hover
         self.assertIn(f'href="/snp/locus/?key={key}&amp;row=0&amp;trait=Brain"', card)  # its button to the locus browser
         self.assertIn("exclude=0", card[:card.index('id="card-body"')])  # the +/− switch
         self.assertNotIn("data-next", card)  # no peak in Brain: not in the table, so no Previous/Next
@@ -224,7 +223,7 @@ class LocusTest(SimpleTestCase):
         self.assertIn("caQTL (chromatin accessibility)", mq)  # the molQTL section (R4): the peak shown 1-based
         self.assertIn("25:28,963,214-28,965,045", mq)
         self.assertIn("no direction implied", mq)
-        grid = svg_of(mq[mq.index("Chromatin state per condition"):])
+        grid = re.search(r'<svg x="[^"]*" y="[^"]*" .*?</svg>', mq[mq.index('id="cs-locus"'):], re.S).group(0)  # tiles under the SNP's peak
         self.assertIn("Chromatin state per condition", grid)  # a peak somewhere: the grid
         self.assertEqual(grid.count('rx="3" fill="none"'), 4)  # the 4 Brain conditions of the trait are outlined
         swap = self.get(reverse("snpportal:card", args=[key, 2]) + "?trait=all", HTTP_HX_REQUEST="true", HTTP_HX_TARGET="card-body")

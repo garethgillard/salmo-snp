@@ -268,7 +268,7 @@ def peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes):
     for p in data.get("peaks", []):
         states = p["states"]
         n = sum(1 for v in states.values() if v)
-        best = next((x for x in STATE_ORDER if x in states.values()), "Accessible_chromatin")
+        best = locus_svg.strongest(states.values())
         x0, x1 = ax.x(p["start"]), ax.x(p["end"])
         body.append(f'<rect x="{x0:.1f}" y="3" width="{max(2, x1 - x0):.1f}" height="14" fill="{palette.state(best)[0]}" stroke="{G[900]}" '
                     f'stroke-width="0.5"><title>robust peak {p["start"] + 1:,}-{p["end"]:,} · called in {n} of {len(conditions)} conditions · '

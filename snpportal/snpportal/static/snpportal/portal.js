@@ -218,6 +218,22 @@
     var close = drawer.querySelector("[data-close]");
     if (close) close.click();
   });
+  // The card's sections (details.sp-cs) stay folded as the reader left them, card after card (this tab only).
+  function folds() {
+    try { return JSON.parse(sessionStorage.getItem("sp-folds") || "[]"); } catch (err) { return []; }
+  }
+  function refold() {
+    folds().forEach(function (id) { var d = document.getElementById(id); if (d && d.classList.contains("sp-cs")) d.open = false; });
+  }
+  document.addEventListener("toggle", function (e) {
+    var d = e.target;
+    if (!d.classList || !d.classList.contains("sp-cs")) return;
+    var f = folds().filter(function (id) { return id !== d.id; });
+    if (!d.open) f.push(d.id);
+    try { sessionStorage.setItem("sp-folds", JSON.stringify(f)); } catch (err) { /* private mode: folds reset per card */ }
+  }, true);
+  document.addEventListener("htmx:afterSwap", refold);
+  refold();
   document.addEventListener("keydown", function (e) {  // Escape closes the card drawer
     var close = e.key === "Escape" && document.querySelector("#drawer [data-close]");
     if (close) close.click();
