@@ -324,6 +324,22 @@ class PortalTest(SimpleTestCase):
         finally:
             weights.write_text(original)
 
+    def test_score_page_lists_this_browsers_results(self):
+        a = jobs.create_from_rows([("25", 28996360, "vgll3", "C", "T")], "First list")
+        b = jobs.create_from_rows([("26", 19138923, "bco1l", "A", "G")], "Second list")
+        for key in (a, b):
+            self.client.get(reverse("snpportal:results", args=[key]))  # opening results adds them to the list
+        page = self.client.get(reverse("snpportal:upload")).content.decode()
+        self.assertLess(page.index("Second list"), page.index("First list"))  # newest first
+        self.assertIn("1 SNPs", page)
+        self.assertIn('class="sp-mine-current"', page)
+        response = self.client.post(reverse("snpportal:delete", args=[b]), {"next": "score"})
+        self.assertEqual(response["Location"], reverse("snpportal:upload"))  # back to the Score page
+        page = self.client.get(reverse("snpportal:upload")).content.decode()
+        self.assertNotIn("Second list", page)
+        self.assertIn("First list", page)
+        self.assertIsNone(jobs.read(b))
+
     def test_pages_render(self):
         for name in ("landing", "upload", "locus", "about_data", "methods", "help", "run_locally", "tour", "search"):
             response = self.client.get(reverse(f"snpportal:{name}"))

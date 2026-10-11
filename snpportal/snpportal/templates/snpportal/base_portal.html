@@ -15,7 +15,7 @@
     <div class="sp-wrap">
       <a class="sp-brand" href="{% url 'snpportal:landing' %}">Functional SNP portal</a>
       <ul>
-        <li><a href="{% url 'snpportal:current' %}"{% if nav == 'score' %} aria-current="page"{% endif %}>Score</a></li>
+        <li><a href="{% url 'snpportal:upload' %}"{% if nav == 'score' %} aria-current="page"{% endif %}>Score</a></li>
         <li><a href="{% url 'snpportal:design_panel' %}"{% if nav == 'panel' %} aria-current="page"{% endif %}>Design panel<span hx-get="{% url 'snpportal:panel_count' %}" hx-trigger="load" hx-swap="innerHTML"></span></a></li>
         <li><a href="{% url 'snpportal:known_loci' %}"{% if nav == 'known' %} aria-current="page"{% endif %}>Known loci</a></li>
         <li><a href="{% url 'snpportal:locus' %}?r=25:28985000-29010000"{% if nav == 'explore' %} aria-current="page"{% endif %}>Locus browser</a></li>

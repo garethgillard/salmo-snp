@@ -578,7 +578,8 @@ def association(request, key):
     ctx.setdefault("actions", []).append(
         {"label": "Delete", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",
          "confirm": "Delete these results now? This can't be undone."})
-    return render(request, "snpportal/association.html", ctx)
+    response = render(request, "snpportal/association.html", ctx)  # the Score page lists it
+    return views.keep_mine(response, [str(key)] + [k for k in views._mine_keys(request) if k != str(key)])
 
 
 def snp_line(request, key, row, job):

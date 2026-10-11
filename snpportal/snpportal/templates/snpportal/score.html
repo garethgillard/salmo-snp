@@ -2,7 +2,8 @@
 {% load snpportal_tags %}
 
 {% block main %}
-<div class="sp-narrow sp-stack">
+<div class="row g-4">
+<div class="col-lg-7 sp-stack">
 <p class="sp-lead mb-0">Upload or paste Atlantic salmon SNPs or GWAS results (Ssal_v3.1). Each SNP gets a functional tier and the evidence behind it.</p>
 
 {% if error %}<div class="sp-status sp-status-fail" role="alert"><strong>&#9888; {% if tab == 'gwas' %}Can't analyse these summary statistics.{% else %}Can't score this list.{% endif %}</strong> {{ error }}</div>{% endif %}
@@ -71,9 +72,23 @@
       <button class="btn btn-primary" type="submit">Analyse</button>
     </form>
   </div>
-  <p class="sp-small sp-muted mt-2 mb-1">Tiers count chromatin activity in all 21 sample conditions; choose conditions with Active in on the Table.</p>
+  <p class="sp-small sp-muted mt-2 mb-1">Tiers count chromatin activity in all 21 sample conditions; the Table can filter by condition.</p>
   <p class="sp-small mb-0" id="privacy">From a VCF only CHROM, POS, ID, REF and ALT are read. Other table columns and summary
     statistics are kept with the results for {{ keep_hours }} h; anyone with the link can see them. Confidential? <a href="{% url 'snpportal:run_locally' %}">Run it locally</a>.</p>
 </section>
+</div>
+
+{# this browser's results (views.mine: the cookie lists them); each opens or is deleted here #}
+<aside class="col-lg-5"><section class="sp-card" aria-labelledby="mine-h">
+  <h2 class="mb-2" id="mine-h">Your results</h2>
+  {% if mine %}<ul class="sp-mine">{% for r in mine %}<li{% if r.current %} class="sp-mine-current"{% endif %}>
+    <a class="sp-mine-name" href="{{ r.url }}">{{ r.name }}</a>
+    <span class="sp-small sp-muted">{% if r.state == 'done' %}{{ r.n|thousands }} SNPs{% elif r.state == 'failed' %}failed{% else %}scoring&hellip;{% endif %} &middot; {{ r.when }}</span>
+    <form method="post" action="{% url 'snpportal:delete' r.key %}" onsubmit="return confirm('Delete these results?')">{% csrf_token %}<input type="hidden" name="next" value="score">
+      <button class="btn btn-sm btn-link sp-mine-del" type="submit" title="Delete these results" aria-label="Delete {{ r.name }}">Delete</button></form>
+  </li>{% endfor %}</ul>
+  <p class="sp-small sp-muted mb-0 mt-2">Kept for {{ keep_hours }} h, in this browser's list; anyone with a result's link can open it.</p>
+  {% else %}<p class="sp-small sp-muted mb-0">Lists you score appear here, so you can switch between them. They are kept for {{ keep_hours }} h.</p>{% endif %}
+</section></aside>
 </div>
 {% endblock main %}

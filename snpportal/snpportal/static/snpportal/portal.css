@@ -502,3 +502,13 @@ a.sp-card:hover { border-color: var(--sp-accent); }
   transform: translateX(-50%); padding: 0 4px; background: var(--sp-white); font: 600 11px var(--sp-mono); pointer-events: none; }
 @media print { .sp-bctl { display: none; } .sp-more-rows { display: block !important; } .sp-cur .sp-trk::after, .sp-cur .sp-trk::before { content: none; } }
 /* end locus browser */
+
+/* the Score page's 'Your results' (score.html): a name to open, its size and time, Delete */
+.sp-mine { list-style: none; margin: 0; padding: 0; }
+.sp-mine li { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: .5rem; padding: .45rem .5rem;
+  border-bottom: 1px solid var(--sp-grey-200); }
+.sp-mine li > span { grid-column: 1; }
+.sp-mine li > form { grid-column: 2; grid-row: 1 / span 2; }
+.sp-mine-name { font-weight: 600; overflow-wrap: anywhere; }
+.sp-mine-current { background: var(--sp-grey-50); box-shadow: inset 3px 0 0 var(--sp-accent); }
+.sp .sp-mine-del { color: var(--sp-fail-text); }

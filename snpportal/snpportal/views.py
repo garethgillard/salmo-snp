@@ -29,7 +29,9 @@ from . import jobs, results as result_views, tools
 SUFFIXES = (".vcf.gz", ".vcf", ".tsv.gz", ".tsv", ".csv.gz", ".csv", ".txt.gz", ".txt", ".bim", ".map")
 PASTE_LINES = 10_000
 TABS = ("overview", "table", "panel", "export")  # panel: the automatic designer, unlinked (testing only; the Design panel page is curated)
-CURRENT = "snpportal_current"  # cookie: the results this browser last opened, for the nav's Score
+CURRENT = "snpportal_current"  # cookie: the results this browser last opened
+MINE = "snpportal_results"  # cookie: the results this browser opened, newest first: the Score page lists them
+MAX_MINE = 30
 EXAMPLES = {  # the release's demo/ files (name without extension) -> (title, what it is; {n}: its rows)
     "known_loci": ("Known loci", "{n:,} from published studies"),
     "chip_demo_SYNTHETIC": ("SNP chip", "synthetic, {n:,} SNPs"),
@@ -138,7 +140,7 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
     tab = tab if tab in INPUTS else request.GET.get("input") if request.GET.get("input") in INPUTS else "file"
     found = examples()
     return render(request, "snpportal/score.html", {
-        "nav": "score", "title": "Score SNPs", "error": error, "tabs": INPUTS.items(), "tab": tab,
+        "nav": "score", "title": "Score SNPs", "error": error, "tabs": INPUTS.items(), "tab": tab, "mine": mine(request),
         "tries": [dict(found[name], name=name, gwas=name.startswith("gwas_")) for name in TRY if name in found],
         "targets": targets, "flanks": FLANKS, "flank": FLANK, "paste_lines": PASTE_LINES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}",
@@ -207,10 +209,11 @@ def start_job(request):
                                   ".txt, optionally gzipped) or a PLINK .bim/.map file: see Format help.")
         if not upload.size:
             raise jobs.InputError("The uploaded file is empty.")
-        return jobs.create(Path(upload.path), suffix, "snps", preset, "Uploaded list"), preset
+        name = Path(upload.name or "").name[:80] or "Uploaded list"  # the file's name names the results
+        return jobs.create(Path(upload.path), suffix, "snps", preset, name), preset
     if paste:
         rows = jobs.parse_paste(paste, PASTE_LINES)
-        return jobs.create_from_rows(rows, f"Pasted list ({len(rows):,} lines)", preset, kind="snps", input_format="paste"), preset
+        return jobs.create_from_rows(rows, f"Pasted {jobs.utc()}", preset, kind="snps", input_format="paste"), preset
     raise jobs.InputError("Choose a file, paste some positions or pick an example.")
 
 
@@ -272,7 +275,8 @@ def results(request, key):
         {"label": "Delete", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",
          "confirm": "Delete these results now? This can't be undone."})
     response = render(request, "snpportal/results.html", context)
-    response.set_cookie(CURRENT, str(key), max_age=24 * 3600, httponly=True, samesite="Lax")  # the nav's Score returns here
+    response.set_cookie(CURRENT, str(key), max_age=24 * 3600, httponly=True, samesite="Lax")
+    keep_mine(response, [str(key)] + [k for k in _mine_keys(request) if k != str(key)])  # the Score page lists it
     return response
 
 
@@ -327,9 +331,37 @@ def _stream(header, f):
 @require_POST
 @private
 def delete(request, key):
-    """'Delete now': remove the job folder; the results URL then shows the expired page."""
+    """'Delete now': remove the job folder; the results URL then shows the expired page. From the Score page's list
+    (next=score): back there, without it."""
     jobs.delete(key)
-    return redirect("snpportal:results", key=key)
+    if request.POST.get("next") != "score":
+        return redirect("snpportal:results", key=key)
+    return keep_mine(redirect("snpportal:upload"), [k for k in _mine_keys(request) if k != str(key)])
+
+
+def _mine_keys(request):
+    return [k for k in request.COOKIES.get(MINE, "").split(",") if k][:MAX_MINE]
+
+
+def keep_mine(response, keys):
+    response.set_cookie(MINE, ",".join(keys[:MAX_MINE]), max_age=int(3600 * float(jobs.setting("SNPPORTAL_KEEP_HOURS", 24))),
+                        httponly=True, samesite="Lax")
+    return response
+
+
+def mine(request):
+    """This browser's results that still exist, newest first, for the Score page: [{key, name, n, when, state, url}]."""
+    out = []
+    for key in _mine_keys(request):
+        try:
+            job = jobs.read(key)
+        except (ValueError, OSError):
+            job = None
+        if job:
+            out.append({"key": key, "name": job.get("label") or "Results", "n": job.get("n_rows"), "when": job.get("created_utc"),
+                        "state": job.get("state"), "url": reverse("snpportal:results", args=[key]),
+                        "current": not out})  # the one opened last
+    return out
 
 
 @private

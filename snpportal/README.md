@@ -76,12 +76,13 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 | `results/<key>/chip/` (POST) | `chip` file, `demo=1` or `remove=1` |
 | `results/<key>/download/?format=tsv\|parquet\|bed\|illumina\|axiom\|kasp\|bundle\|priors&scope=all\|filtered\|panel-<hash>` | exports with provenance (`&plain=1` drops it, `&include_failed=1` keeps assay failures in vendor files); vendor files hold no comment lines, so `format=<vendor>.provenance` and `.lookup` give snpscore's sidecars; `format=rejects` gives the dropped rows |
 | `panel/`, `panel/change/` (POST), `panel/download/?format=tsv\|kasp\|illumina\|axiom[&scope=new]`, `results/<key>/add-to-panel/` (POST) | Design panel: a curated panel of whole Table selections from any results ('Add to panel', the cart), compared with an existing chip, its assay readiness and vendor files (all, or the SNPs not on the chip). One browser's only (an HttpOnly cookie names its folder `results/panel-<uuid>`, never a URL), deleted 24 hours after it was started (its `created` marker); its TSV, scored again, brings it back |
-| `score/current/` | the nav's Score: the results this browser last opened (a cookie), else the Score page |
+| `score/current/` | the results this browser last opened (a cookie), else the Score page |
+| `score/` | the nav's Score: the forms, and 'Your results': the results this browser opened (an HttpOnly cookie, newest first; named by the uploaded file, or 'Pasted' and the time), each with its SNPs, time, a link and Delete (`results/<key>/delete/` with `next=score` comes back here) |
 | `results/<key>/report/?trait=[&filters][&panel=<hash>]` | one-page printable report (two A4 pages) |
 | `results/<key>/figure/<name>.svg`, `results/<key>/tools/<name>.svg` | overview and Panel-tab figures (`&format=tsv` for their data) |
 | `results/<key>/association/` (+ `<name>.svg`, `download/`, `region/`) | GWAS jobs: QC, Manhattan, QQ, loci, fine-mapping, regional plot |
 | `results/<key>/snp/<row>/`, `variant/<chrom>-<pos>[-ref-alt]/`, `locus/?r=[&key=]`, `gene/<id>/` | a job's SNP (opens its card in the Table's drawer, `?snp=`), variant page, locus browser (with a GWAS job's key it draws the association lane; `&embed=1`: without the site's chrome and with no Back steps, as the card drawer shows it), gene page |
-| `score/`, `score/gwas/`, `candidates/`, `tour/`, `known-loci/`, `search/`, `about/data/`, `about/methods/`, `help/`, `run-locally/` | the other pages |
+| `score/gwas/`, `candidates/`, `tour/`, `known-loci/`, `search/`, `about/data/`, `about/methods/`, `help/`, `run-locally/` | the other pages |
 | `colours/?name=portal\|aquafaang` | the locus browser's chromatin-colour toggle (Display options): sets the `snpportal_palette` cookie, back to the (same-site) referring page |
 
 Search (`search.py`): positions and regions, rs IDs (the catalogue's, else `snpscore.rsid` on the release's EVA release 9
