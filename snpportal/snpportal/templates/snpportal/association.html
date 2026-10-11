@@ -24,16 +24,6 @@
     <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ query }}&amp;tab=overview">Overview</a></li>
     <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ query }}&amp;tab=table">Table</a></li>
     <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ query }}&amp;tab=export">Export</a></li>
-    <li class="ms-auto align-self-center">
-      <form method="get" class="d-flex align-items-center gap-2 sp-small" hx-get="{% url 'snpportal:association' key %}" hx-trigger="change" hx-push-url="true">
-        {% for name, value in settings %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
-        <label for="trait" title="The conditions tiers (and the functional prior) count chromatin activity in">Conditions</label>
-        <select class="form-select form-select-sm w-auto" id="trait" name="trait">
-          {% for value, label, tip in presets %}<option value="{{ value }}" title="{{ tip }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
-        </select>
-        <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Apply</button></noscript>
-      </form>
-    </li>
   </ul>
   {% include 'snpportal/_caveat.html' with synthetic=synthetic %}
 

@@ -97,9 +97,8 @@ def _columns(con, rel):
 
 
 def _trait(request, weights):
-    """The request's trait (a named preset or an Active-in key), 'all' when it is neither."""
-    trait = request.GET.get("trait") or request.POST.get("trait") or "all"
-    return jobs.canonical(trait, weights["presets"]) if weights else "all"
+    """The conditions tiers count: always all 21 (CLAUDE.md)."""
+    return "all"
 
 
 def _open(d, trait, weights, selected=False):
@@ -360,9 +359,8 @@ def figure(request, key, name):
 
 
 def _selected_trait(d, weights):
-    """The Table selection's Active in: the conditions the Panel's tiers count."""
-    req = results.selection_request(results.selection(d))
-    return jobs.requested_trait(req.GET.get, req.GET.getlist, weights["presets"]) if weights else "all"
+    """The conditions the Panel's tiers count: always all 21."""
+    return "all"
 
 
 def _selection_key(d):

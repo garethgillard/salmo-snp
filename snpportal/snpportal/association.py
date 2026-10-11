@@ -105,7 +105,7 @@ def score(request):
 @csrf_protect
 @sensitive_post_parameters()
 def _score(request):
-    preset = jobs.canonical(request.POST.get("trait", "all"), (jobs.weights() or {}).get("presets") or {})
+    preset = "all"  # tiers (and the functional prior) always count all 21 conditions
     example, upload = request.POST.get("example"), request.FILES.get("sumstats")
     try:
         if example:
@@ -563,11 +563,10 @@ def association(request, key):
     if job["state"] == "done":
         gwas_job(key)
         a = analyse(request, key)
-        d, query = a["d"], urlencode({"trait": a["trait"], **a["query"]})
+        query = urlencode({"trait": a["trait"], **a["query"]})
         values, defaults = form_values(a["cfg"]), form_values(a["defaults"])
-        weights, report = jobs.weights(d), a["report"]
+        report = a["report"]
         ctx.update(trait=a["trait"], query=query, loci=loci_rows(a, key), release_changed=jobs.release_changed(job),
-                   presets=[(v, label, results.trait_tip(weights, v)) for v, label in jobs.presets(d)],
                    figs={name: figure_card(a, name, figure_data(a, name, job, key)[0], key) for name in FIGURES},
                    fields=[(k, LABELS[k][0], values[k], LABELS[k][1]) for k in FIELDS], values=values,
                    changed=sum(values[k] != defaults[k] for k in FIELDS), settings=a["query"].items(),

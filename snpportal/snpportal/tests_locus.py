@@ -181,11 +181,11 @@ class LocusTest(SimpleTestCase):
     def test_card_and_variant_page(self):
         key = jobs.create_from_rows([("25", 28996360, "vgll3_Met54Thr", "C", "T"), ("26", 19138923, "bco1l", "A", "G"),
                                      ("25", 28964518, "mq", None, None)], "Card rows")
-        page = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&trait=brain&snp=0")  # the card, in the drawer
+        page = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&trait=brain&snp=0")  # the card, in the drawer (trait: ignored)
         self.assertIn("sp-caveat", page)  # the page's one caveat line
         card = page[page.index('id="drawer"'):]
         d = jobs.folder(key)
-        scores = dict(jobs.connect([d]).execute(f"SELECT file_row_number, tier_score__brain FROM read_parquet('{d / 'tiers.parquet'}')").fetchall())
+        scores = dict(jobs.connect([d]).execute(f"SELECT file_row_number, tier_score__all FROM read_parquet('{d / 'tiers.parquet'}')").fetchall())
         blocks = svg_of(card[card.index('id="card-body"'):])  # the score, first: blocks and = score
         score = re.search(r">= (\d+)</text>", blocks).group(1)
         self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)</title>", blocks)), scores[0])  # the blocks sum to tier_score
@@ -200,11 +200,10 @@ class LocusTest(SimpleTestCase):
         mini = svg_of(card[card.index('id="cs-locus"'):])  # the mini locus browser, inline (no peak: no tiles under it)
         self.assertIn("<title>Mini locus browser</title>", mini)  # the list's SNPs in the window, linked to their cards
         self.assertIn(f'href="/snp/results/{key}/snp/0/', mini)
-        self.assertIn('<g opacity="0.3">', mini)  # no peak in Brain: out of the selection, so faded
+        self.assertNotIn('<g opacity="0.3">', mini)  # in the selection: not faded
         self.assertIn(">GERP<title>", mini)  # lane names explain themselves on hover
-        self.assertIn(f'href="/snp/locus/?key={key}&amp;row=0&amp;trait=Brain"', card)  # its button to the locus browser
+        self.assertIn(f'href="/snp/locus/?key={key}&amp;row=0"', card)  # its link to the locus browser
         self.assertIn("exclude=0", card[:card.index('id="card-body"')])  # the +/− switch
-        self.assertNotIn("data-next", card)  # no peak in Brain: not in the table, so no Previous/Next
         every = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&snp=0")
         self.assertIn(" of 3</span>", every)  # its place in the table, and the rows either side
         self.assertTrue("data-next" in every or "data-prev" in every)
@@ -231,7 +230,7 @@ class LocusTest(SimpleTestCase):
         self.assertIn("no direction implied", mq)
         grid = re.search(r'<svg x="[^"]*" y="[^"]*" .*?</svg>', mq[mq.index('id="cs-locus"'):], re.S).group(0)  # tiles under the SNP's peak
         self.assertIn("Chromatin state per condition", grid)  # a peak somewhere: the grid
-        self.assertEqual(grid.count('rx="3" fill="none"'), 4)  # the 4 Brain conditions of the trait are outlined
+        self.assertNotIn('rx="3" fill="none"', grid)  # tiers count all conditions: none is outlined
         swap = self.get(reverse("snpportal:card", args=[key, 2]) + "?trait=all", HTTP_HX_REQUEST="true", HTTP_HX_TARGET="card-body")
         self.assertNotIn("sp-nav", swap)  # a trait change swaps only the card
         self.assertIn('id="card-body"', swap)
@@ -262,7 +261,7 @@ class LocusTest(SimpleTestCase):
         self.assertIn("conditions sampled", variant)
         self.assertIn("<title>Mini locus browser</title>", variant)
         self.assertIn("Open in the locus browser", variant)
-        self.assertIn("25:28996360", self.get(reverse("snpportal:variant", args=["ssa25-28996360"])))
+        self.assertIn('data-copy="25-28996360"', self.get(reverse("snpportal:variant", args=["ssa25-28996360"])))
         self.assertEqual(self.client.get(reverse("snpportal:variant", args=["ssa99-1"])).status_code, 404)
         self.assertFalse([p for p in (Path(self.tmp.name) / "results").iterdir() if p.name.startswith(".")])
 

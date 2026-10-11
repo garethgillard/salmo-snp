@@ -68,22 +68,18 @@ class ResultsTest(SimpleTestCase):
     def direct(self, sql):
         return jobs.connect([self.d]).execute(f"SELECT count(*) FROM '{self.d / 'result.parquet'}' WHERE {sql}").fetchone()[0]
 
-    def test_active_in_sets_the_tiers(self):
-        same = self.client.get(self.url + "?tab=table&active_set=1&tissue=Gonad&tissue=Brain").content.decode()
-        self.assertIn('class="sp-colf-val" title="brain + gonad">brain + gonad</span>', same)  # conditions, never a trait; stored tiers
-        self.assertFalse(list(self.d.glob("tiers_*")))
-        own = self.client.get(self.url + "?tab=table&trait=Brain.Mature.Female").content.decode()
-        self.assertIn(">brain (mature females)</span>", own)
-        self.assertTrue((self.d / "tiers_Brain.Mature.Female.parquet").exists())  # scored once, kept with the job
-        parts = jobs.trait_summary(self.d, jobs.weights(self.d), "Brain.Mature.Female", self.summary)  # the Export bundle's figures
-        self.assertEqual(sum(parts["tiers"]["Brain.Mature.Female"].values()), self.summary["n_rows"])
-        self.assertIn("Tier for all conditions", self.client.get(self.url + "?trait=Brain.Mature.Female").content.decode())  # Overview: whole list
+    def test_tiers_always_count_all_conditions(self):
+        for query in ("?tab=table&active_set=1&tissue=Gonad&tissue=Brain", "?tab=table&trait=Brain.Mature.Female"):  # older links
+            page = self.client.get(self.url + query).content.decode()
+            self.assertNotIn('name="tissue"', page)  # no Active in: the Table only filters after scoring
+            self.assertIn(f"of {self.summary['n_rows']:,} SNPs", page)  # nothing filtered out
+        self.assertFalse(list(self.d.glob("tiers_*")))  # never scored for other conditions
         self.client.get(self.url + "?tab=table")  # back to the whole list, for the other tests
         if "tier_terms" not in self.columns:  # several evidence terms: SNPs with any of them
             terms = jobs.connect([self.d]).execute(
-                f"SELECT count(*) FROM '{self.d / 'tiers.parquet'}' WHERE list_has_any(list_transform(tier_terms__maturation, x -> x.term), "
+                f"SELECT count(*) FROM '{self.d / 'tiers.parquet'}' WHERE list_has_any(list_transform(tier_terms__all, x -> x.term), "
                 "['coding', 'utr'])").fetchone()[0]
-            page = self.client.get(self.url + "?tab=table&trait=maturation&term=coding&term=utr").content.decode()
+            page = self.client.get(self.url + "?tab=table&term=coding&term=utr").content.decode()
             self.assertIn("Evidence: CDS (protein change or unknown), UTR", page)
             self.assertIn(f"of {terms:,} shown" if terms > 50 else f"&ndash;{terms} of {terms} shown", page)
 
@@ -202,23 +198,24 @@ class ResultsTest(SimpleTestCase):
         self.assertEqual(self.count("?gene=it's"), 0)  # quoted, not SQL
 
     def test_table_page_sort_columns_and_barcode(self):
-        page = self.client.get(self.url + "?tab=table&size=100&trait=brain").content.decode()
+        page = self.client.get(self.url + "?tab=table&size=100").content.decode()
         rows = page.count("<tr data-card")
         self.assertEqual(rows, 100)
         self.assertEqual(page.count('class="sp-bc"'), rows)  # a barcode on every row
         barcode = re.search(r'<span class="sp-bc".*?</span></span>', page, re.S).group(0)
         self.assertEqual(barcode.count("<i "), 21)
-        self.assertEqual(len(re.findall(r'class="st-\w+ in"|class=" in"', barcode)), 4)  # the brain conditions are underlined
+        self.assertNotIn(' in"', barcode)  # tiers count all conditions: none is underlined
         headers = re.findall(r'<th scope="col"[^>]*><span class="sp-th">(?:<a [^>]*>|<span [^>]*>)([^<&]+)', page)
         self.assertEqual([h.strip() for h in headers], ["+/"] + [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS])  # the selector, then 9
         self.assertIn('aria-sort="ascending"', page)  # tier, the default
         head = page[page.index("<thead"):page.index("</thead>")]  # each filter on its column; the others above the table
-        self.assertTrue(all(f'id="dd-{d}"' in head for d in ("tier", "region", "gene", "active", "assay")))
+        self.assertTrue(all(f'id="dd-{d}"' in head for d in ("tier", "region", "gene", "assay")))
+        self.assertNotIn('id="dd-active"', page)  # no Active in
         few = self.client.get(self.url + "?tab=table&cols=1&col=tier").content.decode()
         self.assertIn('id="dd-region"', few[few.index('class="sp-filters"'):few.index("<thead")])  # Region hidden: its filter above
         self.assertNotIn('id="drawer"', page)  # the evidence drawer opens only on a click
         row = re.search(r'href="\?[^"]*snp=(\d+)"', page).group(1)
-        drawer = self.client.get(self.url + f"?tab=table&trait=brain&snp={row}").content.decode()
+        drawer = self.client.get(self.url + f"?tab=table&snp={row}").content.decode()
         self.assertIn('id="drawer"', drawer)
         self.assertIn('id="card-body"', drawer)  # the full card
         self.assertIn("Tier ", drawer[drawer.index('id="drawer"'):])

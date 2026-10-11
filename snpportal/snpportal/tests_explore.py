@@ -186,7 +186,7 @@ class ExploreTest(SimpleTestCase):
         text = f"{VGLL3}\n26:14.5-15Mb"
         response = self.client.post(reverse("snpportal:candidates"), {"targets": text, "flank": "50000", "trait": "maturation"})
         self.assertEqual(response.status_code, 302)
-        self.assertIn("trait=Brain%2BGonad", response.url)  # an older preset name: its tissues
+        self.assertNotIn("trait=", response.url)  # a posted trait is ignored: tiers always count all conditions
         job = jobs.read(response.url.split("/")[-2])
         windows = [("25", 28995075 - 50000, 28999268 + 50000), ("26", 14_500_000, 15_000_000)]
         self.assertEqual((job["state"], job["input_kind"]), ("done", "from_rows"))

@@ -133,7 +133,6 @@ class TourTest(SimpleTestCase):
         table = next(f for _, f in page.forms if f.get("tab") == "table")
         key, url = self.example(**table)
         self.assertIn("tab=table", url)
-        self.assertIn("trait=Brain%2BGonad", url)
         self.assertEqual(jobs.read(key)["state"], "done")
 
     def test_report_matches_overview_and_table(self):
@@ -142,7 +141,7 @@ class TourTest(SimpleTestCase):
         results, report = reverse("snpportal:results", args=[key]), reverse("snpportal:report", args=[key])
         self.client.get(results, {"tab": "table", "trait": "maturation"})  # the Table keeps its selection
         overview = self.client.get(results)
-        self.assertContains(overview, f"{report}?trait=Brain%2BGonad")  # the results header links the report of the selection
+        self.assertContains(overview, report)  # the results header links the report
         page = self.client.get(report, {"trait": "maturation"})
         self.assertEqual(page.status_code, 200)
         self.assertEqual(page["Cache-Control"], "no-store, private")
@@ -156,8 +155,7 @@ class TourTest(SimpleTestCase):
         table = self.client.get(results, {"trait": "maturation", "tab": "table"}).content.decode()
         drawers = list(dict.fromkeys(re.findall(r"snp=(\d+)", table)))  # the table's rows, in order
         self.assertEqual(card_rows(html, key), drawers[:20])
-        self.assertEqual(len(card_rows(html, key)), min(20, len(drawers)))  # Active in: only SNPs in a brain or gonad element
-        self.assertIn("Only SNPs in an element of these conditions", html)
+        self.assertEqual(len(card_rows(html, key)), min(20, len(drawers)))
         self.assertEqual(card_rows(overview.content.decode(), key), [])  # the Overview lists no SNPs: the Table does
         self.assertIn("SNPs were annotated with snpscore", html)
         self.assertIn(jobs.read(key)["manifest_sha256"][:12], html)  # provenance, 12-character hashes

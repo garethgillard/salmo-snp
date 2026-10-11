@@ -422,9 +422,7 @@ def gene(request, gene_id):
     g = gene_rows([gene_id]).get(gene_id)
     if g is None:
         raise Http404("No such gene in this release")
-    presets = jobs.presets()
-    trait = request.GET.get("trait", "all")
-    trait = trait if trait in dict(presets) else "all"
+    trait = "all"  # tiers always count all 21 conditions
     flank = request.GET.get("flank", "")
     flank = int(flank) if flank.isdecimal() and int(flank) in FLANKS else FLANK
     sort = request.GET.get("sort", "tier")
@@ -477,7 +475,7 @@ def gene(request, gene_id):
         "names": [n for n in names if not (n == "id" and plain_ids) and not (known and n == "known_locus")],
         "tiers": sorted(tiers.items(), key=lambda kv: kv[0] or 9),
         "window": window, "window_text": "{}:{:,}-{:,}".format(*window), "flank": flank, "flanks": FLANKS, "trait": trait,
-        "presets": presets, "sort": sort, "query": urlencode(query),
+        "sort": sort, "query": urlencode(query),
         "sorts": [(k, label) for k, label in [("tier", "tier"), ("pos", "position"), ("maf", "minor allele frequency")]
                   if SORTS[k][0] in names], "public_af": jobs.PUBLIC_AF})
 
@@ -549,7 +547,7 @@ def candidate_job(request):
     text = request.POST.get("targets", "")[:20_000]
     flank = request.POST.get("flank", "")
     flank = int(flank) if flank.isdecimal() and int(flank) <= max(FLANKS) else FLANK
-    trait = jobs.canonical(request.POST.get("trait", "all"), (jobs.weights() or {}).get("presets") or {})
+    trait = "all"  # tiers always count all 21 conditions
     try:
         windows, labels = targets(text, flank)
         rows = public_rows(windows)

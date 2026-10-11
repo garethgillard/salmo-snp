@@ -43,10 +43,6 @@
 <section class="sp-card mb-3" id="candidates" aria-labelledby="cand-h">
   <div class="sp-card-head"><h2 id="cand-h">Public variants</h2></div>
   <form method="get" action="#candidates" class="d-flex flex-wrap align-items-end gap-3 sp-small" hx-get="{% url 'snpportal:gene' gene.id %}" hx-trigger="change" hx-push-url="true">
-    <div class="mb-2"><label class="form-label sp-small mb-0" for="gene-trait" title="The conditions tiers count chromatin activity in">Conditions</label>
-      <select class="form-select form-select-sm w-auto" id="gene-trait" name="trait">
-        {% for value, label in presets %}<option value="{{ value }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
-      </select></div>
     <div class="mb-2"><label class="form-label sp-small mb-0" for="flank">Flank</label>
       <select class="form-select form-select-sm w-auto" id="flank" name="flank">
         {% for f in flanks %}<option value="{{ f }}"{% if f == flank %} selected{% endif %}>&plusmn; {{ f|thousands }} bp</option>{% endfor %}
@@ -63,7 +59,7 @@
     <span class="ms-auto"></span>
     {% if n_rows %}<a class="btn btn-sm btn-outline-primary" href="?{{ query }}&amp;download=candidates.tsv" download>Download TSV</a>
     <form method="post" action="{% url 'snpportal:candidates' %}">{% csrf_token %}
-      <input type="hidden" name="targets" value="{{ gene.id }}"><input type="hidden" name="flank" value="{{ flank }}"><input type="hidden" name="trait" value="{{ trait }}">
+      <input type="hidden" name="targets" value="{{ gene.id }}"><input type="hidden" name="flank" value="{{ flank }}">
       <button class="btn btn-sm btn-primary" type="submit">Score these {{ n_rows|thousands }}</button>
     </form>{% endif %}
   </div>

@@ -285,19 +285,12 @@ def stored_preset(trait, presets):
 
 
 def selection_of(trait, presets):
-    """(tissues, maturity, sex) the Active-in controls show for `trait`; a named preset covers whole tissues."""
+    """(tissues, maturity, sex) of `trait`; a named preset covers whole tissues."""
     sel = selection(trait)
     if sel:
         return sel
     conditions = conditions_in(presets.get(trait, []))
     return [t for t in TISSUES if conditions & conditions_in(selection_prefixes(t))], None, None
-
-
-def requested_trait(get, getlist, presets):
-    """A request's trait: the Table's Active-in fields when its form sent them (active_set), else ?trait=."""
-    if get("active_set"):
-        return canonical(selection_key(getlist("tissue"), get("maturity"), get("sex")), presets)
-    return canonical(get("trait") or "all", presets)
 
 
 def trait_tiers(d, w, trait):

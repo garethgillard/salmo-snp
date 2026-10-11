@@ -628,10 +628,10 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
     and the robust ATAC peaks (coloured by their strongest state; n/21 under each: the conditions with the peak). Lane
     names explain themselves on hover, a peak shows its state; variants and GERP show nothing. No ruler: the window's
     ends are marked beside the SNP's label. The SNP is a line through the lanes and its own peak is outlined; `tiles`
-    (chromatin_grid without a legend) hang under it in a wedge: that peak per condition. data: locus.lanes(); snps:
+    (chromatin_grid without a legend) hang under the SNP in a wedge from it: that peak per condition. data: locus.lanes(); snps:
     locus.user_snps(), with `out` for SNPs not selected."""
     ax = Axis(data["start"], data["end"], 4, width - 4)
-    body, y, own = [], 14, None
+    body, y = [], 14
 
     def lane(name, tip):
         body.append(_t(ax.x0, y + 8, name, 9.5, G[900], weight="600").replace("</text>", f"<title>{escape(tip)}</title></text>"))
@@ -667,7 +667,6 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
     for p in data.get("peaks", []):
         best, mine = strongest([v for v in p["states"].values() if v]), p["start"] < pos <= p["end"]
         x0, x1 = ax.x(p["start"]), ax.x(p["end"])
-        own = (x0, max(x0 + 2, x1), y + 12) if mine else own
         body.append(f'<rect x="{x0:.1f}" y="{y}" width="{max(2, x1 - x0):.1f}" height="12" fill="{palette.state(best)[0]}" stroke="{G[900]}" '
                     f'stroke-width="{2 if mine else 0.5}"><title>{best.replace("_", " ")}</title></rect>')
     if not data.get("peaks"):
@@ -677,12 +676,10 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
     left, right = (pos - 1 - data["start"]) / 1000, (data["end"] - pos) / 1000
     body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="12" y2="{y}" stroke="{G[900]}" stroke-opacity="0.45"/>' + _t(x, 9, "SNP", 9.5, G[900], "middle", "600")
                 + _t(ax.x0, 9, f"−{left:g} kb", 9, G[700]) + _t(ax.x1, 9, f"+{right:g} kb", 9, G[700], "end"))
-    if tiles:  # the SNP's peak per condition, in a wedge from the outlined peak
+    if tiles:  # the SNP's peak per condition, in a wedge from the SNP: the same size and place on every card
         gw, gh = (float(v) for v in re.search(r' width="([\d.]+)" height="([\d.]+)"', tiles).groups())
-        px0, px1, py = own or (ax.x0, ax.x0, y)
-        gx, gy = min(max((px0 + px1) / 2 - gw / 2, 0), width - gw), y + 16
-        if own:  # under everything else
-            body.insert(0, f'<path d="M{px0:.1f} {py:.1f} L{px1:.1f} {py:.1f} L{gx + gw:.1f} {gy:.1f} L{gx:.1f} {gy:.1f}Z" fill="{G[100]}"/>')
+        gx, gy = min(max(x - gw / 2, 0), width - gw), y + 16
+        body.insert(0, f'<path d="M{x:.1f} {y:.1f} L{gx + gw:.1f} {gy:.1f} L{gx:.1f} {gy:.1f}Z" fill="{G[100]}"/>')  # under everything else
         body.append(tiles.replace("<svg ", f'<svg x="{gx:.1f}" y="{gy:.1f}" ', 1))
         y = gy + gh
     desc = (f"Chromosome {data['chrom']}: {data['start'] + 1:,}-{data['end']:,} around the SNP at {pos:,}: genes, public variants, "

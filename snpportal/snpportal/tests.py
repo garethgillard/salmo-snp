@@ -115,11 +115,11 @@ class PortalTest(SimpleTestCase):
     def test_upload_job_tabs_card_download(self):
         response = self.upload(trait="liver")
         self.assertEqual(response.status_code, 302)
-        self.assertIn("trait=Liver", response.url)  # an older preset name: the conditions of its tissue
+        self.assertNotIn("trait=", response.url)  # a posted trait is ignored: tiers always count all conditions
         key, url = self.key(response), response.url.split("?")[0]
         folder = self.results / key
         job = json.loads((folder / "job.json").read_text())
-        self.assertEqual((job["state"], job["preset"]), ("done", "Liver"))
+        self.assertEqual((job["state"], job["preset"]), ("done", "all"))
         n = job["n_rows"]
         self.assertGreater(n, 1000)
         self.assertTrue(all(job[k] for k in ("manifest_sha256", "weights_sha256", "input_sha256", "created_utc")))
@@ -145,12 +145,11 @@ class PortalTest(SimpleTestCase):
         self.assertContains(page, "Tier 1:")
         filtered = self.client.get(url + "?tab=table&trait=maturation&max_tier=2&hide_lore=1")
         self.assertContains(filtered, "shown")
-        form = filtered.content.decode().split('id="tf"')[1].split("</form>")[0]  # Active in sits in the filter form: changing it keeps them
-        self.assertIn('name="active_set" value="1"', form)
+        form = filtered.content.decode().split('id="tf"')[1].split("</form>")[0]
+        self.assertNotIn('name="tissue"', form)  # no Active in: the Table only filters after scoring
         self.assertIn('name="tier" value="1" checked', form)  # max_tier=2 (older links): tiers 1 and 2 ticked
         self.assertIn('name="tier" value="2" checked', form)
         self.assertIn('name="hide_lore" value="1" checked', form)
-        self.assertContains(filtered, 'class="sp-colf-val" title="brain + gonad">brain + gonad</span>')  # under Chromatin: conditions, never a trait
 
         card = self.client.get(reverse("snpportal:card", args=[key, 0]) + "?trait=brain", HTTP_HX_REQUEST="true")
         self.assertTrue("Chromatin state per condition" in card.content.decode() or "conditions sampled" in card.content.decode())
@@ -329,7 +328,7 @@ class PortalTest(SimpleTestCase):
             response = self.client.get(reverse(f"snpportal:{name}"))
             self.assertContains(response, 'class="sp-nav"', msg_prefix=name)
         self.assertContains(self.client.get(reverse("snpportal:about_data")), "chromatin")
-        self.assertContains(self.client.get(reverse("snpportal:variant", args=["25-28996360-C-T"])), "25:28996360")
+        self.assertContains(self.client.get(reverse("snpportal:variant", args=["25-28996360-C-T"])), 'data-copy="25-28996360-C-T"')
         self.assertEqual(self.client.get(reverse("snpportal:search") + "?q=25:28996360").status_code, 302)
         locus = self.client.get(reverse("snpportal:search") + "?q=ssa25:28,990,000-29,000,000")
         self.assertIn("chrom=25&start=28990000&end=29000000", locus.url)

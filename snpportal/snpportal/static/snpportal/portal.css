@@ -306,8 +306,9 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp .sp-keep-out { border-style: dashed; background: var(--sp-grey-100); color: var(--sp-grey-700); }
 .sp .sp-keep-out:hover, .sp .sp-keep-out:focus-visible { color: var(--sp-ok-text); border-color: var(--sp-ok-border); background: var(--sp-ok-bg); }
 .sp-card-bar h2 { margin: 0; }
-.sp .sp-copy-icon { padding: 0 .2rem; border: 0; background: none; color: var(--sp-grey-700); line-height: 1; }
-.sp .sp-copy-icon:hover { color: var(--sp-grey-900); }
+.sp .sp-copy-chip { display: inline-flex; align-items: center; gap: .3rem; color: var(--sp-grey-900); }  /* copies what it shows */
+.sp .sp-copy-chip svg { color: var(--sp-grey-700); }
+.sp .sp-copy-chip:hover { border-color: var(--sp-grey-700); background: var(--sp-grey-100); }
 .sp a.sp-fact { text-decoration: none; }
 .sp-facts { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-bottom: .6rem; }
 .sp-fact { padding: .05rem .5rem; border: 1px solid var(--sp-grey-300); border-radius: 1rem; background: var(--sp-white); font-size: .8rem; white-space: nowrap; }

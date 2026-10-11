@@ -73,9 +73,6 @@ TERMS = {"active": "active in the chosen conditions", "active_elsewhere": "activ
          "splice": "splice region", "utr": "UTR",
          "constrained": "GERP constrained", "regbuild": "Ensembl regulatory", "molqtl": "molQTL lead (display only)"}
 GROUP_STARTS = ("dd-maf", "dd-more")  # gaps in the bar above the table (filters of hidden columns)
-ACTIVITY = {  # Active in: what a SNP must be in, in at least one of the chosen conditions (PROVISIONAL, CLAUDE.md)
-    "peak": ("Regulatory element", "inside an AQUA-FAANG robust ATAC peak (any chromatin state)"),
-    "active": ("Active element", "inside a peak in an active state (Active_TSS or Active_enhancer: the +3 tier term)")}
 TERM_SHORT = {"active": "active", "active_elsewhere": "active elsewhere", "weak": "weak", "coding": "CDS", "synonymous": "synonymous",
               "splice": "splice", "utr": "UTR", "constrained": "constrained", "regbuild": "Ensembl reg.", "molqtl": "molQTL"}
 QUIET = ("unknown_chromosomes", "aliases_applied", "alias_warnings", "columns_renamed", "columns_dropped",
@@ -121,7 +118,7 @@ COLUMNS = {
     "region": ("Consequence", "Where the SNP falls in the nearest gene and, in coding sequence, its effect on the protein "
                "(Ensembl 116 gene models)", ("region_class",), [("region_class", True)]),
     "chromatin": ("Chromatin", "AQUA-FAANG chromatin state in 21 conditions: Brain, Gonad, Liver, Muscle (immature F, M; "
-                  "mature F, M), then 5 embryo stages. Underlined: the chosen conditions", ("chromatin",), []),
+                  "mature F, M), then 5 embryo stages", ("chromatin",), []),
     "known": ("Known locus", "A published locus of the known-loci catalogue within the window: this SNP, or one nearby (how "
               "far); * a caveat (hover)", ("known_locus",), [("known_locus_dist", True)]),
     "molqtl": ("molQTL", "Lead SNP of an eQTL (e) or caQTL (ca) in 12 fish; display only, never counted in tiers",
@@ -179,10 +176,9 @@ def _open(request, key, write=False, chip=False):
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
     weights = jobs.weights(d)  # the job's snapshot, not the current release
-    trait = "all"
+    trait = "all"  # tiers always count all 21 conditions (CLAUDE.md); the Table only filters after scoring
     if weights:
-        trait = jobs.requested_trait(request.GET.get, request.GET.getlist, weights["presets"])
-        path, suffix = jobs.trait_tiers(d, weights, trait)  # a new set of conditions is scored on its first view
+        path, suffix = jobs.trait_tiers(d, weights, trait)
         stored = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet('{path}'))").fetchall()] if path else []
         picked = [c for c in jobs.TIER_COLUMNS if f"{c}__{suffix}" in stored]
         if picked:
@@ -295,15 +291,6 @@ def filters(request, types, weights):
     if weights and active and f"chromatin_{active}" in types and f"chromatin_{active}" not in snpscore.score.NOT_CONDITIONS:
         states = ", ".join(lit(s) for s in weights.get("active_states", [])) or "NULL"
         out.append(({"active": active}, f"Active in {condition_label(active)}", f"{ident('chromatin_' + active)} IN ({states})"))
-    trait = jobs.requested_trait(get, request.GET.getlist, weights["presets"]) if weights else "all"
-    if trait != "all" and conditions_of(types):  # Active in: SNPs in an element of at least one of its conditions
-        level = get("act") if get("act") in ACTIVITY else "peak"
-        states = ", ".join(lit(s) for s in weights.get("active_states", [])) or "NULL"
-        test = "IS NOT NULL" if level == "peak" else f"IN ({states})"  # a peak has a state; active: TSS or enhancer
-        mine = snpscore.score.preset_conditions(weights, list(types), trait)[0]
-        out.append(({"trait": trait, **({"act": level} if level != "peak" else {})},
-                    f"Active in {jobs.trait_label(trait)}" + (" (active state)" if level != "peak" else ""),
-                    " OR ".join(f"{ident('chromatin_' + c)} {test}" for c in mine) or "false"))
     terms = [t for t in picks(request, "term") if t in (weights or {}).get("weights", {})]
     if terms and "tier_terms" in types:  # several: any of them (links carry them comma-joined)
         out.append(({"term": ",".join(terms)}, "Evidence: " + ", ".join(TERMS.get(t, t) for t in terms),
@@ -523,7 +510,7 @@ def table(request, key, job=None):
     ids = [i for i, in con.execute(f"SELECT file_row_number FROM {src} {where} ORDER BY {', '.join(order + ['file_row_number'])} "
                                    f"LIMIT {size} OFFSET {(page - 1) * size}").fetchall()]
     conditions = conditions_of(types)
-    in_preset = set(snpscore.score.preset_conditions(weights, list(types), chosen["trait"])[0]) if weights and conditions else set()
+    in_preset = set()  # tiers count all conditions: none stands out
     caveats = _known_caveats() if "known" in shown else {}
     rows = _page(con, view, ids, types, shown, maf, conditions, in_preset, (weights or {}).get("active_states", []), caveats)
 
@@ -553,27 +540,16 @@ def table(request, key, job=None):
             suggest = (conds[best][1], counts[best], chips[best][1])
 
     # The filter bar: dropdowns (a summary of the choice, a panel applied on change) in this order. 'list' panels tick
-    # any of several values ('Any' clears them), 'radio' panels pick one; Active in, Location and More have their own.
+    # any of several values ('Any' clears them), 'radio' panels pick one; Location and More have their own.
     tier_counts = tier_facets(con, view, conds, types, summary, chosen["trait"])
     ticked = {k: [x for x in chosen.get(k, "").split(",") if x] for k in ("tier", "region", "assay", "term")}
     dds = []
 
     def dd(kind, key, label, summary, active, tip="", **more):
-        ticks = more.get("tissues") or (more.get("options") if kind == "list" else ())
+        ticks = more.get("options") if kind == "list" else ()
         dds.append({"kind": kind, "id": f"dd-{key}", "label": label, "summary": summary, "on": active, "tip": tip,
                     "anyon": not any(x[2 if len(x) > 2 else 1] for x in ticks), **more})  # 'Any' ticked: nothing else is
 
-    if weights and conditions:  # the conditions tiers score against: tissues, maturity and sex, or a trait preset
-        tissues, maturity, sex = jobs.selection_of(chosen["trait"], weights["presets"])
-        every = len(tissues) == len(jobs.TISSUES)
-        level = chosen.get("act", "peak")
-        dd("active", "active", "Active in", jobs.trait_label(chosen["trait"]) + (" · active state" if level != "peak" else ""),
-           chosen["trait"] != "all", "SNPs active in at least one of these conditions; tiers count activity there",
-           tissues=[(x, x in tissues and not every) for x in jobs.TISSUES],
-           maturity=[("", "any", not maturity)] + [(x, x.lower(), x == maturity) for x in jobs.MATURITIES],
-           sex=[("", "any", not sex)] + [(x, x.lower(), x == sex) for x in jobs.SEXES],
-           levels=[(k, label, tip, k == level) for k, (label, tip) in ACTIVITY.items()], column="chromatin",
-           reset=link(trait=None, act=None, page=None) if chosen["trait"] != "all" else None)
     if "tier" in types:
         counts = dict(tier_counts)
         dd("list", "tier", "Tier", f"{tier_text(ticked['tier'])}" if ticked["tier"] else "any", bool(ticked["tier"]),
@@ -648,7 +624,7 @@ def table(request, key, job=None):
                         }.get(get("panel_error", "")),
         "dds": dds, "pick": pick, "n_selected": n_every - n_out, "n_out": n_out,
         "shown_tiers": [(x, k) for x, k in shown_tiers if x is not None and k],
-        "active_set": any(x["kind"] == "active" for x in dds), "groups": GROUP_STARTS,
+        "groups": GROUP_STARTS,
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
         "start": chosen.get("start", ""), "end": chosen.get("end", ""),
         "hidden": [(k, base[k]) for k in ("sort", "desc", "size") if base[k]]  # and filters with no control on the form
@@ -1134,7 +1110,7 @@ def keep_selection(d, query):
 
 
 def selection_request(query):
-    """A stand-in request whose GET is a saved selection, for filters() and requested_trait()."""
+    """A stand-in request whose GET is a saved selection, for filters()."""
     return SimpleNamespace(GET=QueryDict(query))
 
 

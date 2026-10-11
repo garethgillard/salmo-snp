@@ -114,8 +114,7 @@ def view_state(request):
     """{chrom, start, end (BED), trait, assay, hmm, scale, key, row, error, too_wide, mark, compact} from ?r= (also
     ?region= or ?chrom=&start=&end=, 1-based), or the SNP in ?key=&row=."""
     g = request.GET
-    presets = dict(jobs.presets())
-    s = {"trait": g.get("trait") if g.get("trait") in presets else "all", "assay": g.get("assay") if g.get("assay") in ASSAYS else "ATAC",
+    s = {"trait": "all", "assay": g.get("assay") if g.get("assay") in ASSAYS else "ATAC",  # tiers: always all 21 conditions
          "hmm": g.get("hmm") == "1", "scale": "track" if g.get("scale") == "track" else "shared", "key": None, "row": None,
          "chrom": None, "error": None, "too_wide": False, "compact": g.get("compact") == "1",
          "mark": int(g["mark"]) if g.get("mark", "").isdecimal() else None, "gwas": {}}
@@ -315,11 +314,10 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
     spec = f"{chrom}-{pos}" + (f"-{ref}-{alt}" if ref and alt else "")
     ev = {"trait": trait, "title": snp.get("id") or f"{chrom}:{pos:,}", "position": f"{chrom}:{pos}",
           "alleles": f"{ref}>{alt}" if ref and alt else "", "spec": spec, "synthetic": synthetic, "tier": snp.get("tier"),
-          "score": snp.get("tier_score"), "samples": results.SAMPLES,
-          "note": results.locus_note(snp.get)}  # the position and alleles when the title doesn't hold them
+          "score": snp.get("tier_score"), "samples": results.SAMPLES}
     ev["terms"] = results.tier_parts(snp.get) or None  # 'Missense p.Thr46Met (...)', 3; the blocks' hover text
     states = {c[len("chromatin_"):]: snp[c] for c in snp if c.startswith("chromatin_") and c not in NOT_CONDITIONS}
-    chosen = set(preset_conditions(weights, list(snp), trait)[0]) if weights and states else set()
+    chosen = set()  # tiers count all 21 conditions: none stands out in the tiles or the counts
     if weights and "tier_terms" in snp:
         ev["blocks"] = mark_safe(locus_svg.score_blocks(score_parts(snp, states, chosen, weights), weights["tiers"], snp.get("tier_score") or 0,
                                                         synthetic))
@@ -487,16 +485,16 @@ def gwas_chips(line):
 
 
 def rank_chip(con, score):
-    """'top 3%' (of the whole list, by tier score; ties share the best rank) or 'highest score'; None for a score of 0
-    or in the lower half."""
+    """'top 3%' (of the whole list, by tier score; ties share the best rank) or 'highest score', the rest on hover;
+    None for a score of 0 or in the lower half."""
     if not score:
         return None
     better, total = con.execute("SELECT count(*) FILTER (WHERE tier_score > ?), count(*) FROM v", [score]).fetchone()
     share = (better + 1) / max(total, 1)
     if share > 0.5:
         return None
-    return chip("highest score in your list" if not better else f"top {max(1, math.ceil(100 * share))}% by score", "",
-                f"{better:,} of the {total:,} SNPs in your list score higher", "rank")
+    return chip("highest score" if not better else f"top {max(1, math.ceil(100 * share))}%", "",
+                f"Rank by score in your list: {better:,} of its {total:,} SNPs score higher", "rank")
 
 
 def caveats(snp, ev):
@@ -655,10 +653,8 @@ def _fmt(v):
     return "n/a" if v is None else f"{v:.3g}" if isinstance(v, float) else str(v)
 
 
-def card_context(request, ev, presets, switch_url, locus_url, keep=None):
-    hx = bool(request.headers.get("HX-Request"))
-    return {"nav": "score", "title": ev["title"], "ev": ev, "presets": presets, "switch_url": switch_url, "hx": hx,
-            "locus_url": locus_url, "trait": ev["trait"], "keep": sorted((keep or {}).items())}
+def card_context(request, ev, locus_url):
+    return {"nav": "score", "title": ev["title"], "ev": ev, "hx": bool(request.headers.get("HX-Request")), "locus_url": locus_url}
 
 
 def job_card(request, key, row, job):
@@ -683,9 +679,7 @@ def job_card(request, key, row, job):
     ev = evidence(snp, jobs.weights(d), chosen["trait"], synthetic, snps)
     ev["facts"] = ordered(ev["facts"] + gwas_chips(association.snp_line(request, key, row, job))
                           + [c for c in [rank_chip(con, snp.get("tier_score"))] if c])
-    ctx = card_context(request, ev, jobs.presets(d), None,
-                       f"{reverse('snpportal:locus')}?{urlencode({'key': key, 'row': row, 'trait': chosen['trait'], **gwas_query})}",
-                       gwas_query)
+    ctx = card_context(request, ev, f"{reverse('snpportal:locus')}?{urlencode({'key': key, 'row': row, **gwas_query})}")
     ctx.update(job=job, synthetic=synthetic, panel=panel.holds(request, snp))
     return ctx
 
@@ -715,17 +709,14 @@ def variant(request, spec):
     except ValueError as e:
         raise Http404(str(e)) from None
     pos, ref, alt = int(m.group(2)), (m.group(3) or "").upper() or None, (m.group(4) or "").upper() or None
-    presets = jobs.presets()
-    trait = request.GET.get("trait") if request.GET.get("trait") in dict(presets) else "all"
+    trait = "all"  # tiers always count all 21 conditions
     try:
-        snp = sl.annotate_position(jobs.release(), chrom, pos, ref, alt, jobs.stored_preset(trait, jobs.weights()["presets"]) or "all",
-                                   work_dir=jobs.results_dir())  # snpscore knows the stored presets' names
+        snp = sl.annotate_position(jobs.release(), chrom, pos, ref, alt, trait, work_dir=jobs.results_dir())
     except snpscore.InputError as e:
         raise Http404(str(e)) from None
     snp["id"] = snp.get("id") or next((r["id"] for r in sl.catalog(jobs.release()) if r.get("chrom") == chrom and r.get("pos") == str(pos)), None)
     info = jobs.release_info()
     ev = evidence(snp, jobs.weights(), trait, bool(info.get("synthetic")))
-    ctx = card_context(request, ev, presets, reverse("snpportal:variant", args=[spec]),
-                       f"{reverse('snpportal:locus')}?{urlencode({'r': region_text(chrom, max(0, pos - 1 - 10_000), pos + 10_000), 'trait': trait})}")
+    ctx = card_context(request, ev, f"{reverse('snpportal:locus')}?{urlencode({'r': region_text(chrom, max(0, pos - 1 - 10_000), pos + 10_000)})}")
     ctx.update(nav="explore", title=ev["title"], synthetic=ev["synthetic"], crumbs=[("Locus browser", reverse("snpportal:locus")), ("Variant", None)])
     return render(request, "snpportal/card.html" if ctx["hx"] else "snpportal/variant.html", ctx)
