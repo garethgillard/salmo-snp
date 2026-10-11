@@ -1,9 +1,10 @@
 """python manage.py tour_images [--base URL] [--chrome PATH]: retake the guided tour's screenshots from a running portal.
 
-Scores the example jobs the slides show through the Score form (known loci, 50,000 public sites, the synthetic GWAS),
-then drives headless Chrome over the DevTools protocol (a pipe, so no extra packages): for each slide in explore.TOUR it
-opens the page, clicks what the slide needs, crops to the slide's elements and saves static/snpportal/tour/<slug>.webp,
-1200 px wide. It also writes tour/tour.css, which places each numbered callout box over its image in %."""
+Scores the example jobs the slides show through the Score form (known loci, the synthetic GWAS), then drives headless
+Chrome over the DevTools protocol (a pipe, so no extra packages) in one fresh profile, so the Score page lists the results
+it opened and the Design panel is its own: for each slide in explore.TOUR it POSTs the forms the slide needs first (e.g.
+Add to panel), opens the page, clicks what the slide needs, crops to the slide's elements and saves
+static/snpportal/tour/<slug>.webp, 1200 px wide. It also writes tour/tour.css, which places each numbered callout box over its image in %."""
 from __future__ import annotations
 
 import base64
@@ -27,7 +28,12 @@ from snpportal.explore import TOUR
 OUT = Path(__file__).resolve().parents[2] / "static" / "snpportal" / "tour"
 CHROMES = ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "google-chrome", "chromium", "chromium-browser")
 WIDTH, MAX_RATIO, PAD, QUALITY = 1200, 0.68, 12, 82  # image width (px), tallest height/width, crop margin (CSS px), WebP quality
-JOBS = {"snps": ("score/", "known_loci"), "panel": ("score/", "public_50k"), "gwas": ("score/gwas/", "gwas_maturation_SYNTHETIC")}
+JOBS = {"snps": ("score/", "known_loci"), "gwas": ("score/gwas/", "gwas_maturation_SYNTHETIC")}
+SUBMIT = """(async function (sel) {  // POST a button's form with the button's name=value, as a click would, staying on the page
+  var b = document.querySelector(sel), data = new FormData(b.form);
+  if (b.name) data.append(b.name, b.value);
+  return (await fetch(b.form.action, {method: "POST", body: data, credentials: "same-origin"})).status;
+})"""
 FIND = """window.tourBox = function (spec) {  // [x, y, w, h] of an element, or of the union of a list; null if none is shown
   var find = function (sel) {
     if (sel.indexOf("text=") !== 0) return document.querySelector(sel);
@@ -126,7 +132,7 @@ def score_example(base, path, example):
     web = build_opener(HTTPCookieProcessor(jar), Stay)
     web.open(base + "score/").read()
     token = next((c.value for c in jar if c.name == "csrftoken"), "")
-    data = urlencode({"example": example, "trait": "maturation"}).encode()
+    data = urlencode({"example": example}).encode()
     try:
         web.open(Request(base + path, data=data, headers={"X-CSRFToken": token, "Referer": base + "score/"}))
         raise CommandError(f"Scoring the example {example} did not start a job (is it in this release?)")
@@ -156,7 +162,7 @@ class Command(BaseCommand):
         binary = options["chrome"] or next((c for c in CHROMES if shutil.which(c) or Path(c).exists()), None)
         if not binary:
             raise CommandError("Chrome not found: pass --chrome or set CHROME")
-        need = {name for s in TOUR for name in JOBS if "{" + name + "}" in s["shot"]["path"]}
+        need = {name for s in TOUR for name in JOBS if "{" + name + "}" in json.dumps(s["shot"])}
         keys = {name: score_example(base, *JOBS[name]) for name in sorted(need)}
         OUT.mkdir(parents=True, exist_ok=True)
         css = ["/* Written by `python manage.py tour_images` with the images: each slide's numbered callout boxes, in % of its image. */"]
@@ -176,6 +182,11 @@ class Command(BaseCommand):
         """Screenshot one slide's page; returns its tour.css rules."""
         shot, slug = slide["shot"], slide["slug"]
         chrome.size(shot["width"], 900)
+        for path, button in shot.get("before", []):
+            chrome.open(base + path.format(**keys))
+            status = chrome.js(f"{SUBMIT}({json.dumps(button)})")
+            if status != 200:
+                raise CommandError(f"{slug}: POSTing {button} on {path} gave HTTP {status}")
         chrome.open(base + shot["path"].format(**keys))
         if shot.get("click"):
             chrome.js(f"document.querySelector({json.dumps(shot['click'])}).click()")

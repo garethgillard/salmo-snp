@@ -18,6 +18,7 @@ No Docker, Apache, server, deployment or hosting work until the prototype works 
 - Few files, little code, readable. Don't add tests for every edge case.
 - No Django models or database until there's something to save (e.g. saved panels): state lives in job folders.
 - Ask before adding a dependency.
+- After changing a page the guided tour shows, retake its screenshots: `python manage.py tour_images` (a running portal).
 
 ## Design system
 - Every colour lives in `palette.py`; templates and `portal.css` use classes and `var(--sp-*)` only (tested). SVGs embed literal hex.
@@ -25,8 +26,9 @@ No Docker, Apache, server, deployment or hosting work until the prototype works 
 - Pages that show tiers include `_caveat.html` once (SYNTHETIC prefix on synthetic jobs): no PROVISIONAL or SYNTHETIC badges elsewhere.
 - Panels, filters, card sections and export columns render only when their column exists in the result.
 - `hx-boost` only on links and forms that stay on the same page (a boosted file or other-page link swaps in nothing; tested).
-- Results tabs: Overview | Table | Panel | Export; GWAS jobs: Association | Overview | Table | Export. View state lives in whitelisted GET
-  parameters (a trait change keeps each tab's `keep` list; GWAS links keep the fine-mapping settings); derived files are
+- Results tabs: Overview | Table | Export; GWAS jobs: Association | Overview | Table | Export. Tiers always count all 21
+  conditions (no trait picker); the curated panel is its own page (Design panel, `panel.py`; `?tab=panel` is unlinked).
+  View state lives in whitelisted GET parameters (GWAS links keep the fine-mapping settings); derived files are
   cached in the job folder by a hash of their parameters (`panels/<hash>.parquet`, `loci/<hash>.parquet`), so the
   same URL gives the same file. User SNP names (must-include ids) are POSTed, never put in a URL.
 

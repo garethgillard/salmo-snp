@@ -28,8 +28,9 @@ EMISSIONS = "https://salmobase.org/datafiles/datasets/Aqua-Faang/figures/chromHM
 STATE_MODELS = {"Bivalent": "DevMap only", "Poised_enhancer_2": "BodyMap only"}  # BodyMap and DevMap: separate 12-state models
 TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.scored)
     "active": "An active state (Active TSS or Active enhancer) in at least one of the 21 conditions.",
-    "active_elsewhere": "An active state only in conditions outside the chosen ones.",
-    "weak": "A weak state in a chosen condition, and no active state there.",
+    "active_elsewhere": "An active state only outside the chosen conditions (snpscore's --trait; never in the portal, "
+                        "which counts all 21).",
+    "weak": "A weak state in at least one condition, and no active state in any.",
     "coding": "A CDS change to the protein (missense, stop gained or lost, start lost) or of unknown effect.",
     "synonymous": "A synonymous CDS change (or stop retained): no amino-acid change (weight under review).",
     "splice": "In a splice region.",
@@ -383,7 +384,7 @@ def methods_text(m, w):
             + (", the Ensembl regulatory build" if "regbuild" in layers else "")
             + (", GERP constrained elements from the Ensembl Compara 65-fish alignment" if "gerp" in layers else "")
             + (" and allele frequencies of the 504-fish reference panel" if "public_af" in layers else "")
-            + ". Each SNP's tier_score is the sum of the weights of its evidence for the chosen conditions, and tiers "
+            + ". Each SNP's tier_score is the sum of the weights of its evidence over all conditions, and tiers "
               "are cut-offs on that score (rules in weights.yaml, sha256 given in each download; PROVISIONAL).")
     return [text], []
 
@@ -425,9 +426,9 @@ def chrom_aliases(chrom):
 
 
 def run_locally(request):
-    """/snp/run-locally/: how to score a confidential list on your own computer with the same release and settings."""
+    """/snp/run-locally/: how to score a confidential list on your own computer with the same release and settings
+    (tiers for all conditions, as the portal; snpscore's single-tissue presets named as an aside)."""
     info, presets = jobs.release_info(), jobs.presets()
-    trait = jobs.canonical(request.GET.get("trait", "all"), (jobs.weights() or {}).get("presets") or {})
     release = jobs.release()
     checksum = None
     if (release / "release.zip.sha256").exists():
@@ -438,16 +439,15 @@ def run_locally(request):
     lines = sorted(f"{x['name']} {x.get('sha256')}\n" for x in info["layers"])
     weights = release / "weights.yaml"
     return render(request, "snpportal/run_locally.html", {
-        "nav": "about", "title": "Run it locally", "release": info, "presets": presets, "trait": trait,
-        "trait_label": jobs.trait_label(jobs.cli_trait(trait) and trait or "all"), "folder": folder,
-        "cli": [(jobs.stored_preset(v, jobs.weights()["presets"]), label) for v, label in presets if jobs.stored_preset(v, jobs.weights()["presets"])],
+        "nav": "about", "title": "Run it locally", "release": info, "folder": folder,
+        "cli": [(jobs.stored_preset(v, jobs.weights()["presets"]), label) for v, label in presets
+                if v != "all" and jobs.stored_preset(v, jobs.weights()["presets"])],
         "zip": (release / "release.zip").exists(), "zip_sha256": checksum,
         "layers_sha256": hashlib.sha256("".join(lines).encode()).hexdigest() if lines else None,
         "weights_sha256": jobs.sha256(weights) if weights.exists() else None,
         "layers_check": (f"python3 -c \"import hashlib, json; m = json.load(open('{folder}/manifest.json')); print(hashlib.sha256(''.join("
                          "sorted(x['name'] + ' ' + str(x.get('sha256')) + chr(10) for x in m['layers'])).encode()).hexdigest())\""),
-        "command": f"snpscore annotate my_snps.vcf.gz --release {folder} --trait {jobs.cli_trait(trait) or 'all'} "
-                   f"-o my_snps.tsv",  # snpscore names all conditions and single tissues
+        "command": f"snpscore annotate my_snps.vcf.gz --release {folder} --trait all -o my_snps.tsv",
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}"})
 
 

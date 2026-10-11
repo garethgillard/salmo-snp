@@ -13,9 +13,9 @@
   {% if summary %}<figure class="sp-card sp-figure" id="fig-{{ summary.name }}"><h2>{{ summary.title }}</h2>{{ summary.svg }}</figure>{% endif %}
 
   <section class="sp-card" aria-labelledby="top-h">
-    <div class="sp-card-head"><h2 id="top-h">Top {{ top.rows|length }} SNPs for {{ preset }}</h2>
+    <div class="sp-card-head"><h2 id="top-h">Top {{ top.rows|length }} SNPs</h2>
       <a class="ms-auto sp-small sp-noprint" href="{{ table_url }}">All {{ top.matching|thousands }} in the table</a></div>
-    <p class="sp-small sp-muted mb-1">{% if trait != 'all' %}Only SNPs in an element of these conditions (Active in). {% endif %}{% if top.gwas %}Ordered by p.{% else %}Ordered by tier, then score.{% endif %}{% if top.ties %} {{ top.ties }}{% endif %}{% if filters %}
+    <p class="sp-small sp-muted mb-1">{% if top.gwas %}Ordered by p.{% else %}Ordered by tier, then score.{% endif %}{% if top.ties %} {{ top.ties }}{% endif %}{% if filters %}
       Filters: {% for k, v in filters.items %}{{ k }}={{ v }}{% if not forloop.last %}, {% endif %}{% endfor %} ({{ top.matching|thousands }} SNPs match).{% endif %}</p>
     {% if top.rows %}<div class="table-responsive"><table class="table table-sm sp-small mb-0">
       <thead><tr><th scope="col">SNP</th><th scope="col">Position</th>{% if top.gwas %}<th scope="col" class="sp-num">p</th>{% endif %}
@@ -47,7 +47,7 @@
     <h2 id="methods-h">Methods</h2>
     <p class="sp-small">SNPs were annotated with snpscore against release {{ release }}: AQUA-FAANG chromatin states in 21
       conditions, Ensembl 116 genes, GERP constrained elements, the Ensembl regulatory build and public allele frequencies.
-      Each SNP's tier sums evidence weights for the trait's conditions (1 = strongest, 4 = no evidence found, not evidence of
+      Each SNP's tier sums evidence weights over all 21 conditions (1 = strongest, 4 = no evidence found, not evidence of
       no effect). The rules are provisional. Full methods: <a href="{{ methods_url }}">{{ methods_url }}</a></p>
     {% if refs %}<h3>References</h3>
     <ul class="sp-small mb-0">{% for r in refs %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}

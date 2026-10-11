@@ -1,8 +1,8 @@
 # salmo-snpportal
 
-Django app for salmobase.org: score a SNP list against AQUA-FAANG functional maps and tier it for a trait, then explore
-the result (overview, filterable table, evidence card per SNP), design a genotyping panel, compare it with an existing
-chip, export it (TSV, Parquet, BED, Illumina-, Axiom- and KASP-style files, genomic-prediction priors, or a zip bundle) and
+Django app for salmobase.org: score a SNP list against AQUA-FAANG functional maps and tier it by its evidence in all 21
+sample conditions, then explore the result (overview, a table filtered on its columns, an evidence card per SNP in the
+table's drawer), collect selections in a Design panel, compare it with an existing chip, export it (TSV, Parquet, BED, Illumina-, Axiom- and KASP-style files, genomic-prediction priors, or a zip bundle) and
 print a one-page report.
 GWAS summary statistics get an Association page (Manhattan, tier-stratified QQ, loci, regional plot and fine-mapping
 with a functional prior). Without a list: search (genes, NCBI LOC symbols, rs IDs, positions), gene pages, a locus
@@ -28,12 +28,15 @@ python manage.py test snpportal                       # builds a release from sa
 'Try it' box at the top of the Score page (the release's `demo/` inputs: known loci, the SYNTHETIC demo chip and the
 SYNTHETIC maturation GWAS; `example=public_50k` still works but is not offered), paste a few positions or rs IDs, upload
 `../salmo-snpscore/tests/fixture/snps.vcf`, or follow the guided tour (`/snp/tour/`). The Score card's tabs (Upload SNPs,
-Paste positions, Genes or regions, GWAS) open with `?input=file|paste|regions|gwas` (or `#gwas`). On a results page,
-the Panel tab's 'Use the demo chip' button compares the list with the SYNTHETIC demo chip.
+Paste positions, Genes or regions, GWAS) open with `?input=file|paste|regions|gwas` (or `#gwas`). On the Design panel,
+'Use the demo chip' compares the panel with the SYNTHETIC demo chip.
 `python manage.py tour_images [--base http://localhost:8000/snp/]` retakes the tour's screenshots (`static/snpportal/tour/`)
-from a running portal with headless Chrome (`--chrome` or `CHROME` if it is not in the usual place).
+from a running portal with headless Chrome (`--chrome` or `CHROME` if it is not in the usual place), in one fresh
+profile: it scores the examples, adds the known loci to that profile's Design panel with the demo chip, and writes
+`tour.css` with each callout's box. Retake them after changing a page the tour shows; `tests_tour` checks every slide has
+its image and boxes.
 
-The trait preset, tab and filters live in the URL, so a view can be bookmarked or shared; the download follows them.
+The tab and the Table's filters live in the URL, so a view can be bookmarked or shared; the download follows them.
 `SNPPORTAL_TEST_RELEASE=<folder>` makes the tests reuse (a copy of) a release already built from the fixture.
 `SNPSCORE_DEV=1` adds a load check: the 1.6M-site public VCF scored on the background pool against release/dev
 (about 85 s here; the POST returns at once).
@@ -57,8 +60,8 @@ The folder holds:
 | `summary.json` | everything the overview draws (tiers, bins, conditions, regions, terms, MAF, assay status and reasons, known-locus and molQTL counts, gaps per preset): see `jobs.summarise` |
 | `validation.json`, `rejects.tsv` | snpscore's upload QC and dropped rows (shown on the results page; rejects downloadable) |
 | `weights.yaml`, `manifest.json` | snapshot of the release: editing the release never changes an existing job, and a banner says when it changed |
-| `panels/<hash>.parquet`, `.json` | each panel designed on the Panel tab (folder 0700): the result columns plus `source_row`, `selection_reason`, `panel_rank`, `design_score` (and the chip columns); the .json holds hash, preset, params, summary, chip label. hash = `snpscore.panel.params_hash` of the preset, parameters, weights sha256 and chip sha256, so the same URL gives the same file |
-| `chip.parquet`, `chip.json` | the reference chip of the Panel tab (chrom, pos, id), and its label, SYNTHETIC flag, kept/rejected rows, sha256, density per Mb and the comparison per preset |
+| `panels/<hash>.parquet`, `.json` | each panel designed on the (unlinked) Panel tab (folder 0700): the result columns plus `source_row`, `selection_reason`, `panel_rank`, `design_score` (and the chip columns); the .json holds hash, preset, params, summary, chip label. hash = `snpscore.panel.params_hash` of the preset, parameters, weights sha256 and chip sha256, so the same URL gives the same file |
+| `chip.parquet`, `chip.json` | the reference chip of the (unlinked) Panel tab (chrom, pos, id), and its label, SYNTHETIC flag, kept/rejected rows, sha256, density per Mb and the comparison per preset |
 | `chip_rows_<sha>.parquet` | `file_row_number`, `on_chip`, `dist_to_chip`, `near_chip` of every SNP for that chip (`results.chip_view`, made once from chrom and pos); pages that use the chip columns join it by row number (`novel_functional` = tier 1-2 and not near the chip) |
 | `sumstats.parquet`, `gwas.parquet`, `gwas.json` | GWAS jobs (`input_kind` gwas): the summary statistics as read, harmonised to Ssal_v3.1, and the upload QC report (see snpscore README "GWAS") |
 | `loci/<hash>.json`, `.parquet` | GWAS jobs: the loci (the `association.MAX_LOCI` = 200 strongest, and how many there are) and the fine-mapping table of one trait and settings; hash = `params_hash` of the trait and settings, so each page reads them instead of clumping again |
@@ -70,7 +73,7 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 
 | URL | What |
 | --- | --- |
-| `results/<key>/?tab=overview\|table\|panel\|export` | the results tabs. Tiers always count all 21 conditions (no Active in, no condition picker; an older link's `trait` is ignored): the Table only filters after scoring. Table filters (`tier`, `region`, `chrom/start/end`, `gene`, `min_maf`, `assay`, `known`, `min_score` (the Score column's slider), `hide_*`; Chromatin: `tissue` (several), `maturity`, `sex` and `act=active`, SNPs in a robust ATAC peak (or an active state) in at least one of those conditions, a filter only; `tier`, `region`, `assay` and `term` take several values, comma-joined or repeated: any of them; `region` is the Consequence column's filter: missense (protein-changing), synonymous, cds, splice, utr5, utr3, exon, intron, intergenic, and the Overview's groups coding and UTR) are the Table's selection, kept per job (`selection.json`): the Table tab link returns to it, the Panel designs from it and compares it with a chip, the Export tab offers it ('Table selection'); the Overview always shows the whole list with tiers for all conditions, and its links start a new selection. Each filter sits on its column (a funnel in the header, `_dd.html`); a hidden column has no filter (Columns shows it) and a filtered column always shows; Flags is a default column. The selector column (+/−) takes single SNPs out of the selection by hand (`exclude=<row>`, `include=<row>`, `include_all=1`; kept in `unselected.json`): the Table shows only the + rows unless asked (`picked=out`: only −; `picked=all`: both, the − dimmed), and the Panel, Export, downloads and Add to panel leave them out. `&snp=<row>` opens the SNP's card in the Table's drawer: a bar with its +/− switch (key x) and the previous and next rows of the table (keys k and j, across pages), then one top row (+/−, tier, SNP, gene, copy, previous/next), the score (a block per evidence term, as wide as its points, largest first, labelled like a chip, with dashed lines at the tier cut-offs and = score on the right), the key facts under it (not what a block or the heading says; a GWAS job's p, beta and PIP), caveats and foldable sections: the functional evidence at the locus (a mini locus browser of the SNP +- 10 kb: your SNPs (faded when not selected), genes, public variants, GERP and robust ATAC peaks, with the SNP's peak per condition in a wedge under it), as a marker (its header: the assay check, GC, MAF, LORe, A/T or C/G; the flank in a box (a copy icon beside it) with long runs underlined and public variants' offset, alleles and MAF on hover; one duplicate-copy line; the Design panel and its chip), and context; a SNP taken out stays in the table while its card is open; 'Open locus browser' widens the drawer over the page to the browser at that SNP (20 kb), and 'Back to the card', Esc or the browser's Back return to the card and table as they were (a lollipop of another SNP opens its card; other pages open in a new tab); GWAS jobs have Association, Overview, Table and Export (no Panel), and every link of theirs keeps the fine-mapping settings (`sig`, `sugg`, `window`, `prior_sd`, `lam`, `trait_sd`) |
+| `results/<key>/?tab=overview\|table\|export` | the results tabs (`tab=panel`, the automatic designer, still works but is no longer linked: the Design panel page is the curated panel). Tiers always count all 21 conditions (no Active in, no condition picker; an older link's `trait` is ignored): the Table only filters after scoring. Table filters (`tier`, `region`, `chrom/start/end`, `gene`, `min_maf`, `assay`, `known`, `min_score` (the Score column's slider), `hide_*`; Chromatin: `tissue` (several), `maturity`, `sex` and `act=active`, SNPs in a robust ATAC peak (or an active state) in at least one of those conditions, a filter only; `tier`, `region`, `assay` and `term` take several values, comma-joined or repeated: any of them; `region` is the Consequence column's filter: missense (protein-changing), synonymous, cds, splice, utr5, utr3, exon, intron, intergenic, and the Overview's groups coding and UTR) are the Table's selection, kept per job (`selection.json`): the Table tab link returns to it, the Panel designs from it and compares it with a chip, the Export tab offers it ('Table selection'); the Overview always shows the whole list with tiers for all conditions, and its links start a new selection. Each filter sits on its column (a funnel in the header, `_dd.html`); a hidden column has no filter (Columns shows it) and a filtered column always shows; Flags is a default column. The selector column (+/−) takes single SNPs out of the selection by hand (`exclude=<row>`, `include=<row>`, `include_all=1`; kept in `unselected.json`): the Table shows only the + rows unless asked (`picked=out`: only −; `picked=all`: both, the − dimmed), and the Panel, Export, downloads and Add to panel leave them out. `&snp=<row>` opens the SNP's card in the Table's drawer: a bar with its +/− switch (key x) and the previous and next rows of the table (keys k and j, across pages), then one top row (+/−, tier, SNP, gene, copy, previous/next), the score (a block per evidence term, as wide as its points, largest first, labelled like a chip, with dashed lines at the tier cut-offs and = score on the right), the key facts under it (not what a block or the heading says; a GWAS job's p, beta and PIP), caveats and foldable sections: the functional evidence at the locus (a mini locus browser of the SNP +- 10 kb: your SNPs (faded when not selected), genes, public variants, GERP and robust ATAC peaks, with the SNP's peak per condition in a wedge under it), as a marker (its header: the assay check, GC, MAF, LORe, A/T or C/G; the flank in a box (a copy icon beside it) with long runs underlined and public variants' offset, alleles and MAF on hover; one duplicate-copy line; the Design panel and its chip), and context; a SNP taken out stays in the table while its card is open; 'Open locus browser' widens the drawer over the page to the browser at that SNP (20 kb), and 'Back to the card', Esc or the browser's Back return to the card and table as they were (a lollipop of another SNP opens its card; other pages open in a new tab); GWAS jobs have Association, Overview, Table and Export, and every link of theirs keeps the fine-mapping settings (`sig`, `sugg`, `window`, `prior_sd`, `lam`, `trait_sd`) |
 | `results/<key>/?tab=panel&design=1&n=&spacing_kb=&spacing_cm=&cm_map=&backbone=&maf=&per_gene=&per_element=&assay=&exclude=&gap_mb=` | panel designer as a link (blank or invalid values fall back to weights.yaml `design`; `spacing_cm` and `cm_map` (mean, female, male) only with the `cm` columns) |
 | `results/<key>/panel/` (POST) | the designer's form, the same fields plus `must` (must-include ids, which never go in a URL): designs the panel and redirects to `?tab=panel&panel=<hash>`, which shows a saved panel with its parameters (for another trait: the same parameters) |
 | `results/<key>/chip/` (POST) | `chip` file, `demo=1` or `remove=1` |
@@ -78,11 +81,12 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 | `panel/`, `panel/change/` (POST), `panel/download/?format=tsv\|kasp\|illumina\|axiom[&scope=new]`, `results/<key>/add-to-panel/` (POST) | Design panel: a curated panel of whole Table selections from any results ('Add to panel', the cart), compared with an existing chip, its assay readiness and vendor files (all, or the SNPs not on the chip). One browser's only (an HttpOnly cookie names its folder `results/panel-<uuid>`, never a URL), deleted 24 hours after it was started (its `created` marker); its TSV, scored again, brings it back. Two equal columns (sources, chip and downloads; at a glance and the genome figure), then the SNP list: 50 rows (`show=all`: up to 2,000), problems first (assay fail/warn, MAF below the designer's minimum, LORe, a kept neighbour within the minimum spacing) or by genome (`order=genome`); with a chip, its status per SNP (on the chip, near and how far, new) and `chip=new` for the new ones only; +/- drops a SNP by hand or puts it back (POST `drop`/`keep`, kept in panel.json 'dropped'): dropped SNPs stay in the list, dimmed, and leave the counts, figure and downloads |
 | `score/current/` | the results this browser last opened (a cookie), else the Score page |
 | `score/` | the nav's Score: the forms, and 'Your results': the results this browser opened (an HttpOnly cookie, newest first; named by the uploaded file, or 'Pasted' and the time), each with its SNPs, time, a link and Delete (`results/<key>/delete/` with `next=score` comes back here) |
-| `results/<key>/report/?trait=[&filters][&panel=<hash>]` | one-page printable report (two A4 pages) |
-| `results/<key>/figure/<name>.svg`, `results/<key>/tools/<name>.svg` | overview and Panel-tab figures (`&format=tsv` for their data) |
+| `results/<key>/report/?[filters][&panel=<hash>]` | one-page printable report (two A4 pages): the Overview's numbers and the top 20 SNPs of the Table's selection, tiers for all 21 conditions |
+| `results/<key>/figure/<name>.svg`, `results/<key>/tools/<name>.svg` | Overview and (unlinked) Panel-tab figures (`&format=tsv` for their data) |
 | `results/<key>/association/` (+ `<name>.svg`, `download/`, `region/`) | GWAS jobs: QC, Manhattan, QQ, loci, fine-mapping, regional plot |
 | `results/<key>/snp/<row>/`, `variant/<chrom>-<pos>[-ref-alt]/`, `locus/?r=[&key=]`, `gene/<id>/` | a job's SNP (opens its card in the Table's drawer, `?snp=`), variant page, locus browser (with a GWAS job's key it draws the association lane; `&embed=1`: without the site's chrome and with no Back steps, as the card drawer shows it), gene page |
-| `score/gwas/`, `candidates/`, `tour/`, `known-loci/`, `search/`, `about/data/`, `about/methods/`, `help/`, `run-locally/` | the other pages |
+| `tour/?slide=N` | the guided tour: 8 slides (overview, Score, Table, card, locus browser, Design panel, GWAS, search and help), each a screenshot with numbered callouts and a 'Try it' (a page, or a Score example that opens the slide's tab and card) |
+| `score/gwas/`, `candidates/`, `known-loci/`, `search/`, `about/data/`, `about/methods/`, `help/`, `run-locally/` | the other pages (Run locally gives the `--trait all` command, as the portal's tiers) |
 | `colours/?name=portal\|aquafaang` | the locus browser's chromatin-colour toggle (Display options): sets the `snpportal_palette` cookie, back to the (same-site) referring page |
 
 Search (`search.py`): positions and regions, rs IDs (the catalogue's, else `snpscore.rsid` on the release's EVA release 9
@@ -100,9 +104,9 @@ Public data on the pages (R1, R3-R8 of salmo-snpscore's ROADMAP 'Push 2'):
   from the catalogue's evidence and caveat text). The card lists the nearest row and every other row within the
   catalogue window; the locus browser draws them in a 'Published' lane (filled diamond = effect allele stated).
 - molQTL (`molqtl` columns): a card section (tissue, eQTL or caQTL, gene or peak, eigenMT-adjusted p, pi without a
-  direction, citation and licence note), a Table column and the 'molQTL lead SNPs' filter (`molqtl=1`) and a
+  direction, citation and licence note), a Table column with its 'molQTL lead SNPs' filter (`molqtl=1`) and a
   locus-browser lane (read from `molqtl.parquet`). Weight 0: never counted in tiers.
-- Genetic map: the card shows female and male cM, the Table a 'cM (F/M)' column, and the panel designer a 'Min spacing
+- Genetic map: the card shows female and male cM, the Table a 'cM (F/M)' column, and the (unlinked) Panel tab's designer a 'Min spacing
   (cM)' field with the map to use (`snpscore.panel.design(min_spacing_cm=, cm_map=)`; a median cM spacing KPI), when the
   `cm` columns exist.
 - Vendor checks (`tools.vendor_checks` = `snpscore.panel.vendor_checks`): each Export-tab vendor row shows its own
@@ -112,11 +116,11 @@ Public data on the pages (R1, R3-R8 of salmo-snpscore's ROADMAP 'Push 2'):
   `.provenance.txt` and `.lookup.tsv` sidecars.
 - Coding consequences (`coding_*` columns, snpscore's VEP-lite): the Table's and the Panel's Region cell shows the
   consequence (missense, synonymous, stop gained, splice donor, ..., tooltip `p.Thr46Met · <transcript>`; a bare CDS
-  says 'amino-acid effect not computed: <reason>' in its tooltip); the Region filter (More filters) adds
-  `region=missense` ('protein-changing': missense, stop and start changes) and `region=synonymous`; the card's tier line
-  and the Table's drawer name it (`results.tier_parts`: `Missense p.Thr46Met (ENSSSAT00000230965; published as
-  Met54Thr) +3`, the published label when the catalogue's residue or direction differs, one- or three-letter), the
-  'why this tier' bar labels it (`missense +3`) and the card's closed Details add the transcript and codons; the variant
+  says 'amino-acid effect not computed: <reason>' in its tooltip); the Consequence column's filter adds
+  `region=missense` ('protein-changing': missense, stop and start changes) and `region=synonymous`; the card's score
+  block labels it (`missense +3`; `results.tier_parts` gives the long form, `Missense p.Thr46Met (ENSSSAT00000230965;
+  published as Met54Thr) +3`, the published label when the catalogue's residue or direction differs, one- or
+  three-letter, on hover) and the card's closed Details add the transcript and codons; the variant
   page gets the same through `snpscore.locus.annotate_position` (a position only: the 504-fish panel's alleles).
 - Genomic-prediction priors: the Export tab's closed 'More formats' offers `format=priors` (snpscore's zip of BayesRC
   classes, GFBLUP/MultiBLUP sets, LDAK partitions and an annotation matrix), always for all SNPs (`scope=all`, whatever
@@ -127,7 +131,7 @@ Public data on the pages (R1, R3-R8 of salmo-snpscore's ROADMAP 'Push 2'):
   own '#' lines), and one line under it: the known loci were partly chosen as missense, so their CDS enrichment is not a
   validation; without it, the one-line 'not yet validated' note stays.
 - Upload QC: chromosome-name warnings (e.g. `HG993277.1`, an older chromosome 18) as alerts; `.2` GenBank names are
-  accepted; the Panel tab's Assay readiness card labels snpscore's reasons.
+  accepted; the Design panel's At a glance labels snpscore's assay reasons.
 - Data page: layer population and licence, the AQUA-FAANG samples (ENA projects, BodyMap fish) and a 'How to cite'
   block (wording PROVISIONAL). Gene pages, cards and the Known loci page link to SalmoBase gene pages.
 - State colours: `palette.STATE_PALETTES` has the portal palette and AQUA-FAANG's itemRgb colours;
@@ -138,8 +142,8 @@ Public data on the pages (R1, R3-R8 of salmo-snpscore's ROADMAP 'Push 2'):
 Modules: `views.py` (score page, job status, results shell, downloads, delete), `results.py` (overview, table and
 filters, figures), `locus.py` (locus browser, evidence card, variant page; `locus_svg.py` draws them), `explore.py`
 (landing, gene pages, known loci, candidate jobs, tour), `search.py` (resolver), `about.py` (data, methods, help, run
-locally), `tools.py` (Panel tab: panel designer and chip comparison; Export tab and every export format, via
-`snpscore.panel` and `snpscore.export`), `report.py` (printable report), `association.py` (GWAS upload, Association
+locally), `panel.py` (the Design panel: Add to panel, sources, chip, SNP list, downloads), `tools.py` (the unlinked Panel
+tab's designer and chip comparison; Export tab and every export format, via `snpscore.panel` and `snpscore.export`), `report.py` (printable report), `association.py` (GWAS upload, Association
 page, regional plot), `figures.py` (pure functions data -> SVG), `palette.py` (every colour). Templates extend `base_portal.html` and use the partials `_page_header`,
 `_figure`, `_badges` and `_footer`; styles are in `static/snpportal/portal.css`, small enhancements in `portal.js`.
 
@@ -150,7 +154,7 @@ badges; figure cards show a title, an (i) and one download menu, with provenance
 downloads. Every SVG has `role="img"`,
 `<title>` and `<desc>`; text colours pass WCAG AA (a test checks); focus is always visible. Checked for colour blindness
 (deuteranopia, protanopia, tritanopia; no tier or portal-palette pair collides only under CVD; 'Ensembl regulatory' in
-the 'why this tier' bar is `palette.REGBUILD`, Okabe-Ito sky blue). Below 992 px, figures drawn 1200 px wide keep 0.8x
+the card's score blocks is `palette.REGBUILD`, Okabe-Ito sky blue). Below 992 px, figures drawn 1200 px wide keep 0.8x
 and scroll sideways in their card; at 992-1199 px 'More charts' stack one per row. Print: the card fits one A4 page
 (10pt root, closed sections left out), the report two (8.5pt); salmobase's nav, header and footer and Copy buttons
 never print. Checked in headless Chrome only (not Safari or Firefox print, not touch tablets).

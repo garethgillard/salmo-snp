@@ -186,8 +186,10 @@ def _score(request):
         response["Retry-After"] = "60"
         return response
     params = {"trait": preset} if preset != "all" else {}
-    if request.POST.get("tab") in TABS:  # the tour's 'Try it' buttons open the tab their slide shows
+    if request.POST.get("tab") in TABS:  # the tour's 'Try it' buttons open the tab their slide shows (and its card)
         params["tab"] = request.POST["tab"]
+        if request.POST.get("snp", "").isdecimal():
+            params["snp"] = request.POST["snp"]
     url = reverse("snpportal:results", args=[key])
     return redirect(f"{url}?{urlencode(params)}" if params else url)
 

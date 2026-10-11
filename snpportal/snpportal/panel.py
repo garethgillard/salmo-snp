@@ -88,9 +88,11 @@ def holds(request, snp):
     con = jobs.connect([d])
     found = []
     if files:
-        same = " AND ".join(["chrom = ?", "pos = ?"] + [f"coalesce({c}, '') = ?" for c in ("ref", "alt") if c in snp])
-        found = [x for x, in con.execute(f"SELECT DISTINCT panel_source FROM read_parquet([{', '.join(lit(f) for f in files)}], union_by_name=true) "
-                                         f"WHERE {same}", [snp["chrom"], snp["pos"]] + [snp.get(c) or "" for c in ("ref", "alt") if c in snp]).fetchall()]
+        src = f"read_parquet([{', '.join(lit(f) for f in files)}], union_by_name=true)"
+        alleles = [c for c in ("ref", "alt") if c in snp and c in {r[0] for r in con.execute(f"DESCRIBE SELECT * FROM {src}").fetchall()}]
+        same = " AND ".join(["chrom = ?", "pos = ?"] + [f"coalesce({c}, '') = ?" for c in alleles])
+        found = [x for x, in con.execute(f"SELECT DISTINCT panel_source FROM {src} WHERE {same}",
+                                         [snp["chrom"], snp["pos"]] + [snp.get(c) or "" for c in alleles]).fetchall()]
     names = {x["id"]: f"S{i + 1}" for i, x in enumerate(s.get("sources", []))}
     out = {"sources": [names.get(x, "?") for x in sorted(found)], "chip": None}
     if (d / "chip.parquet").exists():

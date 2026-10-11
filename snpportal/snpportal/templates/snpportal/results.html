@@ -18,9 +18,9 @@
     they still use release {{ job.release }} as it was. <a href="{% url 'snpportal:upload' %}">Score the list again</a> to update them.</div>{% endif %}
 
   {% comment %}Links and forms that stay on this page (tabs, table filters, sort, pages, the drawer) swap in the new
-     #results and the header actions (#sp-actions, so Report follows the trait). Only those: a boosted link to another page
-     or a file would swap in nothing. The trait (the conditions tiers use) is set by Active in on the Table tab and
-     travels in every link; everything also works without JavaScript.{% endcomment %}
+     #results and the header actions (#sp-actions, so Report follows the Table's filters). Only those: a boosted link to
+     another page or a file would swap in nothing. Tiers always count all 21 conditions; everything also works without
+     JavaScript.{% endcomment %}
   <div id="results" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-select-oob="#sp-actions">
     <ul class="nav nav-tabs" hx-boost="true">
       {% if gwas %}<li class="nav-item"><a class="nav-link" hx-boost="false" href="{% url 'snpportal:association' key %}?{{ query }}">Association</a></li>{% endif %}

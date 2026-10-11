@@ -85,10 +85,10 @@ def report(request, key):
     synthetic = bool(job.get("synthetic_input") or job.get("synthetic_layers") or tools.chip_info(d).get("synthetic"))
     command = next((line[2:] for line in jobs.provenance(job, trait, filters) if line.startswith("# equivalent command")), "")
     return render(request, "snpportal/report.html", {
-        "nav": "score", "job": job, "key": key, "title": f"Report · {job.get('label') or 'results'}", "trait": trait, "preset": label,
+        "nav": "score", "job": job, "key": key, "title": f"Report · {job.get('label') or 'results'}", "trait": trait,
         "crumbs": [("Score SNPs", reverse("snpportal:upload")), ("Results", f"{base}?{urlencode({'trait': trait, **filters})}"),
                    ("Report", None)],
-        "meta": " · ".join(x for x in [f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None, f"trait {label}",
+        "meta": " · ".join(x for x in [f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None, f"tiers for {label}",
                                        f"printed {jobs.utc()}"] if x),
         "actions": [{"label": "Back to the results", "url": f"{base}?{urlencode({'trait': trait, **filters})}"}],
         "warnings": ov["warnings"], "summary": ov["figs"].get(FIGURES[0]), "figs": [ov["figs"][n] for n in FIGURES[1:] if n in ov["figs"]], "panel": panel(request, key, d),

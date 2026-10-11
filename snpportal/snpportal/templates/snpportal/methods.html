@@ -8,7 +8,7 @@
   <div class="col-lg-6 sp-stack">
     <section class="sp-card" id="weights" aria-labelledby="w-h">
       <h2 id="w-h">Evidence weights</h2>
-      <p class="sp-small sp-muted mt-1">A SNP's tier_score is the sum of the weights of its evidence for the chosen conditions.</p>
+      <p class="sp-small sp-muted mt-1">A SNP's tier_score is the sum of the weights of its evidence, counted over all 21 conditions.</p>
       <table class="table table-sm sp-small mb-0">
         <thead><tr><th scope="col">Evidence</th><th scope="col" class="sp-num">Weight</th><th scope="col">Fires when</th></tr></thead>
         <tbody>{% for name, value, text in weights %}<tr id="term-{{ name }}"><th scope="row" class="fw-normal sp-mono">{{ name }}</th>
@@ -30,9 +30,10 @@
         expected; not a validation (n = {{ benchmark }}).</p>{% endif %}</div>{% endif %}
     <section class="sp-card" id="presets" aria-labelledby="p-h">
       <h2 id="p-h">Conditions</h2>
-      <p class="sp-small mt-1 mb-0">Tiers count chromatin activity in the conditions you choose with Active in on the Table:
-        tissues (brain, gonad, liver, muscle; immature or mature, female or male) and the 5 embryo stages, 21 in all
-        (all of them unless you choose). The portal names sample conditions only, never a phenotype.</p>
+      <p class="sp-small mt-1 mb-0">Tiers count chromatin activity in all 21 conditions: tissues (brain, gonad, liver, muscle;
+        immature or mature, female or male) and the 5 embryo stages. The Table's Chromatin filter then keeps SNPs in a robust
+        ATAC peak (or an active state) in the conditions you pick, without changing any tier. The portal names sample
+        conditions only, never a phenotype.</p>
     </section>
   </div>
   <div class="col-lg-6 sp-stack">
@@ -66,7 +67,7 @@
       strongest first, by distance only (no LD). Each locus is fine-mapped assuming one causal variant and no LD: Wakefield
       approximate Bayes factors with W = {{ finemap.prior_sd }}&sup2; on the standardised scale (betas divided by a trait SD of
       {{ finemap.trait_sd }}; without se, V = 1/(2N&middot;af&middot;(1&minus;af))). The uniform prior gives every SNP the same
-      weight; the functional prior &pi; &prop; exp({{ finemap.functional_lambda }} &times; tier_score) for the chosen conditions.
+      weight; the functional prior &pi; &prop; exp({{ finemap.functional_lambda }} &times; tier_score) over all 21 conditions.
       {% widthratio finemap.coverage 1 100 %}% credible sets in descending PIP.</p>
     <p class="sp-small mb-0">Alleles are turned to the Ssal_v3.1 reference (alt = effect allele) using the genome, else the
       504-fish panel sites; p values are read as text, so p = 1e-400 stays 400 on the &minus;log10 scale.</p>

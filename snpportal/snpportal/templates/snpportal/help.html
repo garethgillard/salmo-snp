@@ -4,10 +4,12 @@
 <div class="sp-narrow sp-stack">
   <section class="sp-card" id="quick-start"><h2>Quick start</h2>
     <ol class="sp-small mb-0 mt-2">
-      <li><a href="{% url 'snpportal:upload' %}">Score</a> a file, pasted positions, genes or regions, or try an example.</li>
-      <li>Choose sample conditions with Active in on the Table.</li>
-      <li>Read the overview, filter the table and open a SNP's evidence.</li>
-      <li>Design a panel, or export vendor files.</li>
+      <li><a href="{% url 'snpportal:upload' %}">Score</a> a file, pasted positions, genes or regions, or try an example. The Score
+        page lists the results this browser opened.</li>
+      <li>Read the Overview: tiers count all 21 sample conditions.</li>
+      <li>Filter the Table on its columns (Chromatin: a peak in the tissues you pick) and click a SNP for its evidence card.</li>
+      <li>Add the selection to your <a href="{% url 'snpportal:design_panel' %}">Design panel</a>, compare it with your chip and
+        download vendor files.</li>
       <li>No list? <a href="#search">Search</a> a gene, rs ID or region, or browse the <a href="{% url 'snpportal:known_loci' %}">known loci</a>.</li>
     </ol></section>
 
@@ -31,6 +33,17 @@
     <details id="chips"><summary>Chip manifests</summary>
       <p class="sp-small">Illumina manifests and Axiom annotation files are read as they are, but their positions are often on
         ICSASG_v2 and their alleles on the TOP/BOT or probe strand: watch the assembly warning and the ref_check column.</p></details>
+    <details id="conditions"><summary>Why don't tiers change when I filter by tissue?</summary>
+      <p class="sp-small">Tiers always count all 21 conditions, so a SNP has the same tier in the Overview, its card, the Design
+        panel and every download. The Table's Chromatin filter only picks rows: SNPs inside a robust ATAC peak (or, if you
+        choose, an active state) in at least one of the conditions you tick.</p></details>
+    <details id="my-results"><summary>Where are my results?</summary>
+      <p class="sp-small">The <a href="{% url 'snpportal:upload' %}">Score</a> page lists the results this browser opened, newest
+        first, until they are deleted ({{ keep_hours }} hours after scoring, or Delete). The list lives in your browser; anyone
+        with a results link can open those results.</p></details>
+    <details id="design-panel"><summary>Who can see my Design panel?</summary>
+      <p class="sp-small">Only this browser: a cookie names the panel, never a link. It is deleted {{ keep_hours }} hours after you
+        start it; to keep it longer, download its TSV and score that file again later.</p></details>
     <details id="states"><summary>What do tiers, evidence terms and chromatin colours mean?</summary>
       <p class="sp-small"><a href="{% url 'snpportal:methods' %}">Methods</a> defines the tiers, the evidence weights, the
         chromatin states with their colours, and a glossary.</p></details>
@@ -80,8 +93,8 @@
     <p class="sp-small mt-2 mb-0">Uploaded files are deleted as soon as they have been scored. From a VCF only CHROM, POS, ID, REF
       and ALT are read, so genotypes are never stored. Other columns of a SNP table, and GWAS summary statistics, are kept with
       the results for {{ keep_hours }} hours; anyone with the results link can see them. <em>Delete now</em> removes them sooner.
-      The server never logs SNPs or file names. The only cookies are the form-protection cookie and, if you switch chromatin
-      colours, your choice. For confidential lists, <a href="{% url 'snpportal:run_locally' %}">run it locally</a>.</p>
+      The server never logs SNPs or file names. Besides the form-protection cookie, the portal's own cookies remember the
+      results this browser opened (for the Score page), your Design panel and, if you switch chromatin colours, your choice. For confidential lists, <a href="{% url 'snpportal:run_locally' %}">run it locally</a>.</p>
   </section>
 </div>
 {% endblock main %}

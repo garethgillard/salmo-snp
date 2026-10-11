@@ -572,52 +572,58 @@ def candidate_job(request):
 
 TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 words), the screenshot's alt text, numbered
     # callouts (label, element) and 'Try it' (label, portal path or the Score example to post; {label}: its name).
-    # 'shot' is for `manage.py tour_images`: the page ({snps}, {panel}, {gwas}: the example jobs it scores), the browser
-    # width, an element to click first and the crop. Elements are CSS selectors or 'text=<exact text>'; a list is their
-    # union, and a leading 'row' stretches it across the crop.
+    # 'shot' is for `manage.py tour_images`: the page ({snps}, {gwas}: the example jobs it scores), the browser width, an
+    # element to click first and the crop; 'before' lists (page, button) whose form is POSTed first, as a click would.
+    # Elements are CSS selectors or 'text=<exact text>'; a list is their union, and a leading 'row' stretches it across
+    # the crop.
     {"slug": "overview", "title": "Find SNPs with functional evidence",
-     "text": "Each SNP gets a tier for the trait you pick, from 1 (strongest) to 4 (no evidence found, not evidence of no "
-             "effect). Results open with an overview of the whole list.",
-     "alt": "Results of the known-loci example for maturation: trait menu, key numbers, SNPs per tier and where they "
-            "fall in the genome.",
-     "callouts": [("Pick the trait", "#trait"), ("Click a number to list those SNPs", ".sp-kpis"),
-                  ("Tier: 1 strongest, 4 no evidence found", "#fig-tiers"),
-                  ("Where they fall in the genome", "#fig-ideogram")],
+     "text": "Each SNP gets a tier from 1 (strongest) to 4 (no evidence found, not evidence of no effect), counted over all "
+             "21 AQUA-FAANG sample conditions. Results open with an overview of the whole list.",
+     "alt": "Overview of the known-loci example: key numbers, SNPs per tier, gene region, known loci and assay check, and "
+            "where the SNPs fall in the genome.",
+     "callouts": [("Click a number or bar to list those SNPs", "#fig-summary svg a[href$='tier=1-2']"),
+                  ("Tier: 1 strongest, 4 no evidence found", ["#fig-summary svg a[href$='&tier=1']", "#fig-summary svg a[href$='&tier=4']"]),
+                  ("Where they fall in the genome", "#fig-ideogram"),
+                  ("Then filter the Table, or export", "#results .nav-tabs")],
      "try": ("Try it: score the known loci", {"example": "known_loci"}),
-     "shot": {"path": "results/{snps}/?trait=maturation", "width": 1100,
-              "crop": [".nav-tabs", "#fig-ideogram"]}},
+     "shot": {"path": "results/{snps}/", "width": 1200, "crop": [".nav-tabs", "#fig-summary", "#fig-ideogram"]}},
     {"slug": "score", "title": "Score your list",
      "text": "Upload a VCF, SNP table, PLINK or chip file, paste positions, name genes or regions, or upload GWAS "
-             "results. Without a list, try one of the examples.",
-     "alt": "The Score page: the Try it examples and the Upload SNPs, Paste positions, Genes or regions and GWAS tabs.",
+             "results. Your results are listed beside the forms until they are deleted, after 24 hours.",
+     "alt": "The Score page: the Try it examples, the Upload SNPs, Paste positions, Genes or regions and GWAS tabs, and "
+            "Your results.",
      "callouts": [("No list? Try an example", ".sp-try"),
                   ("Upload, paste, genes or regions, or GWAS", "section[aria-label='Your data'] .nav-tabs"),
-                  ("Drop your file, then Score", ["#pane-file .sp-drop", "#pane-file button"])],
+                  ("Drop your file, then Score", ["#pane-file .sp-drop", "#pane-file button"]),
+                  ("Your results: open or delete", ["#mine-h", ".sp-mine"])],
      "try": ("Try it: open Score", "score/"),
-     "shot": {"path": "score/", "width": 1000, "crop": ["#try-it", "section[aria-label='Your data']"]}},
+     "shot": {"path": "score/", "width": 1200, "crop": [".sp-lead", "section[aria-label='Your data']", ".sp-mine"]}},
     {"slug": "table", "title": "Filter, then open a SNP",
-     "text": "Filters combine and stay in the link, so a view can be bookmarked or shared. Click any row to see that SNP's "
-             "evidence beside the table.",
-     "alt": "The Table tab with its filters, the top-tier SNP selected and its evidence card open on the right.",
-     "callouts": [("Filter by tier, gene, position, MAF or assay", "#results .sp-filters"), ("Click a row", "tr.sp-selected"),
-                  ("Its evidence; open the full card", ["#drawer-h", "#drawer .btn"])],
+     "text": "Every column has its own filter; Chromatin keeps SNPs in a peak in the tissues you pick, without changing "
+             "any tier. Filters stay in the link, and a click on a SNP opens its evidence card.",
+     "alt": "The Table of the known-loci example with the Chromatin column's filter open: tissue, maturity, sex, and a "
+            "robust ATAC peak or an active state.",
+     "callouts": [("Filter on any column, Chromatin too", "#dd-active .sp-dd-panel"),
+                  ("+/−: keep or take out single SNPs", ["th.sp-pickcol", "tr[data-card]:nth-child(6) td.sp-pickcol"]),
+                  ("Click a SNP for its evidence card", "tr[data-card]:nth-child(1) a.sp-snp"),
+                  ("Add the selection to your panel", "button[form=add-panel]")],
      "try": ("Try it: the example's table", {"example": "known_loci", "tab": "table"}),
-     "shot": {"path": "results/{snps}/?trait=maturation&tab=table", "width": 1200, "click": "tr[data-card] a[hx-get]",
-              "wait": "#drawer", "crop": [".nav-tabs", "tr[data-card]:nth-child(12)", "#drawer-h"]}},
+     "shot": {"path": "results/{snps}/?tab=table", "width": 1200, "click": "#dd-active > summary",
+              "wait": "#dd-active[open] .sp-dd-panel", "crop": [".nav-tabs", "#dd-active .sp-dd-panel", "tr[data-card]:nth-child(14)"]}},
     {"slug": "card", "title": "See why it got its tier",
-     "text": "The evidence card adds up what earned the tier: chromatin state in 21 AQUA-FAANG conditions, the coding "
-             "consequence and any published locus nearby.",
-     "alt": "Evidence card of akap11 Val214Met for maturation: tier 1 for brain activity and a missense change, its "
-            "published locus and the chromatin state in each condition.",
-     "callouts": [("Tier, and what earned it", ["#card-body p:has(> .sp-badge)", "#card-body .sp-figure svg"]),
-                  ("Published locus and effect allele", "#card-body .sp-status-ok"),
-                  ("Chromatin per condition; outlined: the trait's", "#card-body .sp-card-side > .sp-figure:first-child svg")],
-     "try": ("Try it: akap11 Val214Met", "variant/25-29064238-A-G/?trait=maturation"),
-     "shot": {"path": "variant/25-29064238-A-G/?trait=maturation", "width": 1000,
-              "crop": ["#card-body p:has(> .sp-badge)", "#card-body .sp-card-side > .sp-figure:first-child svg"]}},
+     "text": "The score adds up the SNP's evidence as blocks, each as wide as its points, against the tier cut-offs. "
+             "Below come its peak and chromatin state in each condition, and how it would work as a marker.",
+     "alt": "The evidence card of akap11 Val214Met beside the Table: score blocks for an active state and a missense "
+            "change, a mini locus browser with the chromatin state per condition, and the marker check.",
+     "callouts": [("What earned the score; dashed lines: tier cut-offs", "#card-body .sp-score svg"),
+                  ("Open the full locus browser", "#cs-locus .sp-cs-act"),
+                  ("Its peak: chromatin state per condition", "#cs-locus svg svg"),
+                  ("As a marker: assay check, GC and MAF", "#cs-marker > summary")],
+     "try": ("Try it: akap11 Val214Met's card", {"example": "known_loci", "tab": "table", "snp": "2"}),
+     "shot": {"path": "results/{snps}/?tab=table&snp=2", "width": 1000, "crop": [".sp-card-bar", "#cs-marker > summary", "tr.sp-selected"]}},
     {"slug": "locus", "title": "Explore a locus",
      "text": "The locus browser lines up genes, published loci, regulatory elements, chromatin states and live RNA, ATAC "
-             "and ChIP data from salmobase. Open a group for one track per condition.",
+             "and ChIP data from salmobase. From a card, Open locus browser shows it over the table until you go back.",
      "alt": "Locus browser at vgll3 on chromosome 25: genes and published SNPs, regulatory elements, chromatin states and "
             "the functional assays.",
      "callouts": [("Zoom and move", ".sp-bctl .btn-group:nth-of-type(1)"),
@@ -627,14 +633,17 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
      "try": ("Try it: vgll3 in the locus browser", "locus/?r=25:28983861-29008860"),
      "shot": {"path": "locus/?r=25:28983861-29008860", "width": 1280, "crop": [".sp-bctl", "#g-assays .sp-grp-h"]}},
     {"slug": "panel", "title": "Design a genotyping panel",
-     "text": "The Panel tab picks the best-scoring SNPs that pass the assay checks, spread over every chromosome. Export "
-             "writes the KASP, Illumina and Axiom files.",
-     "alt": "The Panel tab for 50,000 public sites: designer settings, a 384-marker panel and its markers along the genome.",
-     "callouts": [("How many markers, how far apart", ["#designer label:nth-child(1)", "#designer label:nth-child(2)"]),
-                  ("Assay checks to pass", "#designer select[name=assay]"), ("Design panel", "#designer button"),
-                  ("Export vendor files", "#panel-h + a")],
-     "try": ("Try it: a panel from {label}", {"example": "public_50k", "tab": "panel"}),
-     "shot": {"path": "results/{panel}/?trait=maturation&tab=panel", "width": 1100, "crop": [".nav-tabs", "#fig-panel-coverage"]}},
+     "text": "Add to panel on the Table brings its selection here, for this browser only and for 24 hours. Compare the "
+             "panel with your chip, drop SNPs by hand and download KASP, Illumina or Axiom files.",
+     "alt": "The Design panel holding the known-loci example, compared with the synthetic demo chip: its source, the chip "
+            "comparison, the downloads, the assay check and the panel along the genome.",
+     "callouts": [("Selections added from the Table", "section[aria-labelledby=src-h] table"),
+                  ("Compared with the chip you use", "section[aria-labelledby=chip-h] .sp-kpis"),
+                  ("Vendor files", "section[aria-labelledby=dl-h] form"),
+                  ("Ready to genotype?", "section[aria-labelledby=glance-h]")],
+     "try": ("Try it: open Design panel", "panel/"),
+     "shot": {"before": [("results/{snps}/?tab=table", "button[form=add-panel]"), ("panel/", "button[name=demo]")],
+              "path": "panel/", "width": 1200, "crop": [".sp-page-header", ".sp-eq"]}},
     {"slug": "gwas", "title": "Analyse GWAS summary statistics",
      "text": "Upload GWAS results for a Manhattan plot, the loci and fine-mapping that weights SNPs by their functional "
              "evidence (one causal variant per locus, no LD). The example is synthetic.",
@@ -643,7 +652,7 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("Loci, strongest first", ["#loci-h ~ * thead th:nth-child(1)", "#loci-h ~ * tbody tr:nth-child(3) td:nth-child(3)"]),
                   ("Top SNP after fine-mapping", ["text=Top SNP by PIP", "#loci-h ~ * tbody tr:nth-child(3) td:nth-child(6)"])],
      "try": ("Try it: the synthetic maturation GWAS", {"example": "gwas_maturation_SYNTHETIC"}),
-     "shot": {"path": "results/{gwas}/association/?trait=maturation", "width": 1280,
+     "shot": {"path": "results/{gwas}/association/", "width": 1280,
               "crop": [".sp-caveat", "#loci-h ~ * tbody tr:nth-child(3)"]}},
     {"slug": "more", "title": "Search, browse and get help",
      "text": "Quick search finds one gene, SNP or region, and Known loci lists the published SNPs. For a confidential "
@@ -669,7 +678,7 @@ def tour(request):
         if isinstance(target, str):
             try_it = {"label": label, "url": home + target}
         elif target["example"] in found:
-            try_it = {"label": label.format(label=found[target["example"]]["label"]), "fields": {"trait": "maturation", **target},
+            try_it = {"label": label.format(label=found[target["example"]]["label"]), "fields": target,
                       "post": reverse("snpportal:gwas_score" if gwas else "snpportal:upload")}
         else:  # this release lacks the example
             try_it = {"label": "Try it: open Score", "url": reverse("snpportal:upload") + ("?input=gwas" if gwas else "")}
