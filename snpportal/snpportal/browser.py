@@ -31,9 +31,7 @@ STAGES = {"LateCleavage": "L cleavage", "EarlyBlastulation": "E blastula", "MidB
           "LateGastrulation": "L gastrula", "EarlySomitogenesis": "E somit.", "EarlyMidSomitogenesis": "EM somit.",
           "MidSomitogenesis": "M somit.", "MidLateSomitogenesis": "ML somit.", "LateSomitogenesis": "L somit.",
           "EarlyEyed": "E eyed", "LateEyed": "L eyed"}  # embryo stages in developmental order
-STATE_ORDER = ("Active_TSS", "Flanking_upstream", "Flanking_downstream", "Active_enhancer", "Primed_enhancer",
-               "Poised_enhancer_1", "Poised_enhancer_2", "Accessible_chromatin", "Bivalent", "Repressed_polycomb",
-               "ZNF_genes_and_repeats", "Unknown_1")  # stacked bottom to top; Quiescent is not drawn
+STATE_ORDER = locus_svg.STATE_ORDER  # stacked bottom to top; Quiescent is not drawn
 LEGEND_STATES = ("Active_TSS", "Flanking_upstream", "Active_enhancer", "Primed_enhancer", "Poised_enhancer_1",
                  "Accessible_chromatin", "Bivalent", "Repressed_polycomb", "ZNF_genes_and_repeats", "Quiescent")
 ASSAYS = {"RNA": ("RNA-seq", "expression; + strand up, &#8722; down; conditions on a log scale"), "ATAC": ("ATAC-seq", "open chromatin"),
@@ -306,27 +304,9 @@ def hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes):
         segs = {c: [(p["start"], p["end"], p["states"][c]) for p in data.get("peaks", []) if p["states"].get(c)] for c in conditions}
         note = "AQUA-FAANG, inside robust peaks" + (f" (ChromHMM is read in windows up to {sl.MAX_SIGNAL // 1000} kb)"
                                                     if s["end"] - s["start"] > sl.MAX_SIGNAL else "")
-    n, h = 250, 60
-    counts = [{} for _ in range(n)]
-    for c in conditions:
-        for a, e, st in segs.get(c) or ():
-            if st == "Quiescent":
-                continue
-            for b in range(max(0, int((a - s["start"]) * n / (s["end"] - s["start"]))), min(n, int(math.ceil((e - s["start"]) * n / (s["end"] - s["start"]))))):
-                mid = s["start"] + (b + 0.5) * (s["end"] - s["start"]) / n
-                if a <= mid < e:
-                    counts[b][st] = counts[b].get(st, 0) + 1
-    body, bw = [blacklist(ax, data, h), f'<line x1="0" x2="{W}" y1="{h}" y2="{h}" stroke="{G[300]}"/>'], W / n
-    total = max(1, len(conditions))
-    for b, cnt in enumerate(counts):
-        y = h
-        for st in STATE_ORDER:
-            k = cnt.get(st, 0)
-            if k:
-                hh = h * k / total
-                y -= hh
-                body.append(f'<rect x="{b * bw:.2f}" y="{y:.2f}" width="{bw + 0.3:.2f}" height="{hh:.2f}" fill="{palette.state(st)[0]}">'
-                            f'<title>{k} of {total} conditions: {st.replace("_", " ")}</title></rect>')
+    h, total = 60, max(1, len(conditions))
+    body = [blacklist(ax, data, h), f'<line x1="0" x2="{W}" y1="{h}" y2="{h}" stroke="{G[300]}"/>']
+    body += locus_svg.state_stack(ax, segs, 250, 0, h, total)
     more = []
     for c in conditions:
         if found and found.get(c) is None:

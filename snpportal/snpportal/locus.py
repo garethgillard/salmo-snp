@@ -32,14 +32,14 @@ from snpscore import tracks as st
 from snpscore.formats import lit
 from snpscore.score import NOT_CONDITIONS, preset_conditions
 
-from . import explore, figures, jobs, locus_svg, palette, results
+from . import explore, figures, jobs, locus_svg, results
 from .views import finished, private
 
 DEFAULT_WIDTH = 10_000  # a single position opens this wide
 DEFAULT_REGION = "25:28985000-29010000"  # the locus browser opens here (vgll3) when no region is given
 FULL = {"published", "molqtl", "regbuild", "gerp", "variants", "signal", "snps"}  # the locus browser's optional lanes
 REGION_LANES = {"published", "gerp"}  # the regional association plot (its association lane is drawn on top)
-ELEMENT_FLANK = 2_500  # the card's locus view (robust ATAC peaks): the SNP +- this
+MINI_FLANK = 5_000  # the card's mini locus browser: the SNP +- this
 COMPACT_WIDTH = 640  # the landing figure: about the width it is shown at (no shrunk text)
 ASSAYS = ("ATAC", "H3K27ac", "H3K4me3")
 MAX_SNPS = 5_000  # user SNPs drawn per view
@@ -303,12 +303,12 @@ TIPS = {"LORe region": "region where the duplicated chromosomes still pair; prob
         "A/T or C/G SNP": "strand-ambiguous; needs care on arrays"}
 
 
-def evidence(snp, weights, trait, synthetic=False):
+def evidence(snp, weights, trait, synthetic=False, snps=()):
     """The evidence card for one annotated row (a dict of its columns), each part only when its columns exist: the key
-    facts and the caveats; why it scores (tier terms, the regulatory element around it, chromatin per condition or one
-    line when no condition has a peak, conservation, molQTL); as a marker (assay, flank, duplicates, MAF); context
-    (known association, gene; expression, the user's own columns and details closed). Shared by the job card and the
-    variant page."""
+    facts and the caveats; the score breakdown; the regulatory state (chromatin per condition, or one line when no
+    condition has a peak, beside a mini locus browser with the job's `snps` in its window; conservation, molQTL); as a
+    marker (assay, flank, duplicates, MAF); context (known association, gene; expression, the user's own columns and
+    details closed). Shared by the job card and the variant page."""
     chrom, pos = snp.get("chrom"), snp.get("pos")
     ref, alt = snp.get("ref"), snp.get("alt")
     spec = f"{chrom}-{pos}" + (f"-{ref}-{alt}" if ref and alt else "")
@@ -328,7 +328,10 @@ def evidence(snp, weights, trait, synthetic=False):
         else:
             ev["no_peak"] = (results.NO_PEAK if len(states) == 21 else
                              f"No AQUA-FAANG peak in the {len(states)} conditions sampled. No immune tissue, gill or skin.")
-        ev["element"] = element(snp, set((weights or {}).get("active_states", [])), chosen, synthetic)
+        start, end = mini_window(pos)
+        ev["mini"] = mark_safe(locus_svg.mini_browser(lanes(chrom, start, end), pos, snps, lambda gid: reverse("snpportal:gene", args=[gid]),
+                                                      synthetic))
+        ev["mini_flank"] = locus_svg.fmt_bp(MINI_FLANK).replace(".0 ", " ")
     if snp.get("gene_id"):
         ev["gene"] = gene_context(snp)
     expression = {c[len("expression_"):]: snp[c] for c in snp if c.startswith("expression_")}
@@ -445,10 +448,14 @@ def duplicates(snp):
 
 
 def function(snp):
-    """[(label, value)] of the functional layers not in the tier line's words or the regulatory element: GERP."""
+    """[(label, value)] of the functional layers not in the tier line's words: GERP and the Ensembl regulatory build."""
+    out = []
     if snp.get("gerp"):
-        return [("Conservation", f"in a GERP constrained element (score {_fmt(snp.get('gerp_score'))}, 65 fish)")]
-    return []
+        out.append(("Conservation", f"in a GERP constrained element (score {_fmt(snp.get('gerp_score'))}, 65 fish)"))
+    if snp.get("regbuild"):
+        out.append(("Ensembl regulatory", " ".join(str(x) for x in ((snp.get("regbuild_type") or "").replace("_", " "), snp.get("regbuild_id")) if x)
+                    + (f", promoter of {snp['regbuild_gene_id']}" if snp.get("regbuild_gene_id") else "")))
+    return out
 
 
 def flank_parts(flank):
@@ -463,46 +470,9 @@ def flank_parts(flank):
     return out
 
 
-def element(snp, active_states, chosen, synthetic=False):
-    """The card's regulatory element, in two columns: facts on the SNP's robust ATAC peak (or how far the nearest one
-    is) and the Ensembl regulatory feature, [(label, value, swatch class)]; and the mini locus view of the peaks within
-    ELEMENT_FLANK (locus_svg.element_view). None without a chromatin layer."""
-    path = jobs.release() / "chromatin.parquet"
-    if not path.exists():
-        return None
-    chrom, pos = snp["chrom"], snp["pos"]
-    con = jobs.connect([jobs.release()])
-    cur = con.execute(f'SELECT * EXCLUDE (chrom) FROM read_parquet({lit(path)}) WHERE chrom = ? AND start < ? AND "end" > ? ORDER BY start',
-                      [chrom, pos + ELEMENT_FLANK, pos - 1 - ELEMENT_FLANK])
-    names = [d[0] for d in cur.description]
-    peaks = []
-    for row in cur.fetchall():
-        r = dict(zip(names, row))
-        found = {k: v for k, v in r.items() if k not in ("start", "end", "summary") and v}
-        peaks.append({"start": r["start"], "end": r["end"], "state": r.get("summary"), "peaks": len(found),
-                      "active": sum(v in active_states for v in found.values()), "found": found})
-    own = next((p for p in peaks if p["start"] < pos <= p["end"]), None)
-    facts = []
-    if own:
-        state = (own["state"] or "").replace(" ", "_")
-        mine = lambda n: f" ({n} of the {len(chosen)} chosen)" if chosen and len(chosen) < 21 else ""  # noqa: E731
-        facts += [("ATAC peak", f"{chrom}:{own['start'] + 1:,}-{own['end']:,}", ""),
-                  ("Size", f"{locus_svg.fmt_bp(own['end'] - own['start'])}, the SNP {locus_svg.fmt_bp(int(abs(pos - (own['start'] + own['end']) / 2)))} "
-                   "from its centre", ""),
-                  ("State", f"{(own['state'] or 'none')} (AQUA-FAANG)", f"st-{state}" if state in palette.STATES else ""),
-                  ("Peak in", f"{own['peaks']} of 21 conditions" + mine(len(chosen & set(own["found"]))), ""),
-                  ("Active in", f"{own['active']} of 21" + mine(sum(own["found"].get(c) in active_states for c in chosen)), "")]
-    else:
-        near = con.execute(f'SELECT min(CASE WHEN "end" < ? THEN ? - "end" ELSE start + 1 - ? END) FROM read_parquet({lit(path)}) '
-                           'WHERE chrom = ? AND start < ? AND "end" > ?', [pos, pos, pos, chrom, pos + 100_000, pos - 100_000]).fetchone()[0]
-        facts.append(("ATAC peak", "none here; " + (f"the nearest is {locus_svg.fmt_bp(near)} away" if near else "none within 100 kb"), ""))
-    con.close()
-    if snp.get("regbuild"):
-        facts.append(("Ensembl", " ".join(str(x) for x in ((snp.get("regbuild_type") or "").replace("_", " "), snp.get("regbuild_id")) if x)
-                      + (f", promoter of {snp['regbuild_gene_id']}" if snp.get("regbuild_gene_id") else ""), ""))
-    start, end = max(0, pos - 1 - ELEMENT_FLANK), pos + ELEMENT_FLANK
-    return {"svg": mark_safe(locus_svg.element_view(peaks, start, end, pos, synthetic)), "facts": facts,
-            "flank": locus_svg.fmt_bp(ELEMENT_FLANK)}
+def mini_window(pos):
+    """The card's mini locus browser window: the SNP +- MINI_FLANK, BED coordinates."""
+    return max(0, pos - 1 - MINI_FLANK), pos + MINI_FLANK
 
 
 def details(snp):
@@ -619,9 +589,11 @@ def job_card(request, key, row, job):
     d = jobs.folder(key)
     synthetic = bool(job.get("synthetic_input") or job.get("synthetic_layers"))
     snp = dict(zip(types, hit))
-    ev = evidence(snp, jobs.weights(d), chosen["trait"], synthetic)
-    ev["gwas"] = association.snp_line(request, key, row, job)
     gwas_query = association.query_of(request)  # a GWAS job's fine-mapping settings
+    start, end = mini_window(snp["pos"])
+    snps = user_snps(request, {"key": str(key), "chrom": snp["chrom"], "start": start, "end": end, "trait": chosen["trait"], "gwas": gwas_query})
+    ev = evidence(snp, jobs.weights(d), chosen["trait"], synthetic, snps)
+    ev["gwas"] = association.snp_line(request, key, row, job)
     ctx = card_context(request, ev, jobs.presets(d), None,
                        f"{reverse('snpportal:locus')}?{urlencode({'key': key, 'row': row, 'trait': chosen['trait'], **gwas_query})}",
                        gwas_query)

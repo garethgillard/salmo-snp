@@ -2,9 +2,9 @@
 {% comment %}Evidence card for one SNP, laid out to decide whether to keep it (context: ev from locus.evidence, presets,
    switch_url (none: no conditions form; a job's card follows the Table's Active in), hx, locus_url, keep: other
    parameters the conditions form keeps; a job's card also panel (panel.holds) and, in the Table's drawer, nearby):
-   the key facts and caveats; the score breakdown; the regulatory state (the SNP's robust ATAC peak beside a mini locus
-   view of the peaks around it, with a button to the locus browser; chromatin per condition, GERP, molQTL); as a marker (assay and flank, duplicates, MAF, the
-   Design panel); the list's SNPs nearby; context (published association, gene; expression, the user's own columns
+   the key facts and caveats; the score breakdown; the regulatory state (chromatin per condition beside a mini locus
+   browser, with a button to the locus browser; GERP, Ensembl regulatory, molQTL); as a marker (assay and flank,
+   duplicates, MAF, the Design panel); the list's SNPs nearby; context (published association, gene; expression, the user's own columns
    and details closed). Parts render only when their columns exist. The drawer and variant.html give the heading.{% endcomment %}
 {% if hx and crumbs %}{% include 'snpportal/_crumbs.html' with oob=1 %}{% endif %}
 <div id="card-body" class="sp-card sp-small">
@@ -36,16 +36,13 @@
       &middot; {{ ev.gwas.cs }} (one causal variant, no LD){% endif %}{% endif %}</p>{% endif %}
   </section>
 
-  {% if ev.element or ev.grid or ev.no_peak or ev.function or ev.molqtl or locus_url %}<section class="sp-cs" aria-labelledby="cs-reg"><h3 class="sp-cs-h" id="cs-reg">Regulatory state</h3>
-    {% if ev.element %}<div class="sp-cols mb-2">
-      <div><h4 class="sp-cs-h4" title="The AQUA-FAANG robust ATAC peak (merged over the 21 conditions) that holds the SNP">Regulatory element</h4>
-        <dl class="sp-dl">{% for label, value, swatch in ev.element.facts %}<dt>{{ label }}</dt><dd>{% if swatch %}<i class="sp-sw {{ swatch }}" aria-hidden="true"></i> {% endif %}{{ value }}</dd>{% endfor %}</dl></div>
-      <div><h4 class="sp-cs-h4">Chromatin around the SNP (&plusmn;{{ ev.element.flank }})</h4>
-        <div class="sp-figure">{{ ev.element.svg }}</div>
-        {% if locus_url %}<a class="btn btn-sm btn-outline-primary mt-2" href="{{ locus_url }}">Open in the locus browser &rarr;</a>{% endif %}</div>
-    </div>{% elif locus_url %}<p class="mb-2"><a class="btn btn-sm btn-outline-primary" href="{{ locus_url }}">Open in the locus browser &rarr;</a></p>{% endif %}
-    {% if ev.grid %}<h4 class="sp-cs-h4">Chromatin state at the SNP, per condition</h4><div class="sp-figure mb-2">{{ ev.grid }}</div>
-    {% elif ev.no_peak %}<p class="mb-2">{{ ev.no_peak }}</p>{% endif %}
+  {% if ev.mini or ev.grid or ev.no_peak or ev.function or ev.molqtl or locus_url %}<section class="sp-cs" aria-labelledby="cs-reg"><h3 class="sp-cs-h" id="cs-reg">Regulatory state</h3>
+    <div class="sp-cols mb-2">
+      <div>{% if ev.grid %}<h4 class="sp-cs-h4">Chromatin state at the SNP, per condition</h4><div class="sp-figure">{{ ev.grid }}</div>
+        {% elif ev.no_peak %}<h4 class="sp-cs-h4">Chromatin state at the SNP</h4><p class="mb-0">{{ ev.no_peak }}</p>{% endif %}</div>
+      {% if ev.mini or locus_url %}<div>{% if ev.mini %}<h4 class="sp-cs-h4">Around the SNP (&plusmn;{{ ev.mini_flank }})</h4><div class="sp-figure">{{ ev.mini }}</div>{% endif %}
+        {% if locus_url %}<a class="btn btn-sm btn-outline-primary mt-2" href="{{ locus_url }}">Open in the locus browser &rarr;</a>{% endif %}</div>{% endif %}
+    </div>
     {% if ev.function %}<dl class="sp-dl mb-2">{% for label, value in ev.function %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
 
     {% if ev.molqtl %}<h4 class="sp-cs-h4">molQTL lead SNP (nf-RASQUAL)</h4>

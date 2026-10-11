@@ -19,7 +19,7 @@ from django.urls import reverse
 import snpscore
 from snpscore import bbi
 
-from . import jobs, locus, locus_svg, palette
+from . import jobs, locus, palette
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
@@ -190,7 +190,10 @@ class LocusTest(SimpleTestCase):
         self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)", line)), scores[0])  # the tier line sums to tier_score
         self.assertEqual(int(score), scores[0])
         self.assertIn('class="sp-fact" title="Known locus vgll3_Met54Thr', card)  # the key facts
-        self.assertIn("Regulatory elements around the SNP", svg_of(card[card.index("Regulatory element"):]))  # the locus view, inline
+        mini = svg_of(card[card.index("Around the SNP"):])  # the mini locus browser, inline
+        self.assertIn("<title>Mini locus browser</title>", mini)
+        self.assertIn(">Your SNPs</text>", mini)  # the list's SNPs in the window, linked to their cards
+        self.assertIn(f'href="/snp/results/{key}/snp/0/', mini)
         self.assertIn(f'href="/snp/locus/?key={key}&amp;row=0&amp;trait=Brain"', card)  # its button to the locus browser
         self.assertIn("Nearby in your list", card)  # mq is 32 kb away: none within 20 kb
         self.assertIn("No other SNP of your list within 20 kb", card)
@@ -243,16 +246,14 @@ class LocusTest(SimpleTestCase):
         self.assertIn("a different variant at this position", render_to_string("snpportal/card.html", {"ev": other}))
         why = svg_of(two["why"])  # the score bars only when two or more terms count
         self.assertEqual(sum(int(w) for w in re.findall(r": \+(\d+)</title>", why)), 6)
-        peaks = locus_svg.element_view([{"start": 90, "end": 400, "state": "Active TSS", "peaks": 14, "active": 9}], 0, 5000, 200)
-        ET.fromstring(peaks)
-        self.assertIn("a peak in 14 of 21 conditions, active in 9", peaks)
+        ET.fromstring(mini)
         self.assertEqual(locus.flank_parts("ACGYT[A/G]NNA"), [("ACG", ""), ("Y", "var"), ("T", ""), ("[A/G]", "snp"), ("NN", "n"), ("A", "")])
 
         variant = self.get(reverse("snpportal:variant", args=["25-28996360-C-T"]))
         self.assertIn("vgll3_Met54Thr", variant)  # no upload: annotated on the fly
         self.assertIn("sp-tier-", variant)
         self.assertIn("conditions sampled", variant)
-        self.assertIn("Regulatory elements around the SNP", variant)
+        self.assertIn("<title>Mini locus browser</title>", variant)
         self.assertIn("Open in the locus browser", variant)
         self.assertIn("25:28996360", self.get(reverse("snpportal:variant", args=["ssa25-28996360"])))
         self.assertEqual(self.client.get(reverse("snpportal:variant", args=["ssa99-1"])).status_code, 404)
