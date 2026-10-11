@@ -73,16 +73,33 @@
 
   {% if n %}
   <section class="sp-card" aria-labelledby="list-h">
-    <div class="sp-card-head"><h2 id="list-h">Panel SNPs</h2></div>
-    <div class="table-responsive"><table class="table table-sm sp-table sp-small mb-1">
-      <thead><tr><th scope="col">SNP</th><th scope="col">Position</th><th scope="col">Gene</th><th scope="col">Region</th><th scope="col">Tier</th>
-        <th scope="col">Assay</th>{% if chip %}<th scope="col">Chip</th>{% endif %}<th scope="col">Sources</th></tr></thead>
-      <tbody>{% for r in rows %}<tr><td>{{ r.snp }}{% if r.alleles %} <span class="sp-muted">&middot; {{ r.alleles }}</span>{% endif %}</td>
-        <td class="sp-mono">{{ r.position }}</td><td>{{ r.gene }}</td><td>{{ r.region }}</td>
-        <td>{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td><td>{{ r.assay }}</td>
+    <div class="sp-card-head flex-wrap gap-2"><h2 id="list-h">Panel SNPs</h2>
+      <span class="sp-small sp-muted">{{ n|thousands }} kept{% if dropped %}, {{ dropped|thousands }} dropped{% endif %}</span>
+      <span class="ms-auto sp-small d-flex flex-wrap gap-2 align-items-center">Order
+        <span class="btn-group btn-group-sm">          <a class="btn {% if order == 'problems' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?{% if new_only %}chip=new{% endif %}#list-h">Problems first</a>
+          <a class="btn {% if order == 'genome' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?order=genome{% if new_only %}&amp;chip=new{% endif %}#list-h">Genome</a></span>
+        {% if chip %}Show <span class="btn-group btn-group-sm">
+          <a class="btn {% if not new_only %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?{% if order == 'genome' %}order=genome{% endif %}#list-h">All</a>
+          <a class="btn {% if new_only %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?chip=new{% if order == 'genome' %}&amp;order=genome{% endif %}#list-h">Not on the chip</a></span>{% endif %}</span></div>
+    <div class="table-responsive"><table class="table table-sm sp-table sp-small sp-results mb-1">
+      <thead><tr><th scope="col" class="sp-pickcol" title="+ in the panel, − dropped: click to switch">+/&minus;</th><th scope="col">SNP</th><th scope="col">Gene</th><th scope="col">Consequence</th>
+        <th scope="col" class="sp-ctr">Tier</th><th scope="col">Assay</th><th scope="col" class="sp-num">MAF</th>
+        <th scope="col" title="Another panel SNP closer than the panel designer's minimum spacing">Too close</th>{% if chip %}<th scope="col">Chip</th>{% endif %}<th scope="col">Sources</th></tr></thead>
+      <tbody>{% for r in rows %}<tr{% if r.dropped %} class="sp-out"{% endif %}>
+        <td class="sp-pickcol"><form method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}
+          {% if order == 'genome' %}<input type="hidden" name="order" value="genome">{% endif %}{% if new_only %}<input type="hidden" name="chip" value="new">{% endif %}
+          <button class="sp-pick" type="submit" name="{% if r.dropped %}keep{% else %}drop{% endif %}" value="{{ r.key }}"
+            title="{% if r.dropped %}Dropped: click to put it back{% else %}In the panel: click to drop it{% endif %}"><span class="sp-pick-now" aria-hidden="true">{% if r.dropped %}&minus;{% else %}+{% endif %}</span><span class="sp-pick-next" aria-hidden="true">{% if r.dropped %}+{% else %}&minus;{% endif %}</span></button></form></td>
+        <td title="{{ r.position }}">{{ r.snp }}{% if r.alleles %} <span class="sp-muted">&middot; {{ r.alleles }}</span>{% endif %}</td>
+        <td>{{ r.gene }}</td><td>{{ r.region }}</td>
+        <td class="sp-ctr">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
+        <td><span class="sp-as sp-as-{{ r.assay.1 }}"><span aria-hidden="true">{{ r.assay.0 }}</span> {{ r.assay.2 }}</span>{% if r.lore %} <span class="sp-as sp-as-warn">LORe</span>{% endif %}</td>
+        <td class="sp-num">{% if r.maf %}{% if r.maf.1 %}<span class="sp-as sp-as-warn" title="Below the panel designer's minimum MAF">{{ r.maf.0 }}</span>{% else %}{{ r.maf.0 }}{% endif %}{% endif %}</td>
+        <td>{% if r.close %}<span class="sp-as sp-as-warn">{{ r.close }}</span>{% endif %}</td>
         {% if chip %}<td>{{ r.chip }}</td>{% endif %}<td>{{ r.sources }}</td></tr>{% endfor %}</tbody>
     </table></div>
-    {% if more %}<p class="sp-small mb-0"><a href="{{ more }}">Show all {{ n|thousands }}</a> (up to 2,000)</p>{% endif %}
+    {% if not rows %}<p class="sp-small sp-muted">{% if new_only %}Every panel SNP is on the chip.{% else %}No SNPs to list.{% endif %}</p>{% endif %}
+    {% if more %}<p class="sp-small mb-0"><a href="{{ more }}">Show all {{ n|add:dropped|thousands }}</a> (up to 2,000)</p>{% endif %}
   </section>
   {% endif %}
   {% endif %}

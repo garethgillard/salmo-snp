@@ -73,7 +73,8 @@ def _cookie(response, d):
 def count(request):
     """The nav's 'Design panel' badge: the panel's SNP count (empty without a panel)."""
     d = _folder(request)
-    n = sum(s["n"] for s in jobs.read_json(d / "panel.json").get("sources", [])) if d else 0
+    s = jobs.read_json(d / "panel.json") if d else {}
+    n = sum(x["n"] for x in s.get("sources", [])) - len(s.get("dropped", []))  # sources overlap: an upper bound
     return HttpResponse(f" ({n:,})" if n else "", content_type="text/plain")
 
 
@@ -163,8 +164,10 @@ def _copy(jd, rows, out, source):
 
 def _open(d):
     """(connection reading the panel folder and the release, writing only the folder; view p, or None when empty):
-    p has one row per SNP (the first source's), `sources` (the source ids that hold it) and file_row_number in
-    genome order; with a chip, also on_chip, dist_to_chip, near_chip and novel_functional (snp_panel.compare_sql)."""
+    p has one row per SNP kept in the panel (the first source's), `sources` (the source ids that hold it), snp_key
+    (chrom:pos:ref:alt) and file_row_number in genome order; with a chip, also on_chip, dist_to_chip, near_chip and
+    novel_functional (snp_panel.compare_sql). View pa also holds the SNPs dropped by hand (dropped: true), for the
+    list to show them; downloads, the chip comparison and every count read p."""
     con = jobs.connect([d, jobs.release()], d)
     files = sorted(d.glob("source_*.parquet"))
     if not files:
@@ -172,15 +175,20 @@ def _open(d):
     con.execute("CREATE VIEW u AS SELECT * FROM read_parquet([" + ", ".join(f"'{f}'" for f in files) + "], union_by_name=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE u)").fetchall()]
     same = ", ".join(["chrom", "pos"] + [f"coalesce({c}, '')" for c in ("ref", "alt") if c in columns])
-    con.execute(f"""CREATE VIEW p0 AS SELECT * EXCLUDE (_n), row_number() OVER (ORDER BY TRY_CAST(chrom AS INTEGER), chrom, pos) - 1
-                    AS file_row_number FROM (SELECT *, row_number() OVER (PARTITION BY {same} ORDER BY panel_source, source_row) AS _n,
+    key = "concat_ws(':', " + ", ".join(["chrom", "pos"] + [f"coalesce({c}, '')" for c in ("ref", "alt") if c in columns]) + ")"
+    dropped = [lit(k) for k in jobs.read_json(d / "panel.json").get("dropped", [])]
+    con.execute(f"""CREATE VIEW pa0 AS SELECT * EXCLUDE (_n), row_number() OVER (ORDER BY TRY_CAST(chrom AS INTEGER), chrom, pos) - 1
+                    AS file_row_number, {key} AS snp_key, list_contains({'[' + ', '.join(dropped) + ']' if dropped else '[]::VARCHAR[]'}, {key})
+                    AS dropped FROM (SELECT *, row_number() OVER (PARTITION BY {same} ORDER BY panel_source, source_row) AS _n,
                     list(DISTINCT panel_source) OVER (PARTITION BY {same}) AS sources FROM u) WHERE _n = 1""")
+    con.execute("CREATE VIEW p0 AS SELECT * FROM pa0 WHERE NOT dropped")
     chip = d / "chip.parquet"
     if chip.exists():
         window = snp_panel.settings(jobs.weights())["chip_window"]
-        con.execute(f"CREATE VIEW p AS {snp_panel.compare_sql('p0', f'read_parquet({chr(39)}{chip}{chr(39)})', window)}")
+        con.execute(f"CREATE VIEW pa AS {snp_panel.compare_sql('pa0', f'read_parquet({chr(39)}{chip}{chr(39)})', window)}")
     else:
-        con.execute("CREATE VIEW p AS SELECT * FROM p0")
+        con.execute("CREATE VIEW pa AS SELECT * FROM pa0")
+    con.execute("CREATE VIEW p AS SELECT * FROM pa WHERE NOT dropped")
     con.execute("CREATE VIEW v AS SELECT * FROM p")  # tools.assay_readiness reads v
     return con, "p"
 
@@ -253,28 +261,60 @@ def page(request):
                           (f"{on[1]:,}", "not on the chip"), (f"{cs['novel_functional']:,}", f"tier 1–2 with no chip marker within {tools._bp(cs['window_bp'])}"),
                           (f"{cs['gaps']:,}", f"chip gaps over {tools._bp(cs['gap_bp'])}")]
     every = request.GET.get("show") == "all"
+    order = "genome" if request.GET.get("order") == "genome" else "problems"
+    new_only = bool(chip) and request.GET.get("chip") == "new"
+    dropped = con.execute("SELECT count(*) FROM pa WHERE dropped").fetchone()[0]
     ctx.update(n=n, several=several, tiers=sorted((t, k) for t, k in tiers.items() if t is not None),
                fig=mark_safe(_figure(con, d, chip, res, synthetic)),
                readiness=tools.assay_readiness(con, types, synthetic, lambda **_: None),
-               rows=_rows(con, types, s["sources"], LISTED if every else SHOWN), more=None if every or n <= SHOWN else "?show=all",
+               rows=_rows(con, dict(con.execute("SELECT column_name, column_type FROM (DESCRIBE pa)").fetchall()), s["sources"],
+                          LISTED if every else SHOWN, order, new_only),
+               more=None if every or n + dropped <= SHOWN else "?" + urlencode({k: v for k, v in (("show", "all"), ("order", order),
+                                                                                         ("chip", "new" if new_only else "")) if v and v != "problems"}),
+               order=order, new_only=new_only, dropped=dropped,
                downloads=_downloads(con, chip, n))
     return render(request, "snpportal/panel.html", ctx)
 
 
-def _rows(con, types, sources, limit):
-    """The first `limit` panel SNPs in genome order, as display values."""
+def _rows(con, types, sources, limit, order="problems", new_only=False):
+    """The panel's SNPs as display values, the dropped ones dimmed in their place (to put back): problems first by default
+    (assay fail, warn, low MAF, LORe, another panel SNP closer than the panel designer's minimum spacing), else genome
+    order; new_only: not on the chip. Each says how close the nearest other kept SNP is when it is that close."""
     names = {x["id"]: f"S{i + 1}" for i, x in enumerate(sources)}
-    cols = [c for c in ("chrom", "pos", "id", "ref", "alt", "gene_name", "gene_id", "gene_ortholog_human", "region_class",
-                        "coding_consequence", "coding_hgvsp", "tier", "assay_status", "on_chip", "near_chip", "sources") if c in types]
-    cur = con.execute(f"SELECT {', '.join(cols)} FROM p ORDER BY file_row_number LIMIT {int(limit)}")
+    cfg = snp_panel.settings(jobs.weights())
+    spacing, low = int(cfg["min_spacing"]), float(cfg["min_maf"])
+    cols = [c for c in ("chrom", "pos", "id", "ref", "alt", "gene_name", "gene_id", "gene_ortholog_human", "region_class", "coding_consequence",
+                        "coding_hgvsp", "tier", "assay_status", "public_af_maf", "lore", "on_chip", "near_chip", "dist_to_chip", "sources",
+                        "snp_key", "dropped") if c in types]
+    maf = "public_af_maf" if "public_af_maf" in types else "NULL"
+    lore = "coalesce(lore, false)" if "lore" in types else "false"
+    sql = f"""WITH k AS (SELECT snp_key, chrom, pos, coalesce(nullif(id, '.'), chrom || ':' || pos) AS name FROM p),
+              n AS (SELECT snp_key, pos - lag(pos) OVER w AS dp, lag(name) OVER w AS np, lead(pos) OVER w - pos AS dn,
+                           lead(name) OVER w AS nn FROM k WINDOW w AS (PARTITION BY chrom ORDER BY pos)),
+              c AS (SELECT snp_key, CASE WHEN dn IS NULL OR dp <= dn THEN dp ELSE dn END AS close_bp,
+                           CASE WHEN dn IS NULL OR dp <= dn THEN np ELSE nn END AS close_to FROM n)
+              SELECT {', '.join('a.' + x for x in cols)}, c.close_bp, c.close_to,
+                     (a.assay_status = 'fail')::INT * 4 + (a.assay_status = 'warn')::INT * 2 + coalesce({maf} < {low}, false)::INT
+                     + {lore}::INT + coalesce(c.close_bp <= {spacing}, false)::INT AS problems
+              FROM pa a LEFT JOIN c USING (snp_key)
+              {'WHERE NOT coalesce(a.on_chip, false)' if new_only and 'on_chip' in types else ''}
+              ORDER BY {'problems DESC, ' if order == 'problems' else ''}a.file_row_number LIMIT {int(limit)}"""
+    cur = con.execute(sql)
+    names_ = [x[0] for x in cur.description]
     out = []
-    for r in (dict(zip(cols, x)) for x in cur.fetchall()):
+    for r in (dict(zip(names_, x)) for x in cur.fetchall()):
         g = r.get
-        out.append({"snp": g("id") if g("id") not in (None, ".") else f"{g('chrom')}:{g('pos'):,}", "position": f"{g('chrom')}:{g('pos'):,}",
-                    "alleles": results._alleles(g), "gene": results.gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")),
-                    "region": results.region_text(g), "tier": g("tier"), "assay": (g("assay_status") or "not_checked").replace("_", " "),
-                    "chip": None if "on_chip" not in r else "on the chip" if g("on_chip") else "near" if g("near_chip") else "new",
-                    "sources": " ".join(names.get(x, "?") for x in g("sources") or [])})
+        status = g("assay_status") or "not_checked"
+        near = g("close_bp") is not None and g("close_bp") <= spacing and not g("dropped")
+        chip = None if "on_chip" not in r else "on the chip" if g("on_chip") else (
+            f"near · {tools._bp(g('dist_to_chip'))}" if g("near_chip") else "new")
+        out.append({"key": g("snp_key"), "dropped": g("dropped"), "snp": g("id") if g("id") not in (None, ".") else f"{g('chrom')}:{g('pos'):,}",
+                    "position": f"{g('chrom')}:{g('pos'):,}", "alleles": results._alleles(g),
+                    "gene": results.gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")), "region": results.region_text(g),
+                    "tier": g("tier"), "assay": (results.ASSAY.get(status, ("?", "not_checked")) + (status.replace("_", " "),)),
+                    "maf": None if g("public_af_maf") is None else (f"{g('public_af_maf'):.2f}", g("public_af_maf") < low),
+                    "lore": bool(g("lore")), "close": f"{tools._bp(g('close_bp'))} from {g('close_to')}" if near else "",
+                    "chip": chip, "sources": " ".join(names.get(x, "?") for x in g("sources") or [])})
     return out
 
 
@@ -324,6 +364,14 @@ def _change(request):
         (d / f"source_{i}.parquet").unlink(missing_ok=True)
         jobs._write_json(d / "panel.json", s)
         return back
+    if request.POST.get("drop") or request.POST.get("keep"):  # one SNP out of the panel, or back in
+        s = jobs.read_json(d / "panel.json")
+        out = set(s.get("dropped", []))
+        out = out | {request.POST["drop"][:200]} if request.POST.get("drop") else out - {request.POST["keep"]}
+        s["dropped"] = sorted(out)
+        jobs._write_json(d / "panel.json", s)
+        return redirect(reverse("snpportal:design_panel") + "?" + urlencode({k: v for k, v in request.POST.items() if k in ("order", "chip")})
+                        + "#list-h")
     if request.POST.get("chip_remove"):
         for path in (d / "chip.parquet", d / "chip.json"):
             path.unlink(missing_ok=True)

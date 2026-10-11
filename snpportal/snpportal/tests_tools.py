@@ -137,6 +137,13 @@ class ToolsTest(SimpleTestCase):
         tsv = body(self.client.get(reverse("snpportal:panel_download"), {"format": "tsv", "plain": "1"})).decode()
         self.assertEqual(len([x for x in tsv.splitlines() if x and not x.startswith("#")]) - 1, n)
         self.assertNotIn("panel_source", tsv.splitlines()[0])  # the panel's own columns stay out
+        key = re.search(r'name="drop" value="([^"]+)"', page).group(1)  # drop one SNP by hand, then put it back
+        self.client.post(reverse("snpportal:panel_change"), {"drop": key})
+        self.assertIn(f"{n - 1:,} kept, 1 dropped", self.client.get(reverse("snpportal:design_panel")).content.decode())
+        tsv = body(self.client.get(reverse("snpportal:panel_download"), {"format": "tsv", "plain": "1"})).decode()
+        self.assertEqual(len([x for x in tsv.splitlines() if x and not x.startswith("#")]) - 1, n - 1)
+        self.client.post(reverse("snpportal:panel_change"), {"keep": key})
+        self.assertIn(f"{n:,} kept</span>", self.client.get(reverse("snpportal:design_panel")).content.decode())
         self.client.post(reverse("snpportal:panel_add", args=[self.key]))  # the same selection again: no SNP twice
         self.assertIn(f"<strong>{n:,}</strong> SNPs in the panel; {n:,} in more than one source",
                       self.client.get(reverse("snpportal:design_panel")).content.decode())

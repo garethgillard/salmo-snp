@@ -516,3 +516,4 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 /* the Design panel page: two columns as tall as each other; each one's last card takes up the slack */
 .sp-eq > div > :last-child { flex: 1 1 auto; }
 .sp-eq .sp-card, .sp-eq .sp-figure { margin: 0; }
+.sp button.sp-pick { padding: 0; }  /* the Design panel's +/−: a form button, as the Table's link */
