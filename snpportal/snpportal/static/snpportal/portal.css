@@ -315,15 +315,11 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-cs { margin-top: .9rem; padding-top: .6rem; border-top: 1px solid var(--sp-grey-200); }
 .sp-cs-h { margin-bottom: .5rem; font-size: .75rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--sp-grey-700); }
 .sp-cs-h4 { margin: .6rem 0 .3rem; font-size: .875rem; font-weight: 600; }
-.sp-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: .5rem 1.25rem; }  /* two columns, stacked when narrow */
-.sp-cols .sp-cs-h4 { margin-top: 0; }
 .sp-flank { font-size: .8rem; line-height: 1.7; word-break: break-all; }
 .sp-flank mark, .sp-cs mark { padding: 0 .1rem; border-radius: .15rem; }
 .sp-cs mark.sp-flank-snp { background: var(--sp-grey-900); color: var(--sp-white); font-weight: 600; }
 .sp-cs mark.sp-flank-var { background: var(--sp-warn-bg); color: var(--sp-warn-text); box-shadow: inset 0 0 0 1px var(--sp-warn-border); }
 .sp-cs mark.sp-flank-n { background: var(--sp-fail-bg); color: var(--sp-fail-text); }
-.sp-near th, .sp-near td { vertical-align: middle; }
-.sp-near tr.sp-this > * { background: var(--sp-grey-100); }
 .sp-results tbody tr.sp-selected > * { background: var(--sp-grey-100); }
 .sp-results tbody tr.sp-selected > :first-child { box-shadow: inset 3px 0 0 var(--sp-accent); }
 .sp-known { white-space: nowrap; }

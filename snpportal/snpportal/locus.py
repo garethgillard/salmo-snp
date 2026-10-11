@@ -39,7 +39,6 @@ DEFAULT_WIDTH = 10_000  # a single position opens this wide
 DEFAULT_REGION = "25:28985000-29010000"  # the locus browser opens here (vgll3) when no region is given
 FULL = {"published", "molqtl", "regbuild", "gerp", "variants", "signal", "snps"}  # the locus browser's optional lanes
 REGION_LANES = {"published", "gerp"}  # the regional association plot (its association lane is drawn on top)
-MINI_FLANK = 5_000  # the card's mini locus browser: the SNP +- this
 COMPACT_WIDTH = 640  # the landing figure: about the width it is shown at (no shrunk text)
 ASSAYS = ("ATAC", "H3K27ac", "H3K4me3")
 MAX_SNPS = 5_000  # user SNPs drawn per view
@@ -176,7 +175,7 @@ def user_snps(request, s, link=True):
     for row, sid, ref, alt, pos, tier, score, evidence, fired in rows:
         evidence = results.evidence_text(evidence, fired)
         alleles = f" {ref}>{alt}" if ref else ""
-        out.append({"pos": pos, "id": sid, "tier": tier, "tier_score": score,
+        out.append({"row": row, "pos": pos, "id": sid, "tier": tier, "tier_score": score,
                     "title": f"{sid or '(no id)'} · {s['chrom']}:{pos:,}{alleles} · tier {tier} (score {score}): {evidence or 'no evidence'}",
                     "url": f"{reverse('snpportal:card', args=[s['key'], row])}?{urlencode({'trait': s['trait'], **s.get('gwas', {})})}" if link else None})
     return out
@@ -328,10 +327,10 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
         else:
             ev["no_peak"] = (results.NO_PEAK if len(states) == 21 else
                              f"No AQUA-FAANG peak in the {len(states)} conditions sampled. No immune tissue, gill or skin.")
-        start, end = mini_window(pos)
+        start, end = mini_window(pos, weights)
         ev["mini"] = mark_safe(locus_svg.mini_browser(lanes(chrom, start, end), pos, snps, lambda gid: reverse("snpportal:gene", args=[gid]),
                                                       synthetic))
-        ev["mini_flank"] = locus_svg.fmt_bp(MINI_FLANK).replace(".0 ", " ")
+        ev["mini_flank"] = locus_svg.fmt_bp(pos - 1 - start).replace(".0 ", " ")
     if snp.get("gene_id"):
         ev["gene"] = gene_context(snp)
     expression = {c[len("expression_"):]: snp[c] for c in snp if c.startswith("expression_")}
@@ -401,7 +400,7 @@ def facts(snp, ev, states, chosen, active_states):
     m = ev.get("maf")
     if m and m["value"] is not None:
         out.append((f"MAF {m['value']}" + (" · low" if m["low"] else ""), "warn" if m["low"] else "",
-                    f"Below the panel designer's minimum ({m['min']}, provisional)" if m["low"] else results.MAF_TIP))
+                    results.MAF_TIP + (f"; below the panel designer's minimum ({m['min']}, provisional)" if m["low"] else "")))
     elif m:
         out.append(("no public MAF", "muted", "Not a site of the 504-fish public panel" if not m.get("other") else
                     "The 504-fish public panel has a different variant at this position"))
@@ -436,22 +435,19 @@ def duplicates(snp):
     may also bind: [(text, gene id to link or None, text after)]."""
     out = []
     if snp.get("lore"):
-        pair = f" (chromosomes {snp['lore_label']})" if snp.get("lore_label") else ""
-        out.append((f"In a LORe region{pair}: the duplicated chromosomes still pair, so the other copy is nearly identical and "
-                    "probes may bind both.", None, ""))
+        pair = f" ({snp['lore_label']})" if snp.get("lore_label") else ""
+        out.append((f"LORe region{pair}: the duplicate copy is nearly identical, so probes may bind both.", None, ""))
     if snp.get("ss4r_ohnolog"):
-        kind = {"LORe": "LORe: diverged recently, so more similar", "AORe": "AORe: diverged before the salmonid species split"}
-        out.append(("Its gene's Ss4R duplicate is ", snp["ss4r_ohnolog"],
-                    f" on chromosome {snp.get('ss4r_ohnolog_chrom') or '?'}"
+        kind = {"LORe": "LORe: a recent split, more similar", "AORe": "AORe: split before the salmonid species"}
+        out.append(("Ss4R duplicate of its gene: ", snp["ss4r_ohnolog"], f" on chr{snp.get('ss4r_ohnolog_chrom') or '?'}"
                     + (f" ({kind.get(snp.get('ss4r_class'), snp.get('ss4r_class'))})" if snp.get("ss4r_class") else "") + "."))
     return out
 
 
 def function(snp):
-    """[(label, value)] of the functional layers not in the tier line's words: GERP and the Ensembl regulatory build."""
+    """[(label, value)] of the functional layers neither the tier line nor the mini browser shows: the Ensembl regulatory
+    build."""
     out = []
-    if snp.get("gerp"):
-        out.append(("Conservation", f"in a GERP constrained element (score {_fmt(snp.get('gerp_score'))}, 65 fish)"))
     if snp.get("regbuild"):
         out.append(("Ensembl regulatory", " ".join(str(x) for x in ((snp.get("regbuild_type") or "").replace("_", " "), snp.get("regbuild_id")) if x)
                     + (f", promoter of {snp['regbuild_gene_id']}" if snp.get("regbuild_gene_id") else "")))
@@ -470,9 +466,11 @@ def flank_parts(flank):
     return out
 
 
-def mini_window(pos):
-    """The card's mini locus browser window: the SNP +- MINI_FLANK, BED coordinates."""
-    return max(0, pos - 1 - MINI_FLANK), pos + MINI_FLANK
+def mini_window(pos, weights):
+    """The card's mini locus browser window, BED coordinates: the SNP +- the panel designer's minimum spacing (weights.yaml
+    design.min_spacing, 20 kb), so it shows the list's SNPs too close to keep both."""
+    flank = int(snp_panel.settings(weights)["min_spacing"])
+    return max(0, pos - 1 - flank), pos + flank
 
 
 def details(snp):
@@ -582,7 +580,7 @@ def job_card(request, key, row, job):
     the SNP's p, beta and fine-mapping (association.snp_line), and every card whether this browser's Design panel
     holds the SNP. None when the row doesn't exist."""
     from . import association, panel
-    con, types, _, chosen = results.open_result(request, key)
+    con, types, where, chosen = results.open_result(request, key)
     hit = con.execute(results.CARD_SQL, [row]).fetchone()
     if hit is None:
         return None
@@ -590,8 +588,12 @@ def job_card(request, key, row, job):
     synthetic = bool(job.get("synthetic_input") or job.get("synthetic_layers"))
     snp = dict(zip(types, hit))
     gwas_query = association.query_of(request)  # a GWAS job's fine-mapping settings
-    start, end = mini_window(snp["pos"])
+    start, end = mini_window(snp["pos"], jobs.weights(d))
     snps = user_snps(request, {"key": str(key), "chrom": snp["chrom"], "start": start, "end": end, "trait": chosen["trait"], "gwas": gwas_query})
+    near = f"chrom = {lit(snp['chrom'])} AND pos > {start} AND pos <= {end}"
+    selected = {i for i, in con.execute(f"SELECT file_row_number FROM v {where} {'AND' if where else 'WHERE'} {near}").fetchall()}
+    for p in snps:
+        p["out"] = p["row"] not in selected  # filtered out or taken out (−): hollow in the mini browser
     ev = evidence(snp, jobs.weights(d), chosen["trait"], synthetic, snps)
     ev["gwas"] = association.snp_line(request, key, row, job)
     ctx = card_context(request, ev, jobs.presets(d), None,

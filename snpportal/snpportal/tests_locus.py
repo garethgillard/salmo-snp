@@ -186,17 +186,17 @@ class LocusTest(SimpleTestCase):
         card = page[page.index('id="drawer"'):]
         d = jobs.folder(key)
         scores = dict(jobs.connect([d]).execute(f"SELECT file_row_number, tier_score__brain FROM read_parquet('{d / 'tiers.parquet'}')").fetchall())
-        score, line = re.search(r">Score (\d+):(.*?)</p>", card, re.S).groups()
+        score, line = re.search(r">score (\d+)</span>", card).group(1), re.search(r'class="mb-2 sp-terms">(.*?)</p>', card, re.S).group(1)
         self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)", line)), scores[0])  # the tier line sums to tier_score
         self.assertEqual(int(score), scores[0])
         self.assertIn('class="sp-fact" title="Known locus vgll3_Met54Thr', card)  # the key facts
-        mini = svg_of(card[card.index("Around the SNP"):])  # the mini locus browser, inline
+        mini = svg_of(card[card.index("Locus &plusmn;20 kb"):])  # the mini locus browser, inline: the SNP +- the minimum spacing
         self.assertIn("<title>Mini locus browser</title>", mini)
         self.assertIn(">Your SNPs</text>", mini)  # the list's SNPs in the window, linked to their cards
         self.assertIn(f'href="/snp/results/{key}/snp/0/', mini)
+        self.assertIn('<g opacity="0.3">', mini)  # no peak in Brain: out of the selection, so faded
+        self.assertIn(">GERP</text>", mini)
         self.assertIn(f'href="/snp/locus/?key={key}&amp;row=0&amp;trait=Brain"', card)  # its button to the locus browser
-        self.assertIn("Nearby in your list", card)  # mq is 32 kb away: none within 20 kb
-        self.assertIn("No other SNP of your list within 20 kb", card)
         self.assertIn("exclude=0", card[:card.index('id="card-body"')])  # the +/− switch
         self.assertNotIn("data-next", card)  # no peak in Brain: not in the table, so no Previous/Next
         every = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&snp=0")
@@ -218,13 +218,13 @@ class LocusTest(SimpleTestCase):
         self.assertNotIn("molQTL", card)  # not a lead SNP: no section
         self.assertIn("https://salmobase.org/genes/id/ENSSSAG00000053708?assembly=Ssal_v3.1", card)
         self.assertIn("VGLL3", card)
-        self.assertIn("Copy 25-28996360-C-T", card)
+        self.assertIn('data-copy="25-28996360-C-T"', card)
         self.assertEqual(card.count("<h2"), 1)  # the drawer's heading is the only title
         mq = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&trait=brain&snp=2")
         self.assertIn("caQTL (chromatin accessibility)", mq)  # the molQTL section (R4): the peak shown 1-based
         self.assertIn("25:28,963,214-28,965,045", mq)
-        self.assertIn("no direction is implied", mq)
-        grid = svg_of(mq[mq.index("Chromatin state at the SNP"):])
+        self.assertIn("no direction implied", mq)
+        grid = svg_of(mq[mq.index("Chromatin state per condition"):])
         self.assertIn("Chromatin state per condition", grid)  # a peak somewhere: the grid
         self.assertEqual(grid.count('rx="3" fill="none"'), 4)  # the 4 Brain conditions of the trait are outlined
         swap = self.get(reverse("snpportal:card", args=[key, 2]) + "?trait=all", HTTP_HX_REQUEST="true", HTTP_HX_TARGET="card-body")
