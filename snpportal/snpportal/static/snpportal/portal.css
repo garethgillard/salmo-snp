@@ -313,7 +313,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-caveats { list-style: none; margin: 0 0 .6rem; padding: .35rem .6rem; }
 .sp-caveats li::before { content: "\26A0\00a0"; }
 .sp-cs { margin-top: .6rem; }  /* a foldable section, its header like the locus browser's groups (.sp-grp-h) */
-.sp-cs > summary { display: flex; align-items: baseline; gap: 10px; margin-bottom: .4rem; padding: 3px 6px; border-radius: 3px;
+.sp-cs > summary { display: flex; align-items: baseline; gap: 10px; margin-bottom: .4rem; padding: 6px 8px; border-radius: 3px;
   background: var(--sp-grey-50); list-style: none; cursor: pointer; }
 .sp-cs > summary::-webkit-details-marker { display: none; }
 .sp-cs > summary::after { content: "\25BE"; margin-left: auto; font-size: 15px; line-height: 1; color: var(--sp-grey-700); }

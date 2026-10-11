@@ -186,9 +186,13 @@ class LocusTest(SimpleTestCase):
         card = page[page.index('id="drawer"'):]
         d = jobs.folder(key)
         scores = dict(jobs.connect([d]).execute(f"SELECT file_row_number, tier_score__brain FROM read_parquet('{d / 'tiers.parquet'}')").fetchall())
-        score, line = re.search(r">score (\d+)</span>", card).group(1), re.search(r'class="mb-2 sp-terms">(.*?)</p>', card, re.S).group(1)
-        self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)", line)), scores[0])  # the tier line sums to tier_score
+        score, blocks = re.search(r">score (\d+)</span>", card).group(1), svg_of(card[card.index('id="cs-score"'):])
+        self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)</title>", blocks)), scores[0])  # the blocks sum to tier_score
         self.assertEqual(int(score), scores[0])
+        self.assertIn("Missense p.Thr46Met (ENSSSAT00000230965; published as Met54Thr) +3</title>", blocks)  # in full on hover
+        self.assertIn(">missense</text>", blocks)
+        self.assertIn(">tier 1</text>", blocks)  # the cut-offs the blocks reach
+        self.assertEqual(card.count('class="sp-badge sp-tier-'), 1)  # the tier once, beside the heading
         self.assertIn('class="sp-fact" title="Known locus vgll3_Met54Thr', card)  # the key facts
         mini = svg_of(card[card.index('id="cs-locus"'):])  # the mini locus browser, inline (no peak: no tiles under it)
         self.assertIn("<title>Mini locus browser</title>", mini)  # the list's SNPs in the window, linked to their cards
@@ -206,7 +210,6 @@ class LocusTest(SimpleTestCase):
         self.assertIn('class="sp-selected sp-out"', out)
         self.assertIn("include=0", out[out.index('id="drawer"'):])
         self.get(reverse("snpportal:results", args=[key]) + "?tab=table&include=0")
-        self.assertIn("Missense p.Thr46Met (ENSSSAT00000230965; published as Met54Thr) +3", line)
         self.assertIn("No AQUA-FAANG peak in the 21 conditions sampled", card)  # one line instead of an empty grid
         self.assertNotIn("Chromatin state per condition", card)
         self.assertIn("Expression of the nearest gene (not necessarily the target)</summary>", card)  # closed
@@ -243,8 +246,9 @@ class LocusTest(SimpleTestCase):
         self.assertTrue(other["maf"]["other"])
         self.assertIn(("Public variant (504-fish panel)", "a different variant at this position"), other["details"])
         self.assertIn("a different variant at this position", render_to_string("snpportal/card.html", {"ev": other}))
-        why = svg_of(two["why"])  # the score bars only when two or more terms count
-        self.assertEqual(sum(int(w) for w in re.findall(r": \+(\d+)</title>", why)), 6)
+        self.assertEqual([p[:3] for p in locus.score_parts({"tier_terms": [{"term": "active", "weight": 3}, {"term": "coding", "weight": 3}], "tier_evidence": "active: Brain,LateBlastulation; CDS"})],
+                         [("active", "Brain, embryo (1 stage)", 3), ("CDS", "effect not computed", 3)])  # short names, details
+        self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)</title>", svg_of(two["blocks"]))), 6)
         ET.fromstring(mini)
         self.assertEqual(locus.flank_parts("ACGYT[A/G]NNA"), [("ACG", ""), ("Y", "var"), ("T", ""), ("[A/G]", "snp"), ("NN", "n"), ("A", "")])
 

@@ -1,7 +1,8 @@
 {% load snpportal_tags %}
 {% comment %}Evidence card for one SNP, laid out to decide whether to keep it (context: ev from locus.evidence, presets,
    switch_url (none: no conditions form; a job's card follows the Table's Active in), hx, locus_url, keep: other
-   parameters the conditions form keeps; a job's card also panel (panel.holds)): the key facts and caveats; the score
+   parameters the conditions form keeps; a job's card also panel (panel.holds); tier_in_heading: the drawer's heading
+   shows the tier, so the key facts don't): the key facts and caveats; the score
    breakdown; the functional evidence at the locus (its header links to the locus browser; a mini locus browser with
    the SNP's peak per condition hanging under it; Ensembl regulatory, molQTL); as a marker (assay and flank, duplicates, the Design panel); context
    (published association; expression, the user's own columns and details closed). Each section folds under a grey
@@ -22,14 +23,13 @@
   </div>{% endif %}
 
   <p class="sp-facts"><span class="sp-fact"><span class="sp-mono">{{ ev.position }}{% if ev.alleles %} {{ ev.alleles }}{% endif %}</span>
-    <button type="button" class="btn btn-link btn-sm p-0 align-baseline sp-copy" data-copy="{{ ev.spec }}" title="Copy {{ ev.spec }}">Copy</button></span>{% if ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %}{% if ev.score is not None %}<span class="sp-fact" title="Tier score: the summed weights of the evidence below">score {{ ev.score }}</span>{% endif %}{% endif %}
+    <button type="button" class="btn btn-link btn-sm p-0 align-baseline sp-copy" data-copy="{{ ev.spec }}" title="Copy {{ ev.spec }}">Copy</button></span>{% if ev.tier %}{% if not tier_in_heading %}{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %}{% endif %}{% if ev.score is not None %}<span class="sp-fact" title="Tier score: the summed weights of the evidence below">score {{ ev.score }}</span>{% endif %}{% endif %}
     {% for text, cls, tip in ev.facts %}<span class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</span>{% endfor %}
     {% if panel.sources %}<span class="sp-fact sp-fact-ok" title="Your Design panel holds this SNP ({{ panel.sources|join:', ' }})">in your panel</span>{% endif %}</p>
   {% if ev.caveats %}<ul class="sp-status sp-status-warn sp-caveats" aria-label="Caveats">{% for text in ev.caveats %}<li>{{ text }}</li>{% endfor %}</ul>{% endif %}
 
   <details class="sp-cs" id="cs-score" open><summary><h3 class="sp-cs-h">Score breakdown</h3></summary>
-    {% if ev.tier %}<p class="mb-2 sp-terms">{% for text, w in ev.terms %}{{ text }}{% if w is not None %} +{{ w }}{% endif %}{% if not forloop.last %} &middot; {% endif %}{% empty %}no evidence found (not evidence of no effect){% endfor %}</p>{% endif %}
-    {% if ev.why %}<div class="sp-figure mb-2">{{ ev.why }}</div>{% endif %}
+    {% if ev.blocks %}<div class="sp-figure mb-2">{{ ev.blocks }}</div>{% endif %}
     {% if ev.gwas %}<p class="mb-0">GWAS: p {{ ev.gwas.p }}{% if ev.gwas.beta is not None %} &middot; beta {{ ev.gwas.beta|floatformat:3 }}{% if ev.gwas.se is not None %} ({{ ev.gwas.se|floatformat:3 }}){% endif %}{% endif %}
       {% if ev.gwas.locus %}&middot; <a href="{{ ev.gwas.region }}">locus {{ ev.gwas.locus }}</a>{% if ev.gwas.pip_u is not None %} &middot; PIP {{ ev.gwas.pip_u|floatformat:2 }} &rarr; {{ ev.gwas.pip_f|floatformat:2 }} (functional prior)
       &middot; {{ ev.gwas.cs }} (one causal variant, no LD){% endif %}{% endif %}</p>{% endif %}

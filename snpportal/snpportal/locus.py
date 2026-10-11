@@ -32,7 +32,7 @@ from snpscore import tracks as st
 from snpscore.formats import lit
 from snpscore.score import NOT_CONDITIONS, preset_conditions
 
-from . import explore, figures, jobs, locus_svg, results
+from . import explore, figures, jobs, locus_svg, palette, results
 from .views import finished, private
 
 DEFAULT_WIDTH = 10_000  # a single position opens this wide
@@ -315,11 +315,9 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
     ev = {"trait": trait, "title": snp.get("id") or f"{chrom}:{pos:,}", "position": f"{chrom}:{pos}",
           "alleles": f"{ref}>{alt}" if ref and alt else "", "spec": spec, "synthetic": synthetic, "tier": snp.get("tier"),
           "score": snp.get("tier_score"), "samples": results.SAMPLES}
-    ev["terms"] = results.tier_parts(snp.get) or None  # 'Missense p.Thr46Met (...)', 3; the same as the table's drawer
-    if weights and len([t for t in snp.get("tier_terms") or [] if t["weight"]]) > 1:
-        named = {t: results.region_text(snp.get) for t in results.CODING_TERMS} if snp.get("coding_consequence") else {}
-        ev["why"] = mark_safe(locus_svg.tier_contribution(snp["tier_terms"], snp.get("tier_score") or 0, snp.get("tier") or 4,
-                                                          weights["tiers"], synthetic, labels=named))
+    ev["terms"] = results.tier_parts(snp.get) or None  # 'Missense p.Thr46Met (...)', 3; the blocks' hover text
+    if weights and "tier_terms" in snp:
+        ev["blocks"] = mark_safe(locus_svg.score_blocks(score_parts(snp), weights["tiers"], synthetic))
     states = {c[len("chromatin_"):]: snp[c] for c in snp if c.startswith("chromatin_") and c not in NOT_CONDITIONS}
     chosen = set(preset_conditions(weights, list(snp), trait)[0]) if weights and states else set()
     if states:
@@ -366,6 +364,38 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
                    ("salmobase JBrowse", JBROWSE.format(chrom=chrom, start=max(1, pos - 1000), end=pos + 1000))]
     ev["permalink"] = reverse("snpportal:variant", args=[spec])
     return ev
+
+
+SCORE_LABELS = {"active": "active", "active_elsewhere": "active elsewhere", "weak": "weak", "synonymous": "synonymous",
+                "splice": "splice region", "utr": "UTR", "constrained": "conserved", "regbuild": "Ensembl"}
+
+
+def score_parts(snp):
+    """The evidence terms that count, largest first, for the score blocks: [(short name, detail, weight, colour, full
+    text)]: 'weak', 'Brain, Muscle'; 'missense', 'p.Thr20Ala'; 'conserved', 'GERP element'."""
+    g, fired = snp.get, snp.get("tier_terms") or []
+    raw = [x for x in (g("tier_evidence") or "").split("; ") if x]
+    raw = raw if len(raw) == len(fired) else [""] * len(fired)
+    out = []
+    for (t, r), (text, w) in zip([(t, r) for t, r in zip(fired, raw) if t["weight"]], results.tier_parts(g)):
+        k = t["term"]
+        detail = (conditions_text(r.partition(": ")[2]) if k in ("active", "active_elsewhere", "weak") else
+                  g("coding_hgvsp") or ("effect not computed" if k == "coding" else "") if k in results.CODING_TERMS else
+                  results.CLASS_LABELS.get(g("region_class"), "") if k == "utr" else "GERP element" if k == "constrained" else
+                  (g("regbuild_type") or "").replace("_", " ") if k == "regbuild" else "")
+        label = results.CONSEQUENCES.get(g("coding_consequence") or "") or "CDS" if k == "coding" else SCORE_LABELS.get(k, k)
+        out.append((label, detail, t["weight"],
+                    locus_svg._colour(locus_svg.TERMS.get(k, (palette.GREY[500], k))[0]), f"{text} +{w}"))
+    return sorted(out, key=lambda p: -p[2])
+
+
+def conditions_text(items):
+    """'Brain, Liver, embryo (2 stages)' from tier_evidence's tissue and stage list 'Brain,Liver,LateBlastulation,…'."""
+    names = [x for x in items.split(",") if x]
+    stages = [x for x in names if x in results.STAGES]
+    embryo = (["embryo (all stages)" if len(stages) == len(results.STAGES) else f"embryo ({len(stages)} stage{'s' * (len(stages) > 1)})"]
+              if stages else [])
+    return ", ".join([x for x in names if x not in results.STAGES] + embryo)
 
 
 def facts(snp, ev, states, chosen, active_states):

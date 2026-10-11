@@ -96,7 +96,7 @@
         {% if drawer.steps.next %}<a class="btn btn-sm btn-outline-secondary" href="{{ drawer.steps.next }}" hx-get="{{ drawer.steps.next }}" data-next title="Next row (j)">Next &rsaquo;</a>{% endif %}
       </nav>{% endif %}
     </div>
-    <h2 class="h5 mb-2" id="drawer-h">{{ drawer.ev.title }}</h2>
-    {% include 'snpportal/card.html' with ev=drawer.ev presets=drawer.presets switch_url=None hx=drawer.hx locus_url=drawer.locus_url trait=drawer.trait keep=drawer.keep panel=drawer.panel crumbs=None %}
+    <h2 class="h5 mb-2" id="drawer-h">{% if drawer.ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=drawer.ev.tier %} {% endif %}{{ drawer.ev.title }}</h2>
+    {% include 'snpportal/card.html' with tier_in_heading=1 ev=drawer.ev presets=drawer.presets switch_url=None hx=drawer.hx locus_url=drawer.locus_url trait=drawer.trait keep=drawer.keep panel=drawer.panel crumbs=None %}
   </div>
 </aside>{% endif %}

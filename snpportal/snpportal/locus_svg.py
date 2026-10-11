@@ -496,41 +496,36 @@ def _signal(body, ax, signal, y, gutter, uid, lane_label, compact):
 
 # ---- evidence card figures ----
 
-def tier_contribution(terms, score, tier, cutoffs, synthetic=False, uid="tc", labels=None):
-    """'Why this tier': the tier_terms weights as one stacked bar (they sum to tier_score), with the tier cut-offs.
-    labels: {term: label} in place of TERMS' (the card names the coding consequence: 'missense')."""
-    labels = {k: (TERMS.get(k, (G[500], k))[0], v) for k, v in (labels or {}).items()}
-    width, x0, x1 = 560, 12, 548
-    top = max([cutoffs[0] + 1, score or 0] + [1])
-    sx = lambda v: x0 + (x1 - x0) * v / top
-    parts, x = [], 0
-    for t in terms or []:
-        w = t["weight"] or 0
-        if w <= 0:
-            continue
-        colour, label = labels.get(t["term"]) or TERMS.get(t["term"], (G[500], t["term"]))
-        colour = _colour(colour)
-        a, b = sx(x), sx(x + w)
-        parts.append(f'<rect x="{a:.1f}" y="22" width="{b - a:.1f}" height="22" fill="{colour}" stroke="{palette.WHITE}">'
-                     f'<title>{escape(label)}: +{w}</title></rect>')
-        text = f"{label} +{w}"
-        if b - a > 6 * len(text):
-            parts.append(_t((a + b) / 2, 37, text, 10, palette.text_on(colour), "middle"))
-        elif b - a > 14:
-            parts.append(_t((a + b) / 2, 37, f"+{w}", 10, palette.text_on(colour), "middle"))
-        x += w
-    parts.append(f'<line x1="{x0}" x2="{x1}" y1="44" y2="44" stroke="{G[500]}"/>')
-    for v in range(0, top + 1):
-        parts.append(f'<line x1="{sx(v):.1f}" x2="{sx(v):.1f}" y1="44" y2="48" stroke="{G[500]}"/>' + _t(sx(v), 58, v, 9, G[700], "middle"))
-    for i, c in enumerate(cutoffs):
-        parts.append(f'<line x1="{sx(c):.1f}" x2="{sx(c):.1f}" y1="16" y2="48" stroke="{G[900]}" stroke-dasharray="3 2"/>'
-                     + _t(sx(c) + 2, 12, f"tier {i + 1} ≥ {c}", 9, G[900]))
-    if not terms:
-        parts.append(_t(x0 + 4, 37, "no evidence counted for these conditions: tier 4", 10, G[700]))
-    legend = "; ".join(f"{(labels.get(t['term']) or TERMS.get(t['term'], (0, t['term'])))[1]} +{t['weight']}" for t in terms or [] if t["weight"])
-    desc = f"tier_score {score} = {legend or 'nothing'}; tier {tier}. Weights and cut-offs are provisional."
-    parts.append(_t(x0, 74, f"score {score} → tier {tier}", 9.5, G[700]))
-    return figures.svg(width, 82, "Why this tier", desc, "".join(parts), synthetic)
+def _fit(text, px, size):
+    """text cut to about px wide at font size `size`, with an ellipsis."""
+    n = int(px / (size * 0.58))
+    return text if len(text) <= n else text[: max(1, n - 1)] + "…"
+
+
+def score_blocks(parts, cutoffs, synthetic=False, unit=70, width=640):
+    """The card's score breakdown: one block per evidence term, as wide as its points (largest first), its name and
+    +points inside with its detail under the name (the full text on hover), and dashed lines at the tier cut-offs
+    (tier 3, 2 and 1 at cutoffs[2], [1] and [0] points) to show which the blocks reach. parts: [(label, detail, weight,
+    colour, tip)]."""
+    span = max(sum(p[2] for p in parts), cutoffs[0])
+    u = min(unit, width / max(span, 1))
+    body, words, x = [], [], 0  # blocks, then the cut-off lines, then the words on top
+    for label, detail, w, colour, tip in parts:
+        bw, ink = w * u - 4, palette.text_on(colour)
+        body.append(f'<rect x="{x:.1f}" y="14" width="{bw:.1f}" height="36" rx="4" fill="{colour}"><title>{escape(tip)}</title></rect>')
+        words.append(f'<g pointer-events="none">{_t(x + 6, 29, _fit(label, bw - 30, 10.5), 10.5, ink, weight="600")}{_t(x + bw - 6, 29, f"+{w}", 11, ink, "end", "700")}'
+                     + (_t(x + 6, 43, _fit(detail, bw - 10, 9.5), 9.5, ink) if detail else "") + "</g>")
+        x += w * u
+    if not parts:
+        body.append(_t(4, 36, "no evidence found (not evidence of no effect)", 10.5, G[700]))
+    for i, c in enumerate(cutoffs):  # the cut-offs over the blocks: after c points
+        cx = c * u - 2
+        body.append(f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="14" y2="50" stroke="{palette.WHITE}" stroke-width="3" stroke-opacity="0.6"/>'  # seen on dark blocks
+                    f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="12" y2="52" stroke="{G[900]}" stroke-dasharray="3 2"/>'
+                    + _t(cx, 9, f"tier {i + 1}", 9, G[700], "middle"))
+    body += words
+    desc = "; ".join(f"{p[4]} +{p[2]}" for p in parts) or "no evidence counted"
+    return figures.svg(round(span * u + 16), 54, "Score breakdown", f"{desc}. Weights and tier cut-offs are provisional.", "".join(body), synthetic)
 
 
 def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="cg", legend=True):
