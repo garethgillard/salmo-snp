@@ -35,9 +35,9 @@ Decided:
 - No phenotypic traits in the portal (2026-10-09): it names sample conditions only (tissues, maturity, sex, embryo
   stages), never maturation, growth and so on; users map conditions to traits themselves. weights.yaml presets stay as
   snpscore's CLI names and the portal's cache of precomputed condition sets (to rename to tissue names later).
-- Trait = Active in (2026-10-09): the portal Table's Active in (tissues, maturity, sex) sets the conditions tiers score
-  against; the trait presets are quick picks in it. A selection with a preset's conditions uses its stored tiers, any
-  other is scored on first view and kept with the job (the same weights). One SNP's card opens in the Table's drawer.
+- All conditions (2026-10-11, replaces 'Trait = Active in'): the portal's tiers always count all 21 conditions (Table,
+  card, Overview, GWAS functional prior, gene page, variant page); there is no Active in and no condition picker. The
+  Table only filters after scoring. One SNP's card opens in the Table's drawer.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.
@@ -72,10 +72,6 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
 - Ss4R duplicates (2026-10-07): `ss4r` layer from the AQUA-FAANG SalmonTroutOrthologs.tsv on salmobase: the other
   salmon genes of a gene's clade on the paired chromosome of its syntenic quartet (any other chromosome when the quartet
   is unknown); class AORe/LORe from the clade or its neighbours; Ens106 gene ids used as Ens116 ids.
-- Active in (2026-10-09): in the portal Table, a chosen set of conditions also filters: a SNP stays when it is in an
-  element of at least one of them, by default inside an AQUA-FAANG robust ATAC peak (any chromatin state; no peak = no
-  state), optionally only in an active state (Active_TSS, Active_enhancer). Links from the Overview carry the trait, so
-  the Table can then show fewer SNPs than the Overview's whole-list counts.
 - Locus browser redesign (2026-10-08): no trait on the browser; signal tracks are the mean over a condition's replicates;
   combined tracks stack the tissue means; RNA-seq per-condition rows on a shared log scale.
 
