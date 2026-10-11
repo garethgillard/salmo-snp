@@ -457,12 +457,14 @@ def facts(snp, ev, states, chosen, active_states):
 
 
 def marker_chips(snp, ev):
-    """The As a marker header's chips, seen when it is folded: [(text, class, tooltip)]: the assay check, MAF ('low'
-    below the panel designer's minimum), LORe and A/T or C/G."""
+    """The As a marker header's chips, seen when it is folded: [(text, class, tooltip)]: the assay check, the flanks' GC,
+    MAF ('low' below the panel designer's minimum), LORe and A/T or C/G."""
     out = []
     if ev.get("assay"):
         a = ev["assay"]
         out.append((f"{a['icon']} assay {a['status']}", a["cls"], "Assay design check of the probe flanks" + (f": {a['all']}" if a["all"] else "")))
+        if a["gc"]:
+            out.append((a["gc"][0], a["gc"][1] or "plain", a["gc"][2]))
     m = ev.get("maf")
     if m and m["value"] is not None:
         out.append((f"MAF {m['value']}" + (" · low" if m["low"] else ""), "warn" if m["low"] else "plain",
