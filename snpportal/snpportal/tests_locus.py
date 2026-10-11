@@ -186,11 +186,14 @@ class LocusTest(SimpleTestCase):
         card = page[page.index('id="drawer"'):]
         d = jobs.folder(key)
         scores = dict(jobs.connect([d]).execute(f"SELECT file_row_number, tier_score__brain FROM read_parquet('{d / 'tiers.parquet'}')").fetchall())
-        score, blocks = re.search(r">score (\d+)</span>", card).group(1), svg_of(card[card.index('id="cs-score"'):])
+        blocks = svg_of(card[card.index('id="card-body"'):])  # the score, first: blocks and = score
+        score = re.search(r">= (\d+)</text>", blocks).group(1)
         self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)</title>", blocks)), scores[0])  # the blocks sum to tier_score
         self.assertEqual(int(score), scores[0])
         self.assertIn("Missense p.Thr46Met (ENSSSAT00000230965; published as Met54Thr) +3</title>", blocks)  # in full on hover
-        self.assertIn(">missense</text>", blocks)
+        self.assertIn(">missense</text>", blocks)  # as short as a chip
+        self.assertNotIn(">score ", card)  # no score chip, and no consequence chip: the block says it
+        self.assertNotIn(">missense · ", card)
         self.assertIn(">tier 1</text>", blocks)  # the cut-offs the blocks reach
         self.assertEqual(card.count('class="sp-badge sp-tier-'), 1)  # the tier once, beside the heading
         self.assertIn('class="sp-fact" title="Known locus vgll3_Met54Thr', card)  # the key facts
@@ -246,8 +249,9 @@ class LocusTest(SimpleTestCase):
         self.assertTrue(other["maf"]["other"])
         self.assertIn(("Public variant (504-fish panel)", "a different variant at this position"), other["details"])
         self.assertIn("a different variant at this position", render_to_string("snpportal/card.html", {"ev": other}))
-        self.assertEqual([p[:3] for p in locus.score_parts({"tier_terms": [{"term": "active", "weight": 3}, {"term": "coding", "weight": 3}], "tier_evidence": "active: Brain,LateBlastulation; CDS"})],
-                         [("active", "Brain, embryo (1 stage)", 3), ("CDS", "effect not computed", 3)])  # short names, details
+        self.assertEqual([(p[0], p[1], p[3]) for p in locus.score_parts({"tier_terms": [{"term": "active", "weight": 3}, {"term": "coding", "weight": 3}],
+                                                                       "tier_evidence": "active: Brain,LateBlastulation; CDS"})],
+                         [("active", 3, "active: Brain, embryo (1 stage) +3"), ("CDS", 3, "CDS (amino-acid effect not computed) +3")])
         self.assertEqual(sum(int(w) for w in re.findall(r"\+(\d+)</title>", svg_of(two["blocks"]))), 6)
         ET.fromstring(mini)
         self.assertEqual(locus.flank_parts("ACGYT[A/G]NNA"), [("ACG", ""), ("Y", "var"), ("T", ""), ("[A/G]", "snp"), ("NN", "n"), ("A", "")])

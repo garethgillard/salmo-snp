@@ -502,30 +502,33 @@ def _fit(text, px, size):
     return text if len(text) <= n else text[: max(1, n - 1)] + "…"
 
 
-def score_blocks(parts, cutoffs, synthetic=False, unit=70, width=640):
-    """The card's score breakdown: one block per evidence term, as wide as its points (largest first), its name and
-    +points inside with its detail under the name (the full text on hover), and dashed lines at the tier cut-offs
-    (tier 3, 2 and 1 at cutoffs[2], [1] and [0] points) to show which the blocks reach. parts: [(label, detail, weight,
-    colour, tip)]."""
-    span = max(sum(p[2] for p in parts), cutoffs[0])
-    u = min(unit, width / max(span, 1))
+def score_blocks(parts, cutoffs, score, synthetic=False, unit=76, width=640):
+    """The card's score: one block per evidence term, as wide as its points (largest first), its label as short as a
+    chip (with +points when it fits; the full text on hover), dashed lines at the tier cut-offs (tier 3, 2 and 1 at
+    cutoffs[2], [1] and [0] points) to show which the blocks reach, and '= score' at the right edge, in the same place
+    on every card. A label too long for its block drops ' in', then all but its first word. parts: [(label, weight,
+    colour, full text)]."""
+    span = max(sum(p[1] for p in parts), cutoffs[0])
+    u = min(unit, (width - 44) / max(span, 1))
     body, words, x = [], [], 0  # blocks, then the cut-off lines, then the words on top
-    for label, detail, w, colour, tip in parts:
+    for label, w, colour, tip in parts:
         bw, ink = w * u - 4, palette.text_on(colour)
-        body.append(f'<rect x="{x:.1f}" y="14" width="{bw:.1f}" height="36" rx="4" fill="{colour}"><title>{escape(tip)}</title></rect>')
-        words.append(f'<g pointer-events="none">{_t(x + 6, 29, _fit(label, bw - 30, 10.5), 10.5, ink, weight="600")}{_t(x + bw - 6, 29, f"+{w}", 11, ink, "end", "700")}'
-                     + (_t(x + 6, 43, _fit(detail, bw - 10, 9.5), 9.5, ink) if detail else "") + "</g>")
+        body.append(f'<rect x="{x:.1f}" y="14" width="{bw:.1f}" height="28" rx="4" fill="{colour}"><title>{escape(tip)}</title></rect>')
+        text = next((t for t in (label, label.replace(" in ", " "), label.split(" ")[0]) if 6.2 * len(t) <= bw - 12), label)
+        halo = f' stroke="{colour}" stroke-width="3" paint-order="stroke"'  # hides the cut-off lines behind the letters
+        words.append(f'<g pointer-events="none">{_t(x + 6, 32, _fit(text, bw - 12, 10.5), 10.5, ink, "start", "600", halo)}'
+                     + (_t(x + bw - 6, 32, f"+{w}", 10.5, ink, "end", "700", halo) if bw - 12 - 6.2 * len(text) > 20 else "") + "</g>")
         x += w * u
     if not parts:
-        body.append(_t(4, 36, "no evidence found (not evidence of no effect)", 10.5, G[700]))
+        body.append(_t(4, 32, "no evidence found (not evidence of no effect)", 10.5, G[700]))
     for i, c in enumerate(cutoffs):  # the cut-offs over the blocks: after c points
         cx = c * u - 2
-        body.append(f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="14" y2="50" stroke="{palette.WHITE}" stroke-width="3" stroke-opacity="0.6"/>'  # seen on dark blocks
-                    f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="12" y2="52" stroke="{G[900]}" stroke-dasharray="3 2"/>'
+        body.append(f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="14" y2="42" stroke="{palette.WHITE}" stroke-width="3" stroke-opacity="0.6"/>'  # seen on dark blocks
+                    f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="12" y2="44" stroke="{G[900]}" stroke-dasharray="3 2"/>'
                     + _t(cx, 9, f"tier {i + 1}", 9, G[700], "middle"))
-    body += words
-    desc = "; ".join(f"{p[4]} +{p[2]}" for p in parts) or "no evidence counted"
-    return figures.svg(round(span * u + 16), 54, "Score breakdown", f"{desc}. Weights and tier cut-offs are provisional.", "".join(body), synthetic)
+    body += words + [_t(width - 2, 33, f"= {score}", 14, G[900], "end", "700")]
+    desc = "; ".join(p[3] for p in parts) or "no evidence counted"
+    return figures.svg(width, 46, f"Score {score}", f"{desc}. Weights and tier cut-offs are provisional.", "".join(body), synthetic)
 
 
 def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="cg", legend=True):

@@ -316,10 +316,11 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
           "alleles": f"{ref}>{alt}" if ref and alt else "", "spec": spec, "synthetic": synthetic, "tier": snp.get("tier"),
           "score": snp.get("tier_score"), "samples": results.SAMPLES}
     ev["terms"] = results.tier_parts(snp.get) or None  # 'Missense p.Thr46Met (...)', 3; the blocks' hover text
-    if weights and "tier_terms" in snp:
-        ev["blocks"] = mark_safe(locus_svg.score_blocks(score_parts(snp), weights["tiers"], synthetic))
     states = {c[len("chromatin_"):]: snp[c] for c in snp if c.startswith("chromatin_") and c not in NOT_CONDITIONS}
     chosen = set(preset_conditions(weights, list(snp), trait)[0]) if weights and states else set()
+    if weights and "tier_terms" in snp:
+        ev["blocks"] = mark_safe(locus_svg.score_blocks(score_parts(snp, states, chosen, weights), weights["tiers"], snp.get("tier_score") or 0,
+                                                        synthetic))
     if states:
         tiles = locus_svg.chromatin_grid(states, chosen, bool(snp.get("blacklist")), synthetic, legend=False) if any(states.values()) else None
         if not tiles:
@@ -366,27 +367,30 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
     return ev
 
 
-SCORE_LABELS = {"active": "active", "active_elsewhere": "active elsewhere", "weak": "weak", "synonymous": "synonymous",
-                "splice": "splice region", "utr": "UTR", "constrained": "conserved", "regbuild": "Ensembl"}
+SCORE_LABELS = {"active_elsewhere": "active elsewhere", "synonymous": "synonymous", "splice": "splice region",
+                "constrained": "conserved"}
+CHROMATIN_TERMS = ("active", "active_elsewhere", "weak")  # their blocks say what the chromatin chip would
 
 
-def score_parts(snp):
-    """The evidence terms that count, largest first, for the score blocks: [(short name, detail, weight, colour, full
-    text)]: 'weak', 'Brain, Muscle'; 'missense', 'p.Thr20Ala'; 'conserved', 'GERP element'."""
-    g, fired = snp.get, snp.get("tier_terms") or []
+def score_parts(snp, states=None, chosen=(), weights=None):
+    """The evidence terms that count, largest first, for the score blocks: [(label, weight, colour, full text)] with
+    labels as short as the key facts' chips: 'active in 5/21' (of the chosen conditions), 'weak in 3/21', 'missense',
+    'conserved', '5′ UTR', 'Ensembl enhancer'; the full text (conditions, protein change) on hover."""
+    g, fired, states = snp.get, snp.get("tier_terms") or [], states or {}
     raw = [x for x in (g("tier_evidence") or "").split("; ") if x]
     raw = raw if len(raw) == len(fired) else [""] * len(fired)
+    among = [c for c in states if c in chosen] or list(states)
     out = []
     for (t, r), (text, w) in zip([(t, r) for t, r in zip(fired, raw) if t["weight"]], results.tier_parts(g)):
         k = t["term"]
-        detail = (conditions_text(r.partition(": ")[2]) if k in ("active", "active_elsewhere", "weak") else
-                  g("coding_hgvsp") or ("effect not computed" if k == "coding" else "") if k in results.CODING_TERMS else
-                  results.CLASS_LABELS.get(g("region_class"), "") if k == "utr" else "GERP element" if k == "constrained" else
-                  (g("regbuild_type") or "").replace("_", " ") if k == "regbuild" else "")
-        label = results.CONSEQUENCES.get(g("coding_consequence") or "") or "CDS" if k == "coding" else SCORE_LABELS.get(k, k)
-        out.append((label, detail, t["weight"],
-                    locus_svg._colour(locus_svg.TERMS.get(k, (palette.GREY[500], k))[0]), f"{text} +{w}"))
-    return sorted(out, key=lambda p: -p[2])
+        n = sum(states[c] in (weights or {}).get(f"{k}_states", ()) for c in among)
+        label = (f"{k} in {n}/{len(among)}" if k in ("active", "weak") and among else
+                 results.CONSEQUENCES.get(g("coding_consequence") or "") or "CDS" if k == "coding" else
+                 results.CLASS_LABELS.get(g("region_class")) or "UTR" if k == "utr" else
+                 f"Ensembl {(g('regbuild_type') or '').replace('_', ' ')}".strip() if k == "regbuild" else SCORE_LABELS.get(k, k))
+        tip = (f"{k.replace('_', ' ')}: {conditions_text(r.partition(': ')[2])}" if k in CHROMATIN_TERMS and r else text)
+        out.append((label, t["weight"], locus_svg._colour(locus_svg.TERMS.get(k, (palette.GREY[500], k))[0]), f"{tip} +{w}"))
+    return sorted(out, key=lambda p: -p[1])
 
 
 def conditions_text(items):
@@ -400,15 +404,17 @@ def conditions_text(items):
 
 def facts(snp, ev, states, chosen, active_states):
     """The card's key facts, one chip each: [(text, class, tooltip)]: consequence and gene, chromatin, known locus,
-    molQTL, assay, MAF and the marker risks (LORe, A/T or C/G). Class ok, warn, fail or muted ('' plain)."""
+    molQTL, assay, MAF and the marker risks (LORe, A/T or C/G); not what a score block says (the consequence of a
+    coding or UTR SNP: just its gene; chromatin when it scored). Class ok, warn, fail or muted ('' plain)."""
     out, g = [], snp.get
-    region = results.region_text(g) if "region_class" in snp else ""
+    fired = {t["term"] for t in g("tier_terms") or [] if t["weight"]}  # what the score blocks already say
+    region = results.region_text(g) if "region_class" in snp and not fired & {"coding", "synonymous", "splice", "utr"} else ""
     gene = ev.get("gene")
     if region or gene:
         where = f" · {locus_svg.fmt_bp(g('gene_distance'))} from {gene['label']}" if gene and g("gene_distance") else \
             f" · {gene['label']}" if gene else ""
         out.append((region + where if region else gene["label"], "", results.coding_tip(g) or (gene or {}).get("where", "")))
-    if states:
+    if states and not fired & set(CHROMATIN_TERMS):
         peak = [c for c, s in states.items() if s]
         active = [c for c in peak if states[c] in active_states]
         n = len(states)
