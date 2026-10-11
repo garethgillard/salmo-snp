@@ -102,7 +102,7 @@ class ExploreTest(SimpleTestCase):
         self.assertEqual(len(search.resolve("c", limit=10)), 10)
 
     def test_landing_and_known_loci(self):
-        landing = self.client.get(reverse("snpportal:landing"))  # the home page is the Score page
+        landing = self.client.get(reverse("snpportal:upload"))  # the home page is the Score page
         counts = explore.catalogue_counts()  # the one count helper: Known loci header and intro agree
         self.assertContains(landing, 'aria-label="Your data"')
         self.assertNotContains(landing, "published entries")  # known loci: top nav and Score's example
@@ -280,7 +280,7 @@ class ExploreTest(SimpleTestCase):
             self.assertIn(palette.STATE_PALETTES["aquafaang"]["Active_TSS"],  # figures too
                           locus_svg.chromatin_grid({"Brain_Immature_Female": "Active_TSS"}))
             away = self.client.get(reverse("snpportal:state_palette"), {"name": "nope"}, HTTP_REFERER="https://elsewhere.example/")
-            self.assertEqual(away.url, reverse("snpportal:landing"))  # other sites' referers are not followed
+            self.assertEqual(away.url, reverse("snpportal:upload"))  # other sites' referers are not followed
             self.assertNotIn(palette.COOKIE + "=nope", str(away.cookies))
             self.client.cookies.pop(palette.COOKIE)
             self.assertContains(self.client.get(help_url), ".st-Active_TSS{background:#B2182B")

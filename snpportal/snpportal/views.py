@@ -141,7 +141,7 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
     tab = tab if tab in INPUTS else request.GET.get("input") if request.GET.get("input") in INPUTS else "file"
     found, listed = examples(), mine(request)
     return no_store(listed, render(request, "snpportal/score.html", {
-        "nav": "score", "title": "Score your SNPs", "error": error, "tabs": INPUTS.items(), "tab": tab, "mine": listed,
+        "nav": "score", "title": "Score SNPs by functional evidence", "error": error, "tabs": INPUTS.items(), "tab": tab, "mine": listed,
         "tries": [dict(found[name], name=name, gwas=name.startswith("gwas_")) for name in TRY if name in found],
         "targets": targets, "flanks": FLANKS, "flank": FLANK, "paste_lines": PASTE_LINES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}",
@@ -187,10 +187,6 @@ def _score(request):
         response["Retry-After"] = "60"
         return response
     params = {"trait": preset} if preset != "all" else {}
-    if request.POST.get("tab") in TABS:  # the tour's 'Try it' buttons open the tab their slide shows (and its card)
-        params["tab"] = request.POST["tab"]
-        if request.POST.get("snp", "").isdecimal():
-            params["snp"] = request.POST["snp"]
     url = reverse("snpportal:results", args=[key])
     return redirect(f"{url}?{urlencode(params)}" if params else url)
 

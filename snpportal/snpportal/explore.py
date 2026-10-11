@@ -537,8 +537,8 @@ def candidate_job(request):
 
 # ---- the guided tour: an illustrated slide show ----
 
-TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 words), the screenshot's alt text, numbered
-    # callouts (label, element) and 'Try it' (label, portal path or the Score example to post; {label}: its name).
+TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 words), the screenshot's alt text and
+    # numbered callouts (label, element).
     # 'shot' is for `manage.py tour_images`: the page ({snps}, {gwas}: the example jobs it scores), the browser width, an
     # element to click first and the crop; 'before' lists (page, button) whose form is POSTed first, as a click would.
     # Elements are CSS selectors or 'text=<exact text>'; a list is their union, and a leading 'row' stretches it across
@@ -552,19 +552,17 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("Tier: 1 strongest, 4 no evidence found", ["#fig-summary svg a[href$='&tier=1']", "#fig-summary svg a[href$='&tier=4']"]),
                   ("Where they fall in the genome", "#fig-ideogram"),
                   ("Then filter the Table, or export", "#results .nav-tabs")],
-     "try": ("Try it: score the known loci", {"example": "known_loci"}),
      "shot": {"path": "results/{snps}/", "width": 1200, "crop": [".nav-tabs", "#fig-summary", "#fig-ideogram"]}},
     {"slug": "score", "title": "Score your list",
      "text": "Upload a VCF, SNP table, PLINK or chip file, paste positions, name genes or regions, or upload GWAS "
-             "results. Without a list, try an example; your results stay listed beside the forms for 24 hours.",
-     "alt": "The Score page, also the home page: the Upload SNPs, Paste positions, Genes or regions and GWAS tabs, the "
-            "examples under them, and Your results.",
-     "callouts": [("Upload, paste, genes or regions, or GWAS", "section[aria-label='Your data'] .nav-tabs"),
-                  ("Drop your file, then Score", ["#pane-file .sp-drop", "#pane-file button"]),
+             "results. Without a list, try an example; your results stay listed above the forms for 24 hours.",
+     "alt": "The Score page, also the home page: Your results, the examples, and the Upload SNPs, Paste positions, Genes "
+            "or regions and GWAS tabs, beside the tour.",
+     "callouts": [("Your results: open or delete", ".sp-mine-box"),
                   ("No list? Try an example", ".sp-try"),
-                  ("Your results: open or delete", ["#mine-h", ".sp-mine"])],
-     "try": ("Try it: open Score", "score/"),
-     "shot": {"path": "score/", "width": 1200, "crop": [".sp-lead", "section[aria-label='Your data']", ".sp-mine"]}},
+                  ("Upload, paste, genes or regions, or GWAS", "section[aria-label='Your data'] .nav-tabs"),
+                  ("Drop your file, then Score", ["#pane-file .sp-drop", "#pane-file .sp-go"])],
+     "shot": {"path": "", "width": 1200, "crop": [".sp-lead", "section[aria-label='Your data']", ".sp-hero"]}},
     {"slug": "table", "title": "Filter, then open a SNP",
      "text": "Every column has its own filter; Chromatin keeps SNPs in a peak in the tissues you pick, without changing "
              "any tier. Filters stay in the link, and a click on a SNP opens its evidence card.",
@@ -574,7 +572,6 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("+/−: keep or take out single SNPs", ["th.sp-pickcol", "tr[data-card]:nth-child(6) td.sp-pickcol"]),
                   ("Click a SNP for its evidence card", "tr[data-card]:nth-child(1) a.sp-snp"),
                   ("Add the selection to your panel", "button[form=add-panel]")],
-     "try": ("Try it: the example's table", {"example": "known_loci", "tab": "table"}),
      "shot": {"path": "results/{snps}/?tab=table", "width": 1200, "click": "#dd-active > summary",
               "wait": "#dd-active[open] .sp-dd-panel", "crop": [".nav-tabs", "#dd-active .sp-dd-panel", "tr[data-card]:nth-child(14)"]}},
     {"slug": "card", "title": "See why it got its tier",
@@ -586,7 +583,6 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("Open the full locus browser", "#cs-locus .sp-cs-act"),
                   ("Its peak: chromatin state per condition", "#cs-locus svg svg"),
                   ("As a marker: assay check, GC and MAF", "#cs-marker > summary")],
-     "try": ("Try it: akap11 Val214Met's card", {"example": "known_loci", "tab": "table", "snp": "2"}),
      "shot": {"path": "results/{snps}/?tab=table&snp=2", "width": 1000, "crop": [".sp-card-bar", "#cs-marker > summary", "tr.sp-selected"]}},
     {"slug": "locus", "title": "Explore a locus",
      "text": "The locus browser lines up genes, published loci, regulatory elements, chromatin states and live RNA, ATAC "
@@ -597,7 +593,6 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("Genes, published loci and variants", "#g-genes"),
                   ("Open a group: one track per condition", "#g-hmm .sp-tog"),
                   ("RNA, ATAC and ChIP from salmobase", "#g-assays .sp-grp-h")],
-     "try": ("Try it: vgll3 in the locus browser", "locus/?r=25:28983861-29008860"),
      "shot": {"path": "locus/?r=25:28983861-29008860", "width": 1280, "crop": [".sp-bctl", "#g-assays .sp-grp-h"]}},
     {"slug": "panel", "title": "Design a genotyping panel",
      "text": "Add to panel on the Table brings its selection here, for this browser only and for 24 hours. Compare the "
@@ -608,7 +603,6 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("Compared with the chip you use", "section[aria-labelledby=chip-h] .sp-kpis"),
                   ("Vendor files", "section[aria-labelledby=dl-h] form"),
                   ("Ready to genotype?", "section[aria-labelledby=glance-h]")],
-     "try": ("Try it: open Design panel", "panel/"),
      "shot": {"before": [("results/{snps}/?tab=table", "button[form=add-panel]"), ("panel/", "button[name=demo]")],
               "path": "panel/", "width": 1200, "crop": [".sp-page-header", ".sp-eq"]}},
     {"slug": "gwas", "title": "Analyse GWAS summary statistics",
@@ -618,7 +612,6 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
      "callouts": [("Click a lead SNP for its regional plot", "#fig-manhattan svg a[href*='locus=1']"),
                   ("Loci, strongest first", ["#loci-h ~ * thead th:nth-child(1)", "#loci-h ~ * tbody tr:nth-child(3) td:nth-child(3)"]),
                   ("Top SNP after fine-mapping", ["text=Top SNP by PIP", "#loci-h ~ * tbody tr:nth-child(3) td:nth-child(6)"])],
-     "try": ("Try it: the synthetic maturation GWAS", {"example": "gwas_maturation_SYNTHETIC"}),
      "shot": {"path": "results/{gwas}/association/", "width": 1280,
               "crop": [".sp-caveat", "#loci-h ~ * tbody tr:nth-child(3)"]}},
     {"slug": "more", "title": "Browse and get help",
@@ -627,7 +620,6 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
      "alt": "The Known loci page with the open Help menu: Help, Guided tour, Data, Methods and Run locally.",
      "callouts": [("Published SNPs", ".sp-nav a[href$='known-loci/']"), ("Any region, with live data", ".sp-nav a[href*='locus/']"),
                   ("Help, this tour and Run locally", ".sp-menu ul")],
-     "try": ("Try it: the known loci", "known-loci/"),
      "shot": {"path": "known-loci/", "width": 1100, "click": ".sp-menu > summary", "wait": ".sp-menu[open] ul",
               "crop": [".sp-brand", ".sp-release", ".sp-loci-tabs .nav-tabs", ".sp-loci tbody tr:nth-child(2)"]}},
 ]
@@ -635,21 +627,9 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
 
 def tour(request):
     """/snp/tour/?slide=N: the guided tour, an illustrated slide show (TOUR, screenshots in static/snpportal/tour/).
-    Every slide is in the page and ?slide=N picks the one shown, so Previous, Next and the dots are plain links;
-    portal.js /* tour */ switches slides without reloading. 'Try it' opens the real page or posts a Score example."""
-    found, home = views.examples(), reverse("snpportal:landing")
-    slides = []
-    for s in TOUR:
-        label, target = s["try"]
-        gwas = isinstance(target, dict) and target["example"].startswith("gwas_")
-        if isinstance(target, str):
-            try_it = {"label": label, "url": home + target}
-        elif target["example"] in found:
-            try_it = {"label": label.format(label=found[target["example"]]["label"]), "fields": target,
-                      "post": reverse("snpportal:gwas_score" if gwas else "snpportal:upload")}
-        else:  # this release lacks the example
-            try_it = {"label": "Try it: open Score", "url": reverse("snpportal:upload") + ("?input=gwas" if gwas else "")}
-        slides.append({**s, "try_it": try_it, "image": f"snpportal/tour/{s['slug']}.webp"})
+    Every slide is in the page and ?slide=N picks the one shown, so the arrows and the dots are plain links;
+    portal.js /* tour */ switches slides without reloading. 'Back to Score' is always one click away."""
+    slides = [dict(s, image=f"snpportal/tour/{s['slug']}.webp") for s in TOUR]
     slide = request.GET.get("slide", "")
     n = int(slide) if slide.isdecimal() and 1 <= int(slide) <= len(TOUR) else 1
     return render(request, "snpportal/tour.html", {

@@ -7,9 +7,8 @@ from . import association  # AGENT gwas (stage 3)
 
 app_name = "snpportal"
 urlpatterns = [
-    path("", views.score, name="landing"),  # the home page is the Score page
-    path("score/", views.score, name="upload"),
-    path("score/current/", views.current, name="current"),
+    path("", views.score, name="upload"),  # the Score page is the home page
+    path("current/", views.current, name="current"),
     path("panel/", panel.page, name="design_panel"),
     path("panel/change/", panel.change, name="panel_change"),
     path("panel/download/", panel.download, name="panel_download"),
@@ -43,7 +42,7 @@ urlpatterns = [
     path("results/<uuid:key>/report/", report.report, name="report"),
     path("results/<uuid:key>/tools/<slug:name>.svg", tools.figure, name="tool_figure"),  # AGENT breeder (stage 3): Panel-tab figures
     # AGENT gwas (stage 3): GWAS summary statistics -> Association page, figures, downloads, regional plot
-    path("score/gwas/", association.score, name="gwas_score"),
+    path("gwas/", association.score, name="gwas_score"),
     path("results/<uuid:key>/association/", association.association, name="association"),
     path("results/<uuid:key>/association/<slug:name>.svg", association.figure, name="association_figure"),
     path("results/<uuid:key>/association/download/", association.download, name="association_download"),

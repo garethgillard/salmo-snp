@@ -156,14 +156,22 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-kpi span { font-size: .8rem; color: var(--sp-grey-700); }
 
 /* score page */
-.sp-try { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: 1.1rem; padding-top: 1rem;
-  border-top: 1px solid var(--sp-grey-200); }
-.sp-try-h { font-size: .875rem; color: var(--sp-grey-700); margin-right: .25rem; }
+.sp-try { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.sp-try-h { font-size: .875rem; font-weight: 600; color: var(--sp-grey-700); margin-right: .25rem; }
 .sp .sp-try .btn { border-radius: 2rem; font-weight: 600; }
 .sp-try .btn small { font-weight: 400; opacity: .8; }
-.sp-drop { border: 2px dashed var(--sp-grey-300); border-radius: .5rem; padding: 1.5rem 1.25rem; text-align: center; background: var(--sp-grey-50); }
-.sp-drop-icon { display: block; width: 2.5rem; height: 2.5rem; margin: 0 auto .5rem; color: var(--sp-accent); }
+/* the Score page's inputs: no card around them; every tab has its input (7rem high), one hint line and the Score button */
+.sp-inputs .tab-content { padding-top: .9rem; }
+.sp-drop { display: flex; align-items: center; gap: 1rem; min-height: 7rem; padding: .9rem 1.25rem; border: 2px dashed var(--sp-grey-300);
+  border-radius: .5rem; background: var(--sp-grey-50); }
+.sp-drop .form-label { margin-bottom: .4rem; font-weight: 600; }
+.sp-drop-icon { flex: none; width: 2.5rem; height: 2.5rem; color: var(--sp-accent); }
 .sp-drop.over { border-color: var(--sp-accent); background: var(--sp-white); }
+.sp textarea.sp-paste { height: 7rem; resize: vertical; }
+.sp-hint { margin: .5rem 0 .75rem; font-size: .875rem; color: var(--sp-grey-700); }
+.sp-go-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; }
+.sp .sp-go { display: inline-flex; align-items: center; gap: .5rem; padding-left: 1rem; padding-right: 1.25rem; font-weight: 600; }
+.sp-go svg { width: 1.15rem; height: 1.15rem; }
 .sp textarea.sp-paste { font-family: var(--sp-mono); font-size: .8125rem; }
 .sp-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
 .sp-chips a { border: 1px solid var(--sp-grey-300); border-radius: 1rem; padding: .1rem .7rem; font-size: .8125rem; text-decoration: none; }
@@ -471,17 +479,32 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-loci details summary { cursor: pointer; color: var(--sp-link); }
 /* end known loci */
 
-/* home (the Score page): the tour as a card, its screenshot above a wide action row */
-.sp .sp-hero { display: block; padding: 0; overflow: hidden; text-decoration: none; color: var(--sp-grey-700); }
+/* confirm: the small dialog that asks before Delete or Clear panel (portal.js) */
+.sp-confirm { width: calc(100% - 2rem); max-width: 25rem; padding: 0; border: 0; border-radius: .75rem;
+  box-shadow: 0 12px 40px var(--sp-grey-500); }
+.sp-confirm::backdrop { background: var(--sp-grey-900); opacity: .35; }
+.sp-confirm > div { padding: 1.25rem 1.25rem 1rem; }
+.sp-confirm-body { display: flex; align-items: flex-start; gap: .85rem; margin-bottom: 1.1rem; }
+.sp-confirm-body p { margin: .3rem 0 0; color: var(--sp-grey-900); overflow-wrap: anywhere; }
+.sp-confirm-icon { display: flex; align-items: center; justify-content: center; flex: none; width: 2.25rem; height: 2.25rem;
+  border-radius: 50%; background: var(--sp-fail-bg); color: var(--sp-fail-text); }
+.sp-confirm-icon svg { width: 1.2rem; height: 1.2rem; }
+.sp-confirm-btns { display: flex; justify-content: flex-end; gap: .5rem; }
+@keyframes sp-pop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+@media (prefers-reduced-motion: no-preference) { .sp-confirm[open] { animation: sp-pop .15s ease-out; } }
+
+/* home (the Score page): the tour as a slide: its screenshot above the icon, the title and a round arrow, framed in blue */
+.sp .sp-hero { display: block; padding: 0; overflow: hidden; border: 2px solid var(--sp-accent); border-radius: .75rem;
+  box-shadow: 0 6px 24px var(--sp-grey-300); text-decoration: none; color: var(--sp-accent); transition: box-shadow .15s, transform .15s; }
 .sp-hero img { display: block; width: 100%; height: auto; border-bottom: 1px solid var(--sp-grey-200); }
-.sp .sp-hero:hover { border-color: var(--sp-accent); box-shadow: 0 2px 8px var(--sp-grey-300); }
-.sp-act { display: flex; align-items: center; gap: .9rem; padding: .8rem 1rem; line-height: 1.3; }
-.sp-act-icon { flex: none; width: 2.25rem; height: 2.25rem; color: var(--sp-accent); }
-.sp-act-text { display: flex; flex-direction: column; min-width: 0; }
-.sp-act-label { font-size: 1.0625rem; font-weight: 600; color: var(--sp-accent); }
-.sp-act-sub { font-size: .875rem; }
-.sp-act-go { margin-left: auto; padding-left: .5rem; font-size: 1.25rem; color: var(--sp-accent); transition: transform .15s; }
-.sp .sp-hero:hover .sp-act-go { transform: translateX(3px); }
+.sp .sp-hero:hover { box-shadow: 0 8px 30px var(--sp-grey-300); transform: translateY(-2px); }
+.sp-act { display: flex; align-items: center; gap: .9rem; padding: .85rem 1.1rem; }
+.sp-act-icon { flex: none; width: 2.25rem; height: 2.25rem; }
+.sp-act-label { font-size: 1.25rem; font-weight: 600; }
+.sp-act-go { display: flex; align-items: center; justify-content: center; flex: none; width: 2.75rem; height: 2.75rem; margin-left: auto;
+  border-radius: 50%; background: var(--sp-accent); color: var(--sp-accent-text); transition: transform .15s; }
+.sp-act-go svg { width: 1.5rem; height: 1.5rem; }
+.sp .sp-hero:hover .sp-act-go { transform: translateX(4px); }
 /* keyboard focus: the '.sp a:focus-visible' rule above draws the 3px --sp-focus ring */
 /* end home */
 
@@ -532,13 +555,17 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 /* end locus browser */
 
 /* the Score page's 'Your results' (score.html): a name to open, its size and time, Delete */
-.sp-mine { list-style: none; margin: 0; padding: 0; }
-.sp-mine li { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: .5rem; padding: .45rem .5rem;
-  border-bottom: 1px solid var(--sp-grey-200); }
-.sp-mine li > span { grid-column: 1; }
-.sp-mine li > form { grid-column: 2; grid-row: 1 / span 2; }
-.sp-mine-name { font-weight: 600; overflow-wrap: anywhere; }
-.sp-mine-current { background: var(--sp-grey-50); box-shadow: inset 3px 0 0 var(--sp-accent); }
+/* Your results on the Score page: a green box, one line per result, scrolling after about four */
+.sp-mine-box { padding: .7rem .9rem .5rem; border: 1px solid var(--sp-ok-border); border-radius: .5rem; background: var(--sp-ok-bg); }
+.sp-mine-box h2 { margin-bottom: .35rem; font-size: 1rem; color: var(--sp-ok-text); }
+.sp-mine { list-style: none; margin: 0; padding: 0; max-height: 9.5rem; overflow-y: auto; }
+.sp-mine li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; column-gap: .75rem;
+  padding: .3rem .5rem; border-top: 1px solid var(--sp-ok-border); }
+.sp-mine li:first-child { border-top: 0; }
+.sp-mine-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-mine-current { box-shadow: inset 3px 0 0 var(--sp-ok-text); }
+.sp .sp-mine-del { padding: 0; }
+@media (max-width: 575.98px) { .sp-mine li { grid-template-columns: minmax(0, 1fr) auto; } .sp-mine li > span { grid-row: 2; } }
 .sp .sp-mine-del { color: var(--sp-fail-text); }
 
 /* the Design panel page: two columns as tall as each other; each one's last card takes up the slack */

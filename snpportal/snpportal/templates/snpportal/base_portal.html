@@ -13,7 +13,7 @@
   <a class="sp-skip" href="#sp-main">Skip to content</a>
   <nav class="sp-nav" aria-label="SNP portal">
     <div class="sp-wrap">
-      <a class="sp-brand" href="{% url 'snpportal:landing' %}">Functional SNP portal</a>
+      <a class="sp-brand" href="{% url 'snpportal:upload' %}">Functional SNP portal</a>
       <ul>
         <li><a href="{% url 'snpportal:upload' %}"{% if nav == 'score' %} aria-current="page"{% endif %}>Score</a></li>
         <li><a href="{% url 'snpportal:design_panel' %}"{% if nav == 'panel' %} aria-current="page"{% endif %}>Design panel<span hx-get="{% url 'snpportal:panel_count' %}" hx-trigger="load" hx-swap="innerHTML"></span></a></li>

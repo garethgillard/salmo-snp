@@ -6,7 +6,6 @@ import re
 import shutil
 import tempfile
 import xml.etree.ElementTree as ET
-from html.parser import HTMLParser
 from pathlib import Path
 from unittest import skipUnless
 
@@ -15,29 +14,11 @@ from django.urls import reverse
 
 import snpscore
 
-from . import explore, jobs, views
+from . import explore, jobs
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
 TOUR_DIR = Path(__file__).resolve().parent / "static" / "snpportal" / "tour"
-
-
-class Page(HTMLParser):
-    """Links (<a href>) of a page, and its POST forms as (action, {hidden fields})."""
-
-    def __init__(self, html):
-        super().__init__()
-        self.links, self.forms = [], []
-        self.feed(html)
-
-    def handle_starttag(self, tag, attrs):
-        a = dict(attrs)
-        if tag == "a" and a.get("href"):
-            self.links.append(a["href"])
-        if tag == "form" and a.get("method") == "post":
-            self.forms.append((a["action"], {}))
-        if tag == "input" and a.get("type") == "hidden" and self.forms and a["name"] != "csrfmiddlewaretoken":
-            self.forms[-1][1][a["name"]] = a["value"]
 
 
 def headline(html):  # the summary figure's key numbers
@@ -80,12 +61,6 @@ class TourTest(SimpleTestCase):
         cls.tmp.cleanup()
         super().tearDownClass()
 
-    def example(self, **fields):
-        """Score the known-loci example as the Score page and the tour's 'Try it' do; returns (key, redirect URL)."""
-        response = self.client.post(reverse("snpportal:upload"), {"example": "known_loci", "trait": "maturation", **fields})
-        self.assertEqual(response.status_code, 302)
-        return re.search(r"[0-9a-f-]{36}", response.url).group(0), response.url
-
     def test_slides_images_and_navigation(self):
         tour, n = reverse("snpportal:tour"), len(explore.TOUR)
         first = self.client.get(tour)
@@ -118,22 +93,12 @@ class TourTest(SimpleTestCase):
         for bad in ("0", "99", "x"):
             self.assertEqual(shown(self.client.get(tour, {"slide": bad}).content.decode()), explore.TOUR[0]["title"])
 
-        menu = re.search(r'<details class="sp-menu">.*?</details>', self.client.get(reverse("snpportal:landing")).content.decode(), re.S)
+        menu = re.search(r'<details class="sp-menu">.*?</details>', self.client.get(reverse("snpportal:upload")).content.decode(), re.S)
         self.assertIn(f'href="{tour}">Guided tour</a>', menu.group(0))  # in the Help menu
-        self.assertContains(self.client.get(reverse("snpportal:landing")), f'href="{tour}"')  # 'Take the tour'
+        self.assertContains(self.client.get(reverse("snpportal:upload")), f'href="{tour}"')  # 'Take the tour'
 
-        page = Page(html)  # 'Try it': real pages, or the Score page's example buttons
-        for link in page.links:  # (the locus browser asks salmobase for live signal: tests_locus covers it offline)
-            if link.startswith("/snp/") and not link.startswith((tour, reverse("snpportal:locus"))):
-                self.assertEqual(self.client.get(link, follow=True).status_code, 200, link)  # Score: the current results or the Score page
-        examples = views.examples()
-        for action, fields in page.forms:
-            self.assertIn(action, (reverse("snpportal:upload"), reverse("snpportal:gwas_score")))
-            self.assertIn(fields["example"], examples)
-        table = next(f for _, f in page.forms if f.get("tab") == "table")
-        key, url = self.example(**table)
-        self.assertIn("tab=table", url)
-        self.assertEqual(jobs.read(key)["state"], "done")
+        self.assertIn(f'href="{reverse("snpportal:upload")}">Back to Score</a>', html)  # out of the tour on every slide
+        self.assertNotIn("<form", html[html.index("data-tour"):])  # no 'Try it' buttons: the tour only shows
 
     def test_report_matches_overview_and_table(self):
         rows = explore.public_rows([("25", 28_945_075, 29_049_268)])  # public variants within 50 kb of vgll3: over 20

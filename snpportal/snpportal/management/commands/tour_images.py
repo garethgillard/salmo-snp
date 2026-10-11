@@ -28,7 +28,7 @@ from snpportal.explore import TOUR
 OUT = Path(__file__).resolve().parents[2] / "static" / "snpportal" / "tour"
 CHROMES = ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "google-chrome", "chromium", "chromium-browser")
 WIDTH, MAX_RATIO, PAD, QUALITY = 1200, 0.68, 12, 82  # image width (px), tallest height/width, crop margin (CSS px), WebP quality
-JOBS = {"snps": ("score/", "known_loci"), "gwas": ("score/gwas/", "gwas_maturation_SYNTHETIC")}
+JOBS = {"snps": ("", "known_loci"), "gwas": ("gwas/", "gwas_maturation_SYNTHETIC")}
 SUBMIT = """(async function (sel) {  // POST a button's form with the button's name=value, as a click would, staying on the page
   var b = document.querySelector(sel), data = new FormData(b.form);
   if (b.name) data.append(b.name, b.value);
@@ -130,11 +130,11 @@ def score_example(base, path, example):
             return None
     jar = CookieJar()
     web = build_opener(HTTPCookieProcessor(jar), Stay)
-    web.open(base + "score/").read()
+    web.open(base).read()  # the Score page, for the CSRF cookie
     token = next((c.value for c in jar if c.name == "csrftoken"), "")
     data = urlencode({"example": example}).encode()
     try:
-        web.open(Request(base + path, data=data, headers={"X-CSRFToken": token, "Referer": base + "score/"}))
+        web.open(Request(base + path, data=data, headers={"X-CSRFToken": token, "Referer": base}))
         raise CommandError(f"Scoring the example {example} did not start a job (is it in this release?)")
     except HTTPError as e:
         if e.code != 302:

@@ -456,7 +456,7 @@ def state_palette(request):
     go back to the page the link was on (its same-site Referer, so no URL travels in the query), else the landing page."""
     back = request.META.get("HTTP_REFERER", "")
     if not url_has_allowed_host_and_scheme(back, {request.get_host()}, request.is_secure()):
-        back = reverse("snpportal:landing")
+        back = reverse("snpportal:upload")
     response = redirect(back)
     name = request.GET.get("name")
     if name in palette.STATE_PALETTES:

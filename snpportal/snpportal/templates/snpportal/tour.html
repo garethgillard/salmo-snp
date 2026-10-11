@@ -20,10 +20,6 @@
         </div>
         <div class="sp-slide-steps">
           <ol class="sp-callouts">{% for label, target in s.callouts %}<li>{{ label }}</li>{% endfor %}</ol>
-          {% if s.try_it.post %}<form method="post" action="{{ s.try_it.post }}">{% csrf_token %}
-            {% for name, value in s.try_it.fields.items %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
-            <button class="btn btn-outline-primary" type="submit">{{ s.try_it.label }}</button>
-          </form>{% else %}<a class="btn btn-outline-primary" href="{{ s.try_it.url }}">{{ s.try_it.label }}</a>{% endif %}
         </div>
         <figure class="sp-shot" id="tour-{{ s.slug }}">
           <img src="{% asset s.image %}" alt="{{ s.alt }}">
@@ -40,6 +36,7 @@
   <nav class="sp-tour-where" aria-label="Slides">
     <ol class="sp-tour-dots">{% for s in slides %}<li><a href="?slide={{ forloop.counter }}" aria-label="Slide {{ forloop.counter }}: {{ s.title }}"{% if forloop.counter == n %} aria-current="step"{% endif %}></a></li>{% endfor %}</ol>
     <span class="sp-small sp-muted" aria-live="polite" data-tour-count>Slide {{ n }} of {{ count }}</span>
+    <a class="sp-small sp-tour-out" href="{% url 'snpportal:upload' %}">Back to Score</a>
   </nav>
 </section>
 {% endblock main %}

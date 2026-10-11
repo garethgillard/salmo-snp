@@ -124,6 +124,42 @@
 })();
 /* end results */
 
+/* confirm: a form with data-confirm asks first in a small dialog (Cancel, or the red data-confirm-ok button) instead of
+   the browser's confirm box; a click outside or Esc cancels. Without JavaScript the form just submits. */
+(function () {
+  "use strict";
+  var dialog, pending;
+  function build() {
+    dialog = document.createElement("dialog");
+    dialog.className = "sp-confirm";
+    dialog.setAttribute("aria-labelledby", "sp-confirm-text");
+    dialog.innerHTML = '<div><div class="sp-confirm-body"><span class="sp-confirm-icon" aria-hidden="true"><svg viewBox="0 0 24 24" ' +
+      'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6' +
+      'M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></span><p id="sp-confirm-text"></p></div>' +
+      '<div class="sp-confirm-btns"><button type="button" class="btn btn-sm btn-outline-secondary" data-no>Cancel</button>' +
+      '<button type="button" class="btn btn-sm btn-danger" data-yes></button></div></div>';
+    (document.querySelector(".sp") || document.body).appendChild(dialog);
+    dialog.addEventListener("click", function (e) {
+      if (e.target === dialog || e.target.closest("[data-no]")) dialog.close();  // the dialog itself: the backdrop
+      if (!e.target.closest("[data-yes]")) return;
+      dialog.close();
+      pending.form.setAttribute("data-confirmed", "");
+      if (pending.by) pending.form.requestSubmit(pending.by); else pending.form.requestSubmit();
+    });
+  }
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form.hasAttribute || !form.hasAttribute("data-confirm")) return;
+    if (form.hasAttribute("data-confirmed")) { form.removeAttribute("data-confirmed"); return; }
+    e.preventDefault();
+    if (!dialog) build();
+    pending = {form: form, by: e.submitter};
+    dialog.querySelector("p").textContent = form.getAttribute("data-confirm");
+    dialog.querySelector("[data-yes]").textContent = form.getAttribute("data-confirm-ok") || "Delete";
+    dialog.showModal();
+  }, true);
+})();
+
 /* tour: the arrows, the dots, the arrow keys and a click on the slide (its right half goes on, its left half back)
    switch slides without reloading (the arrows and dots are ?slide=N links, which work without JavaScript). Hovering a
    half lights its arrow. The counter is a live region; focus inside a slide that goes moves to the new slide's title. */

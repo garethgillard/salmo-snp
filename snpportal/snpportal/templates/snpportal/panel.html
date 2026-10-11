@@ -24,7 +24,7 @@
     <div class="col-lg-6 d-flex flex-column gap-3">
   <section class="sp-card" aria-labelledby="src-h">
     <div class="sp-card-head"><h2 id="src-h">Sources</h2>
-      <form class="ms-auto" method="post" action="{% url 'snpportal:panel_change' %}" onsubmit="return confirm('Remove every source and the chip from your panel?')">{% csrf_token %}
+      <form class="ms-auto" method="post" action="{% url 'snpportal:panel_change' %}" data-confirm="Remove every source and the chip from your panel?" data-confirm-ok="Clear panel">{% csrf_token %}
         <button class="btn btn-sm btn-outline-danger" type="submit" name="clear" value="1">Clear panel</button></form></div>
     <div class="table-responsive"><table class="table table-sm sp-table sp-small mb-1">
       <thead><tr><th scope="col">#</th><th scope="col">Results</th><th scope="col">Selection</th><th scope="col" class="sp-num">SNPs</th><th scope="col">Added</th><th scope="col"></th></tr></thead>
