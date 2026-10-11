@@ -37,7 +37,9 @@ Decided:
   snpscore's CLI names and the portal's cache of precomputed condition sets (to rename to tissue names later).
 - All conditions (2026-10-11, replaces 'Trait = Active in'): the portal's tiers always count all 21 conditions (Table,
   card, Overview, GWAS functional prior, gene page, variant page); there is no Active in and no condition picker. The
-  Table only filters after scoring. One SNP's card opens in the Table's drawer.
+  Table only filters after scoring: its Chromatin column filter keeps SNPs in a robust ATAC peak (or an active state) in
+  at least one chosen condition (tissues, maturity, sex) and changes no tier, Overview or card. One SNP's card opens in
+  the Table's drawer.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.
