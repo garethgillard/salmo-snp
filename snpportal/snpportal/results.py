@@ -137,7 +137,7 @@ COLUMNS = {
 }  # in display order: the score, the SNP, where it is, what it is, then genotyping
 NUMERIC = ("score", "p", "beta", "pip", "gerp", "maf", "cm")  # right-aligned, header and cells
 DEFAULT_COLUMNS = ("tier", "score", "id", "gene", "region", "chromatin", "known", "maf", "assay", "flags")
-FILTER_COLUMNS = {"tier": "tier", "max_tier": "tier", "term": "score", "chrom": "id", "region": "region", "gene": "gene",
+FILTER_COLUMNS = {"tier": "tier", "max_tier": "tier", "term": "score", "min_score": "score", "chrom": "id", "region": "region", "gene": "gene",
                   "tissue": "chromatin", "maturity": "chromatin", "sex": "chromatin", "act": "chromatin", "known": "known",
                   "molqtl": "molqtl", "min_maf": "maf", "max_maf": "maf", "assay": "assay", "hide_lore": "assay"}  # hide_*: flags
 GWAS_COLUMNS = ("tier", "score", "id", "p", "beta", "pip", "gene", "region", "chromatin")
@@ -320,6 +320,8 @@ def filters(request, types, weights):
         params = {k: v for k, v in (("tissue", ",".join(tissues)), ("maturity", maturity), ("sex", sex),
                                     ("act", level if level != "peak" else None)) if v}
         out.append((params, f"Chromatin: {chromatin_text(chromatin)}", " OR ".join(f"{ident('chromatin_' + c)} {test}" for c in mine) or "false"))
+    if get("min_score", "").isdecimal() and int(get("min_score")) > 0 and "tier_score" in types:
+        out.append(({"min_score": get("min_score")}, f"Score ≥ {int(get('min_score'))}", f"tier_score >= {int(get('min_score'))}"))
     terms = [t for t in picks(request, "term") if t in (weights or {}).get("weights", {})]
     if terms and "tier_terms" in types:  # several: any of them (links carry them comma-joined)
         out.append(({"term": ",".join(terms)}, "Evidence: " + ", ".join(TERMS.get(t, t) for t in terms),
@@ -592,10 +594,10 @@ def table(request, key, job=None):
            "1 = strongest functional evidence for these conditions; 4 = no evidence found", name="tier", any="Any tier", column="tier",
            options=[(str(x), f"Tier {x}", str(x) in ticked["tier"], f"{counts.get(x, 0):,}") for x in (1, 2, 3, 4)])
     if weights and "tier_terms" in types:
-        dd("list", "term", "Evidence", ", ".join(TERM_SHORT.get(x, x) for x in ticked["term"]) or "any", bool(ticked["term"]),
-           "SNPs with any of the ticked evidence terms (the score sums their weights)", name="term", any="Any evidence", column="score",
-           options=[(x, TERMS.get(x, x), x in ticked["term"], "") for x in weights.get("weights", {})
-                    if x != "active_elsewhere"])  # all conditions count: nothing is active only elsewhere
+        low = int(chosen["min_score"]) if "min_score" in chosen else 0
+        top = con.execute(f"SELECT max(tier_score) FROM {view}").fetchone()[0] or 0
+        dd("score", "score", "Score", f"≥ {low}" if low else "any", bool(low), "SNPs with at least this score", column="score",
+           low=low, top=top)
     if "region_class" in types:
         offered = consequences(CONSEQUENCE_FILTERS, types)
         dd("list", "region", "Consequence", ", ".join(CONSEQUENCE_FILTERS[x][0] for x in ticked["region"]) or "any",

@@ -14,6 +14,9 @@
       <fieldset class="sp-seg"><legend>Sex</legend>{% for v, text, sel in dd.sex %}<label><input type="radio" name="sex" value="{{ v }}"{% if sel %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</fieldset>
       <fieldset class="sp-seg"><legend>In</legend>{% for v, text, tip, sel in dd.levels %}<label title="{{ tip }}"><input type="radio" name="act" value="{{ v }}"{% if sel %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</fieldset>
       <p class="sp-dd-foot sp-dd-note">In at least one of these conditions. This filters the table only: tiers, the Overview and the cards count all 21 conditions.</p>
+    {% elif dd.kind == 'score' %}
+      <label class="sp-dd-row sp-slider">Score at least <output>{{ dd.low }}</output>
+        <input class="form-range" type="range" name="min_score" min="0" max="{{ dd.top }}" step="1" value="{{ dd.low }}" aria-label="Lowest score"></label>
     {% elif dd.kind == 'list' %}
       <fieldset class="sp-dd-list"><legend class="visually-hidden">{{ dd.label }}</legend>
         <label class="sp-any"><input class="form-check-input" type="checkbox" data-any{% if dd.anyon %} checked{% endif %}> {{ dd.any }}</label>

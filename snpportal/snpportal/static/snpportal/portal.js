@@ -241,6 +241,10 @@
     var close = document.querySelector("#drawer [data-close]");
     if (close) close.click();
   });
+  document.addEventListener("input", function (e) {  // a slider shows its value as it moves; the form applies it on release
+    var out = e.target.type === "range" && e.target.closest("label") && e.target.closest("label").querySelector("output");
+    if (out) out.textContent = e.target.value;
+  });
   /* The card's 'Open in the locus browser' opens it over the whole page, in the drawer (base_embed.html in a frame).
      'Back to the card', Esc (here or in the frame) and the browser's Back all return to the card as it was; a lollipop
      of another SNP of the list opens that SNP's card. Opening adds one Back step; the frame adds none. */

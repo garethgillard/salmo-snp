@@ -235,6 +235,9 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-results th .sp-dd-panel { font-weight: 400; white-space: normal; text-align: left; }  /* the filter bar's groups: what tiers count, where, genotyping, more */
 .sp-dd-list > label { display: flex; }
 .sp-dd-list .sp-any { border-bottom: 1px solid var(--sp-grey-200); padding-bottom: .3rem; margin-bottom: .1rem; }
+.sp-slider { display: grid; grid-template-columns: 1fr auto; gap: .2rem .5rem; }
+.sp-slider output { font-weight: 700; }
+.sp-slider input { grid-column: 1 / -1; }
 .sp-dd-extra { border-top: 1px solid var(--sp-grey-200); padding-top: .35rem; }
 .sp-dd-panel .sp-seg { display: flex; flex-wrap: wrap; gap: 0; }  /* one choice of a few: segmented buttons over radio inputs */
 .sp-seg legend { width: 100%; }
