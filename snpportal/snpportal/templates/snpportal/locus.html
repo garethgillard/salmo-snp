@@ -27,7 +27,6 @@
     <a href="{% url 'snpportal:locus' %}?{{ centre_query }}">Show the central 2 Mb</a>, or browse whole chromosomes in
     <a href="https://salmobase.org/jbrowse/" rel="noreferrer noopener" target="_blank">salmobase JBrowse</a>.</div>
   {% elif groups %}
-  {% if s.key or synthetic %}{% include 'snpportal/_caveat.html' with synthetic=synthetic %}{% endif %}
   {% for note in notes %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ note }}</div>{% endfor %}
   {% if truncated %}<div class="sp-status sp-status-warn" role="status">&#9888; Some lanes are cut short in this wide window: zoom in to see all of {{ truncated|join:", " }}.</div>{% endif %}
   <p class="sp-small sp-muted mb-1">This region in <a href="{{ jbrowse }}" rel="noreferrer noopener" target="_blank">salmobase JBrowse</a> &middot;

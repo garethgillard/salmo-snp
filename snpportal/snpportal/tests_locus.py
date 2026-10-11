@@ -182,7 +182,7 @@ class LocusTest(SimpleTestCase):
         key = jobs.create_from_rows([("25", 28996360, "vgll3_Met54Thr", "C", "T"), ("26", 19138923, "bco1l", "A", "G"),
                                      ("25", 28964518, "mq", None, None)], "Card rows")
         page = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&trait=brain&snp=0")  # the card, in the drawer (trait: ignored)
-        self.assertIn("sp-caveat", page)  # the page's one caveat line
+        self.assertNotIn("sp-caveat", page)  # no prototype line on the pages (Methods, the report and downloads keep it)
         card = page[page.index('id="drawer"'):]
         d = jobs.folder(key)
         scores = dict(jobs.connect([d]).execute(f"SELECT file_row_number, tier_score__all FROM read_parquet('{d / 'tiers.parquet'}')").fetchall())

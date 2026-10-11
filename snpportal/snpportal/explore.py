@@ -613,7 +613,7 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("Loci, strongest first", ["#loci-h ~ * thead th:nth-child(1)", "#loci-h ~ * tbody tr:nth-child(3) td:nth-child(3)"]),
                   ("Top SNP after fine-mapping", ["text=Top SNP by PIP", "#loci-h ~ * tbody tr:nth-child(3) td:nth-child(6)"])],
      "shot": {"path": "results/{gwas}/association/", "width": 1280,
-              "crop": [".sp-caveat", "#loci-h ~ * tbody tr:nth-child(3)"]}},
+              "crop": [".sp-page-header", "#loci-h ~ * tbody tr:nth-child(3)"]}},
     {"slug": "more", "title": "Browse and get help",
      "text": "Known loci lists the published SNPs, and the locus browser shows any region. For a confidential list, "
              "Help → Run locally scores it on your own computer.",

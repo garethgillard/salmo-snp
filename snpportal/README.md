@@ -148,9 +148,9 @@ page, regional plot), `figures.py` (pure functions data -> SVG), `palette.py` (e
 `_figure`, `_badges` and `_footer`; styles are in `static/snpportal/portal.css`, small enhancements in `portal.js`.
 
 **Design rules.** Colours come only from `palette.py`: HTML gets CSS custom properties, SVGs embed literal hex (so
-saved files keep their colours). No colours or inline styles in templates (a test checks). Pages that show tiers
-carry one caveat line (`_caveat.html`, starting 'SYNTHETIC data' on synthetic jobs) instead of PROVISIONAL or SYNTHETIC
-badges; figure cards show a title, an (i) and one download menu, with provenance only in the SVG's `<desc>` and the
+saved files keep their colours). No colours or inline styles in templates (a test checks). No prototype caveat
+line on the pages and no PROVISIONAL or SYNTHETIC badges (a synthetic job's title says so; Methods, the report and every
+download say the rules are provisional); figure cards show a title, an (i) and one download menu, with provenance only in the SVG's `<desc>` and the
 downloads. Every SVG has `role="img"`,
 `<title>` and `<desc>`; text colours pass WCAG AA (a test checks); focus is always visible. Checked for colour blindness
 (deuteranopia, protanopia, tritanopia; no tier or portal-palette pair collides only under CVD; 'Ensembl regulatory' in

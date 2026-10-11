@@ -117,8 +117,8 @@ class GwasTest(SimpleTestCase):
         response = self.client.get(self.page)
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        top = html[:html.index('id="fig-manhattan"')]  # answer first: one caveat line, one QC line
-        self.assertIn("Prototype: tiers rank", top[top.index("sp-caveat"):])
+        top = html[:html.index('id="fig-manhattan"')]  # answer first: one QC line above the Manhattan plot
+        self.assertNotIn("Prototype: tiers rank", html)  # no prototype line on the pages
         self.assertNotIn("SYNTHETIC data", html)  # synthetic is said once, in the results title
         report = jobs.read_json(jobs.folder(self.key) / "gwas.json")
         self.assertLess(abs(report["lambda_gc"] - self.lambda_gc), 0.01)
@@ -204,7 +204,6 @@ class GwasTest(SimpleTestCase):
         self.assertNotIn('fill-opacity="0.85"', svg)  # no ATAC rows: they stay in the locus browser
         self.assertNotIn(">Public variants</text>", svg)
         self.assertIn("No LD used: colours are tiers, not r²", svg)
-        self.assertIn("Prototype: tiers rank", html[:html.index('id="fig-region"')])  # the caveat line
         credible = html[html.index('id="credible"'):]
         self.assertIn(causal, credible)  # the credible-set SNPs under both priors, linked to their cards
         card = re.search(rf'href="(/snp/results/{self.key}/snp/\d+/\?trait=[^"]*)">{re.escape(causal)}<', credible).group(1)

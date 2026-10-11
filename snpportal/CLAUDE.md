@@ -23,7 +23,8 @@ No Docker, Apache, server, deployment or hosting work until the prototype works 
 ## Design system
 - Every colour lives in `palette.py`; templates and `portal.css` use classes and `var(--sp-*)` only (tested). SVGs embed literal hex.
 - New pages extend `base_portal.html`; figures use the `_figure.html` card (title, (i) definition, one SVG/PNG/TSV download menu; provenance only in the SVG `<desc>` and downloads).
-- Pages that show tiers include `_caveat.html` once (SYNTHETIC prefix on synthetic jobs): no PROVISIONAL or SYNTHETIC badges elsewhere.
+- No prototype caveat line on the pages (removed 2026-10-11: a dev version); Methods, the report and every download still
+  say the rules are provisional. No PROVISIONAL or SYNTHETIC badges: a synthetic job's title says so.
 - Panels, filters, card sections and export columns render only when their column exists in the result.
 - `hx-boost` only on links and forms that stay on the same page (a boosted file or other-page link swaps in nothing; tested).
 - Results tabs: Overview | Table | Export; GWAS jobs: Association | Overview | Table | Export. Tiers always count all 21
@@ -34,7 +35,7 @@ No Docker, Apache, server, deployment or hosting work until the prototype works 
 
 ## Provisional (G to confirm)
 Thresholds and defaults live in the release's weights.yaml (`assay`, `design`, `finemap` blocks, copied into each job),
-in tracks.yaml `defaults`, or in a named constant; the UI's caveat line and every download say they are provisional. Portal-side ones:
+in tracks.yaml `defaults`, or in a named constant; Methods, the report and every download say they are provisional. Portal-side ones:
 `SNPPORTAL_MAX_VENDOR_SNPS` (50,000 per vendor file), `SNPPORTAL_MAX_CHIP_SNPS` (1,000,000 chip markers), the panel gap highlight (3x the mean spacing, rounded), the
 candidate flank (50 kb around a gene), the Manhattan thinning (p > 0.01 thinned to the top SNP per 50 kb),
 the regional plot window (lead +- credible set + 20 kb, 50-250 kb), the GWAS loci cap (`association.MAX_LOCI`: the 200

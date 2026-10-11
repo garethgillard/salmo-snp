@@ -25,7 +25,6 @@
     <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ query }}&amp;tab=table">Table</a></li>
     <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ query }}&amp;tab=export">Export</a></li>
   </ul>
-  {% include 'snpportal/_caveat.html' with synthetic=synthetic %}
 
   <details class="sp-more mb-2"{% if qc_line.1 %} open{% endif %}><summary>{{ qc_line.0 }}. QC details</summary>
     <dl class="sp-dl sp-small mb-2">{% for name, value in qc %}<dt>{{ name }}</dt><dd>{{ value|thousands }}</dd>{% endfor %}</dl>

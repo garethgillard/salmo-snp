@@ -3,8 +3,6 @@
 
 {% block portal_head %}{% if job.state == 'queued' or job.state == 'running' %}<noscript><meta http-equiv="refresh" content="3"></noscript>{% endif %}{% endblock portal_head %}
 
-{% block page_header %}{% if job.state == 'done' %}{% include 'snpportal/_caveat.html' %}{% endif %}{{ block.super }}{% endblock page_header %}
-
 {% block main %}
 {% if job.state == 'queued' or job.state == 'running' %}
   {% include 'snpportal/_progress.html' %}

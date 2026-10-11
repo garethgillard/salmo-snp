@@ -141,8 +141,8 @@ class ResultsTest(SimpleTestCase):
         rows = re.findall(r'font-size="12.5" font-weight="600">([^<]*)</text>', summary)
         self.assertEqual(rows, ["Tier for all conditions", "Gene region", "Near a known locus"] + ["Assay check"] * ("assay_status" in self.columns))
         self.assertIn('href="?tab=table&amp;trait=all&amp;tier=1-2"', summary)  # every part lists its SNPs, Active in reset
-        self.assertNotIn("PROVISIONAL", re.sub(r"<svg .*?</svg>", "", page, flags=re.S))  # no badges: one caveat line
-        self.assertEqual(page.count('class="sp-caveat'), 1)  # one caveat line
+        self.assertNotIn("PROVISIONAL", re.sub(r"<svg .*?</svg>", "", page, flags=re.S))  # no badges
+        self.assertNotIn('class="sp-caveat', page)  # no prototype line on the pages
         self.assertEqual('id="qc" open' in page, results.qc_problem(jobs.read_json(self.d / "validation.json")))  # one QC line
         found = svgs(page)
         self.assertGreaterEqual(len(found), len(expected))

@@ -3,7 +3,6 @@
 {% comment %}Regional association plot (P7.3): the GWAS lane above genes, published loci, the trait's chromatin rows and
    GERP, one SVG on one x axis; then the locus's 95% credible-set SNPs under both priors.{% endcomment %}
 {% block main %}
-{% include 'snpportal/_caveat.html' with synthetic=synthetic %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2 sp-small" role="toolbar" aria-label="Loci and window">
   {% for x in loci %}<a class="btn btn-sm {% if current and x.locus == current.locus %}btn-primary{% else %}btn-outline-secondary{% endif %}"
      href="{{ x.region }}"{% if current and x.locus == current.locus %} aria-current="page"{% endif %}>Locus {{ x.locus }} · chr{{ x.chrom }}</a>{% endfor %}
