@@ -1,9 +1,8 @@
-{% comment %}One filter dropdown (results.table's dds): in the bar above the table a labelled button showing the choice,
-   in its column's header (col) a funnel button; the panel's controls belong to the filter form #tf, which applies
-   them on change. portal.js places a column's panel on the page, as the table's scroll box would clip it.{% endcomment %}
-<details class="sp-dd{% if col %} sp-dd-col{% elif dd.id in groups %} sp-dd-gap{% endif %}" id="{{ dd.id }}">
-  {% if col %}<summary class="sp-colf{% if dd.on %} on{% endif %}" title="Filter {{ dd.label }}{% if dd.on %}: {{ dd.summary }}{% endif %}" aria-label="Filter {{ dd.label }}"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 2.5h13l-5 6v4.5l-3 1.5v-6z" fill="{% if dd.on %}currentColor{% else %}none{% endif %}" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></summary>
-  {% else %}<summary class="btn btn-sm {% if dd.on %}btn-outline-primary sp-on{% else %}btn-outline-secondary{% endif %}"{% if dd.tip %} title="{{ dd.tip }}"{% endif %}>{{ dd.label }}{% if dd.on and dd.summary %}: <b>{{ dd.summary }}</b>{% endif %}</summary>{% endif %}
+{% comment %}One filter dropdown (results.table's dds), in its column's header: a funnel button, and a panel whose controls
+   belong to the filter form #tf, which applies them on change. portal.js places the panel on the page, as the table's
+   scroll box would clip it.{% endcomment %}
+<details class="sp-dd sp-dd-col" id="{{ dd.id }}">
+  <summary class="sp-colf{% if dd.on %} on{% endif %}" title="Filter {{ dd.label }}{% if dd.on %}: {{ dd.summary }}{% endif %}" aria-label="Filter {{ dd.label }}"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 2.5h13l-5 6v4.5l-3 1.5v-6z" fill="{% if dd.on %}currentColor{% else %}none{% endif %}" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></summary>
   <div class="sp-dd-panel{% if right %} sp-dd-right{% endif %}">
     {% if dd.kind == 'active' %}
       <div class="sp-dd-head"><span>SNPs with chromatin activity in</span>{% if dd.reset %}<a href="{{ dd.reset }}" hx-boost="true">Reset</a>{% endif %}</div>

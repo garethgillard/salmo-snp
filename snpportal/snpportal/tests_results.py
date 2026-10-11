@@ -215,7 +215,9 @@ class ResultsTest(SimpleTestCase):
         head = page[page.index("<thead"):page.index("</thead>")]  # each filter on its column; the others above the table
         self.assertTrue(all(f'id="dd-{d}"' in head for d in ("tier", "region", "gene", "active", "assay")))  # active: Chromatin
         few = self.client.get(self.url + "?tab=table&cols=1&col=tier").content.decode()
-        self.assertIn('id="dd-region"', few[few.index('class="sp-filters"'):few.index("<thead")])  # Region hidden: its filter above
+        self.assertNotIn('id="dd-region"', few)  # Region hidden: no filter for it (Columns shows it)
+        filtered = self.client.get(self.url + "?tab=table&cols=1&col=tier&region=intron").content.decode()
+        self.assertIn('id="dd-region"', filtered[filtered.index("<thead"):filtered.index("</thead>")])  # filtered: it shows
         self.assertNotIn('id="drawer"', page)  # the evidence drawer opens only on a click
         row = re.search(r'href="\?[^"]*snp=(\d+)"', page).group(1)
         drawer = self.client.get(self.url + f"?tab=table&snp={row}").content.decode()

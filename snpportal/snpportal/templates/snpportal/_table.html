@@ -1,17 +1,14 @@
 {% load snpportal_tags %}
 {% comment %}Table tab. Each filter sits on its column: a funnel button in the header (_dd.html), its choice under the
-   column's name; filters whose column is hidden form the bar above the table. The form #tf holds them all and applies
+   column's name; a hidden column has no filter (show it with Columns), and a filtered column always shows. The form #tf holds them all and applies
    them on change; the tier counts of the rows shown; sort links and pages stay on this page (htmx swaps #results). A click on a row opens its card in the drawer (?snp=); every control is a
    plain link or GET form, so it all works without JavaScript.{% endcomment %}
 <form method="get" class="sp-small" id="tf" hx-get="{% url 'snpportal:results' key %}" hx-trigger="change, submit" hx-push-url="true"
       hx-indicator="#tf-busy" aria-label="Filter the SNPs">
   <input type="hidden" name="tab" value="table">
   {% for name, value in hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
-  <div class="sp-filters">
-    {% for dd in dds %}{% if not dd.header %}{% include 'snpportal/_dd.html' with right=forloop.last %}{% endif %}{% endfor %}
-    {% if clear %}<a class="btn btn-sm btn-link sp-clear" href="{{ clear }}" hx-boost="true">Clear filters</a>{% endif %}
-    <noscript><button class="btn btn-sm btn-primary" type="submit">Apply</button></noscript>
-  </div>
+  {% if clear %}<div class="sp-filters"><a class="btn btn-sm btn-link sp-clear" href="{{ clear }}" hx-boost="true">Clear filters</a></div>{% endif %}
+  <noscript><button class="btn btn-sm btn-primary" type="submit">Apply</button></noscript>
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2 sp-small">
   <span role="status">{% if n_out %}{{ n_out|thousands }} unselected (&minus;) &middot; {% endif %}{% if matching == total %}Showing {{ first|thousands }}&ndash;{{ last|thousands }} of {{ total|thousands }} SNPs{% else %}{% if matching %}{{ first|thousands }}&ndash;{{ last|thousands }} of {{ matching|thousands }} shown{% else %}None shown{% endif %} (filtered from {{ total|thousands }} SNPs){% endif %}</span>

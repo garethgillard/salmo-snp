@@ -72,7 +72,6 @@ TERMS = {"active": "active in a condition", "active_elsewhere": "active elsewher
          "weak": "weak state in the chosen conditions", "coding": "CDS (protein change or unknown)", "synonymous": "CDS (synonymous)",
          "splice": "splice region", "utr": "UTR",
          "constrained": "GERP constrained", "regbuild": "Ensembl regulatory", "molqtl": "molQTL lead (display only)"}
-GROUP_STARTS = ("dd-maf", "dd-more")  # gaps in the bar above the table (filters of hidden columns)
 ACTIVITY = {  # the Chromatin filter: what a SNP must be in, in at least one of the ticked conditions (a filter only)
     "peak": ("Robust ATAC peak", "inside an AQUA-FAANG robust ATAC peak, in any chromatin state"),
     "active": ("Active state", "inside a peak in an active state (Active TSS or Active enhancer)")}
@@ -137,7 +136,10 @@ COLUMNS = {
     "ref_check": ("Ref. check", "Input ref allele against the Ssal_v3.1 genome", ("ref_check",), [("ref_check", True)]),
 }  # in display order: the score, the SNP, where it is, what it is, then genotyping
 NUMERIC = ("score", "p", "beta", "pip", "gerp", "maf", "cm")  # right-aligned, header and cells
-DEFAULT_COLUMNS = ("tier", "score", "id", "gene", "region", "chromatin", "known", "maf", "assay")
+DEFAULT_COLUMNS = ("tier", "score", "id", "gene", "region", "chromatin", "known", "maf", "assay", "flags")
+FILTER_COLUMNS = {"tier": "tier", "max_tier": "tier", "term": "score", "chrom": "id", "region": "region", "gene": "gene",
+                  "tissue": "chromatin", "maturity": "chromatin", "sex": "chromatin", "act": "chromatin", "known": "known",
+                  "molqtl": "molqtl", "min_maf": "maf", "max_maf": "maf", "assay": "assay", "hide_lore": "assay"}  # hide_*: flags
 GWAS_COLUMNS = ("tier", "score", "id", "p", "beta", "pip", "gene", "region", "chromatin")
 EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tier_evidence", "tier_terms", "coding_hgvsp", "known_locus",
                                                                 "known_locus_dist"), "known": ("known_locus_dist",),
@@ -501,6 +503,8 @@ def table(request, key, job=None):
     picked = [k for k in available if k == "id" or k in request.GET.getlist("col")] if get("cols") else default  # the SNP always
     custom_cols = set(picked) != set(default)  # the chooser sends every ticked column: short URLs for the default
     shown = list(picked if custom_cols else default)
+    on = {FILTER_COLUMNS.get(k, "flags" if k.startswith("hide_") else None) for k in chosen}
+    picked, shown = shown, [k for k in available if k in shown or k in on]  # filters sit on their columns: a filtered one shows
     sort = get("sort", "")
     explicit = sort in available and bool(COLUMNS[sort][3])
     sort = sort if explicit else ("p" if gwas and "p" in available else "tier" if "tier" in available else "")
@@ -538,7 +542,7 @@ def table(request, key, job=None):
 
     base = {"tab": "table", **chosen, **settings, "sort": sort if explicit else "", "desc": "1" if desc else "",
             "size": str(size) if size != PAGE_SIZE else "", "cols": "1" if custom_cols else "",
-            "col": [k for k in shown if k != "id"] if custom_cols else [], "picked": "" if view_picks == "in" else view_picks}
+            "col": [k for k in picked if k != "id"] if custom_cols else [], "picked": "" if view_picks == "in" else view_picks}
 
     def link(drop=(), **changes):
         params = {k: v for k, v in base.items() if k not in drop}
@@ -632,7 +636,7 @@ def table(request, key, job=None):
             "views": [("", f"+ selected ({n_every - n_out:,})", view_picks == "in"), ("out", f"− unselected ({n_out:,})", view_picks == "out"),
                       ("all", f"all rows ({n_every:,})", view_picks == "all")] if n_out else [],
             "reset": link(include_all=1, picked=None, page=None) if n_out else None}
-    for x in dds:  # a filter sits on its column when the table shows it, else in the bar above
+    for x in dds:  # a filter sits on its column; a hidden column's filter is off (a filtered column always shows)
         x["header"] = x.get("column") in shown
     on_column = {x["column"]: x for x in dds if x["header"]}
 
@@ -657,7 +661,7 @@ def table(request, key, job=None):
                         }.get(get("panel_error", "")),
         "dds": dds, "pick": pick, "n_selected": n_every - n_out, "n_out": n_out,
         "shown_tiers": [(x, k) for x, k in shown_tiers if x is not None and k],
-        "groups": GROUP_STARTS,
+
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
         "start": chosen.get("start", ""), "end": chosen.get("end", ""),
         "hidden": [(k, base[k]) for k in ("sort", "desc", "size") if base[k]]  # and filters with no control on the form

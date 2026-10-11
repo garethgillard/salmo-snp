@@ -214,9 +214,6 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-figure svg a:focus { outline: none; }
 .sp-figure svg a:focus-visible rect, .sp-figure svg a:focus-visible text { stroke: var(--sp-focus); stroke-width: 3; }
 .sp-filters { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-bottom: .6rem; }
-.sp-filters label { display: inline-flex; align-items: center; gap: .3rem; margin: 0; }
-.sp-filters .form-select, .sp-filters .form-control { width: auto; }
-.sp-filters .sp-pos { width: 7rem; }
 /* filter dropdowns (Active in, Evidence, Columns): a summary showing the choice, a panel of ticks applied on change */
 .sp-dd { position: relative; }
 .sp-dd > summary { list-style: none; white-space: nowrap; max-width: 22rem; overflow: hidden; text-overflow: ellipsis; }
@@ -226,7 +223,6 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-dd > summary b { font-weight: 600; }
 .sp-dd[open] > summary.btn-outline-secondary { background: var(--sp-grey-100); color: var(--sp-grey-900); }
 .sp-dd[open] > summary.btn-outline-primary { background: var(--sp-grey-50); color: var(--sp-accent); }
-.sp-dd-gap { margin-left: .9rem; }
 /* a column's filter: a funnel beside the header's name (the choice under it); its panel is placed on the page (portal.js) */
 .sp-th { display: inline-flex; align-items: center; gap: .2rem; white-space: nowrap; }
 .sp-dd-col { display: inline-block; }
@@ -249,8 +245,6 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-seg label:last-of-type span { border-radius: 0 .25rem .25rem 0; }
 .sp-seg input:checked + span { background: var(--sp-accent); border-color: var(--sp-accent); color: var(--sp-accent-text); }
 .sp-seg input:focus-visible + span { outline: 3px solid var(--sp-focus); outline-offset: 1px; }
-.sp-filters .sp-gene { width: 8.5rem; }
-.sp-filters .sp-gene.sp-on { border-color: var(--sp-accent); box-shadow: inset 0 0 0 1px var(--sp-accent); }
 .sp-dd-row { display: flex; align-items: center; gap: .5rem; }
 .sp-dd-foot { border-top: 1px solid var(--sp-grey-200); padding-top: .35rem; }
 .sp-dd-head { display: flex; justify-content: space-between; gap: 1rem; font-weight: 600; border-bottom: 1px solid var(--sp-grey-200); padding-bottom: .3rem; }
