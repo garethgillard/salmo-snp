@@ -502,7 +502,7 @@ def _fit(text, px, size):
     return text if len(text) <= n else text[: max(1, n - 1)] + "…"
 
 
-def score_blocks(parts, cutoffs, score, synthetic=False, unit=76, width=640):
+def score_blocks(parts, cutoffs, score, synthetic=False, unit=66, width=590):
     """The card's score: one block per evidence term, as wide as its points (largest first, notched at each point like
     a ruler), its label as short as a chip (with +points when it fits; the full text on hover), dashed lines at the tier cut-offs (tier 3, 2 and 1 at
     cutoffs[2], [1] and [0] points) to show which the blocks reach, and '= score' just after the bar. A label too long for its block drops ' in', then all but its first word. parts: [(label, weight,

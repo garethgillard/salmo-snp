@@ -11,7 +11,7 @@
    The drawer and variant.html give the heading.{% endcomment %}
 {% if hx and crumbs %}{% include 'snpportal/_crumbs.html' with oob=1 %}{% endif %}
 <div id="card-body" class="sp-card sp-small">
-  {% if ev.blocks %}<h3 class="sp-cs-h sp-score-h">Score</h3><div class="sp-figure mb-1">{{ ev.blocks }}</div>{% endif %}
+  {% if ev.blocks %}<div class="sp-score mb-1"><h3 class="sp-cs-h sp-score-h">Score</h3><div class="sp-figure">{{ ev.blocks }}</div></div>{% endif %}
   <p class="sp-facts">{% if not heading %}<button type="button" class="sp-copy-icon" data-copy="{{ ev.spec }}" title="Copy {{ ev.spec }}" aria-label="Copy {{ ev.spec }}"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>{% if ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %}{% endif %}{% endif %}
     {% for text, cls, tip, key, url in ev.facts %}{% if not heading or key != 'gene' %}{% if url %}<a class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}" href="{{ url }}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</a>{% else %}<span class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</span>{% endif %}{% endif %}{% endfor %}
     {% if panel.sources %}<span class="sp-fact sp-fact-ok" title="Your Design panel holds this SNP ({{ panel.sources|join:', ' }})">in your panel</span>{% endif %}</p>

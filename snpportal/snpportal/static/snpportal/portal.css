@@ -340,7 +340,8 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-flank-box { min-width: 0; padding: .25rem .5rem; border: 1px solid var(--sp-grey-300); background: var(--sp-grey-50); }  /* square */
 .sp .sp-copy-icon { padding: 0 .15rem; border: 0; background: none; color: var(--sp-grey-700); line-height: 1; }
 .sp .sp-copy-icon:hover { color: var(--sp-grey-900); }
-.sp .sp-score-h { margin: 0 0 .1rem; color: var(--sp-grey-700); }  /* SCORE, as the section titles, without their band */
+.sp-score { display: flex; align-items: center; gap: .75rem; }  /* SCORE, as the section titles without their band, left of the bar */
+.sp .sp-score-h { margin: .6rem 0 0; color: var(--sp-grey-700); }  /* level with the blocks, under the tier labels */
 .sp-cs mark.sp-flank-run { background: none; color: inherit; text-decoration: underline 2px var(--sp-warn-border); text-underline-offset: 3px; }
 .sp-as-plain { color: var(--sp-grey-900); background: var(--sp-white); border-color: var(--sp-grey-300); }
 .sp-flank mark, .sp-cs mark { padding: 0 .1rem; border-radius: .15rem; }
