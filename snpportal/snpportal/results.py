@@ -68,7 +68,7 @@ REASON_SQL = ("list_transform(string_split(coalesce(assay_reasons, ''), '; '), "
 MAFS = ("0.01", "0.05", "0.1", "0.2")
 MAF_TIP = "Minor allele frequency in 504 public fish, pooled; your strain can differ"
 UNNAMED = "Unnamed in Ensembl; named by its human ortholog"
-TERMS = {"active": "active in the chosen conditions", "active_elsewhere": "active elsewhere only",
+TERMS = {"active": "active in a condition", "active_elsewhere": "active elsewhere only",
          "weak": "weak state in the chosen conditions", "coding": "CDS (protein change or unknown)", "synonymous": "CDS (synonymous)",
          "splice": "splice region", "utr": "UTR",
          "constrained": "GERP constrained", "regbuild": "Ensembl regulatory", "molqtl": "molQTL lead (display only)"}
@@ -287,10 +287,6 @@ def filters(request, types, weights):
         out.append(({"known": "1"}, "Known loci only", "known_locus IS NOT NULL"))
     if get("molqtl") == "1" and "molqtl" in types:
         out.append(({"molqtl": "1"}, "molQTL lead SNPs", "coalesce(molqtl, false)"))
-    active = get("active", "")
-    if weights and active and f"chromatin_{active}" in types and f"chromatin_{active}" not in snpscore.score.NOT_CONDITIONS:
-        states = ", ".join(lit(s) for s in weights.get("active_states", [])) or "NULL"
-        out.append(({"active": active}, f"Active in {condition_label(active)}", f"{ident('chromatin_' + active)} IN ({states})"))
     terms = [t for t in picks(request, "term") if t in (weights or {}).get("weights", {})]
     if terms and "tier_terms" in types:  # several: any of them (links carry them comma-joined)
         out.append(({"term": ",".join(terms)}, "Evidence: " + ", ".join(TERMS.get(t, t) for t in terms),
@@ -321,11 +317,6 @@ def condition_groups(conditions):
             else ("Embryo", STAGE_LABELS.get(c, c[:8]))
         groups.setdefault(group, []).append((label, c))
     return list(groups.items())
-
-
-def condition_label(c):
-    tissue, _, rest = c.partition("_")
-    return f"{tissue} {rest.replace('_', ' ').lower()}" if rest else c
 
 
 def trait_tip(weights, trait):
@@ -558,7 +549,8 @@ def table(request, key, job=None):
     if weights and "tier_terms" in types:
         dd("list", "term", "Evidence", ", ".join(TERM_SHORT.get(x, x) for x in ticked["term"]) or "any", bool(ticked["term"]),
            "SNPs with any of the ticked evidence terms (the score sums their weights)", name="term", any="Any evidence", column="score",
-           options=[(x, TERMS.get(x, x), x in ticked["term"], "") for x in weights.get("weights", {})])
+           options=[(x, TERMS.get(x, x), x in ticked["term"], "") for x in weights.get("weights", {})
+                    if x != "active_elsewhere"])  # all conditions count: nothing is active only elsewhere
     if "region_class" in types:
         offered = consequences(CONSEQUENCE_FILTERS, types)
         dd("list", "region", "Consequence", ", ".join(CONSEQUENCE_FILTERS[x][0] for x in ticked["region"]) or "any",
@@ -628,7 +620,7 @@ def table(request, key, job=None):
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
         "start": chosen.get("start", ""), "end": chosen.get("end", ""),
         "hidden": [(k, base[k]) for k in ("sort", "desc", "size") if base[k]]  # and filters with no control on the form
-        + [(k, chosen[k]) for k in ("hide_reason", "max_maf", "active") if k in chosen] + list(settings.items()),
+        + [(k, chosen[k]) for k in ("hide_reason", "max_maf") if k in chosen] + list(settings.items()),
         "columns": [(k, COLUMNS[k][0], k in shown) for k in available if k != "id"], "chips": chips,
         "clear": link(drop=filter_keys, page=None) if conds else None, "suggest": suggest,
         "headers": headers, "shown": shown, "rows": rows, "page": page, "pages": pages,
@@ -969,20 +961,17 @@ def _fig_conditions(c, link, desc):
     if not counts:
         return None
     bg = _shares(c["background"].get("active_by_condition"))
-    chosen = set(snpscore.score.preset_conditions(c["weights"], ["chromatin_" + x for x in counts], c["trait"])[0]) if c["weights"] else set()
     rows, tsv = [], []
     for group, cells in condition_groups(conditions_of("chromatin_" + x for x in counts)):
         out = []
         for label, cond in cells:
             share = counts[cond] / n
             fold = share / bg[cond] if bg.get(cond) else None
-            out.append((label, cond, share, fold, cond in chosen))
-            tsv.append((cond, counts[cond], f"{share:.5f}", f"{bg[cond]:.5f}" if cond in bg else "", f"{fold:.3f}" if fold else "",
-                        "yes" if cond in chosen else "no"))
+            out.append((label, cond, share, fold, False))  # all conditions count: none stands out
+            tsv.append((cond, counts[cond], f"{share:.5f}", f"{bg[cond]:.5f}" if cond in bg else "", f"{fold:.3f}" if fold else ""))
         rows.append((group, palette.TISSUES.get(group, palette.GREY[500]), out))
-    svg = figures.heatmap(rows, f"Active chromatin per condition, {c['preset']}", desc, c["synthetic"],
-                          (lambda cond: link(active=cond)) if link else None)
-    return svg, ["condition", "snps_active", "share", "background_share", "fold", "in_preset"], tsv
+    svg = figures.heatmap(rows, "Active chromatin per condition", desc, c["synthetic"])  # no links: the Table filters after scoring
+    return svg, ["condition", "snps_active", "share", "background_share", "fold"], tsv
 
 
 def _fig_regions(c, link, desc):

@@ -27,7 +27,7 @@ from . import explore, figures, jobs, palette, search
 EMISSIONS = "https://salmobase.org/datafiles/datasets/Aqua-Faang/figures/chromHMM.png"
 STATE_MODELS = {"Bivalent": "DevMap only", "Poised_enhancer_2": "BodyMap only"}  # BodyMap and DevMap: separate 12-state models
 TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.scored)
-    "active": "An active state in at least one of the chosen conditions.",
+    "active": "An active state (Active TSS or Active enhancer) in at least one of the 21 conditions.",
     "active_elsewhere": "An active state only in conditions outside the chosen ones.",
     "weak": "A weak state in a chosen condition, and no active state there.",
     "coding": "A CDS change to the protein (missense, stop gained or lost, start lost) or of unknown effect.",

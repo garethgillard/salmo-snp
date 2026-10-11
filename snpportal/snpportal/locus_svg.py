@@ -16,7 +16,7 @@ COLUMNS = (("Immature", "Female", "Imm F"), ("Immature", "Male", "Imm M"), ("Mat
 STAGES = figures.STAGE_LABELS
 REGBUILD = {"promoter": "Active_TSS", "enhancer": "Active_enhancer", "open_chromatin_region": "Accessible_chromatin"}  # -> state colour
 TERMS = {  # tier_terms term -> (state name or colour, label) for the 'why this tier' bar
-    "active": ("Active_enhancer", "active in the chosen conditions"),
+    "active": ("Active_enhancer", "active in a condition"),
     "active_elsewhere": ("Flanking_upstream", "active elsewhere"),
     "weak": ("Primed_enhancer", "weak state"),
     "coding": (palette.TIERS[1][0], "CDS"),

@@ -183,7 +183,7 @@ class ResultsTest(SimpleTestCase):
         total = self.summary["n_rows"]
         cond = next(c for c, k in self.summary["conditions"].items() if 0 < k < total)
         queries = ["?tier=1", "?max_tier=2", "?region=coding", "?chrom=25", "?chrom=25&start=28990000&end=29000000",
-                   "?gene=ppm1", "?min_maf=0.2", "?max_maf=0.1", "?known=1", f"?active={cond}", "?term=constrained",
+                   "?gene=ppm1", "?min_maf=0.2", "?max_maf=0.1", "?known=1", "?term=constrained",
                    "?hide_blacklist=1", "?hide_lore=1", "?hide_ambiguous=1", "?hide_flank=1"]
         if "assay_status" in self.columns:
             queries += ["?assay=pass", "?assay=ok"]
@@ -193,7 +193,7 @@ class ResultsTest(SimpleTestCase):
             self.assertLess(self.count(query), total, query)
             self.assertGreater(self.count(query), 0, query)
         for query in ("?bogus=1", "?tier=9", "?region=nowhere", "?chrom=1%27%20OR%201=1", "?min_maf=abc", "?min_maf=nan",
-                      "?active=summary", "?active=id", "?term=nope", "?hide_lore=", "?known=2"):
+                      f"?active={cond}", "?active=summary", "?term=nope", "?hide_lore=", "?known=2"):  # no single-condition filter
             self.assertEqual(self.count(query), total, query)
         self.assertEqual(self.count("?gene=it's"), 0)  # quoted, not SQL
 
