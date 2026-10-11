@@ -559,7 +559,7 @@ def association(request, key):
         return render(request, "snpportal/expired.html", {"nav": "score", "title": "Results expired or deleted"}, status=404)
     ctx = {"nav": "score", "job": job, "key": key, "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers")),
            "title": " · ".join(x for x in [job.get("label") or "Results", f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None] if x),
-           "crumbs": [("Score SNPs", reverse("snpportal:upload")), ("Results", None)], "meta": f"Deleted after {jobs.utc(jobs.expires(key))}"}
+           "meta": f"Deleted after {jobs.utc(jobs.expires(key))}"}
     if job["state"] == "done":
         gwas_job(key)
         a = analyse(request, key)

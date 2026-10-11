@@ -251,7 +251,6 @@ def results(request, key):
     context = {"nav": "score", "job": job, "key": key, "tab": tab, "gwas": gwas,
                "title": " · ".join(x for x in [label + (" (synthetic data)" if synthetic and "synthetic" not in label.lower() else ""),
                                                f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None] if x),
-               "crumbs": [("Score SNPs", reverse("snpportal:upload")), ("Results", None)],
                "meta": f"Deleted after {jobs.utc(jobs.expires(key))}",
                "synthetic": synthetic}
     if job["state"] == "done":
