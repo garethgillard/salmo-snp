@@ -2,17 +2,15 @@
 {% comment %}Evidence card for one SNP, laid out to decide whether to keep it (context: ev from locus.evidence, presets,
    switch_url (none: no conditions form; a job's card follows the Table's Active in), hx, locus_url, keep: other
    parameters the conditions form keeps; a job's card also panel (panel.holds)): the key facts and caveats; the score
-   breakdown; the functional evidence at the locus (a mini locus browser with the SNP's peak per condition hanging
-   under it, the states legend and a button to the locus browser; Ensembl regulatory, molQTL); as a marker (assay and flank, duplicates, the Design panel); context
+   breakdown; the functional evidence at the locus (its header links to the locus browser; a mini locus browser with
+   the SNP's peak per condition hanging under it; Ensembl regulatory, molQTL); as a marker (assay and flank, duplicates, the Design panel); context
    (published association; expression, the user's own columns and details closed). Each section folds under a grey
    header like the locus browser's groups (portal.js keeps a fold from card to card). Parts render only when their columns exist. The drawer and variant.html give the
    heading.{% endcomment %}
 {% if hx and crumbs %}{% include 'snpportal/_crumbs.html' with oob=1 %}{% endif %}
 <div id="card-body" class="sp-card sp-small">
-  <div class="d-flex flex-wrap align-items-start gap-2 mb-2">
-    <p class="mb-0"><span class="sp-mono">{{ ev.position }}{% if ev.alleles %} {{ ev.alleles }}{% endif %}</span>
-      <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-copy="{{ ev.spec }}" title="Copy {{ ev.spec }}">Copy</button></p>
-    {% if switch_url %}<form class="d-flex align-items-center gap-1 ms-auto sp-noprint" method="get" action="{{ switch_url }}"
+  {% if switch_url %}<div class="d-flex flex-wrap align-items-start gap-2 mb-2">
+    <form class="d-flex align-items-center gap-1 ms-auto sp-noprint" method="get" action="{{ switch_url }}"
           hx-get="{{ switch_url }}" hx-trigger="change" hx-target="#card-body" hx-select="#card-body" hx-swap="outerHTML" hx-push-url="true">
       {% for name, value in keep %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
       <label class="sp-muted" for="card-trait">Conditions</label>
@@ -20,10 +18,11 @@
         {% for value, label in presets %}<option value="{{ value }}"{% if value == trait %} selected{% endif %}>{{ label }}</option>{% endfor %}
       </select>
       <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Apply</button></noscript>
-    </form>{% endif %}
-  </div>
+    </form>
+  </div>{% endif %}
 
-  <p class="sp-facts">{% if ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %}{% if ev.score is not None %}<span class="sp-fact" title="Tier score: the summed weights of the evidence below">score {{ ev.score }}</span>{% endif %}{% endif %}
+  <p class="sp-facts"><span class="sp-fact"><span class="sp-mono">{{ ev.position }}{% if ev.alleles %} {{ ev.alleles }}{% endif %}</span>
+    <button type="button" class="btn btn-link btn-sm p-0 align-baseline sp-copy" data-copy="{{ ev.spec }}" title="Copy {{ ev.spec }}">Copy</button></span>{% if ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %}{% if ev.score is not None %}<span class="sp-fact" title="Tier score: the summed weights of the evidence below">score {{ ev.score }}</span>{% endif %}{% endif %}
     {% for text, cls, tip in ev.facts %}<span class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</span>{% endfor %}
     {% if panel.sources %}<span class="sp-fact sp-fact-ok" title="Your Design panel holds this SNP ({{ panel.sources|join:', ' }})">in your panel</span>{% endif %}</p>
   {% if ev.caveats %}<ul class="sp-status sp-status-warn sp-caveats" aria-label="Caveats">{% for text in ev.caveats %}<li>{{ text }}</li>{% endfor %}</ul>{% endif %}
@@ -36,10 +35,9 @@
       &middot; {{ ev.gwas.cs }} (one causal variant, no LD){% endif %}{% endif %}</p>{% endif %}
   </details>
 
-  {% if ev.mini or ev.no_peak or ev.function or ev.molqtl or locus_url %}<details class="sp-cs" id="cs-locus" open><summary><h3 class="sp-cs-h">Functional evidence at the locus</h3>{% if ev.mini %}<span class="sp-grp-note">&plusmn;{{ ev.mini_flank }} around the SNP</span>{% endif %}</summary>
-    {% if ev.mini %}<div class="sp-figure">{{ ev.mini }}</div>{% endif %}
-    {% if ev.legend or locus_url %}<div class="d-flex flex-wrap align-items-start gap-2 mb-2">{% if ev.legend %}<div class="sp-blegend me-auto">{% for cls, label in ev.legend %}<span><i class="{{ cls }}"></i>{{ label }}</span>{% endfor %}</div>{% endif %}
-      {% if locus_url %}<a class="btn btn-sm btn-outline-primary ms-auto" href="{{ locus_url }}">Open in the locus browser &rarr;</a>{% endif %}</div>{% endif %}
+  {% if ev.mini or ev.no_peak or ev.function or ev.molqtl or locus_url %}<details class="sp-cs" id="cs-locus" open><summary><h3 class="sp-cs-h">Functional evidence at the locus</h3>
+      {% if locus_url %}<a class="sp-cs-act" href="{{ locus_url }}">Open in the locus browser &rarr;</a>{% endif %}</summary>
+    {% if ev.mini %}<div class="sp-figure mb-2">{{ ev.mini }}</div>{% endif %}
     {% if ev.no_peak %}<p class="mb-2">{{ ev.no_peak }}</p>{% endif %}
     {% if ev.function %}<dl class="sp-dl mb-2">{% for label, value in ev.function %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
 

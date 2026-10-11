@@ -320,7 +320,11 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-cs:not([open]) > summary::after { content: "\25B8"; }
 .sp-cs > summary:hover { background: var(--sp-grey-100); }
 .sp .sp-cs-h { margin: 0; font-size: 12.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
-.sp-blegend i.sp-lg-chosen { border: 2px solid var(--sp-grey-900); }
+.sp .sp-cs-act { margin-left: auto; padding: 0 .5rem; border: 1px solid var(--sp-accent); border-radius: 4px; background: var(--sp-white);
+  font-size: 12px; text-decoration: none; white-space: nowrap; }  /* a section's action, in its header */
+.sp .sp-cs-act:hover { background: var(--sp-accent); color: var(--sp-accent-text); }
+.sp-cs > summary:has(.sp-cs-act)::after { margin-left: 0; }
+.sp-fact .sp-copy { font-size: inherit; }
 .sp-cs-h4 { margin: .6rem 0 .3rem; font-size: .875rem; font-weight: 600; }
 .sp-flank { font-size: .8rem; line-height: 1.7; word-break: break-all; }
 .sp-flank mark, .sp-cs mark { padding: 0 .1rem; border-radius: .15rem; }

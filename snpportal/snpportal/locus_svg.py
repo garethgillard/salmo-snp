@@ -545,8 +545,7 @@ def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="c
 
     def cell(x, yy, condition, label, cw=cw):
         state = states.get(condition)
-        name = condition_label(condition)
-        tip = f"{name[0]} {name[1]}: {state.replace('_', ' ') if state else ('blacklisted: cannot tell' if blacklisted else 'no peak')}"
+        tip = state.replace("_", " ") if state else "blacklisted: cannot tell" if blacklisted else "no peak"  # the rows and columns say where
         out = [f"<title>{escape(tip)}</title>"]
         if state:
             fill, text, abbr = palette.state(state)
@@ -564,12 +563,12 @@ def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="c
         return f"<g>{''.join(out)}</g>"
 
     for tissue in TISSUE_ORDER:
-        parts.append(f'<rect x="2" y="{y + 4}" width="4" height="{ch - 8}" fill="{palette.TISSUES[tissue]}"/>' + _t(10, y + 15, tissue, 10.5))
+        parts.append(_t(4, y + 15, tissue, 10.5))
         for i, (maturity, sex, _) in enumerate(COLUMNS):
             parts.append(cell(left + i * (cw + gap), y, f"{tissue}_{maturity}_{sex}", ""))
         y += ch + gap
     y += 4
-    parts.append(f'<rect x="2" y="{y + 4}" width="4" height="{ch - 8}" fill="{palette.TISSUES["Embryo"]}"/>' + _t(10, y + 15, "Embryo", 10.5))
+    parts.append(_t(4, y + 15, "Embryo", 10.5))
     ew = (4 * (cw + gap) - gap - 4 * gap) / 5
     for i, stage in enumerate(STAGES):
         parts.append(cell(round(left + i * (ew + gap), 1), y, stage, STAGES[stage], round(ew, 1)))
@@ -628,11 +627,11 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
     """The card's mini locus browser: the locus browser's lanes in one SVG: the list's SNPs (unnamed; tier colour,
     height = score, faded when not in the selection), genes, public variants (height = MAF), GERP constrained elements
     and the robust ATAC peaks (coloured by their strongest state; n/21 under each: the conditions with the peak). Lane
-    names explain themselves on hover; no ruler (the card says the window). The SNP is a line through the lanes and its
-    own peak is outlined; `tiles` (chromatin_grid without a legend) hang under it in a wedge: that peak per condition.
-    The states legend is the card's. data: locus.lanes(); snps: locus.user_snps(), with `out` for SNPs not selected."""
+    names explain themselves on hover, a peak shows its state; variants and GERP show nothing. No ruler: the window's
+    ends are marked beside the SNP's label. The SNP is a line through the lanes and its own peak is outlined; `tiles`
+    (chromatin_grid without a legend) hang under it in a wedge: that peak per condition. data: locus.lanes(); snps:
+    locus.user_snps(), with `out` for SNPs not selected."""
     ax = Axis(data["start"], data["end"], 4, width - 4)
-    conditions = data.get("conditions") or []
     body, y, own = [], 14, None
 
     def lane(name, tip):
@@ -655,44 +654,37 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
     body.append(f'<line x1="{ax.x0}" x2="{ax.x1}" y1="{y + 16}" y2="{y + 16}" stroke="{G[300]}"/>')
     for v in data.get("variants", []):
         x = ax.x(v["pos"] - 0.5)
-        body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{y + 16}" y2="{y + 14 - 13 * min(0.5, v.get("maf") or 0) / 0.5:.1f}" stroke="{G[700]}">'
-                    f'<title>{v["pos"]:,} {escape(str(v.get("ref")))}&gt;{escape(str(v.get("alt")))} · MAF {_num(v.get("maf"))}</title></line>')
+        body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{y + 16}" y2="{y + 14 - 13 * min(0.5, v.get("maf") or 0) / 0.5:.1f}" stroke="{G[700]}"/>')
     y += 22
     y = lane("GERP", "GERP constrained elements (65 fish); darker = higher score")
     top = max([g.get("score") or 0 for g in data.get("gerp", [])] + [1])
     for g in data.get("gerp", []):
         x, w = ax.span(g["start"], g["end"])
-        body.append(f'<rect x="{x:.1f}" y="{y}" width="{w:.1f}" height="10" fill="{G[700]}" fill-opacity="{0.35 + 0.65 * (g.get("score") or 0) / top:.2f}">'
-                    f'<title>GERP constrained element {g["start"] + 1:,}-{g["end"]:,}, score {g.get("score")}</title></rect>')
+        body.append(f'<rect x="{x:.1f}" y="{y}" width="{w:.1f}" height="10" fill="{G[700]}" fill-opacity="{0.35 + 0.65 * (g.get("score") or 0) / top:.2f}"/>')
     if not data.get("gerp"):
         body.append(_t(ax.x0, y + 9, "none here", 9, G[700]))
     y += 16
-    y = lane("Regulatory elements", f"AQUA-FAANG robust ATAC peaks, coloured by their strongest state; n/{len(conditions)}: the conditions "
-             "with the peak") + 22
-    last = -1e9
+    y = lane("Regulatory elements", "AQUA-FAANG robust ATAC peaks, coloured by their strongest state")
     for p in data.get("peaks", []):
-        found = [v for v in p["states"].values() if v]
-        best, mine = strongest(found), p["start"] < pos <= p["end"]
+        best, mine = strongest([v for v in p["states"].values() if v]), p["start"] < pos <= p["end"]
         x0, x1 = ax.x(p["start"]), ax.x(p["end"])
-        own = (x0, max(x0 + 2, x1), y - 10) if mine else own
-        body.append(f'<rect x="{x0:.1f}" y="{y - 22}" width="{max(2, x1 - x0):.1f}" height="12" fill="{palette.state(best)[0]}" stroke="{G[900]}" '
-                    f'stroke-width="{2 if mine else 0.5}"><title>{"the SNP&#39;s peak: " if mine else ""}robust ATAC peak {p["start"] + 1:,}-{p["end"]:,} · '
-                    f'called in {len(found)} of {len(conditions)} conditions · strongest state: {best.replace("_", " ")}</title></rect>')
-        if (x0 + x1) / 2 - 14 > last:  # the n/21 labels that don't overlap
-            body.append(_t((x0 + x1) / 2, y - 1, f"{len(found)}/{len(conditions)}", 9, G[700], "middle"))
-            last = (x0 + x1) / 2 + 14
+        own = (x0, max(x0 + 2, x1), y + 12) if mine else own
+        body.append(f'<rect x="{x0:.1f}" y="{y}" width="{max(2, x1 - x0):.1f}" height="12" fill="{palette.state(best)[0]}" stroke="{G[900]}" '
+                    f'stroke-width="{2 if mine else 0.5}"><title>{best.replace("_", " ")}</title></rect>')
     if not data.get("peaks"):
-        body.append(_t(ax.x0, y - 12, "none here", 9, G[700]))
-    x = ax.x(pos - 0.5)  # the SNP through every lane, labelled on top
-    body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="12" y2="{y - 10}" stroke="{G[900]}" stroke-opacity="0.45"/>' + _t(x, 9, "SNP", 9.5, G[900], "middle", "600"))
+        body.append(_t(ax.x0, y + 9, "none here", 9, G[700]))
+    y += 12
+    x = ax.x(pos - 0.5)  # the SNP through every lane, labelled on top between the window's ends
+    left, right = (pos - 1 - data["start"]) / 1000, (data["end"] - pos) / 1000
+    body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="12" y2="{y}" stroke="{G[900]}" stroke-opacity="0.45"/>' + _t(x, 9, "SNP", 9.5, G[900], "middle", "600")
+                + _t(ax.x0, 9, f"−{left:g} kb", 9, G[700]) + _t(ax.x1, 9, f"+{right:g} kb", 9, G[700], "end"))
     if tiles:  # the SNP's peak per condition, in a wedge from the outlined peak
         gw, gh = (float(v) for v in re.search(r' width="([\d.]+)" height="([\d.]+)"', tiles).groups())
         px0, px1, py = own or (ax.x0, ax.x0, y)
-        gx, gy = min(max((px0 + px1) / 2 - gw / 2, 0), width - gw), y + 26
-        if own:  # under everything, so the peak's n/21 stays readable on it
-            body.insert(0, f'<path d="M{px0:.1f} {py:.1f} L{px1:.1f} {py:.1f} L{gx + gw:.1f} {gy:.1f} L{gx:.1f} {gy:.1f}Z" fill="{G[100]}" '
-                           f'stroke="{G[500]}" stroke-width="0.6" stroke-dasharray="3 2"/>')
-        body.append(_t(gx, gy - 4, "The SNP's peak, per condition", 9.5, G[900], weight="600") + tiles.replace("<svg ", f'<svg x="{gx:.1f}" y="{gy:.1f}" ', 1))
+        gx, gy = min(max((px0 + px1) / 2 - gw / 2, 0), width - gw), y + 16
+        if own:  # under everything else
+            body.insert(0, f'<path d="M{px0:.1f} {py:.1f} L{px1:.1f} {py:.1f} L{gx + gw:.1f} {gy:.1f} L{gx:.1f} {gy:.1f}Z" fill="{G[100]}"/>')
+        body.append(tiles.replace("<svg ", f'<svg x="{gx:.1f}" y="{gy:.1f}" ', 1))
         y = gy + gh
     desc = (f"Chromosome {data['chrom']}: {data['start'] + 1:,}-{data['end']:,} around the SNP at {pos:,}: genes, public variants, "
             f"GERP constrained elements and {len(data.get('peaks', []))} robust ATAC peaks" + (", with the SNP's peak per condition." if tiles else "."))

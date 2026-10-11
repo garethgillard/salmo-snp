@@ -330,10 +330,6 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
         data = lanes(chrom, *mini_window(pos))
         ev["mini"] = mark_safe(locus_svg.mini_browser(data, pos, snps, lambda gid: reverse("snpportal:gene", args=[gid]), synthetic,
                                                       tiles=tiles))
-        ev["mini_flank"] = f"{MINI_FLANK // 1000} kb"
-        drawn = set(states.values()) | {locus_svg.strongest(p["states"].values()) for p in data.get("peaks", [])}
-        ev["legend"] = ([(f"st-{x}", x.replace("_", " ")) for x in locus_svg.STATE_ORDER + ("Quiescent",) if x in drawn]
-                        + [("", "no peak")] + ([("sp-lg-chosen", "a chosen condition")] if chosen and len(chosen) < len(states) else []))
     if snp.get("gene_id"):
         ev["gene"] = gene_context(snp)
     expression = {c[len("expression_"):]: snp[c] for c in snp if c.startswith("expression_")}
