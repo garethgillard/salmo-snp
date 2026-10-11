@@ -146,7 +146,8 @@ class PortalTest(SimpleTestCase):
         filtered = self.client.get(url + "?tab=table&trait=maturation&max_tier=2&hide_lore=1")
         self.assertContains(filtered, "shown")
         form = filtered.content.decode().split('id="tf"')[1].split("</form>")[0]
-        self.assertNotIn('name="tissue"', form)  # no Active in: the Table only filters after scoring
+        self.assertIn('name="tissue"', form)  # the Chromatin filter: it filters after scoring
+        self.assertNotIn('name="active_set"', form)
         self.assertIn('name="tier" value="1" checked', form)  # max_tier=2 (older links): tiers 1 and 2 ticked
         self.assertIn('name="tier" value="2" checked', form)
         self.assertIn('name="hide_lore" value="1" checked', form)

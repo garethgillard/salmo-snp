@@ -68,11 +68,15 @@ class ResultsTest(SimpleTestCase):
     def direct(self, sql):
         return jobs.connect([self.d]).execute(f"SELECT count(*) FROM '{self.d / 'result.parquet'}' WHERE {sql}").fetchone()[0]
 
-    def test_tiers_always_count_all_conditions(self):
-        for query in ("?tab=table&active_set=1&tissue=Gonad&tissue=Brain", "?tab=table&trait=Brain.Mature.Female"):  # older links
-            page = self.client.get(self.url + query).content.decode()
-            self.assertNotIn('name="tissue"', page)  # no Active in: the Table only filters after scoring
-            self.assertIn(f"of {self.summary['n_rows']:,} SNPs", page)  # nothing filtered out
+    def test_chromatin_filter_leaves_the_tiers(self):
+        total, brain = self.summary["n_rows"], self.count("?tissue=Brain")
+        self.assertTrue(0 < brain < total)  # in a robust ATAC peak in a brain condition
+        self.assertLessEqual(self.count("?tissue=Brain&act=active"), brain)  # in an active state there: fewer
+        self.assertLessEqual(self.count("?tissue=Brain&maturity=Mature&sex=Female"), brain)
+        self.assertEqual(self.count("?trait=Brain.Mature.Female"), total)  # an older link's trait: ignored
+        page = self.client.get(self.url + "?tab=table&tissue=Brain").content.decode()
+        self.assertIn("Chromatin: in a peak in brain", page)
+        self.assertNotIn("Chromatin: in a peak in brain", self.client.get(self.url + "?tab=overview").content.decode())  # whole list
         self.assertFalse(list(self.d.glob("tiers_*")))  # never scored for other conditions
         self.client.get(self.url + "?tab=table")  # back to the whole list, for the other tests
         if "tier_terms" not in self.columns:  # several evidence terms: SNPs with any of them
@@ -209,8 +213,7 @@ class ResultsTest(SimpleTestCase):
         self.assertEqual([h.strip() for h in headers], ["+/"] + [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS])  # the selector, then 9
         self.assertIn('aria-sort="ascending"', page)  # tier, the default
         head = page[page.index("<thead"):page.index("</thead>")]  # each filter on its column; the others above the table
-        self.assertTrue(all(f'id="dd-{d}"' in head for d in ("tier", "region", "gene", "assay")))
-        self.assertNotIn('id="dd-active"', page)  # no Active in
+        self.assertTrue(all(f'id="dd-{d}"' in head for d in ("tier", "region", "gene", "active", "assay")))  # active: Chromatin
         few = self.client.get(self.url + "?tab=table&cols=1&col=tier").content.decode()
         self.assertIn('id="dd-region"', few[few.index('class="sp-filters"'):few.index("<thead")])  # Region hidden: its filter above
         self.assertNotIn('id="drawer"', page)  # the evidence drawer opens only on a click

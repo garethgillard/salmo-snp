@@ -73,6 +73,9 @@ TERMS = {"active": "active in a condition", "active_elsewhere": "active elsewher
          "splice": "splice region", "utr": "UTR",
          "constrained": "GERP constrained", "regbuild": "Ensembl regulatory", "molqtl": "molQTL lead (display only)"}
 GROUP_STARTS = ("dd-maf", "dd-more")  # gaps in the bar above the table (filters of hidden columns)
+ACTIVITY = {  # the Chromatin filter: what a SNP must be in, in at least one of the ticked conditions (a filter only)
+    "peak": ("Robust ATAC peak", "inside an AQUA-FAANG robust ATAC peak, in any chromatin state"),
+    "active": ("Active state", "inside a peak in an active state (Active TSS or Active enhancer)")}
 TERM_SHORT = {"active": "active", "active_elsewhere": "active elsewhere", "weak": "weak", "coding": "CDS", "synonymous": "synonymous",
               "splice": "splice", "utr": "UTR", "constrained": "constrained", "regbuild": "Ensembl reg.", "molqtl": "molQTL"}
 QUIET = ("unknown_chromosomes", "aliases_applied", "alias_warnings", "columns_renamed", "columns_dropped",
@@ -228,6 +231,24 @@ def picks(request, name):
     return list(dict.fromkeys(x for v in request.GET.getlist(name) for x in v.split(",") if x))
 
 
+def chromatin_choice(request):
+    """The Chromatin filter's choice: (tissues, maturity, sex, 'peak' or 'active'), None when it filters nothing."""
+    get = request.GET.get
+    tissues = [t for t in jobs.TISSUES if t in picks(request, "tissue")]
+    maturity = get("maturity") if get("maturity") in jobs.MATURITIES else None
+    sex = get("sex") if get("sex") in jobs.SEXES else None
+    level = "active" if get("act") == "active" else "peak"
+    return (tissues, maturity, sex, level) if tissues or maturity or sex or level == "active" else None
+
+
+def chromatin_text(choice):
+    """'active in brain + gonad (mature)', 'in a peak in any tissue (females)'."""
+    tissues, maturity, sex, level = choice
+    who = " ".join(x.lower() for x in (maturity, sex and f"{sex}s") if x)
+    return (("active in " if level == "active" else "in a peak in ") + (" + ".join(t.lower() for t in tissues) or "any tissue")
+            + (f" ({who})" if who else ""))
+
+
 def tier_text(tiers):
     """'1–3' for a run of tiers, else '1, 3'."""
     t = [int(x) for x in tiers]
@@ -287,6 +308,16 @@ def filters(request, types, weights):
         out.append(({"known": "1"}, "Known loci only", "known_locus IS NOT NULL"))
     if get("molqtl") == "1" and "molqtl" in types:
         out.append(({"molqtl": "1"}, "molQTL lead SNPs", "coalesce(molqtl, false)"))
+    chromatin = chromatin_choice(request)
+    if chromatin and conditions_of(types):  # after scoring: tiers still count all 21 conditions
+        tissues, maturity, sex, level = chromatin
+        mine = [c for c in sorted(jobs.conditions_in(jobs.selection_prefixes(jobs.selection_key(tissues, maturity, sex))))
+                if f"chromatin_{c}" in types]
+        states = ", ".join(lit(s) for s in (weights or {}).get("active_states", [])) or "NULL"
+        test = "IS NOT NULL" if level == "peak" else f"IN ({states})"  # a robust peak has a state; active: TSS or enhancer
+        params = {k: v for k, v in (("tissue", ",".join(tissues)), ("maturity", maturity), ("sex", sex),
+                                    ("act", level if level != "peak" else None)) if v}
+        out.append((params, f"Chromatin: {chromatin_text(chromatin)}", " OR ".join(f"{ident('chromatin_' + c)} {test}" for c in mine) or "false"))
     terms = [t for t in picks(request, "term") if t in (weights or {}).get("weights", {})]
     if terms and "tier_terms" in types:  # several: any of them (links carry them comma-joined)
         out.append(({"term": ",".join(terms)}, "Evidence: " + ", ".join(TERMS.get(t, t) for t in terms),
@@ -531,16 +562,26 @@ def table(request, key, job=None):
             suggest = (conds[best][1], counts[best], chips[best][1])
 
     # The filter bar: dropdowns (a summary of the choice, a panel applied on change) in this order. 'list' panels tick
-    # any of several values ('Any' clears them), 'radio' panels pick one; Location and More have their own.
+    # any of several values ('Any' clears them), 'radio' panels pick one; Chromatin, Location and More have their own.
     tier_counts = tier_facets(con, view, conds, types, summary, chosen["trait"])
     ticked = {k: [x for x in chosen.get(k, "").split(",") if x] for k in ("tier", "region", "assay", "term")}
     dds = []
 
     def dd(kind, key, label, summary, active, tip="", **more):
-        ticks = more.get("options") if kind == "list" else ()
+        ticks = more.get("tissues") or (more.get("options") if kind == "list" else ())
         dds.append({"kind": kind, "id": f"dd-{key}", "label": label, "summary": summary, "on": active, "tip": tip,
                     "anyon": not any(x[2 if len(x) > 2 else 1] for x in ticks), **more})  # 'Any' ticked: nothing else is
 
+    if conditions:  # chromatin activity in some conditions: a filter only, the tiers count all 21
+        choice = chromatin_choice(request)
+        tissues, maturity, sex, level = choice or ([], None, None, "peak")
+        dd("active", "active", "Chromatin", chromatin_text(choice) if choice else "any", bool(choice),
+           "SNPs in a robust ATAC peak, or an active state, in at least one of these conditions (filters the table only)",
+           tissues=[(x, x in tissues) for x in jobs.TISSUES],
+           maturity=[("", "any", not maturity)] + [(x, x.lower(), x == maturity) for x in jobs.MATURITIES],
+           sex=[("", "any", not sex)] + [(x, x.lower(), x == sex) for x in jobs.SEXES],
+           levels=[(k, label, tip, k == level) for k, (label, tip) in ACTIVITY.items()], column="chromatin",
+           reset=link(tissue=None, maturity=None, sex=None, act=None, page=None) if choice else None)
     if "tier" in types:
         counts = dict(tier_counts)
         dd("list", "tier", "Tier", f"{tier_text(ticked['tier'])}" if ticked["tier"] else "any", bool(ticked["tier"]),
