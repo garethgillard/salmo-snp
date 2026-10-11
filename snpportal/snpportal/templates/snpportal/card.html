@@ -2,8 +2,8 @@
 {% comment %}Evidence card for one SNP, laid out to decide whether to keep it (context: ev from locus.evidence, presets,
    switch_url (none: no conditions form; a job's card follows the Table's Active in), hx, locus_url, keep: other
    parameters the conditions form keeps; a job's card also panel (panel.holds) and, in the Table's drawer, nearby):
-   the key facts and caveats; why it scores (the tier terms, the robust ATAC peaks around it with a button to the
-   locus browser, chromatin per condition, other layers, molQTL); as a marker (assay and flank, duplicates, MAF, the
+   the key facts and caveats; the score breakdown; the regulatory state (the SNP's robust ATAC peak beside a mini locus
+   view of the peaks around it, with a button to the locus browser; chromatin per condition, GERP, molQTL); as a marker (assay and flank, duplicates, MAF, the
    Design panel); the list's SNPs nearby; context (published association, gene; expression, the user's own columns
    and details closed). Parts render only when their columns exist. The drawer and variant.html give the heading.{% endcomment %}
 {% if hx and crumbs %}{% include 'snpportal/_crumbs.html' with oob=1 %}{% endif %}
@@ -27,19 +27,23 @@
     {% if panel.sources %}<span class="sp-fact sp-fact-ok" title="Your Design panel holds this SNP ({{ panel.sources|join:', ' }})">in your panel</span>{% endif %}</p>
   {% if ev.caveats %}<ul class="sp-status sp-status-warn sp-caveats" aria-label="Caveats">{% for text in ev.caveats %}<li>{{ text }}</li>{% endfor %}</ul>{% endif %}
 
-  <section class="sp-cs" aria-labelledby="cs-why"><h3 class="sp-cs-h" id="cs-why">Why it scores</h3>
+  <section class="sp-cs" aria-labelledby="cs-score"><h3 class="sp-cs-h" id="cs-score">Score breakdown</h3>
     {% if ev.tier %}<p class="mb-2">Score {{ ev.score|default_if_none:"0" }}:
       {% for text, w in ev.terms %}{{ text }}{% if w is not None %} +{{ w }}{% endif %}{% if not forloop.last %} &middot; {% endif %}{% empty %}no evidence found (not evidence of no effect){% endfor %}</p>{% endif %}
     {% if ev.why %}<div class="sp-figure mb-2">{{ ev.why }}</div>{% endif %}
-    {% if ev.gwas %}<p class="mb-2">GWAS: p {{ ev.gwas.p }}{% if ev.gwas.beta is not None %} &middot; beta {{ ev.gwas.beta|floatformat:3 }}{% if ev.gwas.se is not None %} ({{ ev.gwas.se|floatformat:3 }}){% endif %}{% endif %}
+    {% if ev.gwas %}<p class="mb-0">GWAS: p {{ ev.gwas.p }}{% if ev.gwas.beta is not None %} &middot; beta {{ ev.gwas.beta|floatformat:3 }}{% if ev.gwas.se is not None %} ({{ ev.gwas.se|floatformat:3 }}){% endif %}{% endif %}
       {% if ev.gwas.locus %}&middot; <a href="{{ ev.gwas.region }}">locus {{ ev.gwas.locus }}</a>{% if ev.gwas.pip_u is not None %} &middot; PIP {{ ev.gwas.pip_u|floatformat:2 }} &rarr; {{ ev.gwas.pip_f|floatformat:2 }} (functional prior)
       &middot; {{ ev.gwas.cs }} (one causal variant, no LD){% endif %}{% endif %}</p>{% endif %}
+  </section>
 
-    {% if ev.element %}<div class="sp-cs-sub"><h4 class="sp-cs-h4">Regulatory element</h4>
-      {% if locus_url %}<a class="btn btn-sm btn-outline-primary ms-auto" href="{{ locus_url }}">Open in the locus browser &rarr;</a>{% endif %}</div>
-    <div class="sp-figure">{{ ev.element.svg }}</div>
-    <p class="mb-2">{{ ev.element.text }}</p>
-    {% elif locus_url %}<p class="mb-2"><a class="btn btn-sm btn-outline-primary" href="{{ locus_url }}">Open in the locus browser &rarr;</a></p>{% endif %}
+  {% if ev.element or ev.grid or ev.no_peak or ev.function or ev.molqtl or locus_url %}<section class="sp-cs" aria-labelledby="cs-reg"><h3 class="sp-cs-h" id="cs-reg">Regulatory state</h3>
+    {% if ev.element %}<div class="sp-cols mb-2">
+      <div><h4 class="sp-cs-h4" title="The AQUA-FAANG robust ATAC peak (merged over the 21 conditions) that holds the SNP">Regulatory element</h4>
+        <dl class="sp-dl">{% for label, value, swatch in ev.element.facts %}<dt>{{ label }}</dt><dd>{% if swatch %}<i class="sp-sw {{ swatch }}" aria-hidden="true"></i> {% endif %}{{ value }}</dd>{% endfor %}</dl></div>
+      <div><h4 class="sp-cs-h4">Chromatin around the SNP (&plusmn;{{ ev.element.flank }})</h4>
+        <div class="sp-figure">{{ ev.element.svg }}</div>
+        {% if locus_url %}<a class="btn btn-sm btn-outline-primary mt-2" href="{{ locus_url }}">Open in the locus browser &rarr;</a>{% endif %}</div>
+    </div>{% elif locus_url %}<p class="mb-2"><a class="btn btn-sm btn-outline-primary" href="{{ locus_url }}">Open in the locus browser &rarr;</a></p>{% endif %}
     {% if ev.grid %}<h4 class="sp-cs-h4">Chromatin state at the SNP, per condition</h4><div class="sp-figure mb-2">{{ ev.grid }}</div>
     {% elif ev.no_peak %}<p class="mb-2">{{ ev.no_peak }}</p>{% endif %}
     {% if ev.function %}<dl class="sp-dl mb-2">{% for label, value in ev.function %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
@@ -52,7 +56,7 @@
     </table></div>
     <p class="sp-muted mb-2">Lead SNP per feature in 12 fish (low power): not fine-mapped, not counted in tiers; no direction is implied.
       {{ ev.molqtl.citation }}{% if ev.molqtl.licence %} Licence: {{ ev.molqtl.licence }}.{% endif %}</p>{% endif %}
-  </section>
+  </section>{% endif %}
 
   {% if ev.assay or ev.duplicates or ev.maf or panel %}<section class="sp-cs" aria-labelledby="cs-marker"><h3 class="sp-cs-h" id="cs-marker">As a marker</h3>
     {% if ev.assay %}<p class="mb-1"{% if ev.assay.tip %} title="{{ ev.assay.tip }}"{% endif %}>Assay: <span class="sp-as sp-as-{{ ev.assay.cls }}"><span aria-hidden="true">{{ ev.assay.icon }}</span> {{ ev.assay.status }}</span>{% if ev.assay.reasons %} {{ ev.assay.reasons }}{% endif %}</p>

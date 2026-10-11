@@ -586,47 +586,46 @@ def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="c
     return figures.svg(width, y + 16, "Chromatin state per condition", desc, defs + "".join(parts), synthetic)
 
 
-def element_view(peaks, start, end, pos, synthetic=False):
-    """The card's locus view: the robust ATAC peaks (AQUA-FAANG's regulatory elements, merged over the 21 conditions)
-    in start-end (BED), each coloured by its AQUA-FAANG summary chromatin state, the SNP's own outlined, and the SNP
-    as a line. peaks: [{start, end, state, peaks, active}] (peaks, active: of the 21 conditions)."""
-    width, height = 600, 92
-    ax = Axis(start, end, 10, width - 10)
+def element_view(peaks, start, end, pos, synthetic=False, width=330):
+    """The card's mini locus view: the robust ATAC peaks (AQUA-FAANG's regulatory elements, merged over the 21
+    conditions) in start-end (BED), each coloured by its AQUA-FAANG summary chromatin state, the SNP's own outlined,
+    and the SNP as a line; ticks every kb from the SNP, a legend of the states drawn. peaks: [{start, end, state, peaks,
+    active}] (peaks, active: of the 21 conditions)."""
+    ax = Axis(start, end, 8, width - 8)
     parts, present, snp_x = [], {}, ax.x(pos - 0.5)
-    parts.append(f'<rect x="{ax.x0}" y="22" width="{ax.x1 - ax.x0}" height="22" fill="{G[100]}"/>')
+    parts.append(f'<rect x="{ax.x0}" y="20" width="{ax.x1 - ax.x0}" height="26" fill="{G[100]}"/>')
     for p in peaks:
         state = (p["state"] or "").replace(" ", "_")
         fill, text, abbr = palette.state(state) if state in palette.STATES else (G[500], palette.WHITE, "")
         present[state] = fill
         x, w = ax.span(p["start"], p["end"], 2)
-        own = p["start"] < pos <= p["end"]
         tip = (f"{p['start'] + 1:,}-{p['end']:,} ({fmt_bp(p['end'] - p['start'])}): {state.replace('_', ' ') or 'no state'}"
                f" (AQUA-FAANG summary); a peak in {p['peaks']} of 21 conditions, active in {p['active']}")
-        parts.append(f'<g><title>{escape(tip)}</title><rect x="{x:.1f}" y="22" width="{w:.1f}" height="22" fill="{fill}"{_edge(fill)}/>'
+        parts.append(f'<g><title>{escape(tip)}</title><rect x="{x:.1f}" y="20" width="{w:.1f}" height="26" fill="{fill}"{_edge(fill)}/>'
                      + (_t(x + w / 2, 37, abbr, 10, text, "middle", "600") if w > 24 and abbr else "") + "</g>")
-        if own:
-            parts.append(f'<rect x="{x - 2:.1f}" y="19" width="{w + 4:.1f}" height="28" rx="2" fill="none" stroke="{G[900]}" stroke-width="2"/>')
-            label = f"{state.replace('_', ' ')} · {fmt_bp(p['end'] - p['start'])}"
-            half = 3 * len(label)
-            parts.append(_t(min(max(x + w / 2, ax.x0 + half), ax.x1 - half), 59, label, 10, G[900], "middle", "600"))
+        if p["start"] < pos <= p["end"]:
+            parts.append(f'<rect x="{x - 2:.1f}" y="17" width="{w + 4:.1f}" height="32" rx="2" fill="none" stroke="{G[900]}" stroke-width="2"/>')
     if not peaks:
         parts.append(_t((ax.x0 + ax.x1) / 2, 37, "no robust ATAC peak here", 10, G[700], "middle"))
-    parts.append(f'<line x1="{snp_x:.1f}" x2="{snp_x:.1f}" y1="12" y2="48" stroke="{G[900]}" stroke-width="1.5"/>'
+    parts.append(f'<line x1="{snp_x:.1f}" x2="{snp_x:.1f}" y1="12" y2="52" stroke="{G[900]}" stroke-width="1.5"/>'
                  + _t(snp_x, 9, "SNP", 9.5, G[900], "middle", "600"))
-    parts.append(f'<line x1="{ax.x0}" x2="{ax.x1}" y1="66" y2="66" stroke="{G[500]}"/>')
+    parts.append(f'<line x1="{ax.x0}" x2="{ax.x1}" y1="58" y2="58" stroke="{G[500]}"/>')
     step = 1000 if end - start > 3000 else 100
     for k in range(-((pos - start) // step), (end - pos) // step + 1):  # ticks every kb from the SNP
         x = ax.x(pos + k * step - 0.5)
         label = f"{k * step / 1000:+g} kb".replace("-", "−") if k else "0"
-        parts.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="66" y2="70" stroke="{G[500]}"/>' + _t(x, 80, label, 9, G[700], "middle"))
-    x = ax.x0
-    for state, fill in present.items():  # the legend: the states drawn
+        parts.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="58" y2="62" stroke="{G[500]}"/>' + _t(x, 72, label, 9, G[700], "middle"))
+    x, y = ax.x0, 80
+    for state, fill in present.items():  # the legend: the states drawn, wrapped to the width
         label = state.replace("_", " ") or "no state"
-        parts.append(f'<rect x="{x}" y="84" width="10" height="8" fill="{fill}"{_edge(fill)}/>' + _t(x + 14, 91.5, label, 9, G[700]))
-        x += 24 + 5.2 * len(label)
+        size = 24 + 5.2 * len(label)
+        if x > ax.x0 and x + size > ax.x1:
+            x, y = ax.x0, y + 13
+        parts.append(f'<rect x="{x}" y="{y}" width="10" height="8" fill="{fill}"{_edge(fill)}/>' + _t(x + 14, y + 7.5, label, 9, G[700]))
+        x += size
     desc = (f"Robust ATAC peaks {start + 1:,}-{end:,}, coloured by AQUA-FAANG summary chromatin state; the SNP at {pos:,} "
             + ("is in a peak." if any(p["start"] < pos <= p["end"] for p in peaks) else "is in no peak."))
-    return figures.svg(width, height + (10 if present else 0), "Regulatory elements around the SNP", desc, "".join(parts), synthetic)
+    return figures.svg(width, y + (12 if present else 0), "Regulatory elements around the SNP", desc, "".join(parts), synthetic)
 
 
 def expression_bars(values, synthetic=False):

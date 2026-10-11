@@ -32,7 +32,7 @@ from snpscore import tracks as st
 from snpscore.formats import lit
 from snpscore.score import NOT_CONDITIONS, preset_conditions
 
-from . import explore, figures, jobs, locus_svg, results
+from . import explore, figures, jobs, locus_svg, palette, results
 from .views import finished, private
 
 DEFAULT_WIDTH = 10_000  # a single position opens this wide
@@ -328,7 +328,7 @@ def evidence(snp, weights, trait, synthetic=False):
         else:
             ev["no_peak"] = (results.NO_PEAK if len(states) == 21 else
                              f"No AQUA-FAANG peak in the {len(states)} conditions sampled. No immune tissue, gill or skin.")
-        ev["element"] = element(chrom, pos, set((weights or {}).get("active_states", [])), synthetic)
+        ev["element"] = element(snp, set((weights or {}).get("active_states", [])), chosen, synthetic)
     if snp.get("gene_id"):
         ev["gene"] = gene_context(snp)
     expression = {c[len("expression_"):]: snp[c] for c in snp if c.startswith("expression_")}
@@ -445,14 +445,10 @@ def duplicates(snp):
 
 
 def function(snp):
-    """[(label, value)] of the functional layers not in the tier line's words: GERP and the Ensembl regulatory build."""
-    out = []
+    """[(label, value)] of the functional layers not in the tier line's words or the regulatory element: GERP."""
     if snp.get("gerp"):
-        out.append(("Conservation", f"in a GERP constrained element (score {_fmt(snp.get('gerp_score'))}, 65 fish)"))
-    if snp.get("regbuild"):
-        out.append(("Ensembl regulatory", " ".join(str(x) for x in ((snp.get("regbuild_type") or "").replace("_", " "), snp.get("regbuild_id")) if x)
-                    + (f", promoter of {snp['regbuild_gene_id']}" if snp.get("regbuild_gene_id") else "")))
-    return out
+        return [("Conservation", f"in a GERP constrained element (score {_fmt(snp.get('gerp_score'))}, 65 fish)")]
+    return []
 
 
 def flank_parts(flank):
@@ -467,12 +463,14 @@ def flank_parts(flank):
     return out
 
 
-def element(chrom, pos, active_states, synthetic=False):
-    """The card's locus view: the robust ATAC peaks within ELEMENT_FLANK of the SNP (locus_svg.element_view) and a
-    line on the SNP's own peak, or how far the nearest one is. None without a chromatin layer."""
+def element(snp, active_states, chosen, synthetic=False):
+    """The card's regulatory element, in two columns: facts on the SNP's robust ATAC peak (or how far the nearest one
+    is) and the Ensembl regulatory feature, [(label, value, swatch class)]; and the mini locus view of the peaks within
+    ELEMENT_FLANK (locus_svg.element_view). None without a chromatin layer."""
     path = jobs.release() / "chromatin.parquet"
     if not path.exists():
         return None
+    chrom, pos = snp["chrom"], snp["pos"]
     con = jobs.connect([jobs.release()])
     cur = con.execute(f'SELECT * EXCLUDE (chrom) FROM read_parquet({lit(path)}) WHERE chrom = ? AND start < ? AND "end" > ? ORDER BY start',
                       [chrom, pos + ELEMENT_FLANK, pos - 1 - ELEMENT_FLANK])
@@ -480,22 +478,31 @@ def element(chrom, pos, active_states, synthetic=False):
     peaks = []
     for row in cur.fetchall():
         r = dict(zip(names, row))
-        found = [v for k, v in r.items() if k not in ("start", "end", "summary") and v]
+        found = {k: v for k, v in r.items() if k not in ("start", "end", "summary") and v}
         peaks.append({"start": r["start"], "end": r["end"], "state": r.get("summary"), "peaks": len(found),
-                      "active": sum(v in active_states for v in found)})
+                      "active": sum(v in active_states for v in found.values()), "found": found})
     own = next((p for p in peaks if p["start"] < pos <= p["end"]), None)
+    facts = []
     if own:
-        middle = (own["start"] + own["end"]) / 2
-        text = (f"In a robust ATAC peak of {locus_svg.fmt_bp(own['end'] - own['start'])} ({chrom}:{own['start'] + 1:,}-{own['end']:,}, "
-                f"{locus_svg.fmt_bp(int(abs(pos - middle)))} from its centre): {(own['state'] or 'no state').lower()} in AQUA-FAANG's "
-                f"summary; a peak in {own['peaks']} of 21 conditions, active in {own['active']}.")
+        state = (own["state"] or "").replace(" ", "_")
+        mine = lambda n: f" ({n} of the {len(chosen)} chosen)" if chosen and len(chosen) < 21 else ""  # noqa: E731
+        facts += [("ATAC peak", f"{chrom}:{own['start'] + 1:,}-{own['end']:,}", ""),
+                  ("Size", f"{locus_svg.fmt_bp(own['end'] - own['start'])}, the SNP {locus_svg.fmt_bp(int(abs(pos - (own['start'] + own['end']) / 2)))} "
+                   "from its centre", ""),
+                  ("State", f"{(own['state'] or 'none')} (AQUA-FAANG)", f"st-{state}" if state in palette.STATES else ""),
+                  ("Peak in", f"{own['peaks']} of 21 conditions" + mine(len(chosen & set(own["found"]))), ""),
+                  ("Active in", f"{own['active']} of 21" + mine(sum(own["found"].get(c) in active_states for c in chosen)), "")]
     else:
         near = con.execute(f'SELECT min(CASE WHEN "end" < ? THEN ? - "end" ELSE start + 1 - ? END) FROM read_parquet({lit(path)}) '
                            'WHERE chrom = ? AND start < ? AND "end" > ?', [pos, pos, pos, chrom, pos + 100_000, pos - 100_000]).fetchone()[0]
-        text = "Not in a robust ATAC peak; " + (f"the nearest is {locus_svg.fmt_bp(near)} away." if near else "none within 100 kb.")
+        facts.append(("ATAC peak", "none here; " + (f"the nearest is {locus_svg.fmt_bp(near)} away" if near else "none within 100 kb"), ""))
     con.close()
+    if snp.get("regbuild"):
+        facts.append(("Ensembl", " ".join(str(x) for x in ((snp.get("regbuild_type") or "").replace("_", " "), snp.get("regbuild_id")) if x)
+                      + (f", promoter of {snp['regbuild_gene_id']}" if snp.get("regbuild_gene_id") else ""), ""))
     start, end = max(0, pos - 1 - ELEMENT_FLANK), pos + ELEMENT_FLANK
-    return {"svg": mark_safe(locus_svg.element_view(peaks, start, end, pos, synthetic)), "text": text}
+    return {"svg": mark_safe(locus_svg.element_view(peaks, start, end, pos, synthetic)), "facts": facts,
+            "flank": locus_svg.fmt_bp(ELEMENT_FLANK)}
 
 
 def details(snp):
