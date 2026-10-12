@@ -2,8 +2,9 @@
 # Deploy the public demo to an NREC VM (GOLD Ubuntu 22.04, dualStack network, ports 22/80/443 open):
 #   bash deploy/nrec.sh <ssh host> <web name>      e.g.  bash deploy/nrec.sh nrec 158-39-75-12.sslip.io
 # From this Mac it copies both repos (code only), the release and the genome to /srv/snpportal, then on the VM it
-# installs Python packages, Caddy (HTTPS from Let's Encrypt) and three systemd units: gunicorn, and an hourly
-# snpportal_cleanup. Safe to rerun after a change: results and the secret key are kept.
+# installs Python packages, Caddy (HTTPS from Let's Encrypt), a 2 GB swap file if there is none, and three systemd
+# units: gunicorn, and an hourly snpportal_cleanup. DuckDB gets half the RAM and every CPU. Safe to rerun after a
+# change: results and the secret key are kept.
 set -euo pipefail
 HOST=$1
 NAME=$2
@@ -30,6 +31,10 @@ if ! command -v caddy >/dev/null; then  # Caddy's own apt repository (caddyserve
   curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt | sudo tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
   sudo apt-get update -q && sudo apt-get install -y -q caddy
 fi
+if ! swapon --show | grep -q .; then  # a small VM: swap as a safety net for big lists
+  sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap -q /swapfile && sudo swapon /swapfile
+  echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab >/dev/null
+fi
 [ -d venv ] || python3 -m venv venv
 venv/bin/pip install -q --upgrade pip
 venv/bin/pip install -q "django>=4.2,<5" "duckdb==1.2.2" gunicorn -e salmo-snpscore
@@ -44,6 +49,8 @@ DJANGO_STATIC_ROOT=/srv/snpportal/static
 SNPSCORE_RELEASE=/srv/snpportal/release
 SNPSCORE_GENOME=/srv/snpportal/genome/$GENOME
 SNPPORTAL_RESULTS_DIR=/srv/snpportal/results
+SNPPORTAL_DUCKDB_THREADS=$(nproc)
+SNPPORTAL_DUCKDB_MEMORY=$(( $(free -m | awk '/^Mem:/ {print $2}') / 2 ))MB
 EOF
 chmod 600 env
 (set -a && . ./env && cd salmo-snpportal && ../venv/bin/python manage.py collectstatic --noinput -v 0)
