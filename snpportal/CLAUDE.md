@@ -4,9 +4,9 @@ Django app that will be copied into the salmobase repo (gitlab.com/elixir-nmbu/s
 Annotation logic lives in the sibling repo `salmo-snpscore` (see its README "Release format", ROADMAP.md and TRACKER.md, which cover both repos).
 This app runs scoring jobs, shows the annotated result, and exports it. README "How it works" describes job folders and modules.
 
-## Current phase: local prototype
-Everything runs locally on test data: `tests/fixture` and the public inputs from `snpscore fetch`.
-No Docker, Apache, server, deployment or hosting work until the prototype works and G says it's time to go online.
+## Current phase: public demo
+G said go (2026-10-12): a public demo (no password) on an NREC VM, deployed with `deploy/nrec.sh` (sandbox project,
+gunicorn, Caddy). Merging into salmobase (Docker, Apache) waits until G says so.
 
 ## Match salmobase
 - Pages extend `snpportal/base_portal.html` (which extends `salmobase/base.html` and fills its blocks `head`, `content`, `scripts`). Bootstrap 5.1.3 and jQuery are already loaded there.

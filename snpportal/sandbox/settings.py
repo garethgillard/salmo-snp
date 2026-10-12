@@ -1,12 +1,16 @@
-"""Minimal Django project for developing the snpportal app outside salmobase. Not used in production."""
+"""Minimal Django project for running the snpportal app outside salmobase: development on a laptop, and the public demo
+on NREC (deploy/nrec.sh sets the DJANGO_* variables below; salmobase itself uses its own settings)."""
 import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = "dev-only"
-DEBUG = True
-ALLOWED_HOSTS = ["*"]
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only")
+DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
+CSRF_TRUSTED_ORIGINS = [f"https://{h}" for h in ALLOWED_HOSTS if h != "*"]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")  # behind Caddy on the demo server
+STATIC_ROOT = os.environ.get("DJANGO_STATIC_ROOT")  # collectstatic's target; Caddy serves it when DEBUG is off
 INSTALLED_APPS = ["django.contrib.staticfiles", "snpportal"]
 MIDDLEWARE = ["django.middleware.common.CommonMiddleware", "django.middleware.csrf.CsrfViewMiddleware"]
 ROOT_URLCONF = "sandbox.urls"
@@ -22,6 +26,8 @@ STATIC_URL = "/static/"  # served by runserver (and sandbox/urls.py) while DEBUG
 SNPSCORE_RELEASE = os.environ.get("SNPSCORE_RELEASE", str(BASE_DIR.parent / "salmo-snpscore" / "release" / "dev"))
 
 # Portal settings (defaults shown). Results live in SNPPORTAL_RESULTS_DIR (default: <system temp>/snpportal).
+if os.environ.get("SNPPORTAL_RESULTS_DIR"):
+    SNPPORTAL_RESULTS_DIR = os.environ["SNPPORTAL_RESULTS_DIR"]
 SNPPORTAL_WORKERS = int(os.environ.get("SNPPORTAL_WORKERS", 1))  # background job threads; 0 = run inline (tests)
 SNPPORTAL_KEEP_HOURS = 24
 SNPPORTAL_MAX_UPLOAD_MB = 300  # checked on Content-Length before the body is read
