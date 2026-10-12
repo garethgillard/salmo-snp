@@ -4,9 +4,9 @@ This repo builds the annotation layers behind the salmobase functional SNP porta
 The portal lives in the sibling repo `salmo-snpportal` and depends on this package.
 Read README.md first: its "Release format" section is the contract with the portal. TRACKER.md says what's next.
 
-## Current phase: local prototype
-Everything runs locally on test data: `tests/fixture` and the public inputs from `snpscore fetch`.
-No Docker, Apache, server, deployment or hosting work until the prototype works and G says it's time to go online.
+## Current phase: public demo
+Built and tested locally on `tests/fixture` and the public inputs from `snpscore fetch`. G said go (2026-10-12) for a
+public demo on an NREC VM (salmo-snpportal `deploy/nrec.sh`). Merging into salmobase waits until G says so.
 
 ## Keep it small
 - Minimal files, minimal code. Readable over clever. Don't add tests for every edge case.
@@ -40,6 +40,8 @@ Decided:
   Table only filters after scoring: its Chromatin column filter keeps SNPs in a robust ATAC peak (or an active state) in
   at least one chosen condition (tissues, maturity, sex) and changes no tier, Overview or card. One SNP's card opens in
   the Table's drawer.
+- Public demo (2026-10-12): the portal runs openly (no password) on an NREC VM, so the molQTL rows and the 504-fish
+  allele frequencies are shown publicly; the licence questions under Open are still to confirm with their owners.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.

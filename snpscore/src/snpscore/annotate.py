@@ -291,10 +291,13 @@ LAYER_SQL = {"interval": interval_sql, "nearest": nearest_sql, "count": count_sq
 
 
 def genome_location(manifest):
-    """Local genome path if the release's build machine had it and it is still there, else its URL (or None)."""
+    """$SNPSCORE_GENOME (a server's own copy of the release's genome) if set, else the local path if the release's build
+    machine had it and it is still there, else its URL (or None)."""
     genome = manifest.get("genome")
     if not genome:
         return None
+    if os.environ.get("SNPSCORE_GENOME"):
+        return os.environ["SNPSCORE_GENOME"]
     return genome["path"] if genome.get("path") and Path(genome["path"]).exists() else genome["url"]
 
 

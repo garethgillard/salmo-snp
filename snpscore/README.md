@@ -103,7 +103,8 @@ release/v0.1/
 - `chrom_sizes`: {chrom: length} of the numbered chromosomes, from the genome `.fai` (or the layers' largest end where
   that is larger, or the `.fai` lacks the chromosome, as in the test fixture). annotate's known chromosomes.
 - `provisional`: the rules G still has to confirm (keys of weights.yaml and layers.yaml, e.g. `weights`, `catalog.window`)
-- `genome`: `url`, and `path` of the local copy if the build machine had it (for the sequence checks)
+- `genome`: `url`, and `path` of the local copy if the build machine had it (for the sequence checks); on another machine
+  `SNPSCORE_GENOME` names its own copy (bgzipped, with `.fai` and `.gzi`), else the URL is read remotely
 - `alias`, `rsid` (`file`, `rows`, `left_out`, `source_file`, `urls`, `citation`, `source_sha256`, `sha256`), `catalog`
   (`file`, `window`, `rows`, `sha256`), `files` (sha256 of the copied weights.yaml and tracks.yaml), `demo` ([{`file`,
   `sha256`, `synthetic`}])
