@@ -20,7 +20,7 @@ from .annotate import annotate, connect
 from .formats import lit
 from .tracks import CHROMATIN_CONDITIONS
 
-MIN_WINDOW, MAX_WINDOW = 200, 2_000_000  # annotation lanes
+MIN_WINDOW, MAX_WINDOW = 60, 2_000_000  # annotation lanes (60 bp: the browser's motif logos are readable from 150 bp)
 MAX_SIGNAL = 500_000  # signal and ChromHMM rows are read only in windows up to this wide
 CAPS = {"genes": 300, "peaks": 5000, "regbuild": 5000, "gerp": 5000, "variants": 5000}  # rows per lane; more = truncated
 PUBLIC_SNPS = ("synchrosmolt_af", "axiom")  # point layers of public SNP sets besides public_af ('variants')

@@ -59,32 +59,35 @@ def threshold(lo, p_value=P_VALUE, scale=10):
 
 
 def matrices(path, p_value=P_VALUE):
-    """[(motif id, TF name, log-odds rows, reverse-complement rows, threshold)] for the motifs of a MEME file."""
+    """[(motif id, TF name, log-odds rows, reverse-complement rows, threshold, probability rows)] for the motifs of a
+    MEME file."""
     out = []
     for mid, name, nsites, rows in read_meme(path):
         lo = log_odds(rows, nsites)
-        out.append((mid, name, lo, [col[::-1] for col in lo[::-1]], threshold(lo, p_value)))
+        out.append((mid, name, lo, [col[::-1] for col in lo[::-1]], threshold(lo, p_value), rows))
     return out
 
 
 def flank(motifs):
-    """Bases needed either side of a SNP: the longest motif minus one."""
+    """Bases needed either side of a SNP: the longest motif minus one (32 for JASPAR 2024)."""
     return max(len(m[2]) for m in motifs) - 1
 
 
-def changes(seq, w, ref, alt, motifs, min_delta=0):
-    """[(|delta|, TF, allele that matches)] for the motifs one allele matches and the other doesn't, by at least
-    min_delta bits, in a window seq (upper case) with the SNP at index w; [] when ref, alt or the window hold anything
-    but A, C, G and T. A motif counts once, at its strongest change over positions and strands."""
+def hits(seq, w, ref, alt, motifs, min_delta=0):
+    """The motifs one allele matches and the other doesn't, by at least min_delta bits, in a window seq (upper case)
+    with the SNP at index w, largest change first: [{id, tf, strand, start (window index of the motif's first base on
+    the + strand), ref_score, alt_score, cut, allele (that matches), delta, probs (the motif's rows, as on its own
+    strand)}]; [] when ref, alt or the window hold anything but A, C, G and T. A motif counts once, at its strongest
+    change over positions and strands."""
     r, a = CODE.get(ref), CODE.get(alt)
     if r is None or a is None or any(b not in CODE for b in seq):
         return []
     codes = [CODE[b] for b in seq]
     get = list.__getitem__
     out = []
-    for _, name, fwd, rev, cut in motifs:
+    for mid, name, fwd, rev, cut, probs in motifs:
         best = None
-        for rows in (fwd, rev):
+        for strand, rows in (("+", fwd), ("-", rev)):
             n = len(rows)
             for st in range(max(0, w - n + 1), min(w, len(codes) - n) + 1):
                 s_ref = sum(map(get, rows, codes[st:st + n]))
@@ -93,10 +96,18 @@ def changes(seq, w, ref, alt, motifs, min_delta=0):
                 if (s_ref >= cut) != (s_alt >= cut) and abs(s_alt - s_ref) >= min_delta:
                     d = abs(s_alt - s_ref)
                     if best is None or d > best[0]:
-                        best = (d, name, ref if s_ref >= cut else alt)
+                        best = (d, strand, st, s_ref, s_alt)
         if best:
-            out.append(best)
-    return sorted(out, key=lambda x: (-x[0], x[1]))
+            d, strand, st, s_ref, s_alt = best
+            out.append({"id": mid, "tf": name, "strand": strand, "start": st, "ref_score": round(s_ref, 2),
+                        "alt_score": round(s_alt, 2), "cut": cut, "allele": ref if s_ref >= cut else alt,
+                        "delta": d, "probs": probs})
+    return sorted(out, key=lambda h: (-h["delta"], h["tf"]))
+
+
+def changes(seq, w, ref, alt, motifs, min_delta=0):
+    """[(|delta|, TF, allele that matches)] of hits()."""
+    return [(h["delta"], h["tf"], h["allele"]) for h in hits(seq, w, ref, alt, motifs, min_delta)]
 
 
 def summary(found):

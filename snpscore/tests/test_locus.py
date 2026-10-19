@@ -70,7 +70,7 @@ def test_regions(release):
     for bad in ("ssa99:1-100", "25:abc", "vgll3"):
         with pytest.raises(ValueError):
             sl.parse_region(bad, release)
-    assert sl.clamp(1000, 1001) == (900, 1100) and sl.clamp(0, 10, 5000) == (0, 200) and sl.clamp(4990, 5000, 5000) == (4800, 5000)
+    assert sl.clamp(1000, 1001) == (970, 1030) and sl.clamp(0, 10, 5000) == (0, 60) and sl.clamp(4990, 5000, 5000) == (4940, 5000)
 
 
 def test_annotate_position_matches_annotate(release, tmp_path):
