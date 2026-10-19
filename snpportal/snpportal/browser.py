@@ -332,9 +332,26 @@ def peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes):
         more.append(row(short(c), trk(13, "".join(parts)), tissue=tissue_of(c), dense=True))
     if any(v is None for v in found.values()):
         notes.append("Some per-condition peak tracks did not load in time (grey rows); reload to try again.")
+    rows = [row("Combined", trk(32, "".join(body)), f"n/{len(conditions)}: conditions with the peak")]
+    if (jobs.release() / "motif.parquet").exists():
+        rows.append(motif_row(s, ax, data))
     return group("peaks", "Regulatory elements", "AQUA-FAANG robust ATAC peaks, coloured by chromatin state",
-                 [row("Combined", trk(32, "".join(body)), f"n/{len(conditions)}: conditions with the peak")],
-                 more, f"{len(more)} conditions", open_)
+                 rows, more, f"{len(more)} conditions", open_)
+
+
+def motif_row(s, ax, data):
+    """Public SNPs in a robust peak whose alleles change a JASPAR 2024 motif match (the scored rule), height = the
+    largest score change; hover names the TFs and the allele that matches."""
+    body = [f'<line x1="0" x2="{W}" y1="20" y2="20" stroke="{G[300]}"/>']
+    for v in data.get("motif", []):
+        x, h = ax.x(v["pos"] - 0.5), 4 + 14 * min(12, v.get("delta") or 0) / 12
+        tip = (f"{s['chrom']}:{v['pos']:,} {v.get('ref')}>{v.get('alt')} · changes {v.get('n')} motif"
+               f"{'s' * ((v.get('n') or 0) != 1)}: {v.get('tfs')} · largest change {locus_svg._num(v.get('delta'))} bits")
+        body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="20" y2="{20 - h:.1f}" stroke="{palette.MOTIF}" stroke-width="1.6">'
+                     f'<title>{escape(tip)}</title></line>')
+    if not data.get("motif"):
+        body.append(locus_svg._t(4, 15, "no motif change at a public SNP in this window", 9.5, G[700]))
+    return row("TF motif changes", trk(22, "".join(body)), "public SNPs, JASPAR 2024")
 
 
 def hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes):

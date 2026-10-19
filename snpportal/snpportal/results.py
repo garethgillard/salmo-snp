@@ -71,12 +71,14 @@ UNNAMED = "Unnamed in Ensembl; named by its human ortholog"
 TERMS = {"active": "active in a condition", "active_elsewhere": "active elsewhere only",
          "weak": "weak state in the chosen conditions", "coding": "CDS (protein change or unknown)", "synonymous": "CDS (synonymous)",
          "splice": "splice region", "utr": "UTR",
-         "constrained": "GERP constrained", "regbuild": "Ensembl regulatory", "molqtl": "molQTL lead (display only)"}
+         "constrained": "GERP constrained", "regbuild": "Ensembl regulatory", "molqtl": "molQTL lead (display only)",
+         "motif": "TF motif change in a peak"}
 ACTIVITY = {  # the Chromatin filter: what a SNP must be in, in at least one of the ticked conditions (a filter only)
     "peak": ("Robust ATAC peak", "inside an AQUA-FAANG robust ATAC peak, in any chromatin state"),
     "active": ("Active state", "inside a peak in an active state (Active TSS or Active enhancer)")}
 TERM_SHORT = {"active": "active", "active_elsewhere": "active elsewhere", "weak": "weak", "coding": "CDS", "synonymous": "synonymous",
-              "splice": "splice", "utr": "UTR", "constrained": "constrained", "regbuild": "Ensembl reg.", "molqtl": "molQTL"}
+              "splice": "splice", "utr": "UTR", "constrained": "constrained", "regbuild": "Ensembl reg.", "molqtl": "molQTL",
+              "motif": "TF motif"}
 QUIET = ("unknown_chromosomes", "aliases_applied", "alias_warnings", "columns_renamed", "columns_dropped",
          "duplicates_merged", "indels", "multiallelic")  # upload QC lines left out when empty or zero
 REJECTS = {"unknown_chrom": "unknown chromosome", "missing_chrom": "no chromosome", "bad_pos": "no valid position",

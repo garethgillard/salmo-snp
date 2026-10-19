@@ -89,6 +89,7 @@ CENTRE = "#FF1744"  # the locus browser's centre position on its ruler: a fluore
 SNP_SETS = {  # public SNP datasets in the locus browser: the 504-fish panel keeps the old lane's grey; the others are
     # ColorBrewer Dark2 hues that no tissue uses
     "public_af": "#495057", "aquafaang12": "#7570B3", "synchrosmolt_af": "#A6761D", "axiom": "#E7298A"}
+MOTIF = "#66A61E"  # ColorBrewer Dark2 green: a TF motif change (score block, locus browser row); no term or tissue uses it
 REGBUILD = "#56B4E9"  # Okabe-Ito sky blue: 'Ensembl regulatory' in the 'why this tier' bar (apart from the blues under CVD)
 
 # Status -> (text, background, border). Always shown with an icon and text, never colour alone.

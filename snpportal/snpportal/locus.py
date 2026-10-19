@@ -591,6 +591,10 @@ def details(snp):
         if snp.get("public_af_aquafaang12_af") is not None:
             out.append(("AQUA-FAANG 12 fish", f"alt AF {_fmt(snp['public_af_aquafaang12_af'])}, imputation DR2 "
                         f"{_fmt(snp.get('public_af_aquafaang12_dr2'))}"))
+    if "motif" in snp:
+        out.append(("TF motifs (JASPAR 2024)", f"{snp['motif_tfs']} (largest change {_fmt(snp.get('motif_delta'))} bits)"
+                    if snp.get("motif_changed") else "no motif change" if snp.get("motif")
+                    else "not checked (outside a robust ATAC peak)" if not snp.get("chromatin") else "not checked"))
     if "synchrosmolt_af" in snp:
         out.append(("Synchrosmolt parents (108 fish)", f"MAF {_fmt(snp.get('synchrosmolt_af_maf'))}, alt AF "
                     f"{_fmt(snp.get('synchrosmolt_af_af'))} ({snp.get('synchrosmolt_af_ns')} fish)" if snp.get("synchrosmolt_af") else

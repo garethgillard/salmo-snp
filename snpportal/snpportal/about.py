@@ -38,6 +38,8 @@ TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.sc
     "constrained": "Inside a GERP constrained element (65 fish).",
     "regbuild": "Inside an Ensembl regulatory feature with no AQUA-FAANG peak.",
     "molqtl": "A molQTL lead SNP: shown, not scored.",
+    "motif": "Inside a robust ATAC peak, one allele matches a JASPAR 2024 vertebrate motif at p < 1e-5 and the other "
+             "doesn't, at least 4 bits (16-fold) apart.",
 }
 GLOSSARY = [  # (anchor, term, definition)
     ("peak", "Robust ATAC peak", "An AQUA-FAANG open-chromatin peak reproduced across samples. States are only known inside these peaks."),
@@ -54,6 +56,8 @@ GLOSSARY = [  # (anchor, term, definition)
      "AQUA-FAANG salmon-trout clades; also called its ohnolog."),
     ("coordinates", "Coordinates", "Ssal_v3.1, chromosomes 1–29. Layers use BED intervals; a SNP at 1-based pos is inside "
      "one when start < pos ≤ end."),
+    ("motif", "TF motif change", "One allele of a SNP in a robust ATAC peak matches a transcription factor motif "
+     "(JASPAR 2024, p < 1e-5) and the other doesn't, at least 4 bits apart; motifs are predicted binding, not proof of it."),
     ("synthetic", "Synthetic", "Built from synthetic test data: not real results, never counted in tiers."),
 ]
 FORMATS = [  # (anchor, format, what is read, example built from the published vgll3 SNP)
@@ -94,6 +98,7 @@ LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall
     "flank_variants": ("Public variants within 35 bp (probe flanks)", "504-fish panel"),
     "public_af": ("Allele frequencies in 504 public fish, pooled", "504-fish panel"),
     "synchrosmolt_af": ("Allele frequencies in the 108 Synchrosmolt parents", "ENA PRJEB114348"),
+    "motif": ("TF motif changes at SNPs in robust ATAC peaks (879 vertebrate motifs)", "JASPAR 2024"),
     "axiom": ("SNPs on the Axiom array of the Complex Gill Disease study, with frequencies in 1,710 fish", "ENA PRJEB107807"),
     "molqtl": ("molQTL lead SNPs in 12 fish (display only)", "nf-RASQUAL"),
     "cm": ("Genetic map position (cM)", "Brekke et al."),
