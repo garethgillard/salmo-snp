@@ -39,7 +39,10 @@ ASSAYS = {"RNA": ("RNA-seq", "expression; + strand up, &#8722; down; conditions 
           "H3K4me1": ("ChIP-seq H3K4me1", "enhancers, active and primed"), "H3K27me3": ("ChIP-seq H3K27me3", "polycomb repression"),
           "CTCF": ("ChIP-seq CTCF", "insulators")}
 SKIP_TISSUES = {"Sperm"}  # sperm ChIP is left out (salmobase answers 403 for its files)
-GROUPS = ("peaks", "hmm", "assays", *ASSAYS)  # the groups ?open= may list
+GROUPS = ("public", "peaks", "hmm", "assays", *ASSAYS)  # the groups ?open= may list
+SNP_SETS = [  # (set, row label, sub-label) of the public SNP datasets, in row order; colours: palette.SNP_SETS
+    ("public_af", "504-fish panel", "wild and farmed, pooled"), ("aquafaang12", "AQUA-FAANG 12 fish", "imputed"),
+    ("synchrosmolt_af", "Synchrosmolt", "108 parents, WGS"), ("axiom", "Axiom array", "CGD study, 1,710 fish")]
 
 
 # ---- view state, links and the centre ----
@@ -226,17 +229,61 @@ def genes_group(request, s, ax, data):
                    'copies are still nearly identical</title></rect>' for b in data.get("lore", []))
     defs = locus_svg._hatch("sp", "lore", locus_svg.LORE, -45) if lore else ""  # id sp-lore
     rows.append(row("Genes", trk(h, (f"<defs>{defs}</defs>" if defs else "") + lore + "".join(body)), "Ensembl 116"))
-    body = [f'<line x1="0" x2="{W}" y1="26" y2="26" stroke="{G[300]}"/>']
-    for v in data.get("variants", []):
-        x, h = ax.x(v["pos"] - 0.5), 3 + 22 * min(0.5, v.get("maf") or 0) / 0.5
-        tip = (f"{s['chrom']}:{v['pos']:,} {v.get('ref')}>{v.get('alt')} · 504-fish panel: MAF {locus_svg._num(v.get('maf'))}, "
-               f"alt AF {locus_svg._num(v.get('af'))}" + (f" · AQUA-FAANG 12 fish: alt AF {locus_svg._num(v.get('aquafaang12_af'))}, "
-                                                          f"DR2 {locus_svg._num(v.get('aquafaang12_dr2'))}" if v.get("aquafaang12_af") is not None else ""))
-        body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="26" y2="{26 - h:.1f}" stroke="{G[700]}"><title>{escape(tip)}</title></line>')
-    if not data.get("variants"):
-        body.append(locus_svg._t(4, 20, "none in this window", 9.5, G[700]))
-    rows.append(row("Public variants", trk(28, "".join(body)), "504 fish, height = MAF"))
     return group("genes", "Genes and variants", "", rows)
+
+
+# ---- public SNPs ----
+
+def snp_sets(s, data):
+    """{set: [(pos, maf, tip)]} of the public SNP datasets in the window: the 504-fish panel and its 12 AQUA-FAANG fish
+    (public_af), the Synchrosmolt parents and the Axiom array (snpscore.locus PUBLIC_SNPS)."""
+    num, out = locus_svg._num, {}
+
+    def add(key, v, maf, text):
+        tip = f"{s['chrom']}:{v['pos']:,} {v.get('ref')}>{v.get('alt')} · {dict((k, l) for k, l, _ in SNP_SETS)[key]}: {text}"
+        out.setdefault(key, []).append((v["pos"], maf, tip))
+    for v in data.get("variants", []):
+        add("public_af", v, v.get("maf"), f"MAF {num(v.get('maf'))}, alt AF {num(v.get('af'))}")
+        af = v.get("aquafaang12_af")
+        if af is not None:
+            add("aquafaang12", v, min(af, 1 - af), f"alt AF {num(af)}, imputation DR2 {num(v.get('aquafaang12_dr2'))}")
+    for v in data.get("synchrosmolt_af", []):
+        add("synchrosmolt_af", v, v.get("maf"), f"MAF {num(v.get('maf'))}, alt AF {num(v.get('af'))} ({v.get('ns')} fish)")
+    for v in data.get("axiom", []):
+        add("axiom", v, v.get("maf"), f"{v.get('probe') or 'probe'}, MAF {num(v.get('maf'))} ({v.get('ns'):,} fish)")
+    return out
+
+
+def public_group(s, ax, data, open_):
+    """Public SNPs: one combined row (at each site a segment per dataset that has it, like the chromatin states'
+    count of conditions) and, opened, a row per dataset with height = MAF."""
+    found, seg = snp_sets(s, data), 7
+    sets = [x for x in SNP_SETS if x[0] in found]
+    h = seg * max(1, len(sets)) + 2
+    at = {}
+    for key, *_ in sets:
+        for pos, _, tip in found[key]:
+            at.setdefault(pos, []).append((key, tip))
+    body = [f'<line x1="0" x2="{W}" y1="{h}" y2="{h}" stroke="{G[300]}"/>']
+    for pos, hits in sorted(at.items()):
+        x = ax.x(pos - 0.5)
+        bars = "".join(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{h - i * seg:.1f}" y2="{h - (i + 1) * seg + 1:.1f}" '
+                       f'stroke="{palette.SNP_SETS[key]}" stroke-width="1.6"/>' for i, (key, _) in enumerate(hits))
+        body.append(f'<g><title>{escape(" · ".join([hits[0][1]] + [t.split(" · ", 1)[1] for _, t in hits[1:]]))}</title>{bars}</g>')
+    if not at:
+        body.append(locus_svg._t(4, h - 8, "no public SNP in this window", 9.5, G[700]))
+    more = []
+    for key, label, sub in sets:
+        rows = [f'<line x1="0" x2="{W}" y1="26" y2="26" stroke="{G[300]}"/>']
+        for pos, maf, tip in found[key]:
+            x, t = ax.x(pos - 0.5), 3 + 22 * min(0.5, maf or 0) / 0.5
+            rows.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="26" y2="{26 - t:.1f}" stroke="{palette.SNP_SETS[key]}">'
+                        f'<title>{escape(tip)}</title></line>')
+        more.append(row(label, trk(28, "".join(rows)), sub))
+    legend = [(f"sp-set-{key}", label) for key, label, _ in sets]
+    return group("public", "Public SNPs", "sites in public datasets; open for one row each, height = MAF",
+                 [row("Combined", trk(h + 1, "".join(body)), "datasets with the SNP")], more, f"{len(more)} datasets",
+                 open_, legend)
 
 
 # ---- regulatory elements and chromatin states ----
@@ -466,7 +513,8 @@ def context(request, s, layout):
     prefix = f"snpportal:{(info.get('sha256') or 'release')[:12]}"
     deadline = float(jobs.setting("SNPPORTAL_SIGNAL_DEADLINE", 4.0))
     notes = []
-    groups = [genes_group(request, s, ax, data), peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes),
+    groups = [genes_group(request, s, ax, data), public_group(s, ax, data, open_),
+              peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes),
               hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes)]
     synthetic = bool(info.get("synthetic")) or any(locus.synthetic_track(t) for t in (cfg or {}).get("tracks", []))
     if s["key"]:

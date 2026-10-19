@@ -457,7 +457,7 @@ def facts(snp, ev, states, chosen, active_states):
 
 def marker_chips(snp, ev):
     """The As a marker header's chips, seen when it is folded: [(text, class, tooltip)]: the assay check, the flanks' GC,
-    MAF ('low' below the panel designer's minimum), LORe and A/T or C/G."""
+    MAF ('low' below the panel designer's minimum), on the Axiom array, LORe and A/T or C/G."""
     out = []
     if ev.get("assay"):
         a = ev["assay"]
@@ -471,6 +471,9 @@ def marker_chips(snp, ev):
     elif m:
         out.append(("no public MAF", "not_checked", "Not a site of the 504-fish public panel" if not m.get("other") else
                     "The 504-fish public panel has a different variant at this position"))
+    if snp.get("axiom"):
+        out.append(("on Axiom array", "ok", f"Probe {snp.get('axiom_probe') or '?'} on the Axiom array genotyped in the Complex Gill "
+                    f"Disease study (ENA PRJEB107807): MAF {_fmt(snp.get('axiom_maf'))} in {snp.get('axiom_ns') or '?'} fish"))
     if snp.get("lore"):
         out.append(("LORe", "warn", TIPS["LORe region"]))
     if snp.get("strand_ambiguous"):
@@ -576,8 +579,8 @@ def mini_window(pos):
 
 
 def details(snp):
-    """[(label, value)] for the card's closed Details: the transcript, the public site, genetic map, flank variants
-    and the reference base."""
+    """[(label, value)] for the card's closed Details: the transcript, the public sites (504-fish panel, Synchrosmolt
+    parents, Axiom array), genetic map, flank variants and the reference base."""
     out = []
     if snp.get("coding_consequence"):
         out.append(("Transcript", ", ".join(x for x in (snp.get("coding_transcript"),  # the consequence is in the tier line
@@ -588,6 +591,14 @@ def details(snp):
         if snp.get("public_af_aquafaang12_af") is not None:
             out.append(("AQUA-FAANG 12 fish", f"alt AF {_fmt(snp['public_af_aquafaang12_af'])}, imputation DR2 "
                         f"{_fmt(snp.get('public_af_aquafaang12_dr2'))}"))
+    if "synchrosmolt_af" in snp:
+        out.append(("Synchrosmolt parents (108 fish)", f"MAF {_fmt(snp.get('synchrosmolt_af_maf'))}, alt AF "
+                    f"{_fmt(snp.get('synchrosmolt_af_af'))} ({snp.get('synchrosmolt_af_ns')} fish)" if snp.get("synchrosmolt_af") else
+                    "a different variant at this position" if snp.get("synchrosmolt_af_alleles") == "other" else "not a site"))
+    if "axiom" in snp:
+        out.append(("Axiom array (CGD study)", f"{snp.get('axiom_probe')}, MAF {_fmt(snp.get('axiom_maf'))} in {snp.get('axiom_ns')} fish"
+                    if snp.get("axiom") else "a different variant at this position" if snp.get("axiom_alleles") == "other"
+                    else "not on the array"))
     if "cm" in snp:
         out.append(("Genetic map (Brekke 2023)", f"{_fmt(snp.get('cm_female'))} cM female, {_fmt(snp.get('cm_male'))} cM male"
                     if snp.get("cm") else "outside the map's first and last marker on this chromosome"))

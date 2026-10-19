@@ -90,7 +90,7 @@ class LocusTest(SimpleTestCase):
 
     def test_locus_page_groups(self):
         page = self.get(f"{reverse('snpportal:locus')}?{VGLL3}")
-        for group in ("genes", "peaks", "hmm", "assays", "other"):  # track groups, closed by default
+        for group in ("genes", "public", "peaks", "hmm", "assays", "other"):  # track groups, closed by default
             self.assertIn(f'class="sp-grp" id="g-{group}"' if group != "assays" else 'class="sp-grp sp-sec" id="g-assays"', page)
         self.assertIn(palette.CENTRE, page)  # the centre position on the ruler
         self.assertIn("ENSSSAG00000053708", page)  # the vgll3 gene model, black, with its Ss4R duplicate linked
@@ -98,7 +98,9 @@ class LocusTest(SimpleTestCase):
         self.assertIn("duplicate chr21:33.00 Mb", page)
         self.assertIn("Ss4R block, duplicated on chr21", page)  # the chromosome: the block around the window
         self.assertIn("504-fish panel: MAF 0.48, alt AF 0.48", page)  # public variant at vgll3 Met54Thr (R1)
-        self.assertIn("AQUA-FAANG 12 fish: alt AF 0.67, DR2 1.00", page)
+        self.assertIn("AQUA-FAANG 12 fish: alt AF 0.67, imputation DR2 1.00", page)  # Public SNPs: a row per dataset
+        self.assertIn("Synchrosmolt: MAF", page)  # the 108 Synchrosmolt parents
+        self.assertIn('class="sp-set-synchrosmolt_af"', page)  # in the group's legend
         self.assertIn("vgll3_Met54Thr", page)
         self.assertNotIn("g-bgee", page)  # no Bgee expression on the locus browser
         self.assertIn("conditions with the peak", page)  # regulatory elements: the unified robust peaks

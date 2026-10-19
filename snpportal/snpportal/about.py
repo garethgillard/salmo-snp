@@ -93,6 +93,8 @@ LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall
     "ss4r": ("Ss4R duplicate of the nearest gene (salmonid genome duplication)", "AQUA-FAANG"),
     "flank_variants": ("Public variants within 35 bp (probe flanks)", "504-fish panel"),
     "public_af": ("Allele frequencies in 504 public fish, pooled", "504-fish panel"),
+    "synchrosmolt_af": ("Allele frequencies in the 108 Synchrosmolt parents", "ENA PRJEB114348"),
+    "axiom": ("SNPs on the Axiom array of the Complex Gill Disease study, with frequencies in 1,710 fish", "ENA PRJEB107807"),
     "molqtl": ("molQTL lead SNPs in 12 fish (display only)", "nf-RASQUAL"),
     "cm": ("Genetic map position (cM)", "Brekke et al."),
     "expression": ("Expression of the nearest gene per tissue", "nf-RASQUAL RNA-seq"),

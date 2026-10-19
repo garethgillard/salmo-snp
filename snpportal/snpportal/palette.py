@@ -86,6 +86,9 @@ REGIONS = {"coding": "#A63603", "UTR": "#E6550D", "exon": "#FD8D3C", "intron": "
            "other": GREY[300]}
 CENTRE = "#FF1744"  # the locus browser's centre position on its ruler: a fluorescent red that no track uses
 
+SNP_SETS = {  # public SNP datasets in the locus browser: the 504-fish panel keeps the old lane's grey; the others are
+    # ColorBrewer Dark2 hues that no tissue uses
+    "public_af": "#495057", "aquafaang12": "#7570B3", "synchrosmolt_af": "#A6761D", "axiom": "#E7298A"}
 REGBUILD = "#56B4E9"  # Okabe-Ito sky blue: 'Ensembl regulatory' in the 'why this tier' bar (apart from the blues under CVD)
 
 # Status -> (text, background, border). Always shown with an icon and text, never colour alone.
@@ -149,5 +152,7 @@ def _css(active):
         rules += [f".stp-{scheme}-{name}{{background:{fill};color:{text_on(fill)}}}" for name, fill in colours.items()]
     for tissue, colour in TISSUES.items():
         rules.append(f".sp-tissue-{tissue}{{color:{colour}}}")
+    for name, colour in SNP_SETS.items():
+        rules.append(f".sp-set-{name}{{background:{colour}}}")
     root = ":root{" + ";".join(f"--sp-{k}:{v}" for k, v in props.items()) + "}"
     return "\n".join([root] + rules)
