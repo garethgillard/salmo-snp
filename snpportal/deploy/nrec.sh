@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
-# Deploy the public demo to an NREC VM (GOLD Ubuntu 22.04, dualStack network, ports 22/80/443 open):
-#   bash deploy/nrec.sh <ssh host> <web name>      e.g.  bash deploy/nrec.sh nrec 158-39-75-12.sslip.io
+# Deploy the public demo to an NREC VM (GOLD Ubuntu 22.04/24.04, dualStack network, ports 22/80/443 open):
+#   bash deploy/nrec.sh <ssh host> <web name> [<web name> ...]
+#   e.g.  bash deploy/nrec.sh nrec 158.39.200.140 158-39-200-140.sslip.io   (the address: https://158.39.200.140/snp/)
+# Each name gets its own Caddy site and HTTPS certificate; an IPv4 address gets Let's Encrypt's short-lived IP
+# certificate (Caddy 2.10 or newer). The first name is the one checked at the end.
 # From this Mac it copies both repos (code only), the release and the genome to /srv/snpportal, then on the VM it
 # installs Python packages, Caddy (HTTPS from Let's Encrypt), a 2 GB swap file if there is none, and three systemd
 # units: gunicorn, and an hourly snpportal_cleanup. DuckDB gets half the RAM and every CPU. Safe to rerun after a
 # change: results and the secret key are kept.
 set -euo pipefail
 HOST=$1
-NAME=$2
+shift
+NAMES="$*"
+NAME=$1  # the first name, for the check at the end
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)  # the folder that holds both repos
 SNPSCORE=$ROOT/salmo-snpscore
 RELEASE=${RELEASE:-$SNPSCORE/release/dev}
@@ -21,7 +26,7 @@ rsync -az --delete "${SKIP[@]}" "$ROOT/salmo-snpportal/" "$HOST:/srv/snpportal/s
 rsync -az --delete "$RELEASE/" "$HOST:/srv/snpportal/release/"
 rsync -az "$GENOME" "$GENOME.fai" "$GENOME.gzi" "$HOST:/srv/snpportal/genome/"
 
-ssh "$HOST" "NAME=$NAME GENOME=$(basename "$GENOME") bash -s" <<'REMOTE'
+ssh "$HOST" "NAMES='$NAMES' NAME=$NAME GENOME=$(basename "$GENOME") bash -s" <<'REMOTE'
 set -euo pipefail
 cd /srv/snpportal
 if ! command -v caddy >/dev/null; then  # Caddy's own apt repository (caddyserver.com/docs/install)
@@ -44,7 +49,7 @@ cat > env <<EOF
 DJANGO_SETTINGS_MODULE=sandbox.settings
 DJANGO_DEBUG=0
 DJANGO_SECRET_KEY=$(cat secret_key)
-DJANGO_ALLOWED_HOSTS=$NAME
+DJANGO_ALLOWED_HOSTS=${NAMES// /,}
 DJANGO_STATIC_ROOT=/srv/snpportal/static
 SNPSCORE_RELEASE=/srv/snpportal/release
 SNPSCORE_GENOME=/srv/snpportal/genome/$GENOME
@@ -87,17 +92,12 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 EOF
-sudo tee /etc/caddy/Caddyfile >/dev/null <<EOF
-$NAME {
-	encode gzip
-	redir / /snp/
-	handle_path /static/* {
-		root * /srv/snpportal/static
-		file_server
-	}
-	reverse_proxy 127.0.0.1:8000
-}
-EOF
+for name in $NAMES; do  # one site per name; an IPv4 address gets Let's Encrypt's short-lived IP certificate
+  tls=""
+  [[ $name =~ ^[0-9.]+$ ]] && tls=$'\ttls {\n\t\tissuer acme {\n\t\t\tprofile shortlived\n\t\t}\n\t}\n'
+  printf '%s {\n%s\tencode gzip\n\tredir / /snp/\n\thandle_path /static/* {\n\t\troot * /srv/snpportal/static\n\t\tfile_server\n\t}\n\treverse_proxy 127.0.0.1:8000\n}\n\n' "$name" "$tls"
+done | sudo tee /etc/caddy/Caddyfile >/dev/null
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 sudo chmod 755 /srv/snpportal /srv/snpportal/static  # Caddy reads the static files; results stay 0700
 sudo systemctl daemon-reload
 sudo systemctl enable -q --now snpportal-cleanup.timer

@@ -5,8 +5,9 @@ Annotation logic lives in the sibling repo `salmo-snpscore` (see its README "Rel
 This app runs scoring jobs, shows the annotated result, and exports it. README "How it works" describes job folders and modules.
 
 ## Current phase: public demo
-G said go (2026-10-12): a public demo (no password) on an NREC VM, deployed with `deploy/nrec.sh` (sandbox project,
-gunicorn, Caddy). Merging into salmobase (Docker, Apache) waits until G says so.
+G said go (2026-10-12): a public demo (no password) on an NREC VM at https://158.39.200.140/snp/, deployed with
+`bash deploy/nrec.sh nrec 158.39.200.140 158-39-200-140.sslip.io` (sandbox project, gunicorn, Caddy). Always pass the
+IP address: the script rewrites the Caddy sites and allowed hosts from the names it is given. Merging into salmobase (Docker, Apache) waits until G says so.
 
 ## Match salmobase
 - Pages extend `snpportal/base_portal.html` (which extends `salmobase/base.html` and fills its blocks `head`, `content`, `scripts`). Bootstrap 5.1.3 and jQuery are already loaded there.

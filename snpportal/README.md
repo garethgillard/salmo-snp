@@ -46,10 +46,14 @@ salmobase's real base template. It serves static files while `DEBUG` is on.
 
 ## Public demo (NREC)
 
-`bash deploy/nrec.sh <ssh host> <web name>` puts the portal on an NREC VM (GOLD Ubuntu 22.04 on the `dualStack`
+The demo runs at **https://158.39.200.140/snp/** (and the older name https://158-39-200-140.sslip.io/snp/); redeploy
+with `bash deploy/nrec.sh nrec 158.39.200.140 158-39-200-140.sslip.io`.
+
+`bash deploy/nrec.sh <ssh host> <web name> [<web name> ...]` puts the portal on an NREC VM (GOLD Ubuntu 22.04 on the `dualStack`
 network, so it has a public IPv4 address; ports 22, 80 and 443 open). From this Mac it copies both repos (code only),
 `release/dev` and the genome to `/srv/snpportal`; on the VM it installs Django 4.2, DuckDB 1.2.2 and gunicorn in a
-venv, Caddy for HTTPS (Let's Encrypt; a free `<ip-with-dashes>.sslip.io` name works) and systemd units for the app
+venv, Caddy for HTTPS (a site per name: an IPv4 address gets Let's Encrypt's short-lived IP certificate, renewed by
+Caddy; a `<ip-with-dashes>.sslip.io` name works too) and systemd units for the app
 (`snpportal`) and an hourly `snpportal_cleanup`. Rerun it after a change: results and the secret key are kept. The
 sandbox project serves the demo with `DJANGO_DEBUG=0` and the settings in `/srv/snpportal/env`; `SNPSCORE_GENOME`
 points snpscore at the VM's genome copy. Logs: `journalctl -u snpportal`.
