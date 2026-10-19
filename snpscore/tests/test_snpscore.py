@@ -348,6 +348,12 @@ def test_sites_only_drops_genotypes(tmp_path):
                                                          "25\t100\t.\tC\tT\t.\tPASS\tAF=0.25", "25\t200\trs1\tG\tA\t.\tPASS\tAF=0.5"]
     assert '##INFO=<ID=AF,Number=A,Type=Float,Description="x">' in lines
     assert not any(w in x for x in lines for w in ("fishA", "fishB", "GT", "DR2", "0|1"))
+    sites_only(src.as_uri(), out, ["AC", "AN", "NS", "AF", "MAF"], count_gt=True)  # no usable AF: count the genotypes
+    lines = gzip.open(out, "rt").read().splitlines()
+    assert [x.split("\t")[7] for x in lines if not x.startswith("#")] == ["AC=1;AN=4;NS=2;AF=0.25;MAF=0.25",
+                                                                        "AC=2;AN=4;NS=2;AF=0.5;MAF=0.5"]
+    assert sum(x.startswith("##INFO=<ID=AF,") for x in lines) == 1  # the counted AF replaces the file's own
+    assert not any(w in x for x in lines for w in ("fishA", "fishB", "0|1", "1|1"))
 
 
 def test_manifest(release):
@@ -475,7 +481,9 @@ def test_read_snps_keeps_input_order(tmp_path):
 #   consequence for the 5 fixture SNPs it was computed for, 4 missense ('missense p.Thr46Met' instead of 'CDS') and 1
 #   synonymous, which fires the 'synonymous' term instead of 'coding' (same weight). tier and tier_score are unchanged
 #   for every preset (checked against the old scoring path without the coding columns, as in test_coding.py).
-GOLDEN = "3ba3a7139ffff6c4ea3344daf6635e966482801fd1eb66f9870c728dc11e57b6"
+# - synchrosmolt_af layer (2026-10-19): seven synchrosmolt_af* columns after public_af; every other value unchanged
+#   (checked by building the fixture with and without the layer).
+GOLDEN = "e9c2a3a352d229972b52054c52ee0122972709e05422573ff261e492246183f9"
 
 
 def test_long_lists_are_written_in_sorted_parts(release, tmp_path, monkeypatch):

@@ -23,6 +23,7 @@ from .tracks import CHROMATIN_CONDITIONS
 MIN_WINDOW, MAX_WINDOW = 200, 2_000_000  # annotation lanes
 MAX_SIGNAL = 500_000  # signal and ChromHMM rows are read only in windows up to this wide
 CAPS = {"genes": 300, "peaks": 5000, "regbuild": 5000, "gerp": 5000, "variants": 5000}  # rows per lane; more = truncated
+PUBLIC_SNPS = ("synchrosmolt_af", "axiom")  # point layers of public SNP sets besides public_af ('variants')
 RUNGS = (10, 50, 200, 1000, 5000)  # signal tile grid: bases per bin
 TILE_BINS = 200  # bins per signal tile
 HMM_TILE = 250_000  # bases per ChromHMM tile
@@ -96,7 +97,8 @@ def locus(release_dir, chrom, start, end, all_transcripts=False):
     """The release's lanes in chrom:start-end (at most MAX_WINDOW bp; lanes stop at CAPS rows, listed in 'truncated'):
     genes (one model each: the canonical transcript, else the longest; all transcripts, canonical first, with
     all_transcripts), peaks with their state per condition, regbuild, gerp, blacklist, lore, public variants
-    (pos 1-based, with af/maf/dr2) and known loci. A lane whose file the release lacks is an empty list."""
+    (pos 1-based, with af/maf/dr2), the other public SNP sets (PUBLIC_SNPS, each under its layer name) and known
+    loci. A lane whose file the release lacks is an empty list."""
     if end - start > MAX_WINDOW:
         raise ValueError(f"windows are at most {MAX_WINDOW:,} bp")
     release = Path(release_dir).resolve()
@@ -132,6 +134,8 @@ def locus(release_dir, chrom, start, end, all_transcripts=False):
     for name in ("regbuild", "gerp", "blacklist", "lore"):
         out[name] = lane(name, cap=CAPS.get(name, 1000))
     out["variants"] = [dict(v, pos=v["end"]) for v in lane("variants", "public_af", CAPS["variants"])]
+    for name in PUBLIC_SNPS:  # the other public SNP sets, each its own lane (af, maf, ...; axiom: probe)
+        out[name] = [dict(v, pos=v["end"]) for v in lane(name, cap=CAPS["variants"])]
     out["known"] = [r for r in catalog(release) if r.get("chrom") == chrom and r.get("pos", "").isdigit()
                     and start < int(r["pos"]) <= end]
     out["genes"] = _genes(release, rows, chrom, lane("genes", "gene", CAPS["genes"]), all_transcripts)

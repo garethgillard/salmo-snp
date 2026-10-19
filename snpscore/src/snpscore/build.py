@@ -120,14 +120,19 @@ def read_gff3_transcripts(path, layer):
 def read_vcf_info(path, layer):
     # Variant sites (1-bp intervals) with ref, alt and numbers from INFO: `info` maps column -> INFO key (integers where
     # the VCF header says Type=Integer). With several `files`, the first gives the sites and each other adds its own
-    # `info` columns where chrom, pos, ref and alt match.
+    # `info` columns where chrom, pos, ref and alt match. rename_chrom: true maps other chromosome names (ssa01,
+    # HG993260.1, ...) to 1-29 through the alias table; id_as: <column> keeps the VCF ID (e.g. an array probe name).
     def one(p, info):
         types = info_types(p)
         values = "".join(f", try_cast(regexp_extract(info, '(?:^|;){key}=([^;,]+)', 1) AS {types.get(key, 'DOUBLE')}) "
                          f"AS {q(col)}" for col, key in info.items())
-        return f"""SELECT chrom, pos::BIGINT - 1 AS start, pos::BIGINT AS "end", upper(ref) AS ref, upper(alt) AS alt{values}
+        chrom = "coalesce(a.chrom, v.chrom)" if layer.get("rename_chrom") else "v.chrom"
+        alias = "LEFT JOIN chrom_alias a ON a.alias = lower(v.chrom)" if layer.get("rename_chrom") else ""
+        probe = f", nullif(id, '.') AS {q(layer['id_as'])}" if layer.get("id_as") else ""
+        return f"""SELECT {chrom} AS chrom, pos::BIGINT - 1 AS start, pos::BIGINT AS "end", upper(ref) AS ref,
+                          upper(alt) AS alt{probe}{values}
                    FROM read_csv({lit(p)}, header=false, all_varchar=true, delim='\t', comment='#', quote='',
-                                 names=['chrom', 'pos', 'id', 'ref', 'alt', 'qual', 'filter', 'info'])"""
+                                 names=['chrom', 'pos', 'id', 'ref', 'alt', 'qual', 'filter', 'info']) v {alias}"""
     paths = path if isinstance(path, list) else [path]
     first, *others = [one(p, src.get("info", layer.get("info"))) for p, src in zip(paths, sources(layer))]
     return f"SELECT * FROM ({first})" + "".join(f' LEFT JOIN ({o}) USING (chrom, start, "end", ref, alt)' for o in others)
@@ -301,7 +306,7 @@ def fetch(layers_yaml, data_dir):
             target.parent.mkdir(parents=True, exist_ok=True)
             part = target.with_name(target.name + ".part")
             if layer.get("sites_only"):
-                sites_only(url, part, layer["sites_only"])
+                sites_only(url, part, layer["sites_only"], layer.get("count_gt", False))
             elif url.endswith(".bb") and target.suffix == ".bed":
                 with tempfile.NamedTemporaryFile(suffix=".bb") as bb:
                     download(url, Path(bb.name))
@@ -318,10 +323,26 @@ def download(url, target):
         shutil.copyfileobj(r, out, 1 << 20)
 
 
-def sites_only(url, target, keys):
+GT_INFO = {b"AC": b"Integer", b"AN": b"Integer", b"NS": b"Integer", b"AF": b"Float", b"MAF": b"Float"}
+
+
+def gt_counts(fmt, samples):
+    """{AC, AN, NS, AF, MAF} of one biallelic site from its sample columns: ALT alleles, called alleles, samples with a
+    call, ALT and minor allele frequency (None without calls)."""
+    gts = samples if fmt == b"GT" else b"\t".join(x.split(b":", 1)[0] for x in samples.split(b"\t"))
+    ac, an = gts.count(b"1"), gts.count(b"1") + gts.count(b"0")
+    af = ac / an if an else None
+    return {b"AC": ac, b"AN": an, b"NS": sum(b"." not in g for g in gts.split(b"\t")),
+            b"AF": None if af is None else round(af, 6), b"MAF": None if af is None else round(min(af, 1 - af), 6)}
+
+
+def sites_only(url, target, keys, count_gt=False):
     """Stream a gzipped VCF from `url` into a gzipped sites-only VCF at `target`: the first 8 columns, with only the INFO
-    `keys`, and no sample names. The genotype columns are dropped as the file streams in, so they never reach the disk."""
+    `keys`, and no sample names. The genotype columns are dropped as the file streams in, so they never reach the disk.
+    With count_gt, the AC, AN, NS, AF and MAF among `keys` are counted from the genotypes first (gt_counts), replacing
+    any the file has: only these per-site numbers are kept."""
     keys = {k.encode() for k in keys}
+    counted = {k for k in GT_INFO if k in keys} if count_gt else set()
     request = urllib.request.Request(url, headers={"User-Agent": "snpscore (salmobase SNP portal build)"})
     with urllib.request.urlopen(request, timeout=120) as r, gzip.GzipFile(fileobj=r) as vcf, \
             gzip.open(target, "wb", compresslevel=6) as out:
@@ -334,14 +355,21 @@ def sites_only(url, target, keys):
             kept = []
             for line in lines:
                 if line.startswith(b"##"):
-                    if line.startswith(b"##INFO=<ID=") and line[11:].split(b",")[0] in keys:
+                    key = line[11:].split(b",")[0]
+                    if line.startswith(b"##INFO=<ID=") and key in keys and key not in counted:
                         kept.append(line)
                 elif line.startswith(b"#"):
+                    kept += [b"##INFO=<ID=%s,Number=1,Type=%s,Description=\"Counted from the genotypes by snpscore fetch\">"
+                             % (k, GT_INFO[k]) for k in sorted(counted)]
                     kept.append(b"\t".join(line.split(b"\t", 8)[:8]))
                 elif line:
-                    f = line.split(b"\t", 8)[:8]
-                    f[7] = b";".join(kv for kv in f[7].split(b";") if kv.split(b"=")[0] in keys)
-                    kept.append(b"\t".join(f))
+                    f = line.split(b"\t", 9)
+                    info = [kv for kv in f[7].split(b";") if kv.split(b"=")[0] in keys - counted]
+                    if counted and len(f) > 9:
+                        info += [b"%s=%s" % (k, str(v).encode()) for k, v in gt_counts(f[8], f[9]).items()
+                                 if k in counted and v is not None]
+                    f[7] = b";".join(info) or b"."
+                    kept.append(b"\t".join(f[:8]))
                     n += 1
             out.write(b"".join(x + b"\n" for x in kept))
             if not chunk:
@@ -390,6 +418,9 @@ def build(layers_yaml, data_dir, out_dir):
     if genome:
         local = (data / genome["file"]).resolve()
         manifest["genome"] = {"url": genome["url"], "path": str(local) if local.exists() else None}
+    aliases = cfg.get("aliases")
+    if aliases and (data / aliases["file"]).exists():  # for layers with rename_chrom
+        con.execute(f"CREATE TABLE chrom_alias AS {alias_sql(data / aliases['file'], aliases.get('extra', []))}")
     ends = {}  # chrom -> largest end over the positional layers
     for layer in cfg["layers"]:
         paths = [data / s["file"] for s in sources(layer)]
@@ -483,11 +514,17 @@ def chrom_sizes(fai, ends):
 
 
 def build_aliases(con, path, target, extra=()):
-    """alias.parquet (alias, chrom, warning) from salmobase alias_filtered.txt (chrom, RefSeq, GenBank, ssaNN; no
-    header), plus the accessions without version, chrN, chrNN and ssaN for the numbered chromosomes, and the `extra`
-    names ({alias, chrom, warning}) that annotate accepts with a warning. Aliases are lower case."""
+    """alias.parquet (alias, chrom, warning): alias_sql written out."""
+    con.execute(f"COPY ({alias_sql(path, extra)}) TO {lit(target)} (FORMAT parquet)")
+    return con.execute(f"SELECT count(*) FROM read_parquet({lit(target)})").fetchone()[0]
+
+
+def alias_sql(path, extra=()):
+    """(alias, chrom, warning) from salmobase alias_filtered.txt (chrom, RefSeq, GenBank, ssaNN; no header), plus the
+    accessions without version, chrN, chrNN and ssaN for the numbered chromosomes, and the `extra` names ({alias, chrom,
+    warning}) that annotate accepts with a warning. Aliases are lower case."""
     more = " ".join(f"UNION ALL SELECT lower({lit(e['alias'])}), {lit(e['chrom'])}, {lit(e['warning'])}" for e in extra)
-    con.execute(f"""COPY (
+    return f"""
         WITH a AS (SELECT * FROM read_csv({lit(path)}, header=false, delim='\t', all_varchar=true,
                                           names=['chrom', 'refseq', 'genbank', 'name'])),
         n AS (SELECT chrom FROM a WHERE regexp_matches(chrom, '^[0-9]+$'))
@@ -496,8 +533,7 @@ def build_aliases(con, path, target, extra=()):
                                  regexp_replace(genbank, '\\.[0-9]+$', '')])) AS alias, chrom, NULL::VARCHAR AS warning FROM a
             UNION ALL SELECT unnest(['chr' || chrom, 'chr' || lpad(chrom, 2, '0'), 'ssa' || chrom]), chrom, NULL FROM n
             {more})
-        WHERE alias IS NOT NULL ORDER BY alias, warning NULLS FIRST, chrom) TO {lit(target)} (FORMAT parquet)""")
-    return con.execute(f"SELECT count(*) FROM read_parquet({lit(target)})").fetchone()[0]
+        WHERE alias IS NOT NULL ORDER BY alias, warning NULLS FIRST, chrom"""
 
 
 def build_rsid(con, v31, v2, target):

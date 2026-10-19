@@ -31,7 +31,9 @@ pytest -q                                        # tests run on the small region
 
 `fetch` needs a current CA bundle on old Python/OpenSSL builds: `SSL_CERT_FILE=/path/to/cert.pem snpscore fetch`.
 It streams the 975 MB 504-fish VCF and writes only its sites and frequencies (`sites_only` in layers.yaml: CHROM to
-INFO with AF, MAF, AC, AN, NS; 88 MB): genotypes and sample names never reach the disk.
+INFO with AF, MAF, AC, AN, NS; 88 MB): genotypes and sample names never reach the disk. A source with `count_gt: true`
+(the Synchrosmolt parents, whose VCF has no frequencies) gets AC, AN, NS, AF and MAF counted from its genotypes as it
+streams, and only those are kept.
 
 ## Input SNPs
 
@@ -129,7 +131,7 @@ parquets are zstd-compressed.
 Layers today: `chromatin` (interval with `chromatin_id`), `region`, `regbuild`, `gerp`, `blacklist`, `lore` (interval),
 `gene` (nearest: strand, id, name, biotype, description), `transcripts` (features), `gene_ortholog` (gene: human,
 zebrafish), `ss4r` (gene: ohnolog, ohnolog_chrom, class; AQUA-FAANG Ss4R duplicates), `flank_variants` (count, 504-fish panel sites), `public_af` (point: af, maf, ac, an, ns, aquafaang12_af,
-aquafaang12_dr2), `molqtl` (point: n, tissues, kinds, best_bf, features), `cm` (interval, interpolate: male, female),
+aquafaang12_dr2), `synchrosmolt_af` (point: af, maf, ac, an, ns), `molqtl` (point: n, tissues, kinds, best_bf, features), `cm` (interval, interpolate: male, female),
 `expression` (gene: one column per tissue).
 
 - `public_af`: the nf-rasqual 504-fish reference panel (Beagle-phased; sites with HWE p < 1e-6 removed; MAF > 0.01;
@@ -139,6 +141,16 @@ aquafaang12_dr2), `molqtl` (point: n, tissues, kinds, best_bf, features), `cm` (
   `aquafaang12_af` and `aquafaang12_dr2` are the 12-fish VCF's INFO AF and DR2 (frequency in those 12 fish and their
   imputation quality); every 12-fish site is a panel site. vgll3 Met54Thr (25:28996360 C/T): af 0.480159 (504 fish),
   aquafaang12_af 0.67. layers.yaml records the `population` and `licence: to confirm`.
+- `synchrosmolt_af`: the 108 whole-genome sequenced parents of the Synchrosmolt family experiment (NMBU; ENA
+  PRJEB114348, 411,908 SNPs, Beagle-phased; chromosomes ssa01-ssa29, mapped to 1-29 with `rename_chrom` through the
+  alias table). The ENA analysis also has 2,730 offspring imputed from these parents: 99.97% of their sites are
+  parent sites and their frequencies follow the crosses (100 full-sib families), so only the parents are used.
+  247,196 sites are also 504-fish panel sites.
+- Not added: the CGD Axiom array VCF (ENA PRJEB107807) says Ssal_v3.1 but its contig lengths are Ssal_v3's (chr1
+  158,978,050 bp, chr2 72,924,950 bp), EVA files it under Ssal_v3, and its 63,809 positions hit WGS panel sites at
+  chance level (0.26%); its reference alleles were set from a genome, so they look right anyway. It needs a lift
+  from Ssal_v3 to Ssal_v3.1 (or a v3.1 file from the submitters) first; layers.yaml takes it back with
+  `id_as: probe` and `rename_chrom: true`.
 - `molqtl`: nf-RASQUAL (Nguyen et al. 2025) eigenMT tables from github.com/datngu/nf-RASQUAL_paper: caQTL for Brain,
   Gonad, Liver and Muscle ATAC (Gill ATAC left out: the assay was discarded) and eQTL for Brain, Gill, Gonad, Liver and
   Muscle RNA. The tables hold one lead SNP per feature (12 fish), so this is not fine-mapping and coloc can't run on it.

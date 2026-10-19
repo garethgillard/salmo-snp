@@ -224,6 +224,28 @@ layers:
       2025;26:1070, doi:10.1186/s12864-025-12302-5; sample collection: Bertolotti et al. 2020 (ENA PRJEB38061)
     licence: to confirm (frequencies derived from the salmobase panel; genotypes are never kept)
 
+  - name: synchrosmolt_af
+    type: point
+    format: vcf_info
+    rename_chrom: true  # the VCF names chromosomes ssa01-ssa29
+    files:
+      - file: synchrosmolt_parents.sites.vcf.gz
+        url: https://ftp.sra.ebi.ac.uk/vol1/analysis/ERZ295/ERZ29514745/Synchrosmolt_phased_parents_snp.eva_header.vcf.gz
+        sites_only: [AC, AN, NS, AF, MAF]
+        count_gt: true  # the file has no frequencies: fetch counts them from the genotypes, then drops the genotypes
+        info: {af: AF, maf: MAF, ac: AC, an: AN, ns: NS}
+    description: >-
+      Site at this exact position among the 108 whole-genome sequenced parents of the Synchrosmolt family experiment:
+      ALT allele frequency (af), minor allele frequency (maf), ALT allele count (ac), alleles (an) and fish (ns) with a
+      call (411,908 SNPs, phased with Beagle)
+    population: >-
+      108 parent fish of the Synchrosmolt smoltification family experiment (NMBU), whole-genome sequenced; their
+      offspring were imputed from these fish, so the offspring add no sites and their frequencies follow the crosses
+    citation: >-
+      Synchrosmolt parent SNP genotypes, ENA PRJEB114348 (NMBU, 2026; reads PRJEB47441); Saitou M et al. 2025, bioRxiv
+      doi:10.1101/2025.10.16.682803
+    licence: ENA open data (EMBL-EBI terms of use); frequencies only, genotypes are never kept
+
   - name: molqtl
     type: point
     format: nfrasqual
