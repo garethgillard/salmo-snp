@@ -22,6 +22,8 @@ weights:  # whole numbers (tier_score is an integer)
   constrained: 2       # GERP constrained element (65 fish)
   regbuild: 1          # Ensembl regulatory feature with no AQUA-FAANG peak (68-86% of them overlap a peak)
   molqtl: 0            # nf-RASQUAL caQTL/eQTL lead SNP (12 fish, lead SNPs only): shown in tier_terms, not scored
+  motif: 1             # G (2026-10-19): inside a robust ATAC peak, one allele matches a JASPAR 2024 motif at p < 1e-5 and
+                       # the other doesn't, with at least 4 bits between them (layers.yaml `motif`; about 15% of in-peak SNPs)
 
 # Minimum tier_score for tiers 1, 2 and 3; anything lower is tier 4.
 # e.g. tier 1 = active + constrained, or CDS + constrained; tier 2 = active, or CDS; tier 3 = any weaker evidence.

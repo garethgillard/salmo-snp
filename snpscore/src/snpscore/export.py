@@ -138,7 +138,10 @@ def methods_text(manifest, weights, preset="all", release_dir=None, finemap=None
             + f"a weak state ({w.get('weak')}), a CDS change to the protein or of unknown effect ({w.get('coding')}), a "
             f"synonymous CDS change ({w.get('synonymous', w.get('coding'))}), splice region ({w.get('splice')}), UTR "
             f"({w.get('utr')}), a GERP constrained element ({w.get('constrained')}) and an Ensembl regulatory feature "
-            f"outside AQUA-FAANG peaks ({w.get('regbuild')}); tiers 1-3 need a score of at least "
+            f"outside AQUA-FAANG peaks ({w.get('regbuild')})"
+            + (f", and a transcription factor motif changed inside a robust ATAC peak ({w['motif']}: one allele matches a "
+               "JASPAR 2024 vertebrate motif at p < 1e-5 and the other does not, at least 4 bits apart)" if w.get("motif") else "")
+            + "; tiers 1-3 need a score of at least "
             f"{', '.join(str(t) for t in weights.get('tiers', []))}. These rules are PROVISIONAL.")
     models = next((l for l in manifest.get("layers", []) if l.get("format") == "gff3_transcripts"), None)
     if models and manifest.get("genome"):

@@ -483,7 +483,9 @@ def test_read_snps_keeps_input_order(tmp_path):
 #   for every preset (checked against the old scoring path without the coding columns, as in test_coding.py).
 # - synchrosmolt_af layer (2026-10-19): seven synchrosmolt_af* columns after public_af; every other value unchanged
 #   (checked by building the fixture with and without the layer).
-GOLDEN = "e9c2a3a352d229972b52054c52ee0122972709e05422573ff261e492246183f9"
+# - motif layer and term (2026-10-19): six motif* columns after synchrosmolt_af; no fixture SNP changes a motif (the
+#   fixture genome is mostly N), so tiers are unchanged (checked by building with and without the layer).
+GOLDEN = "7ba0332580ca662d5b8179821ad8bcd55bf48e9585020190ee644d217b6604e6"
 
 
 def test_long_lists_are_written_in_sorted_parts(release, tmp_path, monkeypatch):
@@ -499,3 +501,22 @@ def test_golden_annotate_hash(release, tmp_path):
         lines = annotate(FIXTURE / name, release, tmp_path / f"{name}.tsv").read_text().splitlines()
         h.update("\n".join(lines[:1] + sorted(lines[1:])).encode())
     assert h.hexdigest() == GOLDEN, f"annotate output changed; if on purpose, set GOLDEN = '{h.hexdigest()}'"
+
+
+def test_motif_changes():
+    """A perfect CTCF site loses its match when its most informative base changes: the change names the allele that
+    matches; the same allele twice changes nothing; a stricter p-value needs a higher score."""
+    from snpscore import motif
+    meme = FIXTURE / "JASPAR2024_CORE_vertebrates_non-redundant_pfms_meme.txt"
+    ctcf = [m for m in motif.matrices(meme) if m[0] == "MA0139.2"]
+    lo = ctcf[0][2]
+    k = max(range(len(lo)), key=lambda i: max(lo[i]) - min(lo[i]))
+    site = "".join("ACGT"[c.index(max(c))] for c in lo)
+    w = 32
+    seq = "A" * (w - k) + site + "A" * (w + 1 - len(site) + k)
+    good, bad = seq[w], "ACGT"[lo[k].index(min(lo[k]))]
+    found = motif.changes(seq, w, good, bad, ctcf, min_delta=4)
+    assert [(name, allele) for _, name, allele in found] == [("CTCF", good)] and found[0][0] >= 4
+    assert motif.changes(seq, w, good, good, ctcf) == []
+    assert motif.threshold(lo, 1e-6) > motif.threshold(lo, 1e-5) > motif.threshold(lo, 1e-4)
+    assert motif.summary(found)[:3] == (True, 1, f"CTCF ({good})")

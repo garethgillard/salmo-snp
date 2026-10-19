@@ -42,6 +42,13 @@ Decided:
   the Table's drawer.
 - Public demo (2026-10-12): the portal runs openly (no password) on an NREC VM, so the molQTL rows and the 504-fish
   allele frequencies are shown publicly; the licence questions under Open are still to confirm with their owners.
+- TF motifs (2026-10-19): JASPAR 2024 CORE vertebrates non-redundant (879 motifs, the set SalMotifDB v2 uses), scored
+  ourselves in pure Python (no FIMO). +1 (weights.motif) when, inside a robust ATAC peak, one allele matches a motif at
+  p < 1e-5 and the other doesn't, with at least 4 bits between them (about 15% of in-peak public SNPs; at FIMO's
+  p < 1e-4 76% would score). SalMotifDB data (promoter hits, TOBIAS footprints) only with the authors' files and
+  permission: its robots.txt disallows the API.
+- Synchrosmolt (2026-10-19): the 108 parents' frequencies only (the offspring were imputed from them). The CGD Axiom
+  VCF (PRJEB107807) waits: its positions are not Ssal_v3.1 (README "Not added").
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.

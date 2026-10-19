@@ -35,6 +35,8 @@ gzip -dc "$RAW/$SITES" | awk -F'\t' -v OFS='\t' "$HIT /^#/ { print; next } hit(\
 SYNCHRO=synchrosmolt_parents.sites.vcf.gz  # sites and counted frequencies only (as fetch keeps them); chromosomes ssa01-ssa29
 gzip -dc "$RAW/$SYNCHRO" | awk -F'\t' -v OFS='\t' "$HIT /^#/ { print; next } { c = \$1; sub(/^ssa0?/, \"\", c) }
      hit(c, \$2 - 1, \$2) { \$3 = \".\"; print }" | gzip -9 > "$OUT/$SYNCHRO"
+MEME=JASPAR2024_CORE_vertebrates_non-redundant_pfms_meme.txt  # the header, every 25th motif and CTCF (the fixture genome is mostly N, so few sites score)
+awk '/^MOTIF/ { n++; keep = (n % 25 == 1) || /CTCF$/ } !seen && /^MOTIF/ { seen = 1 } !seen || keep' "$RAW/$MEME" > "$OUT/$MEME"
 for f in "$RAW"/nfrasqual_*.txt; do
   awk -F'\t' "$HIT FNR == 1 { print; next } { split(\$1, s, \"_\") } hit(s[1], s[2] - 1, s[2]) && \$7 < 1" "$f" > "$OUT/${f##*/}"
 done

@@ -69,6 +69,9 @@ def scored(table, weights, columns, trait, synthetic=()):
     if "regbuild" in columns:  # mostly the same elements as the AQUA-FAANG peaks, so only counted where there is no peak
         no_peak = " AND NOT chromatin" if "chromatin" in columns else ""
         terms.append(("regbuild", "regbuild", f"regbuild{no_peak}", "'Ensembl ' || regbuild_type"))
+    if "motif_changed" in columns and "motif" in w:  # a JASPAR motif match changed by the alleles, inside a robust peak
+        in_peak = " AND coalesce(chromatin, false)" if "chromatin" in columns else ""
+        terms.append(("motif", "motif", f"coalesce(motif_changed, false){in_peak}", "'motif: ' || motif_tfs"))
     if "molqtl" in columns and "molqtl" in w:  # nf-RASQUAL lead SNP: display only while its weight is 0
         terms.append(("molqtl", "molqtl", "molqtl", "'molQTL lead: ' || molqtl_tissues"))
     terms = [t for t in terms if t[0] not in synthetic]

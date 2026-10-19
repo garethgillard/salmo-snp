@@ -136,6 +136,7 @@ def locus(release_dir, chrom, start, end, all_transcripts=False):
     out["variants"] = [dict(v, pos=v["end"]) for v in lane("variants", "public_af", CAPS["variants"])]
     for name in PUBLIC_SNPS:  # the other public SNP sets, each its own lane (af, maf, ...; axiom: probe)
         out[name] = [dict(v, pos=v["end"]) for v in lane(name, cap=CAPS["variants"])]
+    out["motif"] = [dict(v, pos=v["end"]) for v in lane("motif", cap=CAPS["variants"]) if v.get("changed")]  # TF motif changes
     out["known"] = [r for r in catalog(release) if r.get("chrom") == chrom and r.get("pos", "").isdigit()
                     and start < int(r["pos"]) <= end]
     out["genes"] = _genes(release, rows, chrom, lane("genes", "gene", CAPS["genes"]), all_transcripts)

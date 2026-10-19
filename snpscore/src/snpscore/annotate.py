@@ -9,7 +9,7 @@ from pathlib import Path
 
 import duckdb
 
-from . import assay, coding
+from . import assay, coding, motif
 from .fasta import Fasta
 from .formats import ACCEPTED, RESERVED, InputError, TooMany, detect, lit, q, source  # noqa: F401 (RESERVED re-exported)
 from .score import load_weights, scored
@@ -434,6 +434,10 @@ def _annotate(con, path, release, out, manifest, weights, trait, sequence, step,
                     for key, col in (("coding", "coding_consequence"), ("coding_notes", "coding_note")):
                         report[key] = dict(con.execute(f"SELECT {col}, count(*) FROM coding WHERE {col} IS NOT NULL "
                                                        "GROUP BY 1 ORDER BY 2 DESC, 1").fetchall())
+                layer = next((l for l in manifest["layers"] if l.get("format") == "motif_effects"), None)
+                if layer and (release / layer["meme"]).exists() and not location.startswith("http"):
+                    step("motifs")  # in-peak SNPs that the precomputed layer doesn't hold (not public sites)
+                    report["motif"] = motif.add_effects(con, location, release / layer["meme"], layer)
             except OSError:  # remote genome unreachable: annotate without the sequence columns
                 report["assembly"] = {"verdict": "not_checked", "checked": 0, "message": "The genome could not be read."}
         # A/T and C/G SNPs read the same on both strands, which some genotyping assays can't tell apart.

@@ -17,6 +17,7 @@ from pathlib import Path
 import duckdb
 import yaml
 
+from . import motif
 from .bbi import BBIFile
 from .formats import lit, q
 
@@ -424,7 +425,14 @@ def build(layers_yaml, data_dir, out_dir):
     ends = {}  # chrom -> largest end over the positional layers
     for layer in cfg["layers"]:
         paths = [data / s["file"] for s in sources(layer)]
-        con.execute(f"CREATE OR REPLACE TABLE layer AS {READERS[layer['format']](paths if 'files' in layer else paths[0], layer)}")
+        if layer["format"] == "motif_effects":  # computed from built layers and the genome; annotate reads the motifs
+            shutil.copyfile(paths[0], out / "motif.meme")
+            layer = dict(layer, meme="motif.meme")
+            tmp = out / ".motif-effects.tsv"
+            con.execute(f"CREATE OR REPLACE TABLE layer AS {motif.layer_sql(con, paths[0], layer, out, data / genome['file'], tmp)}")
+            tmp.unlink()
+        else:
+            con.execute(f"CREATE OR REPLACE TABLE layer AS {READERS[layer['format']](paths if 'files' in layer else paths[0], layer)}")
         if layer["type"] == "interval":
             check_no_overlap(con, layer["name"])
         if layer["type"] in UNIQUE:
