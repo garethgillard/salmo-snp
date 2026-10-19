@@ -332,11 +332,17 @@ def peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes):
         more.append(row(short(c), trk(13, "".join(parts)), tissue=tissue_of(c), dense=True))
     if any(v is None for v in found.values()):
         notes.append("Some per-condition peak tracks did not load in time (grey rows); reload to try again.")
-    rows = [row("Combined", trk(32, "".join(body)), f"n/{len(conditions)}: conditions with the peak")]
-    if (jobs.release() / "motif.parquet").exists():
-        rows.append(motif_row(s, ax, data))
     return group("peaks", "Regulatory elements", "AQUA-FAANG robust ATAC peaks, coloured by chromatin state",
-                 rows, more, f"{len(more)} conditions", open_)
+                 [row("Combined", trk(32, "".join(body)), f"n/{len(conditions)}: conditions with the peak")],
+                 more, f"{len(more)} conditions", open_)
+
+
+def motifs_group(s, ax, data):
+    """TF motifs: the public SNPs in robust peaks whose alleles change a JASPAR 2024 motif match (motif_row); only
+    when the release has the motif layer."""
+    if not (jobs.release() / "motif.parquet").exists():
+        return None
+    return group("motifs", "TF motifs", "JASPAR 2024 motifs changed by public SNPs in robust ATAC peaks", [motif_row(s, ax, data)])
 
 
 LOGO_BP = 150  # the motif row draws logos (and the sequence) in windows up to this wide; ticks in wider ones
@@ -359,9 +365,9 @@ def motif_row(s, ax, data):
                      f'<title>{escape(tip)}</title></line>')
     if not found:
         body.append(locus_svg._t(4, 15, "no motif change at a public SNP in this window", 9.5, G[700]))
-        return row("TF motif changes", trk(22, "".join(body)), "public SNPs, JASPAR 2024")
+        return row("Motif changes", trk(22, "".join(body)), "at public SNPs")
     h = popouts(s, ax, found, body, 22)
-    return row("TF motif changes", trk(h, "".join(body)), "public SNPs, JASPAR 2024")
+    return row("Motif changes", trk(h, "".join(body)), "at public SNPs")
 
 
 def popouts(s, ax, found, body, y, n=2, gap=24):
@@ -419,7 +425,7 @@ def motif_logo_row(s, ax, found, lane_h=30):
     seq = locus.reference(s["chrom"], s["start"], s["end"])
     for i, b in enumerate(seq):  # the reference sequence, + strand
         body.append(locus_svg._t(ax.x(s["start"] + i) + cw / 2, h_all + 11, b, min(10, cw * 1.3), palette.BASES.get(b, G[700]), "middle", "600"))
-    return row("TF motif changes", trk(h_all + 14, "".join(body)), "logos at the SNPs, + strand")
+    return row("Motif changes", trk(h_all + 14, "".join(body)), "logos at the SNPs, + strand")
 
 
 def hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes):
@@ -598,7 +604,7 @@ def context(request, s, layout):
     prefix = f"snpportal:{(info.get('sha256') or 'release')[:12]}"
     deadline = float(jobs.setting("SNPPORTAL_SIGNAL_DEADLINE", 4.0))
     notes = []
-    groups = [genes_group(request, s, ax, data), public_group(s, ax, data, open_),
+    groups = [genes_group(request, s, ax, data), public_group(s, ax, data, open_), motifs_group(s, ax, data),
               peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes),
               hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes)]
     synthetic = bool(info.get("synthetic")) or any(locus.synthetic_track(t) for t in (cfg or {}).get("tracks", []))
