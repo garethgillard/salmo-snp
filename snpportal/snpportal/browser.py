@@ -339,19 +339,87 @@ def peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes):
                  rows, more, f"{len(more)} conditions", open_)
 
 
+LOGO_BP = 150  # the motif row draws logos (and the sequence) in windows up to this wide; ticks in wider ones
+
+
 def motif_row(s, ax, data):
-    """Public SNPs in a robust peak whose alleles change a JASPAR 2024 motif match (the scored rule), height = the
-    largest score change; hover names the TFs and the allele that matches."""
+    """Public SNPs in a robust peak whose alleles change a JASPAR 2024 motif match (the scored rule). Up to LOGO_BP
+    wide: each changed motif's logo on the + strand where it sits (stacked in lanes), the SNP's column outlined, and
+    the reference sequence under them; wider: a tick per SNP, height = the largest score change. Hover: the TFs and
+    the allele that matches."""
+    found = data.get("motif", [])
+    if found and s["end"] - s["start"] <= LOGO_BP:
+        return motif_logo_row(s, ax, found)
     body = [f'<line x1="0" x2="{W}" y1="20" y2="20" stroke="{G[300]}"/>']
-    for v in data.get("motif", []):
+    for v in found:
         x, h = ax.x(v["pos"] - 0.5), 4 + 14 * min(12, v.get("delta") or 0) / 12
         tip = (f"{s['chrom']}:{v['pos']:,} {v.get('ref')}>{v.get('alt')} · changes {v.get('n')} motif"
                f"{'s' * ((v.get('n') or 0) != 1)}: {v.get('tfs')} · largest change {locus_svg._num(v.get('delta'))} bits")
         body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="20" y2="{20 - h:.1f}" stroke="{palette.MOTIF}" stroke-width="1.6">'
                      f'<title>{escape(tip)}</title></line>')
-    if not data.get("motif"):
+    if not found:
         body.append(locus_svg._t(4, 15, "no motif change at a public SNP in this window", 9.5, G[700]))
-    return row("TF motif changes", trk(22, "".join(body)), "public SNPs, JASPAR 2024")
+        return row("TF motif changes", trk(22, "".join(body)), "public SNPs, JASPAR 2024")
+    h = popouts(s, ax, found, body, 22)
+    return row("TF motif changes", trk(h, "".join(body)), "public SNPs, JASPAR 2024")
+
+
+def popouts(s, ax, found, body, y, n=2, gap=24):
+    """Under the ticks, the motif logos of the `n` SNPs with the largest change, enlarged in a wedge from each SNP
+    (as the card draws them); a note when more SNPs change a motif. Appends to body; returns the row's height."""
+    top = sorted(found, key=lambda v: (-(v.get("delta") or 0), v["pos"]))[:n]
+    slot = (W - gap * (len(top) - 1)) / len(top)
+    shown = []
+    for i, v in enumerate(sorted(top, key=lambda v: v["pos"])):
+        hits, seq, w = locus.motif_hits(s["chrom"], v["pos"], v.get("ref"), v.get("alt"))
+        if hits:
+            shown.append((i, v, locus_svg.motif_logos(hits, seq, w, v["ref"].upper(), v["alt"].upper(), width=slot, row=34)))
+    y0, tallest = y + 14, 0
+    for i, v, (panel, pw, ph, sx) in shown:
+        px = i * (slot + gap) + (slot - pw) / 2
+        x = ax.x(v["pos"] - 0.5)
+        body.insert(0, f'<path d="M{x:.1f} {y - 1} L{px + 64:.1f} {y0} L{px + pw - 132:.1f} {y0}Z" fill="{G[100]}"/>')  # under the ticks
+        body.append(f'<g transform="translate({px:.1f} {y0})">{panel}</g>')
+        tallest = max(tallest, ph)
+    if len(found) > len(shown):
+        body.append(locus_svg._t(W - 4, 9, f"enlarged: the {len(shown)} SNP{'s' * (len(shown) != 1)} with the largest change of "
+                                            f"{len(found)}; zoom in to {LOGO_BP} bp for all of them", 9, G[700], "end"))
+    return y0 + tallest + 4 if shown else y
+
+
+def motif_logo_row(s, ax, found, lane_h=30):
+    """motif_row at base resolution: logos in lanes, the SNPs' columns, the reference sequence."""
+    cw = ax.x(s["start"] + 1) - ax.x(s["start"])
+    placed, lanes = [], []  # (lane, x0, x1, hit, snp)
+    for v in found:
+        hits, _, w = locus.motif_hits(s["chrom"], v["pos"], v.get("ref"), v.get("alt"))
+        for h in hits:
+            first = v["pos"] - w + h["start"]  # 1-based position of the motif's first base on the + strand
+            x0, x1 = ax.x(first - 1), ax.x(first - 1 + len(h["probs"]))
+            lane = next((i for i, end in enumerate(lanes) if end <= x0 - 4), None)
+            if lane is None:
+                lanes.append(0)
+                lane = len(lanes) - 1
+            lanes[lane] = x1
+            placed.append((lane, x0, x1, h, v))
+    h_all = lane_h * max(1, len(lanes))
+    body = []
+    for v in found:  # the SNPs' columns, under everything
+        x = ax.x(v["pos"] - 1)
+        body.append(f'<rect x="{x:.1f}" y="0" width="{cw:.1f}" height="{h_all + 14}" fill="{palette.MOTIF}" fill-opacity="0.12" '
+                    f'stroke="{palette.MOTIF}"/>')
+    for lane, x0, x1, h, v in placed:
+        y = lane * lane_h
+        tip = (f"{h['tf']} ({h['id']}, {h['strand']} strand) at {s['chrom']}:{v['pos']:,}: {h['allele']} matches; "
+               f"{v.get('ref')} {h['ref_score']:.1f}, {v.get('alt')} {h['alt_score']:.1f} bits, a match needs {h['cut']:.1f}")
+        cols = "".join("".join(locus_svg.logo_column(x0 + i * cw, y + lane_h - 2, cw, lane_h - 12, probs))
+                       for i, probs in enumerate(locus_svg.strand_rows(h)))
+        body.append(f'<g><title>{escape(tip)}</title>{locus_svg._t(x0, y + 8, h["tf"] + (" (−)" if h["strand"] == "-" else ""), 8.5, G[900], weight="600")}'
+                    f'{cols}</g>')
+    seq = locus.reference(s["chrom"], s["start"], s["end"])
+    for i, b in enumerate(seq):  # the reference sequence, + strand
+        body.append(locus_svg._t(ax.x(s["start"] + i) + cw / 2, h_all + 11, b, min(10, cw * 1.3), palette.BASES.get(b, G[700]), "middle", "600"))
+    return row("TF motif changes", trk(h_all + 14, "".join(body)), "logos at the SNPs, + strand")
 
 
 def hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes):

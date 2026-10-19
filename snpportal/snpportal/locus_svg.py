@@ -627,6 +627,65 @@ def strongest(states):
     return next((x for x in STATE_ORDER if x in states), "Accessible_chromatin")
 
 
+def _letter(base, x, bottom, cw, h):
+    """One logo letter cw wide and h tall, standing on `bottom` (a monospace glyph scaled to the box)."""
+    return (f'<text transform="translate({x:.2f} {bottom:.2f}) scale({cw / 6:.3f} {h / 7.3:.3f})" font-family="Menlo, Consolas, '
+            f'monospace" font-weight="700" font-size="10" fill="{palette.BASES[base]}">{base}</text>')
+
+
+def logo_column(x, bottom, cw, height, probs):
+    """The stacked letters of one motif position (probabilities in A, C, G, T order): heights = probability x
+    information content, `height` for 2 bits, the most likely base on top."""
+    ic = 2 + sum(p * math.log2(p) for p in probs if p > 0)
+    out, y = [], bottom
+    for p, base in sorted(zip(probs, "ACGT")):
+        h = height * p * ic / 2
+        if h >= 0.5:
+            out.append(_letter(base, x, y, cw, h))
+            y -= h
+    return out
+
+
+def strand_rows(hit):
+    """A hit's probability rows as they sit on the + strand (a - strand motif is reverse-complemented)."""
+    return hit["probs"] if hit["strand"] == "+" else [row[::-1] for row in hit["probs"][::-1]]
+
+
+def motif_logos(hits, seq, w, ref, alt, width=640, row=34):
+    """The motifs a SNP changes, over the stretch of its window they cover: one row each (the TF on the left; its
+    logo on the + strand; the two alleles' scores against the match cut-off on the right), then the reference
+    sequence, with the SNP's column outlined and its alt allele under it. Returns (svg body, panel width, height,
+    x of the SNP column's centre) drawn from 0,0; hits: snpscore.motif.hits()."""
+    lo = min([h["start"] for h in hits] + [w - 6])
+    hi = max([h["start"] + len(h["probs"]) for h in hits] + [w + 7])
+    left, right, n = 64, 132, hi - lo
+    cw = max(4.0, min(12.0, (width - left - right) / n))
+    body, y = [], 0
+    for h in hits:
+        x0 = left + (h["start"] - lo) * cw
+        for i, probs in enumerate(strand_rows(h)):
+            body += logo_column(x0 + i * cw, y + row - 2, cw, row - 4, probs)
+        other = alt if h["allele"] == ref else ref
+        tip = (f"{h['tf']} ({h['id']}, {h['strand']} strand): {h['allele']} matches ({max(h['ref_score'], h['alt_score']):.1f} bits), "
+               f"{other} does not ({min(h['ref_score'], h['alt_score']):.1f}); a match needs {h['cut']:.1f} bits (p < 1e-5)")
+        tx = left + n * cw + 8
+        body.append(f'<g><title>{escape(tip)}</title><rect x="0" y="{y}" width="{left + n * cw + right:.1f}" height="{row}" fill="{G[50]}" fill-opacity="0.01"/>'
+                    + _t(left - 6, y + row / 2, h["tf"], 10, G[900], "end", "600")
+                    + _t(left - 6, y + row / 2 + 11, f"{h['strand']} strand", 9, G[700], "end")
+                    + _t(tx, y + row / 2, f"{ref} {h['ref_score']:.1f} · {alt} {h['alt_score']:.1f} bits", 9.5, G[900])
+                    + _t(tx, y + row / 2 + 11, f"a match needs {h['cut']:.1f}", 9, G[700])
+                    + "</g>")
+        y += row
+    for i, b in enumerate(seq[lo:hi]):  # the reference sequence, + strand
+        body.append(_t(left + (i + 0.5) * cw, y + 10, b, 9, G[700] if lo + i != w else G[900], "middle", "600" if lo + i == w else None))
+    sx = left + (w - lo) * cw
+    body.insert(0, f'<rect x="{sx:.1f}" y="0" width="{cw:.1f}" height="{y + 22}" fill="{palette.MOTIF}" fill-opacity="0.12" '
+                   f'stroke="{palette.MOTIF}" stroke-width="1"/>')
+    body.append(_t(sx + cw / 2, y + 21, alt, 9, palette.MOTIF, "middle", "700") + _t(left - 6, y + 10, "+ strand", 9, G[700], "end")
+                + _t(left - 6, y + 21, "alt", 9, G[700], "end"))
+    return "".join(body), left + n * cw + right, y + 24, sx + cw / 2
+
+
 def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, tiles=None):
     """The card's mini locus browser: the locus browser's lanes in one SVG: the list's SNPs (unnamed; tier colour,
     height = score, faded when not in the selection), genes, public variants (height = MAF), GERP constrained elements

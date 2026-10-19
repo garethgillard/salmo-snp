@@ -27,6 +27,9 @@ from django.utils.safestring import mark_safe
 
 import snpscore
 from snpscore import locus as sl
+from snpscore import motif as sm
+from snpscore.annotate import genome_location
+from snpscore.fasta import Fasta
 from snpscore import panel as snp_panel
 from snpscore import tracks as st
 from snpscore.formats import lit
@@ -302,6 +305,47 @@ TIPS = {"LORe region": "region where the duplicated chromosomes still pair; prob
         "A/T or C/G SNP": "strand-ambiguous; needs care on arrays"}
 
 
+_MOTIFS, _FASTA = {}, {}  # the release's motif matrices and genome reader, kept per process
+
+
+def motif_layer():
+    """The release's motif layer (its p_value, min_delta and meme file), or None."""
+    return next((l for l in jobs.manifest().get("layers", []) if l.get("format") == "motif_effects"), None)
+
+
+def reference(chrom, start, end):
+    """The genome's bases chrom:start-end (BED coordinates, upper case), or '' without a genome."""
+    location = genome_location(jobs.manifest())
+    if not location:
+        return ""
+    if location not in _FASTA:
+        _FASTA.clear()
+        _FASTA[location] = Fasta(location)
+    return _FASTA[location].fetch(chrom, start, end).upper()
+
+
+def motif_hits(chrom, pos, ref, alt, top=3):
+    """(hits, window, w) for a SNP: the motifs its alleles change by the release's rule (snpscore.motif.hits, largest
+    change first, at most `top`) in its reference window, the SNP at index w; ([], None, 0) without a motif layer, a
+    genome or single-base alleles."""
+    layer = motif_layer()
+    meme = layer and jobs.release() / layer.get("meme", "motif.meme")
+    location = genome_location(jobs.manifest())
+    if not (layer and meme.exists() and location and ref and alt and len(ref) == len(alt) == 1):
+        return [], None, 0
+    key = (str(meme), meme.stat().st_mtime, layer.get("p_value"))
+    if key not in _MOTIFS:
+        _MOTIFS.clear()
+        _MOTIFS[key] = sm.matrices(meme, layer.get("p_value", sm.P_VALUE))
+    if location not in _FASTA:
+        _FASTA.clear()
+        _FASTA[location] = Fasta(location)
+    motifs = _MOTIFS[key]
+    w = sm.flank(motifs)
+    seq = _FASTA[location].fetch(chrom, pos - 1 - w, pos + w).upper()
+    return sm.hits(seq, w, ref.upper(), alt.upper(), motifs, layer.get("min_delta", sm.MIN_DELTA))[:top], seq, w
+
+
 def evidence(snp, weights, trait, synthetic=False, snps=()):
     """The evidence card for one annotated row (a dict of its columns), each part only when its columns exist: the key
     facts and the caveats; the score breakdown; the functional evidence at the locus (a mini locus browser with the
@@ -329,6 +373,14 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
         data = lanes(chrom, *mini_window(pos))
         ev["mini"] = mark_safe(locus_svg.mini_browser(data, pos, snps, lambda gid: reverse("snpportal:gene", args=[gid]), synthetic,
                                                       tiles=tiles))
+    if snp.get("motif_changed"):  # the card's TF motifs section: the logos and both alleles' scores
+        hits, seq, w = motif_hits(chrom, pos, ref, alt)
+        if hits:
+            body, pw, ph, _ = locus_svg.motif_logos(hits, seq, w, ref.upper(), alt.upper(), row=64)  # tall logos on the card
+            more = (snp.get("motif_n") or len(hits)) - len(hits)
+            ev["motifs"] = {"svg": mark_safe(figures.svg(pw, ph, "TF motifs the SNP changes", f"{len(hits)} JASPAR 2024 motifs whose match "
+                                                         f"one allele makes and the other breaks: {snp.get('motif_tfs')}", body, synthetic)),
+                            "more": more}
     if snp.get("gene_id"):
         ev["gene"] = gene_context(snp)
     expression = {c[len("expression_"):]: snp[c] for c in snp if c.startswith("expression_")}
