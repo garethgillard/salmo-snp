@@ -410,8 +410,9 @@ enrichment_low/high, after '#' provenance lines. caQTLs share the AQUA-FAANG ATA
 their chromatin enrichment is partly circular; eQTLs are the fairer test; leads come from 12 fish (winner's curse).
 
 Positive sets:
-- `benchmark/known_loci.tsv` (also the release catalogue): 37 rows (36 published SNPs and the sdY gene region) across 8 traits, from
-  the verified 2026-10 research catalogue (36 rows; RESEARCH.md section 2) plus the earlier six6_lead_2022. Positions
+- `benchmark/known_loci.tsv` (also the release catalogue): 40 rows (39 published SNPs and the sdY gene region) across 8 traits, from
+  the verified 2026-10 research catalogue (36 rows; RESEARCH.md section 2), the earlier six6_lead_2022, and the three
+  chromosome 14 'hubsmolt' SNPs of the Synchrosmolt preprint (Saitou et al. 2025, Fig. 4; added 2026-10-20). Positions
   are Ssal_v3.1 through EVA release 9 rs IDs, flank matches (`prep/lift_icsasg_v2.py`) or the paper; `caveat` flags
   the inferred ones. bco1l rs863785818: A on the + strand = red flesh (the paper's T, other strand). vgll3 Met54Thr is
   T46M on Ensembl's ENSSSAT00000230965 (aCg/aTg): the published residue numbers are Ensembl's + 8 (Asn323Lys is

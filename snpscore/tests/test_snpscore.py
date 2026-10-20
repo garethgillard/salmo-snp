@@ -92,8 +92,8 @@ def test_benchmark_covers_every_known_locus(release, tmp_path):
     assert rows["region_class = CDS"][3] > 0 and all(0 <= r[4] <= 1 for r in rows.values())
     out = annotate(ROOT / "benchmark" / "known_loci.tsv", release, tmp_path / "known.parquet")
     known = read(out)
-    # 37 catalogue rows; those on chromosomes 9, 25 and 26 are in the fixture, the rest are unknown chromosomes here
-    assert len(known) == 14 and report(out)["rejected"] == {"unknown_chrom": 23}
+    # 40 catalogue rows; those on chromosomes 9, 25 and 26 are in the fixture, the rest are unknown chromosomes here
+    assert len(known) == 14 and report(out)["rejected"] == {"unknown_chrom": 26}
     outside = {"fbxo34like_SW2020", "itprid2_Lochy_25_27034108"}  # on fixture chromosomes, outside its regions
     assert all(r["gene_id"] and r["flank_variants"] is not None for r in known if r["id"] not in outside)
 
@@ -315,7 +315,7 @@ def test_known_loci(release, tmp_path):
     # bco1l: A on the Ssal_v3.1 + strand = red flesh (the paper's T, other strand); here A is the reference allele
     assert rows["bco1l_rs863785818"]["known_effect_allele"] == "A" and rows["bco1l_rs863785818"]["known_effect_note"] == "ref"
     catalog = list(__import__("csv").DictReader(open(ROOT / "benchmark" / "known_loci.tsv"), delimiter="\t"))
-    assert len(catalog) == 37 and len({r["trait"] for r in catalog}) == 8 and sum(bool(r["effect_allele"]) for r in catalog) == 12
+    assert len(catalog) == 40 and len({r["trait"] for r in catalog}) == 8 and sum(bool(r["effect_allele"]) for r in catalog) == 13
     f = tmp_path / "SYNTHETIC.tsv"
     f.write_text(SYNTHETIC + "chrom\tpos\tid\tref\talt\n25\t28996360\tswapped\tT\tC\n25\t28996460\tnear\tA\tG\n")
     rows = {r["id"]: r for r in read(annotate(f, release, tmp_path / "swapped.parquet"))}
@@ -364,7 +364,7 @@ def test_manifest(release):
     layers = {l["name"]: l for l in m["layers"]}
     assert "Bertolotti" in layers["public_af"]["population"] and "European farmed" not in json.dumps(m)
     assert layers["molqtl"]["licence"].startswith("to confirm") and len(layers["molqtl"]["urls"]) == 9
-    assert m["rsid"]["rows"] > 0 and m["catalog"]["rows"] == 37
+    assert m["rsid"]["rows"] > 0 and m["catalog"]["rows"] == 40
     assert m["duckdb_version"] == duckdb.__version__ and "weights.yaml" in m["files"]
     aliases = dict(duckdb.sql(f"SELECT alias, chrom FROM read_parquet('{release / 'alias.parquet'}')").fetchall())
     assert aliases["nc_059466.1"] == aliases["ssa25"] == aliases["chr25"] == aliases["hg993284"] == "25"

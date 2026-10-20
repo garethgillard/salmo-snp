@@ -47,6 +47,9 @@ Decided:
   p < 1e-5 and the other doesn't, with at least 4 bits between them (about 15% of in-peak public SNPs; at FIMO's
   p < 1e-4 76% would score). SalMotifDB data (promoter hits, TOBIAS footprints) only with the authors' files and
   permission: its robots.txt disallows the API.
+- Hubsmolt known loci (2026-10-20, G asked): the chromosome 14 hub SNP ssa14_50815335 and its two high-LD cis-eQTL SNPs
+  (ssa14_50820817, ssa14_50852463) from the Synchrosmolt preprint (Saitou et al. 2025, Fig. 4) under smoltification;
+  the paper gives no alleles, so the hub SNP's effect allele (A) is the Synchrosmolt parents' minor allele (caveat says so).
 - Synchrosmolt (2026-10-19): the 108 parents' frequencies only (the offspring were imputed from them). The CGD Axiom
   VCF (PRJEB107807) waits: its positions are not Ssal_v3.1 (README "Not added").
 
@@ -92,7 +95,7 @@ Open (ask G; all collected with options and recommendations in DECISIONS.md):
   may we redistribute derived rows, which significance rule (paper: eigenMT BF < 0.1), which allele does pi refer to?
 - Public AF: the 504-fish panel is mostly Bertolotti 2020 (PRJEB38061) wild/farmed fish plus the 12 AQUA-FAANG fish; may we host
   derived AF, and how should the population be described? (RESEARCH.md section 4)
-- ImmunoMap regions; Enhancer-CNE source; vetting of the 36-row known-loci catalogue (RESEARCH.md section 2).
+- ImmunoMap regions; Enhancer-CNE source; vetting of the 40-row known-loci catalogue (RESEARCH.md section 2).
 - Data gap: the public 12-fish VCF (pool, demo list, synthetic GWAS) has only 70 sites on chr10 and stops near 105 Mb on chr1,
   while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
 - Assay QC: flank repeat shares are mostly 0 or 1, so ~55% of public SNPs warn on 'repeat' whatever the cut-off; should fully
