@@ -6,7 +6,7 @@ table's drawer), collect selections in a Design panel, compare it with an existi
 print a one-page report.
 GWAS summary statistics get an Association page (Manhattan, tier-stratified QQ, loci, regional plot and fine-mapping
 with a functional prior). Without a list: search (genes, NCBI LOC symbols, rs IDs, positions), gene pages, a locus
-browser with live salmobase signal, published associations and molQTL leads, the known-loci catalogue (36 published SNPs
+browser with live salmobase signal, published associations and molQTL leads, the known-loci catalogue (39 published SNPs
 and a gene region across 8 traits, with evidence badges) and a guided tour (an illustrated slide show). All annotation logic lives in the sibling repo
 [salmo-snpscore](../salmo-snpscore); this app handles upload, jobs, display and export.
 
