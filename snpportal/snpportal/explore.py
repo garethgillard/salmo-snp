@@ -576,7 +576,7 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
               "wait": "#dd-active[open] .sp-dd-panel", "crop": [".nav-tabs", "#dd-active .sp-dd-panel", "tr[data-card]:nth-child(14)"]}},
     {"slug": "card", "title": "See why it got its tier",
      "text": "The score adds up the SNP's evidence as blocks, each as wide as its points, against the tier cut-offs. "
-             "Below come its peak and chromatin state in each condition, and how it would work as a marker.",
+             "Below come its peak and chromatin state per condition, any TF motifs it changes, and how it works as a marker.",
      "alt": "The evidence card of akap11 Val214Met beside the Table: score blocks for an active state and a missense "
             "change, a mini locus browser with the chromatin state per condition, and the marker check.",
      "callouts": [("What earned the score; dashed lines: tier cut-offs", "#card-body .sp-score svg"),
@@ -585,8 +585,8 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("As a marker: assay check, GC and MAF", "#cs-marker > summary")],
      "shot": {"path": "results/{snps}/?tab=table&snp=2", "width": 1000, "crop": [".sp-card-bar", "#cs-marker > summary", "tr.sp-selected"]}},
     {"slug": "locus", "title": "Explore a locus",
-     "text": "The locus browser lines up genes, published loci, regulatory elements, chromatin states and live RNA, ATAC "
-             "and ChIP data from salmobase. From a card, Open locus browser shows it over the table until you go back.",
+     "text": "The locus browser lines up genes, public SNPs, TF motif changes, regulatory elements, chromatin states and "
+             "live RNA, ATAC and ChIP data from salmobase. From a card, Open locus browser shows it over the table.",
      "alt": "Locus browser at vgll3 on chromosome 25: genes and published SNPs, regulatory elements, chromatin states and "
             "the functional assays.",
      "callouts": [("Zoom and move", ".sp-bctl .btn-group:nth-of-type(1)"),
