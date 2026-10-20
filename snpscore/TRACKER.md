@@ -186,6 +186,17 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [x] Score page lists this browser's results; Design panel page (Add to panel from the Table, chip comparison, problems-first SNP list with drops by hand, vendor files; this browser only, 24 h)
 - [x] Guided tour (8 slides, new screenshots), Help, Methods, Run locally, report, READMEs and methods text match the above
 
+### More public data (2026-10-19/20)
+- [x] Synchrosmolt parents' allele frequencies (`synchrosmolt_af`, ENA PRJEB114348; 108 WGS fish) and the locus browser's Public SNPs group (combined row, a row per dataset)
+- [x] TF motif evidence: JASPAR 2024 motif changes at SNPs in robust peaks (+1, G's rule), the card's TF motifs section (logos, both alleles' scores) and the browser's TF motifs group
+- [x] Known loci: the three chromosome 14 hubsmolt SNPs (Saitou et al. 2025 preprint, Fig. 4)
+- [x] Public demo at https://158.39.200.140/snp/ (deploy/nrec.sh with the IP and the sslip.io name)
+- [ ] CGD Axiom array positions (ENA PRJEB107807): need Ssal_v3.1 positions from the submitters (README "Not added")
+- [ ] Synchrosmolt gill eQTL table (45,543 SNP-gene pairs): ask the Sandve lab; would join the molQTL lane
+- [ ] DeepFARM salmon scores: ask D. T. Nguyen for the model weights or precomputed scores for the 504-panel SNPs
+- [ ] LD reference (Synchrosmolt parents or the 504-fish panel, r2 pairs only): G to choose the population
+- [ ] Motif hits in repeats (low-complexity motifs such as EWSR1-FLI1 and ZSCAN4 fire most): G to decide whether to skip soft-masked windows
+
 ### Review pass (2026-10-07)
 - [x] Six-lens review (correctness, security/privacy, Python 3.8 + performance, UI/UX, science, tests/docs): 49 findings, 48 confirmed by two skeptics, fixed (commits e246d89 / 59c27b0)
 - [x] Final check: snpscore 100 + portal 57 tests, dev and live suites, 953-URL smoke test on release/dev
