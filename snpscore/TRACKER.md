@@ -190,7 +190,7 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [x] Synchrosmolt parents' allele frequencies (`synchrosmolt_af`, ENA PRJEB114348; 108 WGS fish) and the locus browser's Public SNPs group (combined row, a row per dataset)
 - [x] TF motif evidence: JASPAR 2024 motif changes at SNPs in robust peaks (+1, G's rule), the card's TF motifs section (logos, both alleles' scores) and the browser's TF motifs group
 - [x] Known loci: the three chromosome 14 hubsmolt SNPs (Saitou et al. 2025 preprint, Fig. 4)
-- [x] Public demo at https://158.39.200.140/snp/ (deploy/nrec.sh with the IP and the sslip.io name)
+- [x] Public demo at https://158.39.75.9/snp/ (deploy/nrec.sh with the IP and the sslip.io name)
 - [ ] CGD Axiom array positions (ENA PRJEB107807): need Ssal_v3.1 positions from the submitters (README "Not added")
 - [ ] Synchrosmolt gill eQTL table (45,543 SNP-gene pairs): ask the Sandve lab; would join the molQTL lane
 - [ ] DeepFARM salmon scores: ask D. T. Nguyen for the model weights or precomputed scores for the 504-panel SNPs
