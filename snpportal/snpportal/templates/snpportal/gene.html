@@ -1,0 +1,113 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% comment %}Gene page: facts, known loci with their caveats, expression and the locus view; the 10 best public variants
+   (then 'Show all'); the element grid closed. The conditions, flank and sort apply on change (htmx swaps #gene).{% endcomment %}
+{% block main %}
+<div id="gene" hx-target="#gene" hx-select="#gene" hx-swap="outerHTML">
+<div class="row g-3 mb-3">
+  <div class="col-lg-5">
+    <section class="sp-card" aria-labelledby="about-h">
+      <h2 id="about-h">About this gene</h2>
+      <dl class="sp-dl sp-small mt-2">
+        <dt>Ensembl name</dt><dd>{% if gene.name %}{{ gene.name }}{% else %}<span title="{{ unnamed_tip }}">unnamed in Ensembl 116</span>{% endif %}</dd>
+        {% if gene.alias %}<dt>Catalogue name</dt><dd>{{ gene.alias }}</dd>{% endif %}
+        <dt>Human ortholog</dt><dd>{{ gene.human|default:"none in Ensembl Compara" }}</dd>
+        <dt>Zebrafish ortholog</dt><dd>{{ gene.zebrafish|default:"none in Ensembl Compara" }}</dd>
+        {% if gene.description %}<dt>Description</dt><dd>{{ gene.description }}</dd>{% endif %}
+      </dl>
+      <p class="sp-small mt-2 mb-0">
+        <a href="{{ salmobase }}" rel="noreferrer noopener" target="_blank">SalmoBase</a> ·
+        <a href="{{ ensembl }}" rel="noreferrer noopener" target="_blank">Ensembl</a> ·
+        <a href="{{ jbrowse }}" rel="noreferrer noopener" target="_blank">JBrowse</a></p>
+      {% for r in loci %}<p class="sp-status sp-status-ok sp-small mt-2 mb-0">&#9733; <strong>{{ r.id }}</strong> ({{ r.trait_text }}),
+        <a href="{% url 'snpportal:variant' r.chrom|add:'-'|add:r.pos %}">{{ r.chrom }}:{{ r.pos }}</a>{% if r.effect %}: {{ r.effect }}{% endif %}.
+        {% for cls, text, tip in r.flags %}{% include 'snpportal/_badges.html' with kind='evidence' value=text cls=cls tip=tip %} {% endfor %}{% if r.caveat %}<em>{{ r.caveat }}</em>{% endif %}</p>{% endfor %}
+      {% if ss4r.copies %}<p class="sp-small sp-muted mt-2 mb-0" id="ohnolog"><abbr title="The gene's other copy from the salmonid whole-genome duplication (AQUA-FAANG salmon-trout clades)">Ss4R duplicate</abbr>:
+        {% for o in ss4r.copies %}<a href="{% url 'snpportal:gene' o.id %}" title="{{ o.id }}">{{ o.label }}</a> (chr{{ o.chrom }}){% if not forloop.last %}, {% endif %}{% endfor %}{% if ss4r.class == 'LORe' %}; late rediploidised, so the copies are nearly identical{% endif %}.</p>{% endif %}
+    </section>
+  </div>
+  <div class="col-lg-7">
+    {% if figure %}{% include 'snpportal/_figure.html' with fig=figure %}
+    {% else %}<div class="sp-card"><p class="sp-small sp-muted mb-0">This release has no expression layer.</p></div>{% endif %}
+  </div>
+</div>
+
+<section class="sp-card mb-3" aria-labelledby="locus-h">
+  <div class="sp-card-head"><h2 id="locus-h">Locus: the gene &plusmn; 20 kb</h2><a class="ms-auto sp-small" href="{{ locus_url }}">Open in the locus browser</a></div>
+  <div class="sp-figure" hx-get="{{ locus_svg }}" hx-trigger="load" hx-target="this" hx-select="svg" hx-swap="innerHTML">
+    <p class="sp-small sp-muted mb-0">Loading the locus view&hellip;</p>
+  </div>
+</section>
+
+<section class="sp-card mb-3" id="candidates" aria-labelledby="cand-h">
+  <div class="sp-card-head"><h2 id="cand-h">Public variants</h2></div>
+  <form method="get" action="#candidates" class="d-flex flex-wrap align-items-end gap-3 sp-small" hx-get="{% url 'snpportal:gene' gene.id %}" hx-trigger="change" hx-push-url="true">
+    <div class="mb-2"><label class="form-label sp-small mb-0" for="flank">Flank</label>
+      <select class="form-select form-select-sm w-auto" id="flank" name="flank">
+        {% for f in flanks %}<option value="{{ f }}"{% if f == flank %} selected{% endif %}>&plusmn; {{ f|thousands }} bp</option>{% endfor %}
+      </select></div>
+    <div class="mb-2"><label class="form-label sp-small mb-0" for="sort">Sort by</label>
+      <select class="form-select form-select-sm w-auto" id="sort" name="sort">
+        {% for value, label in sorts %}<option value="{{ value }}"{% if value == sort %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <noscript><div class="mb-2"><button class="btn btn-sm btn-primary" type="submit">Apply</button></div></noscript>
+  </form>
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-2 sp-small">
+    <span title="{{ public_source }}{% if source == 'annotated now' %}, annotated now: this release has no public pool{% endif %}">{{ n_rows|thousands }} public variants in {{ window_text }}</span>
+    {% for t, n in tiers %}{% if t %}<span class="sp-badge sp-tier-{{ t }}">Tier {{ t }}: {{ n|thousands }}</span>{% endif %}{% endfor %}
+    <span class="ms-auto"></span>
+    {% if n_rows %}<a class="btn btn-sm btn-outline-primary" href="?{{ query }}&amp;download=candidates.tsv" download>Download TSV</a>
+    <form method="post" action="{% url 'snpportal:candidates' %}">{% csrf_token %}
+      <input type="hidden" name="targets" value="{{ gene.id }}"><input type="hidden" name="flank" value="{{ flank }}">
+      <button class="btn btn-sm btn-primary" type="submit">Score these {{ n_rows|thousands }}</button>
+    </form>{% endif %}
+  </div>
+  {% if known %}<p class="sp-small mb-2">&#9733; Nearest known locus for every variant here: {{ known }}.</p>{% endif %}
+  {% if rows %}
+  <div class="sp-scroll"><table class="table table-sm table-hover sp-table mb-0">
+    <thead><tr><th scope="col">Position</th>{% if "id" in names %}<th scope="col">id</th>{% endif %}<th scope="col">Alleles</th>
+      {% if "public_af_maf" in names %}<th scope="col" class="sp-num" title="Minor allele frequency, {{ public_af }}; pooled, your strain can differ">MAF</th>{% endif %}
+      {% if "region_class" in names %}<th scope="col">Region</th>{% endif %}
+      {% if "gene_id" in names %}<th scope="col">Nearest gene</th>{% endif %}
+      {% if "chromatin_summary" in names %}<th scope="col">Chromatin</th>{% endif %}
+      {% if "tier" in names %}<th scope="col">Tier</th><th scope="col">Evidence</th>{% endif %}
+      {% if "known_locus" in names %}<th scope="col">Known locus</th>{% endif %}</tr></thead>
+    <tbody>{% for r in rows %}<tr>
+      <td class="sp-mono"><a href="{{ r.url }}">{{ r.chrom }}:{{ r.pos }}</a></td>
+      {% if "id" in names %}<td>{{ r.id|default_if_none:"" }}</td>{% endif %}
+      <td class="sp-mono">{{ r.ref|default_if_none:"" }}{% if r.alt %}&gt;{{ r.alt }}{% endif %}</td>
+      {% if "public_af_maf" in names %}<td class="sp-num">{{ r.public_af_maf|floatformat:2 }}</td>{% endif %}
+      {% if "region_class" in names %}<td>{{ r.region_class|default:"intergenic" }}</td>{% endif %}
+      {% if "gene_id" in names %}<td>{% if r.gene_id %}<a href="{% url 'snpportal:gene' r.gene_id %}"{% if r.gene_label|first == '~' %} title="{{ unnamed_tip }}"{% endif %}>{{ r.gene_label }}</a>{% if r.gene_distance %} <span class="sp-muted">{{ r.gene_distance|thousands }} bp</span>{% endif %}{% endif %}</td>{% endif %}
+      {% if "chromatin_summary" in names %}<td>{{ r.chromatin_summary|default_if_none:"" }}</td>{% endif %}
+      {% if "tier" in names %}<td>{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}</td><td title="{{ r.tier_evidence }}">{{ r.tier_evidence }}</td>{% endif %}
+      {% if "known_locus" in names %}<td>{{ r.known_locus|default_if_none:"" }}</td>{% endif %}
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% if n_rows > rows|length %}<p class="sp-small mt-1 mb-0"><a href="?{{ query }}&amp;all=1#candidates">{% if n_rows <= 200 %}Show all {{ n_rows|thousands }}{% else %}Show the first 200 of {{ n_rows|thousands }}{% endif %}</a></p>{% endif %}
+  {% else %}<p class="sp-small sp-muted mb-0">No public variants in this window.</p>{% endif %}
+</section>
+
+<details class="sp-more" id="elements"><summary>Regulatory elements near this gene ({{ peaks|length }})</summary>
+<section class="sp-card" aria-label="Regulatory elements near this gene">
+  <p class="sp-small sp-muted">AQUA-FAANG robust ATAC peaks in the gene &plusmn; {{ flank|thousands }} bp, by distance to the TSS
+    (negative = upstream); each cell is the chromatin state in one condition, empty = no peak.
+    <a href="{% url 'snpportal:methods' %}#states">State colours</a></p>
+  {% if peaks %}
+  <div class="sp-scroll"><table class="sp-grid-table sp-small mb-0">
+    <thead>
+      <tr><th scope="col" rowspan="2">Peak (to TSS)</th>{% for group, n in groups %}<th scope="colgroup" colspan="{{ n }}">{{ group }}</th>{% endfor %}
+        {% for key, label in side %}<th scope="col" rowspan="2">{{ label }}</th>{% endfor %}</tr>
+      <tr>{% for c, group, short in head %}<th scope="col" class="text-nowrap" title="{{ c }}">{{ short }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>{% for p in peaks %}<tr>
+      <th scope="row" class="sp-mono fw-normal" title="{{ p.chrom }}:{{ p.start }}-{{ p.end }} (BED)">{{ p.tss }}</th>
+      {% for c, state, abbr in p.states %}<td><span class="sp-state{% if state %} st-{{ state }}{% endif %}" title="{{ c }}: {{ state|default:'no peak' }}">{{ abbr }}</span></td>{% endfor %}
+      {% for key, label in side %}{% with v=p|get:key %}<td class="sp-num">{% if v is True %}&#10003;<span class="visually-hidden"> yes</span>{% elif v is False %}{% else %}{{ v|default_if_none:"" }}{% endif %}</td>{% endwith %}{% endfor %}
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="sp-small sp-muted mb-0">No AQUA-FAANG robust ATAC peaks in the gene &plusmn; {{ flank|thousands }} bp.</p>{% endif %}
+</section>
+</details>
+</div>
+{% endblock main %}

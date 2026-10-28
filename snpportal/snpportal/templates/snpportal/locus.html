@@ -1,0 +1,51 @@
+{% extends layout %}
+{% load snpportal_tags %}
+{% comment %}Locus browser (browser.context; opens at vgll3 without a region): one slim control bar, then track groups on one
+   axis. htmx swaps #locus-view (controls and tracks) from locus/svg/ when moving; the functional assays load one assay
+   at a time from locus/assay/ when their section is opened. portal.js draws a line at the mouse through the tracks, names
+   its base on the ruler and holds it still on a click. Every link and the form also work without JavaScript.{% endcomment %}
+{% block main %}
+<div id="locus-view" class="sp-browser">
+  <form class="sp-bctl" method="get" action="{% url 'snpportal:locus' %}" role="search">
+    <input class="form-control form-control-sm sp-mono sp-region" id="r" name="r" value="{{ region_text }}" aria-label="Region" autocomplete="off"
+           placeholder="25:28,985,000-29,010,000 or ssa25:28.98-29.01 Mb">
+    {% if s.key %}<input type="hidden" name="key" value="{{ s.key }}">{% endif %}
+    <input type="hidden" name="open" value="{{ open }}" data-open>
+    <button class="btn btn-sm btn-primary" type="submit">Go</button>
+    {% if moves %}{% for label, q, tip in moves %}{% if forloop.counter0|divisibleby:2 %}<span class="btn-group btn-group-sm" role="group">{% endif %}{% if q %}<a class="btn btn-outline-secondary" href="{% url 'snpportal:locus' %}?{{ q }}" title="{{ tip }}" aria-label="{{ tip }}"
+       hx-get="{% url 'snpportal:locus_svg' %}?{{ q }}" hx-target="#locus-view" hx-select="#locus-view" hx-swap="outerHTML" hx-indicator="#locus-busy"
+       hx-push-url="{% url 'snpportal:locus' %}?{{ q }}">{{ label }}</a>{% else %}<span class="btn btn-outline-secondary disabled" aria-disabled="true" title="{{ tip }}">{{ label }}</span>{% endif %}{% if not forloop.counter0|divisibleby:2 %}</span>{% endif %}{% endfor %}
+    <span id="locus-busy" class="spinner-border sp-spin htmx-indicator" role="status" aria-label="Loading"></span>{% endif %}
+    {% if groups %}<span class="sp-push"><button type="button" class="btn btn-sm btn-outline-secondary active" data-line aria-pressed="true" aria-label="Mouse line"
+       title="Mouse line on or off: it follows the mouse through the tracks; click the tracks to hold it, click again to let it go"><svg class="sp-ico" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v13M1.5 8h4M10.5 8h4M3.5 6 1.5 8l2 2M12.5 6l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <span class="btn-group btn-group-sm" role="group" aria-label="Track groups"><button type="button" class="btn btn-outline-secondary" data-all="open">Expand all</button><button type="button" class="btn btn-outline-secondary" data-all="close">Collapse all</button></span>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ download }}" title="Download the locus figure (SVG)" aria-label="Download the locus figure (SVG)" hx-boost="false" download>&#10515;</a></span>{% endif %}
+  </form>
+
+  {% if s.error %}<div class="sp-status sp-status-fail" role="alert">&#10007; {{ s.error }}</div>
+  {% elif s.too_wide %}<div class="sp-status sp-status-warn" role="status">&#9888; This window is wider than 2 Mb: zoom in.
+    <a href="{% url 'snpportal:locus' %}?{{ centre_query }}">Show the central 2 Mb</a>, or browse whole chromosomes in
+    <a href="https://salmobase.org/jbrowse/" rel="noreferrer noopener" target="_blank">salmobase JBrowse</a>.</div>
+  {% elif groups %}
+  {% for note in notes %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ note }}</div>{% endfor %}
+  {% if truncated %}<div class="sp-status sp-status-warn" role="status">&#9888; Some lanes are cut short in this wide window: zoom in to see all of {{ truncated|join:", " }}.</div>{% endif %}
+  <p class="sp-small sp-muted mb-1">This region in <a href="{{ jbrowse }}" rel="noreferrer noopener" target="_blank">salmobase JBrowse</a> &middot;
+    <a href="{{ ensembl }}" rel="noreferrer noopener" target="_blank">Ensembl</a></p>
+  <div class="sp-tracks" data-start="{{ s.start }}" data-end="{{ s.end }}">
+    <div class="sp-trk sp-trk-chr"><div class="sp-trk-lab"><span class="sp-trk-name">chr{{ s.chrom }}</span><span class="sp-trk-sub">{{ size_text }}</span></div>{{ chromosome }}</div>
+    <div class="sp-trk sp-trk-ruler"><div class="sp-trk-lab"><span class="sp-trk-name">{{ width_text }}</span></div>{{ ruler }}</div>
+    {% for g in groups %}{% include 'snpportal/_browser_group.html' %}{% endfor %}
+    <section class="sp-grp sp-sec{% if assays_open %} open{% endif %}" id="g-assays" data-group="assays">
+      <header class="sp-grp-h"><h3>Functional assays</h3><span class="sp-grp-note">AQUA-FAANG, live from salmobase &middot; mean of replicates &middot; combined tracks stack the tissue means</span>
+        <button type="button" class="sp-tog" aria-expanded="{% if assays_open %}true{% else %}false{% endif %}" aria-controls="m-assays"><span class="sp-when-closed">Show {{ assays|length }} assays &#9662;</span><span class="sp-when-open">Hide assays &#9652;</span></button></header>
+      <div class="sp-more-rows" id="m-assays">
+        <div class="sp-trk"><div class="sp-trk-lab"></div><div class="sp-blegend">{% for cls, label in tissue_legend %}<span><i class="{{ cls }}"></i>{{ label }}</span>{% endfor %}</div></div>
+        {% for name, title in assays %}<div class="sp-assay-slot" hx-get="{% url 'snpportal:locus_assay' %}?{{ query }}&amp;assay={{ name }}" hx-trigger="{% if assays_open %}load{% else %}sp-open once{% endif %}" hx-swap="outerHTML">
+          <p class="sp-small sp-muted mb-1"><span class="spinner-border sp-spin" aria-hidden="true"></span>Loading {{ title }}&hellip;</p></div>{% endfor %}
+      </div>
+    </section>
+    {% include 'snpportal/_browser_group.html' with g=other %}
+  </div>
+  {% endif %}
+</div>
+{% endblock main %}

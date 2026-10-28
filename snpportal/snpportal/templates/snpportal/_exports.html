@@ -1,0 +1,28 @@
+{% load snpportal_tags %}
+{% comment %}Export tab: one scope choice (applied on change; the Table selection, its panels or all SNPs) and a
+   download row per file, each vendor row with its own counts and checks. Downloads are files: never boosted.{% endcomment %}
+<section class="sp-card sp-small" aria-labelledby="export-h">
+  <h2 id="export-h" class="visually-hidden">Export</h2>
+  {% if not exports.gwas %}<form method="get" hx-get="{% url 'snpportal:results' key %}" hx-trigger="change" hx-push-url="true" class="mb-2">
+    <input type="hidden" name="tab" value="export"><input type="hidden" name="trait" value="{{ exports.trait }}">
+    {% for name, value in exports.hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+    <fieldset class="d-flex flex-wrap align-items-center gap-3"><legend class="visually-hidden">What to export</legend>
+      <span class="fw-semibold">Export</span>
+      {% for value, label, checked in exports.scopes %}<label class="form-check-label text-nowrap"><input class="form-check-input" type="radio" name="scope" value="{{ value }}"{% if checked %} checked{% endif %}> {{ label }}</label>{% endfor %}
+      <a href="{{ exports.panel_link }}" hx-boost="true">Design a panel</a>
+      <noscript><button class="btn btn-sm btn-outline-primary" type="submit">Apply</button></noscript>
+    </fieldset>
+  </form>{% endif %}
+  <div class="table-responsive"><table class="table table-sm align-middle mb-2">
+    <tbody>{% for label, notes, href in exports.rows %}<tr>
+      <th scope="row" class="fw-normal">{{ label }}</th>
+      <td>{{ notes|join:" · " }}</td>
+      <td class="text-end">{% if href %}<a class="btn btn-sm btn-outline-primary" href="{{ href }}" download>Download</a>{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  <details class="sp-more"><summary>More formats</summary>
+    <ul class="list-unstyled mb-2">{% for label, about, href in exports.more %}<li><a href="{{ href }}" download>{{ label }}</a>{% if about %} <span class="sp-muted">({{ about }})</span>{% endif %}</li>{% endfor %}</ul>
+  </details>
+  <p class="sp-muted mb-0">Vendor files use names like Ssa25p28996360; the lookup file maps them back to your ids. Confirm the
+    layout with your vendor. <a href="{% url 'snpportal:help' %}#exports">Details &rarr;</a></p>
+</section>

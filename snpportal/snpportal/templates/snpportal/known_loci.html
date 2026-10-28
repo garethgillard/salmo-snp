@@ -1,0 +1,47 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% block main %}
+{% if groups %}
+<p class="sp-lead">{{ counts.entries }} published entries for {{ counts.traits }} traits: {{ counts.snps }} SNPs{% if counts.regions %} and
+  {{ counts.regions }} gene region{{ counts.regions|pluralize }}{% endif %}. Effect alleles are stated for {{ counts.alleles }}, on the
+  Ssal_v3.1 forward strand. Your SNPs within {% widthratio counts.window 1000 1 %} kb of one get a known-locus badge. Hover a
+  badge for the paper&rsquo;s wording.</p>
+
+{# one tab per trait (?tab= without JavaScript) #}
+<section class="sp-card sp-loci-tabs" aria-label="Known loci by trait">
+  <ul class="nav nav-tabs" role="tablist">{% for trait, heading, items in groups %}
+    <li class="nav-item" role="presentation"><a class="nav-link{% if trait == tab %} active{% endif %}" id="tab-{{ trait }}" href="?tab={{ trait }}"
+      data-bs-toggle="tab" data-bs-target="#pane-{{ trait }}" role="tab" aria-controls="pane-{{ trait }}"
+      aria-selected="{% if trait == tab %}true{% else %}false{% endif %}">{{ heading }} <span class="sp-muted">{{ items|length }}</span></a></li>{% endfor %}
+  </ul>
+  <div class="tab-content">{% for trait, heading, items in groups %}
+  <div class="tab-pane{% if trait == tab %} active{% endif %}" id="pane-{{ trait }}" role="tabpanel" aria-labelledby="tab-{{ trait }}">
+  <h2 class="visually-hidden">{{ heading }}</h2>
+  <div class="table-responsive"><table class="table table-sm sp-small mb-0 sp-loci">
+    <thead><tr><th scope="col">Locus</th><th scope="col">SNP</th><th scope="col">Position (Ssal_v3.1)</th><th scope="col">Gene</th>
+      {% if has_ss4r %}<th scope="col"><abbr title="The gene's other copy from the salmonid whole-genome duplication (AQUA-FAANG salmon-trout clades)">Ss4R duplicate</abbr></th>{% endif %}
+      <th scope="col">Evidence and effect</th><th scope="col">Caveat</th><th scope="col">Publication</th><th scope="col">Explore</th></tr></thead>
+    <tbody>{% for r in items %}<tr>
+      <th scope="row" class="fw-normal">{{ r.locus }}{% if r.interval %} {% include 'snpportal/_badges.html' with kind='flag' value='under review' %}{% endif %}</th>
+      <td>{{ r.id }}{% if r.rsid %}<br><a class="sp-mono" href="{% url 'snpportal:search' %}?q={{ r.rsid }}" title="EVA rs ID">{{ r.rsid }}</a>{% endif %}</td>
+      <td class="sp-mono">{% if r.variant_url %}<a href="{{ r.variant_url }}">{{ r.chrom }}:{{ r.pos }}</a>{% else %}{{ r.chrom }}:{{ r.start }}-{{ r.end }}{% endif %}
+        {% if r.ref %}<span class="sp-muted">{{ r.ref }}{% if r.alt %}/{{ r.alt }}{% endif %}</span>{% endif %}</td>
+      <td>{% if r.gene %}<a href="{% url 'snpportal:gene' r.gene.id %}">{{ r.gene.label }}</a>
+        <br><a href="{{ r.salmobase }}" rel="noreferrer noopener" target="_blank">SalmoBase</a>{% else %}{{ r.ensembl_gene }}{% endif %}</td>
+      {% if has_ss4r %}<td>{% for c in r.ss4r.copies %}<a href="{% url 'snpportal:gene' c.id %}" title="{{ c.id }}">{{ c.label }}</a> (chr{{ c.chrom }}){% if not forloop.last %}<br>{% endif %}{% empty %}{% if r.gene %}<span class="sp-muted" title="No second copy in the AQUA-FAANG salmon-trout table">none</span>{% endif %}{% endfor %}
+        {% if r.ss4r.copies and r.ss4r.class == 'LORe' %}<br><span class="sp-muted" title="Late rediploidisation: the two copies are nearly identical">LORe</span>{% endif %}</td>{% endif %}
+      <td>{% with b=r.badges.0 %}{% include 'snpportal/_badges.html' with kind='evidence' value=b.1 cls=b.0 tip=b.2 %}{% endwith %} {{ r.effect|default:"" }}</td>
+      <td>{% for cls, text, tip in r.flags %}{% include 'snpportal/_badges.html' with kind='evidence' value=text cls=cls tip=tip %} {% endfor %}{{ r.caveat|default:"" }}</td>
+      <td>{% for doi in r.dois %}<a href="https://doi.org/{{ doi }}" rel="noreferrer noopener" target="_blank">{{ doi }}</a>{% if not forloop.last %}<br>{% endif %}{% endfor %}
+        {% if r.note or r.icsasg_v2 %}<details><summary>Notes</summary>{% if r.note %}<p class="mb-1">{{ r.note }}</p>{% endif %}{% if r.icsasg_v2 %}<p class="mb-0">ICSASG_v2 position: <span class="sp-mono">{{ r.icsasg_v2 }}</span></p>{% endif %}</details>{% endif %}</td>
+      <td class="text-nowrap">{% if r.locus_url %}<a href="{{ r.locus_url }}">Locus</a>{% endif %}
+        {% if r.gene %} · <a href="{% url 'snpportal:gene' r.gene.id %}#candidates">Candidates</a>{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  </div>{% endfor %}
+  </div>
+</section>
+<p class="sp-small sp-muted mt-2">ICSASG_v2 is the older assembly many papers and chips use: never compare its distances to genes with
+  Ssal_v3.1 ones. To score these SNPs, use the &lsquo;Known loci&rsquo; example on <a href="{% url 'snpportal:upload' %}">Score</a>.</p>
+{% else %}<section class="sp-card"><p class="sp-small sp-muted mb-0">This release has no known-loci catalogue.</p></section>{% endif %}
+{% endblock main %}

@@ -1,0 +1,48 @@
+{% extends 'salmobase/base.html' %}
+{% load static snpportal_tags %}
+{# Every portal page extends this: sub-nav, page header, footer, portal.css + palette, htmx and portal.js. #}
+
+{% block head %}{{ block.super }}
+<link rel="stylesheet" href="{% asset 'snpportal/portal.css' %}">
+<style>{% palette_css %}</style>
+{% block portal_head %}{% endblock portal_head %}
+{% endblock head %}
+
+{% block content %}{% portal_release as rel %}
+<div class="sp">
+  <a class="sp-skip" href="#sp-main">Skip to content</a>
+  <nav class="sp-nav" aria-label="SNP portal">
+    <div class="sp-wrap">
+      <a class="sp-brand" href="{% url 'snpportal:upload' %}">Functional SNP portal</a>
+      <ul>
+        <li><a href="{% url 'snpportal:upload' %}"{% if nav == 'score' %} aria-current="page"{% endif %}>Score</a></li>
+        <li><a href="{% url 'snpportal:design_panel' %}"{% if nav == 'panel' %} aria-current="page"{% endif %}>Design panel<span hx-get="{% url 'snpportal:panel_count' %}" hx-trigger="load" hx-swap="innerHTML"></span></a></li>
+        <li><a href="{% url 'snpportal:known_loci' %}"{% if nav == 'known' %} aria-current="page"{% endif %}>Known loci</a></li>
+        <li><a href="{% url 'snpportal:locus' %}?r=25:28985000-29010000"{% if nav == 'explore' %} aria-current="page"{% endif %}>Locus browser</a></li>
+        <li><details class="sp-menu"><summary{% if nav == 'help' or nav == 'about' %} aria-current="page"{% endif %}>Help</summary>
+          <ul>
+            <li><a href="{% url 'snpportal:help' %}">Help</a></li>
+            <li><a href="{% url 'snpportal:tour' %}">Guided tour</a></li>
+            <li><a href="{% url 'snpportal:about_data' %}">Data</a></li>
+            <li><a href="{% url 'snpportal:methods' %}">Methods</a></li>
+            <li><a href="{% url 'snpportal:run_locally' %}">Run locally</a></li>
+            <li><a href="{% url 'snpportal:help' %}#privacy">Privacy</a></li>
+            <li><a href="{% url 'snpportal:about_data' %}#cite">How to cite</a></li>
+          </ul></details></li>
+      </ul>
+      <span class="sp-release" title="Annotation release and genome assembly">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</span>
+    </div>
+  </nav>
+  <main id="sp-main" class="sp-main">
+    <div class="sp-wrap">
+      {% block page_header %}{% include 'snpportal/_page_header.html' %}{% endblock page_header %}
+      {% block main %}{% endblock main %}
+    </div>
+  </main>
+</div>
+{% endblock content %}
+
+{% block scripts %}{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+<script src="{% asset 'snpportal/portal.js' %}"></script>
+{% endblock scripts %}

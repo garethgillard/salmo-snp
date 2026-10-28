@@ -1,0 +1,78 @@
+{% load snpportal_tags %}
+{% comment %}Evidence card for one SNP, laid out to decide whether to keep it (context: ev from locus.evidence, hx,
+   locus_url; a job's card also panel (panel.holds); heading: the drawer's heading shows the tier and gene, so the key
+   facts don't). Tiers always count all 21 conditions. Always shown: the score (a block per evidence term, = score on the
+   right), the key facts under it (locus.facts: not what a block or the heading says; a GWAS job's p, beta and PIP),
+   and caveats. Then sections that fold under a
+   grey header like the locus browser's groups (portal.js keeps a fold from card to card): the functional evidence
+   at the locus (its header links to the locus browser; a mini locus browser with the SNP's peak per condition under
+   it; molQTL); as a marker (assay and flank, duplicates, the Design panel); context (published
+   association; expression, the user's own columns and details closed). Parts render only when their columns exist.
+   The drawer and variant.html give the heading.{% endcomment %}
+{% if hx and crumbs %}{% include 'snpportal/_crumbs.html' with oob=1 %}{% endif %}
+<div id="card-body" class="sp-card sp-small">
+  {% if ev.blocks %}<div class="sp-score mb-1"><h3 class="sp-cs-h sp-score-h">Score</h3><div class="sp-figure">{{ ev.blocks }}</div></div>{% endif %}
+  <p class="sp-facts">{% if not heading %}<button type="button" class="sp-copy-icon" data-copy="{{ ev.spec }}" title="Copy {{ ev.spec }}" aria-label="Copy {{ ev.spec }}"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>{% if ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %}{% endif %}{% endif %}
+    {% for text, cls, tip, key, url in ev.facts %}{% if not heading or key != 'gene' %}{% if url %}<a class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}" href="{{ url }}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</a>{% else %}<span class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</span>{% endif %}{% endif %}{% endfor %}
+    {% if panel.sources %}<span class="sp-fact sp-fact-ok" title="Your Design panel holds this SNP ({{ panel.sources|join:', ' }})">in your panel</span>{% endif %}</p>
+  {% if ev.caveats %}<ul class="sp-status sp-status-warn sp-caveats" aria-label="Caveats">{% for text in ev.caveats %}<li>{{ text }}</li>{% endfor %}</ul>{% endif %}
+
+  {% if ev.mini or ev.no_peak or ev.molqtl or locus_url %}<details class="sp-cs" id="cs-locus" open><summary><h3 class="sp-cs-h">Functional evidence at the locus</h3>
+      {% if locus_url %}<a class="sp-cs-act" href="{{ locus_url }}" data-locus>Open locus browser &rarr;</a>{% endif %}</summary>
+    {% if ev.mini %}<div class="sp-figure mb-2">{{ ev.mini }}</div>{% endif %}
+    {% if ev.no_peak %}<p class="mb-2">{{ ev.no_peak }}</p>{% endif %}
+
+    {% if ev.molqtl %}<h4 class="sp-cs-h4">molQTL leads (nf-RASQUAL, 12 fish)</h4>
+    <div class="table-responsive"><table class="table table-sm mb-1">
+      <thead><tr><th scope="col">Tissue</th><th scope="col">Kind</th><th scope="col">Feature</th><th scope="col" class="sp-num" title="eigenMT-adjusted p (the table's BF column)">Adj. p</th><th scope="col" class="sp-num" title="RASQUAL effect size; which allele it refers to is not confirmed">&pi;</th></tr></thead>
+      <tbody>{% for f in ev.molqtl.features %}<tr><td class="text-nowrap"><span class="sp-tissue-{{ f.tissue }}" aria-hidden="true">&#9679;</span> {{ f.tissue }}</td><td>{{ f.kind }}</td>
+        <td class="sp-mono">{% if f.url %}<a href="{{ f.url }}">{{ f.feature }}</a>{% else %}{{ f.feature }}{% endif %}</td><td class="sp-num">{{ f.bf }}</td><td class="sp-num">{{ f.pi }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <p class="sp-muted mb-2">Low power: not fine-mapped, not counted in tiers, no direction implied. {{ ev.molqtl.citation }}{% if ev.molqtl.licence %} Licence: {{ ev.molqtl.licence }}.{% endif %}</p>{% endif %}
+  </details>{% endif %}
+
+  {% if ev.motifs %}<details class="sp-cs" id="cs-motif" open><summary><h3 class="sp-cs-h">TF motifs</h3>
+      <span class="sp-as sp-as-plain" title="The SNP is inside a robust ATAC peak and one allele matches these motifs (p &lt; 1e-5) while the other doesn't, at least 4 bits apart">JASPAR 2024</span></summary>
+    <div class="sp-figure mb-1">{{ ev.motifs.svg }}</div>
+    <p class="sp-muted mb-2">Logos on the + strand, letter height = information content; the SNP's column is outlined.{% if ev.motifs.more %} {{ ev.motifs.more }} more motif{{ ev.motifs.more|pluralize }} in Details.{% endif %} Predicted binding, not proof of it.</p>
+  </details>{% endif %}
+
+  {% if ev.assay or ev.duplicates or ev.marker or panel %}<details class="sp-cs" id="cs-marker" open><summary><h3 class="sp-cs-h">As a marker</h3>
+      {% for text, cls, tip in ev.marker %}<span class="sp-as sp-as-{{ cls }}" title="{{ tip }}">{{ text }}</span>{% endfor %}</summary>
+    {% if ev.assay.reasons %}<p class="mb-1">{{ ev.assay.reasons|capfirst }}.</p>{% endif %}
+    {% if ev.assay.flank_parts %}<div class="mb-2 d-flex align-items-center gap-2"><div class="sp-mono sp-flank sp-flank-box" title="Probe flanks, 35 bp each side: the SNP in black, public variants as IUPAC codes (hover one), long single-base runs underlined">{% for text, kind, tip in ev.assay.flank_parts %}{% if kind %}<mark class="sp-flank-{{ kind }}" title="{{ tip }}">{{ text }}</mark>{% else %}{{ text }}{% endif %}{% endfor %}</div>
+      <button type="button" class="sp-copy-icon" data-copy="{{ ev.assay.flank }}" title="Copy the flank sequence" aria-label="Copy the flank sequence"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+      </div>{% endif %}
+    {% with dup=ev.duplicates %}{% if dup %}<p class="mb-1">Duplicate copy:{% if dup.lore %} <span title="Region where the duplicated chromosomes still pair">LORe ({{ dup.lore }})</span>, nearly identical, so probes may bind both{% endif %}{% if dup.lore and dup.gene %};{% endif %}
+      {% if dup.gene %}its gene&rsquo;s Ss4R copy <a href="{% url 'snpportal:gene' dup.gene %}">{{ dup.gene }}</a> on chr{{ dup.chrom|default:'?' }}{% if dup.kind %} <span title="{{ dup.tip }}">({{ dup.kind }})</span>{% endif %}{% if dup.url %} &middot; <a href="{{ dup.url }}">view it</a>{% endif %}{% endif %}.</p>{% endif %}{% endwith %}
+    {% if panel %}<p class="mb-1">{% if panel.sources %}In your <a href="{% url 'snpportal:design_panel' %}">Design panel</a> ({{ panel.sources|join:", " }}).{% else %}Not in your <a href="{% url 'snpportal:design_panel' %}">Design panel</a>.{% endif %}
+      {% if panel.chip %}{{ panel.chip }}{% endif %}</p>{% endif %}
+  </details>{% endif %}
+
+  <details class="sp-cs" id="cs-context" open><summary><h3 class="sp-cs-h">Context</h3></summary>
+    {% if ev.known %}<div class="sp-status sp-status-ok mb-2" role="group" aria-label="Published association">
+      <p class="mb-0">&#9733; <strong>{{ ev.known.id }}</strong>{% if ev.known.trait %} ({{ ev.known.trait }}){% endif %} {{ ev.known.where }}.
+        {% if ev.known.kind %}<span title="{{ ev.known.kind_tip }}">{{ ev.known.kind }}</span>{% if ev.known.effect %};{% else %}.{% endif %}{% endif %}{% if ev.known.effect %} {{ ev.known.effect }}.{% endif %}
+        {% for cls, text, tip in ev.known.flags %}{% include 'snpportal/_badges.html' with kind='evidence' value=text cls=cls tip=tip %} {% endfor %}
+        {% if ev.known.rsid %}{{ ev.known.rsid }} &middot;{% endif %}
+        {% for doi in ev.known.dois %}<a href="https://doi.org/{{ doi }}" rel="noreferrer noopener" target="_blank">doi:{{ doi }}</a>{% if not forloop.last %} &middot; {% endif %}{% endfor %}
+        {% if ev.known.others %}Nearby: {% for r in ev.known.others %}<a href="{{ r.url }}">{{ r.id }}</a> ({{ r.dist }}){% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}</p>
+    </div>{% endif %}
+    {% if ev.expression %}<details class="sp-more"><summary>Expression of the nearest gene (not necessarily the target)</summary>
+      <div class="sp-figure">{{ ev.expression }}</div>
+      <p class="sp-muted mb-1">Mean CPM per tissue, 12 AQUA-FAANG fish (nf-RASQUAL RNA-seq).</p></details>{% endif %}
+
+    {% if ev.yours %}<details class="sp-more"><summary>Your columns</summary>
+      <dl class="sp-dl mb-0">{% for name, v in ev.yours %}<dt>{{ name }}</dt><dd>{{ v|default_if_none:"" }}</dd>{% endfor %}</dl></details>{% endif %}
+
+    <details class="sp-more"><summary>Details and links</summary>
+      {% if ev.gene %}<dl class="sp-dl mb-1"><dt>Nearest gene</dt><dd><a href="{{ ev.gene.url }}">{{ ev.gene.label }}</a> <span class="sp-mono">{{ ev.gene.id }}</span>{% if ev.gene.biotype %}, {{ ev.gene.biotype }}, {{ ev.gene.strand }} strand{% endif %}; {{ ev.gene.where }}{% if ev.gene.description %}: {{ ev.gene.description }}{% endif %}</dd>
+        {% if ev.gene.human or ev.gene.zebrafish %}<dt>Orthologs</dt><dd>{% if ev.gene.human %}human {{ ev.gene.human }}{% endif %}{% if ev.gene.human and ev.gene.zebrafish %}, {% endif %}{% if ev.gene.zebrafish %}zebrafish <em>{{ ev.gene.zebrafish }}</em>{% endif %}</dd>{% endif %}</dl>{% endif %}
+      {% if ev.details %}<dl class="sp-dl mb-1">{% for label, value in ev.details %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
+      <p class="mb-1">Chromatin: {{ ev.samples }}. <a href="{% url 'snpportal:about_data' %}">About the data &rarr;</a></p>
+      <p class="mb-1">{% for label, url in ev.links %}<a href="{{ url }}" rel="noreferrer noopener" target="_blank">{{ label }}</a> · {% endfor %}
+        {% if ev.gene %}<a href="{{ ev.gene.salmobase }}" rel="noreferrer noopener" target="_blank">SalmoBase gene</a> ·
+        <a href="{{ ev.gene.url }}">Gene page</a> · {% endif %}<a href="{{ ev.permalink }}">Permalink</a></p>
+    </details>
+  </details>
+</div>
