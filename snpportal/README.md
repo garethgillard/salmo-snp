@@ -46,8 +46,9 @@ salmobase's real base template. It serves static files while `DEBUG` is on.
 
 ## Public demo (NREC)
 
-The demo runs at **https://158.39.200.140/snp/** (and the older name https://158-39-200-140.sslip.io/snp/); redeploy
-with `bash deploy/nrec.sh nrec 158.39.200.140 158-39-200-140.sslip.io`.
+The demo runs at **https://158.39.75.9/snp/** (also https://158-39-75-9.sslip.io/snp/); redeploy with
+`bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io`. Until 2026-10-28 it was at 158.39.200.140, before the
+VM lost its network port and got a new address.
 
 `bash deploy/nrec.sh <ssh host> <web name> [<web name> ...]` puts the portal on an NREC VM (GOLD Ubuntu 22.04 on the `dualStack`
 network, so it has a public IPv4 address; ports 22, 80 and 443 open). From this Mac it copies both repos (code only),

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy the public demo to an NREC VM (GOLD Ubuntu 22.04/24.04, dualStack network, ports 22/80/443 open):
 #   bash deploy/nrec.sh <ssh host> <web name> [<web name> ...]
-#   e.g.  bash deploy/nrec.sh nrec 158.39.200.140 158-39-200-140.sslip.io   (the address: https://158.39.200.140/snp/)
+#   e.g.  bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io   (the address: https://158.39.75.9/snp/)
 # Each name gets its own Caddy site and HTTPS certificate; an IPv4 address gets Let's Encrypt's short-lived IP
 # certificate (Caddy 2.10 or newer). The first name is the one checked at the end.
 # From this Mac it copies both repos (code only), the release and the genome to /srv/snpportal, then on the VM it
