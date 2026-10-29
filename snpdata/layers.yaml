@@ -167,6 +167,16 @@ layers:
     description: Ensembl 116 transcript models (exon, CDS and UTR parts, canonical tag) for drawing genes; not annotated
     citation: Ensembl release 116 gene annotation, Ssal_v3.1 (ensembl.org)
 
+  - name: transcripts_ncbi
+    type: features
+    format: gff3_ncbi_transcripts
+    file: GCF_905237065.1_Ssal_v3.1_genomic.gff.gz
+    url: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/905/237/065/GCF_905237065.1_Ssal_v3.1/GCF_905237065.1_Ssal_v3.1_genomic.gff.gz
+    description: NCBI RefSeq transcript models (annotation GCF_905237065.1-RS_2025_05; exon and CDS parts, RefSeq Select
+      as canonical) for drawing isoforms beside Ensembl's; not annotated
+    citation: NCBI RefSeq annotation GCF_905237065.1-RS_2025_05, Ssal_v3.1 (ncbi.nlm.nih.gov)
+    licence: NCBI data, no use restrictions (ncbi.nlm.nih.gov/home/about/policies)
+
   - name: gene_ortholog
     type: gene
     format: gene_tsv

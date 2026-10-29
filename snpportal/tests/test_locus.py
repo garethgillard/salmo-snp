@@ -64,6 +64,18 @@ def test_lanes(release):
         sl.locus(release, "25", 0, sl.MAX_WINDOW + 1)
 
 
+def test_isoforms(release):
+    """Every transcript in the window from both annotations, one drawable model each; the lane keeps one per gene."""
+    genes = sl.locus(release, "25", 28_990_000, 29_000_000)["genes"]
+    iso = sl.isoforms(release, "25", 28_990_000, 29_000_000, genes)
+    vgll3 = [m for m in iso["ensembl"] if m["label"].startswith("~VGLL3 ")]  # unnamed in Ensembl: the human ortholog's name
+    assert len(vgll3) == 2 and len([g for g in genes if g["label"] == "~VGLL3"]) == 1  # two isoforms, one gene model
+    ncbi = {m["transcripts"][0]["transcript_id"]: m for m in iso["ncbi"]}
+    assert ncbi["XM_014173901.2"]["label"] == "vgll3 XM_014173901.2" and ncbi["XM_014173901.2"]["id"] == "106586514"
+    parts = {p["part"] for p in ncbi["XM_014173901.2"]["transcripts"][0]["parts"]}
+    assert parts == {"exon", "CDS"} and ncbi["XM_014173901.2"]["biotype"] == "protein_coding"
+
+
 def test_regions(release):
     same = sl.parse_region("25:28,980,000-29,010,000", release)
     assert same == sl.parse_region("ssa25:28.98-29.01Mb", release) == sl.parse_region("chr25 28980 kb - 29010 kb", release)

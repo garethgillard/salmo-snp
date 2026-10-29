@@ -125,6 +125,9 @@ aquafaang12_dr2), `synchrosmolt_af` (point: af, maf, ac, an, ns), `molqtl` (poin
 
 `transcripts.parquet`: `chrom, start, end, transcript_id, gene_id, gene_name, strand, part` (exon, CDS,
 five_prime_UTR, three_prime_UTR), `phase, canonical` (Ensembl_canonical tag), `biotype`.
+`transcripts_ncbi.parquet`: the same columns for the NCBI RefSeq models (annotation GCF_905237065.1-RS_2025_05):
+`gene_id` is the NCBI GeneID, `part` exon or CDS (NCBI writes no UTR rows), `canonical` the RefSeq Select tag (none in
+this annotation), `biotype` the transcript's feature type (mRNA, lnc_RNA, ...); chromosomes renamed from RefSeq accessions.
 
 `catalog/known_loci.tsv`: `chrom, pos, id, ref, alt, locus, ensembl_gene, trait, evidence, effect, effect_allele,
 effect_direction, icsasg_v2, source` (DOIs), `rsid`, `caveat`, `note`. `effect_allele` is on the Ssal_v3.1 forward

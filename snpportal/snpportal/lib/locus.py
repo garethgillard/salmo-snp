@@ -15,6 +15,8 @@ import tempfile
 import time
 from pathlib import Path
 
+import duckdb
+
 from snpscore import bbi
 from snpscore.annotate import annotate, connect
 from snpscore.formats import lit
@@ -172,6 +174,34 @@ def _genes(release, rows, chrom, genes, all_transcripts):
         o = orthologs.get(g["id"], {})
         out.append(dict(g, human=o.get("human"), zebrafish=o.get("zebrafish"), transcripts=models.get(g["id"], []),
                         label=gene_label(g.get("name"), o.get("human"), o.get("zebrafish"), g["id"])))
+    return out
+
+
+ISOFORMS = {"ensembl": ("transcripts.parquet", "Ensembl 116"), "ncbi": ("transcripts_ncbi.parquet", "NCBI RefSeq RS_2025_05")}
+
+
+def isoforms(release_dir, chrom, start, end, genes=()):
+    """Every transcript overlapping the window, each as its own gene-like dict for drawing (label 'gene transcript',
+    transcripts = [that one]), from both annotations: {'ensembl': [...], 'ncbi': [...]} (a key is missing when the
+    release lacks its table). Ensembl genes take their label from `genes` (the lane's dicts) when they are there."""
+    release, labels = Path(release_dir), {g["id"]: g["label"] for g in genes}
+    con, out = duckdb.connect(), {}
+    for key, (name, _) in ISOFORMS.items():
+        path = release / name
+        if not path.exists():
+            continue
+        rows = con.execute(f"""
+            WITH t AS (SELECT * FROM read_parquet({lit(path)}) WHERE chrom = $c)
+            SELECT gene_id, any_value(gene_name) AS name, transcript_id, any_value(strand) AS strand,
+                   any_value(biotype) AS biotype, bool_or(coalesce(canonical, false)) AS canonical, bool_or(part = 'CDS') AS coding,
+                   min(start) AS start, max("end") AS "end", list({{'start': start, 'end': "end", 'part': part}} ORDER BY start) AS parts
+            FROM t WHERE transcript_id IN (SELECT transcript_id FROM t WHERE start < $e AND "end" > $s)
+            GROUP BY gene_id, transcript_id ORDER BY start, transcript_id""", {"c": chrom, "s": start, "e": end}).fetchall()
+        out[key] = [{"id": gid, "name": nm, "label": f"{labels.get(gid) or nm or gid} {tid}", "strand": strand,
+                     "biotype": "protein_coding" if coding else biotype, "start": a, "end": b,
+                     "transcripts": [{"transcript_id": tid, "canonical": canonical, "start": a, "end": b, "parts": parts}]}
+                    for gid, nm, tid, strand, biotype, canonical, coding, a, b, parts in rows]
+    con.close()
     return out
 
 

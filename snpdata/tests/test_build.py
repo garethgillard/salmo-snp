@@ -128,3 +128,13 @@ def test_parse_trackdb():
         "ChromHMM_Brain_Immature_Female", "BodyMap", "bigBed", "chromatin_Brain_Immature_Female")
     assert (blast["tissue"], blast["stage"]) == ("Embryo", "LateBlastulation")
     assert blast["url"] == "https://salmobase.org/datafiles/datasets/Aqua-Faang/" + CHROMHMM.split()[1]
+
+
+def test_ncbi_transcripts(release):
+    """RefSeq models on chromosomes 1-29 (accessions renamed through the alias table), exon and CDS parts only."""
+    con = duckdb.connect()
+    rows = con.execute(f"""SELECT DISTINCT chrom, part FROM read_parquet('{release / "transcripts_ncbi.parquet"}')""").fetchall()
+    assert {c for c, _ in rows} == {"1", "9", "21", "25", "26"} and {p for _, p in rows} == {"exon", "CDS"}
+    vgll3 = con.execute(f"""SELECT DISTINCT transcript_id, gene_id, strand FROM read_parquet('{release / "transcripts_ncbi.parquet"}')
+                            WHERE gene_name = 'vgll3'""").fetchall()
+    assert vgll3 == [("XM_014173901.2", "106586514", "+")]

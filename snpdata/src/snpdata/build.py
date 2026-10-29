@@ -118,6 +118,28 @@ def read_gff3_transcripts(path, layer):
         WHERE g.type IN ('exon', 'CDS', 'five_prime_UTR', 'three_prime_UTR')"""
 
 
+
+def read_gff3_ncbi_transcripts(path, layer):
+    # NCBI RefSeq models in the shape of read_gff3_transcripts: exon and CDS rows of every rna- feature (mRNA, lnc_RNA,
+    # transcript, ...; NCBI writes no UTR rows), gene_id the NCBI GeneID, canonical = RefSeq Select. Chromosomes are RefSeq
+    # accessions (NC_...), named 1-29 through the alias table; unplaced scaffolds are left out.
+    def attr(key):
+        return f"regexp_extract(attributes, '(?:^|;){key}([^;]+)', 1)"
+    return f"""
+        WITH g AS (SELECT * FROM read_csv({lit(path)}, header=false, names={GFF3}, all_varchar=true, delim='\t', comment='#')),
+        tx AS (SELECT {attr('ID=rna-')} AS transcript_id, {attr('Parent=gene-')} AS gene_key, g.type AS biotype,
+                      regexp_matches(attributes, '(?:^|;)tag=[^;]*RefSeq Select') AS canonical
+               FROM g WHERE regexp_matches(attributes, '(?:^|;)ID=rna-')),
+        genes AS (SELECT {attr('ID=gene-')} AS gene_key, regexp_extract(attributes, 'GeneID:([0-9]+)', 1) AS gene_id,
+                         url_decode(nullif({attr('Name=')}, '')) AS gene_name
+                  FROM g WHERE regexp_matches(attributes, '(?:^|;)ID=gene-'))
+        SELECT a.chrom, g.start::BIGINT - 1 AS start, g."end"::BIGINT AS "end", tx.transcript_id, genes.gene_id,
+               genes.gene_name, g.strand, g.type AS part, try_cast(g.phase AS INTEGER) AS phase, tx.canonical, tx.biotype
+        FROM g JOIN chrom_alias a ON a.alias = lower(g.chrom) JOIN tx ON {attr('Parent=rna-')} = tx.transcript_id
+             LEFT JOIN genes USING (gene_key)
+        WHERE g.type IN ('exon', 'CDS')"""
+
+
 def read_vcf_info(path, layer):
     # Variant sites (1-bp intervals) with ref, alt and numbers from INFO: `info` maps column -> INFO key (integers where
     # the VCF header says Type=Integer). With several `files`, the first gives the sites and each other adds its own
@@ -248,7 +270,7 @@ def read_bgee(paths):
 
 READERS = {"bed": read_bed, "tsv": read_tsv, "aquafaang_peaks": read_aquafaang_peaks, "gff3": read_gff3,
            "gff3_regions": read_gff3_regions, "vcf": read_vcf, "rna_counts": read_rna_counts,
-           "gff3_transcripts": read_gff3_transcripts, "vcf_info": read_vcf_info, "gene_tsv": read_gene_tsv,
+           "gff3_transcripts": read_gff3_transcripts, "gff3_ncbi_transcripts": read_gff3_ncbi_transcripts, "vcf_info": read_vcf_info, "gene_tsv": read_gene_tsv,
            "nfrasqual": read_nfrasqual, "genetic_map": read_genetic_map, "ss4r": read_ss4r}
 POSITIONAL = ("interval", "nearest", "count", "point", "features")  # layer types with chrom, start, end
 UNIQUE = {"point": ["chrom", "end", "ref", "alt"], "count": ["chrom", "end"], "gene": ["gene_id"]}  # annotate's join keys

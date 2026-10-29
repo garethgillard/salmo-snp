@@ -39,7 +39,9 @@ ASSAYS = {"RNA": ("RNA-seq", "expression; + strand up, &#8722; down; conditions 
           "H3K4me1": ("ChIP-seq H3K4me1", "enhancers, active and primed"), "H3K27me3": ("ChIP-seq H3K27me3", "polycomb repression"),
           "CTCF": ("ChIP-seq CTCF", "insulators")}
 SKIP_TISSUES = {"Sperm"}  # sperm ChIP is left out (salmobase answers 403 for its files)
-GROUPS = ("public", "peaks", "hmm", "assays", *ASSAYS)  # the groups ?open= may list
+GROUPS = ("genes", "public", "peaks", "hmm", "assays", *ASSAYS)  # the groups ?open= may list
+NCBI_GENE = "https://www.ncbi.nlm.nih.gov/gene/{}"  # NCBI isoforms link to their gene there
+ISOFORM_ROWS = 40  # rows of the expanded isoform tracks before '+N more transcripts: zoom in'
 SNP_SETS = [  # (set, row label, sub-label) of the public SNP datasets, in row order; colours: palette.SNP_SETS
     ("public_af", "504-fish panel", "wild and farmed, pooled"), ("aquafaang12", "AQUA-FAANG 12 fish", "imputed"),
     ("synchrosmolt_af", "Synchrosmolt", "108 parents, WGS"), ("axiom", "Axiom array", "CGD study, 1,710 fish")]
@@ -187,7 +189,7 @@ def duplicates(genes):
                              + ("LORe: the copies are still nearly identical" if lore else "AORe: the copies diverged after the duplication")}
 
 
-def genes_group(request, s, ax, data):
+def genes_group(request, s, ax, data, open_=()):
     rows = []
     gwas = None
     if s["key"]:
@@ -228,8 +230,16 @@ def genes_group(request, s, ax, data):
                    f'fill="url(#sp-lore)" fill-opacity="0.25"><title>LORe region {escape(str(b.get("label") or ""))}: the duplicate '
                    'copies are still nearly identical</title></rect>' for b in data.get("lore", []))
     defs = locus_svg._hatch("sp", "lore", locus_svg.LORE, -45) if lore else ""  # id sp-lore
-    rows.append(row("Genes", trk(h, (f"<defs>{defs}</defs>" if defs else "") + lore + "".join(body)), "Ensembl 116"))
-    return group("genes", "Genes and variants", "", rows)
+    rows.append(row("Genes", trk(h, (f"<defs>{defs}</defs>" if defs else "") + lore + "".join(body)),
+                    "Ensembl 116, one isoform each"))
+    more = []  # every isoform of both annotations, one transcript per line
+    links = {"ensembl": lambda gid: reverse("snpportal:gene", args=[gid]), "ncbi": NCBI_GENE.format}
+    for key, models in sl.isoforms(jobs.release(), s["chrom"], s["start"], s["end"], data.get("genes", [])).items():
+        body = []
+        h = locus_svg._genes(body, ax, models, 0, links[key], ISOFORM_ROWS, noop, sl.ISOFORMS[key][1], "transcripts")
+        more.append(row(f"{'Ensembl' if key == 'ensembl' else 'NCBI RefSeq'} isoforms", trk(h, "".join(body)),
+                        f"{sl.ISOFORMS[key][1]}, {len(models)} transcript{'s' * (len(models) != 1)}"))
+    return group("genes", "Genes and variants", "", rows, more, "All isoforms", open_)
 
 
 # ---- public SNPs ----
@@ -604,7 +614,7 @@ def context(request, s, layout):
     prefix = f"snpportal:{(info.get('sha256') or 'release')[:12]}"
     deadline = float(jobs.setting("SNPPORTAL_SIGNAL_DEADLINE", 4.0))
     notes = []
-    groups = [genes_group(request, s, ax, data), public_group(s, ax, data, open_), motifs_group(s, ax, data),
+    groups = [genes_group(request, s, ax, data, open_), public_group(s, ax, data, open_), motifs_group(s, ax, data),
               peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes),
               hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes)]
     synthetic = bool(info.get("synthetic")) or any(locus.synthetic_track(t) for t in (cfg or {}).get("tracks", []))

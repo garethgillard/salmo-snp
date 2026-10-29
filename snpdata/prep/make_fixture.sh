@@ -25,6 +25,9 @@ bed gerp_constrained_elements.salmo_salar.bed
 awk -F'\t' "$HIT NR == 1 || hit(\$1, \$2, \$3)" "$RAW/Ssal_late_rediploidized_regions.tsv" > "$OUT/Ssal_late_rediploidized_regions.tsv"
 gff Salmo_salar.Ssal_v3.1.116.chr.gff3.gz
 gff Salmo_salar.Ssal_v3.1.regulatory_features.v116.gff3.gz
+NCBI=GCF_905237065.1_Ssal_v3.1_genomic.gff.gz  # RefSeq models; chromosomes are accessions (alias_filtered.txt column 2)
+gzip -dc "$RAW/$NCBI" | awk -F'\t' "$HIT FNR == NR { nc[\$2] = \$1; next } !/^#/ && (\$1 in nc) && hit(nc[\$1], \$4 - 1, \$5)" \
+  "$RAW/alias_filtered.txt" - | gzip > "$OUT/$NCBI"
 gzip -dc "$RAW/$VCF" | awk -F'\t' -v OFS='\t' "$HIT !/^#/ && hit(\$1, \$2 - 1, \$2) { print \$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8 }" \
   | gzip > "$OUT/$VCF"
 gzip -dc "$RAW/$VCF" | awk -F'\t' -v OFS='\t' "$HIT /^#CHROM/ || (hit(\$1, \$2 - 1, \$2) && NR % 3 == 0) { print \$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8 }" \

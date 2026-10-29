@@ -321,12 +321,13 @@ def _legend(body, groups, y, width, gutter):
     return y
 
 
-def _genes(body, ax, genes, y, gene_url, max_rows, lane_label):
+def _genes(body, ax, genes, y, gene_url, max_rows, lane_label, source="Ensembl 116", what="genes"):
     """Gene models packed into at most max_rows rows (labels dropped when that does not fit), '+N more' after. A gene
-    dict may carry dup = {text, url, title}: its Ss4R duplicate, linked after the label (the locus browser's)."""
+    dict may carry dup = {text, url, title}: its Ss4R duplicate, linked after the label (the locus browser's). A model
+    without UTR parts (NCBI's) draws its exons thin and its CDS thick."""
     if not genes:
         lane_label("Genes", y + 12)
-        body.append(_t(ax.x0, y + 12, "no Ensembl gene in this window", 9.5, G[700]))
+        body.append(_t(ax.x0, y + 12, f"no {source} {what[:-1]} in this window", 9.5, G[700]))
         return y + 20
 
     def pack(with_labels):
@@ -350,7 +351,7 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label):
     labels = not hidden
     if hidden:
         placed, hidden, n = pack(False)
-    lane_label("Genes", y + 12, "Ensembl 116")
+    lane_label("Genes", y + 12, source)
     for row, g in placed:
         yy = y + row * 26 + (12 if labels else 4)
         coding = g.get("biotype") == "protein_coding"
@@ -370,11 +371,12 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label):
             parts.append(f'<path d="M{cx - 2 * arrow} {yy + 3} l{3 * arrow} 3 l{-3 * arrow} 3" fill="none" stroke="{colour}" stroke-width="0.9"/>')
         blocks = (t or {}).get("parts") or [{"start": g["start"], "end": g["end"], "part": "exon"}]
         has_cds = any(p["part"] == "CDS" for p in blocks)
-        for p in blocks:
-            if has_cds and p["part"] == "exon":
+        has_utr = any(p["part"].endswith("UTR") for p in blocks)
+        for p in sorted(blocks, key=lambda p: p["part"] == "CDS"):  # thin exons first, the CDS over them
+            if has_cds and has_utr and p["part"] == "exon":
                 continue
             px, pw = ax.span(p["start"], p["end"])
-            h = 12 if p["part"] in ("CDS", "exon") else 6
+            h = 12 if p["part"] == "CDS" or (p["part"] == "exon" and not has_cds) else 6
             parts.append(f'<rect x="{px:.1f}" y="{yy + 6 - h / 2}" width="{pw:.1f}" height="{h}" fill="{colour}"/>')
         if labels:
             name = f"{g['label']} →" if arrow == 1 else f"← {g['label']}"
@@ -387,10 +389,10 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label):
             body.append(f'<a href="{escape(g["dup"]["url"])}">{dup}</a>' if g["dup"].get("url") else dup)
     y += n * 26 + (8 if labels else 4)
     if hidden:
-        body.append(_t(ax.x0, y + 8, f"+{hidden} more genes: zoom in", 9.5, G[700]))
+        body.append(_t(ax.x0, y + 8, f"+{hidden} more {what}: zoom in", 9.5, G[700]))
         y += 12
     elif not labels:
-        body.append(_t(ax.x0, y + 8, "gene names hidden in this crowded view: zoom in or hover", 9.5, G[700]))
+        body.append(_t(ax.x0, y + 8, f"{what[:-1]} names hidden in this crowded view: zoom in or hover", 9.5, G[700]))
         y += 12
     return y + 4
 

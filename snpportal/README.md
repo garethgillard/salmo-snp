@@ -283,7 +283,8 @@ files `snpscore_<release>_<preset>[_<tag>][_<vendor>].<ext>`.
 ## Locus views and remote tracks
 
 `snpportal.lib.locus` serves the portal's locus browser, card and variant page from the release (BED coordinates; SNP `pos`
-1-based): `locus(release, chrom, start, end)` returns every lane of a window up to 2 Mb (gene models, peaks with their
+1-based): `locus(release, chrom, start, end)` returns every lane of a window up to 2 Mb (gene models, one isoform per Ensembl gene;
+`isoforms()` gives every Ensembl and NCBI RefSeq transcript of the window for the Genes group's 'All isoforms' rows, peaks with their
 21 states, regbuild, GERP, blacklist, LORe, public variants, known loci); `parse_region(text, release)` reads
 `25:28,980,000-29,010,000`, `ssa25:28.98-29.01Mb` or `25:28996360` (aliases through alias.parquet);
 `signal(tracks, chrom, start, end, cache=)` and `segments(...)` read bigWig/bigBed tracks from `tracks.yaml` on a fixed
