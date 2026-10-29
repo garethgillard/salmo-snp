@@ -1,4 +1,4 @@
-"""Explore without an upload (P5.1-P5.4) on a release built from salmo-snpscore's fixture: the search resolver and
+"""Explore without an upload (P5.1-P5.4) on a release built from snpscore's fixture: the search resolver and
 suggestions, gene pages with candidates (with and without a pool), candidate jobs from genes and intervals, the
 known-loci page, and the data, methods, help and run-locally pages generated from the release."""
 import hashlib
@@ -18,12 +18,12 @@ import snpscore
 
 from . import explore, jobs, locus_svg, palette, search
 
-SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
+SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
 VGLL3, VGLL3_CHR21 = "ENSSSAG00000053708", "ENSSSAG00000099564"
 
 
-@skipUnless(FIXTURE.exists(), "needs the salmo-snpscore repo next to this one")
+@skipUnless(FIXTURE.exists(), "needs snpscore/ next to snpportal/")
 class ExploreTest(SimpleTestCase):
     @classmethod
     def setUpClass(cls):

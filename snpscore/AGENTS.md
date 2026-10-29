@@ -1,7 +1,7 @@
 # Notes for Codex
 
 This repo builds the annotation layers behind the salmobase functional SNP portal and annotates SNP lists against them.
-The portal lives in the sibling repo `salmo-snpportal` and depends on this package.
+The portal lives in `../snpportal` (same repository, salmo-snp) and depends on this package.
 Read README.md first: its "Release format" section is the contract with the portal. TRACKER.md says what's next.
 
 ## Current phase: local prototype
@@ -12,7 +12,7 @@ No Docker, Apache, server, deployment or hosting work until the prototype works 
 - Minimal files, minimal code. Readable over clever. Don't add tests for every edge case.
 - Dependencies: duckdb and pyyaml only. Ask before adding any. No pandas.
 - Prefer one DuckDB SQL query over Python loops.
-- Must run on Python 3.8 (salmobase's Docker image): no `match`, no `str.removeprefix`, no `X | Y` types; use `from __future__ import annotations`.
+- Must run on Python 3.8 until the portal's Dockerfile sets the version (G, 2026-10-28: own container): no `match`, no `str.removeprefix`, no `X | Y` types; use `from __future__ import annotations`.
 
 ## Conventions
 - Assembly Ssal_v3.1, chromosomes named "1"-"29" (as AQUA-FAANG and Ensembl).

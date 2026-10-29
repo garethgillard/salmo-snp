@@ -1,4 +1,4 @@
-"""Breeder tools (P6.3 panel designer, P6.4 exports, P6.6 chip comparison) on jobs scored from salmo-snpscore's fixture,
+"""Breeder tools (P6.3 panel designer, P6.4 exports, P6.6 chip comparison) on jobs scored from snpscore's fixture,
 run inline (SNPPORTAL_WORKERS=0): panel constraints and identical files for the same URL, every export format and scope
 with provenance, the demo chip (SYNTHETIC everywhere it contributes) and an uploaded chip."""
 import hashlib
@@ -24,7 +24,7 @@ from snpscore.fasta import Fasta
 from . import jobs, panel, tools
 from .tests import boosted_links
 
-SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
+SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
 SVG = re.compile(r"<svg .*?</svg>", re.S)
 
@@ -42,7 +42,7 @@ def body(response):
     return b"".join(response.streaming_content) if response.streaming else response.content
 
 
-@skipUnless(FIXTURE.exists(), "needs the salmo-snpscore repo next to this one")
+@skipUnless(FIXTURE.exists(), "needs snpscore/ next to snpportal/")
 class ToolsTest(SimpleTestCase):
     @classmethod
     def setUpClass(cls):

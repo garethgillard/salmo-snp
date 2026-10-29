@@ -1,4 +1,4 @@
-# salmo-snpportal
+# snpportal
 
 Django app for salmobase.org: score a SNP list against AQUA-FAANG functional maps and tier it by its evidence in all 21
 sample conditions, then explore the result (overview, a table filtered on its columns, an evidence card per SNP in the
@@ -7,27 +7,27 @@ print a one-page report.
 GWAS summary statistics get an Association page (Manhattan, tier-stratified QQ, loci, regional plot and fine-mapping
 with a functional prior). Without a list: search (genes, NCBI LOC symbols, rs IDs, positions), gene pages, a locus
 browser with live salmobase signal, published associations and molQTL leads, the known-loci catalogue (39 published SNPs
-and a gene region across 8 traits, with evidence badges) and a guided tour (an illustrated slide show). All annotation logic lives in the sibling repo
-[salmo-snpscore](../salmo-snpscore); this app handles upload, jobs, display and export.
+and a gene region across 8 traits, with evidence badges) and a guided tour (an illustrated slide show). All annotation logic lives in
+[snpscore/](../snpscore) (same repository); this app handles upload, jobs, display and export.
 
 ## Run locally
 
 ```bash
-pip install -r requirements.txt                       # also installs ../salmo-snpscore (editable)
-cd ../salmo-snpscore
+pip install -r requirements.txt                       # also installs ../snpscore (editable)
+cd ../snpscore
 snpscore fetch                                        # the public inputs, into data/raw
 bash prep/make_demo.sh                                # the examples (layers.yaml 'demo'): 50K public sites, the
                                                       # SYNTHETIC demo chip and the SYNTHETIC maturation GWAS
 snpscore build --out release/dev                      # copies the examples that exist into release/dev/demo/
-cd ../salmo-snpportal
+cd ../snpportal
 python manage.py runserver                            # http://127.0.0.1:8000/snp/
-python manage.py test snpportal                       # builds a release from salmo-snpscore's fixture
+python manage.py test snpportal                       # builds a release from snpscore/tests/fixture
 ```
 
 `snpscore build` copies only the examples that exist, so run it again after making them. To try the portal, use the
 Examples on the Score page, which is the home page `/snp/` (the release's `demo/` inputs: known loci, the SYNTHETIC demo chip and the
 SYNTHETIC maturation GWAS; `example=public_50k` still works but is not offered), paste a few positions or rs IDs, upload
-`../salmo-snpscore/tests/fixture/snps.vcf`, or follow the guided tour (`/snp/tour/`). The Score page's tabs (Upload SNPs,
+`../snpscore/tests/fixture/snps.vcf`, or follow the guided tour (`/snp/tour/`). The Score page's tabs (Upload SNPs,
 Paste positions, Genes or regions, GWAS) open with `?input=file|paste|regions|gwas` (or `#gwas`). On the Design panel,
 'Use the demo chip' compares the panel with the SYNTHETIC demo chip.
 `python manage.py tour_images [--base http://localhost:8000/snp/]` retakes the tour's screenshots (`static/snpportal/tour/`)
@@ -51,7 +51,7 @@ The demo runs at **https://158.39.75.9/snp/** (also https://158-39-75-9.sslip.io
 VM lost its network port and got a new address.
 
 `bash deploy/nrec.sh <ssh host> <web name> [<web name> ...]` puts the portal on an NREC VM (GOLD Ubuntu 22.04 on the `dualStack`
-network, so it has a public IPv4 address; ports 22, 80 and 443 open). From this Mac it copies both repos (code only),
+network, so it has a public IPv4 address; ports 22, 80 and 443 open). From this Mac it copies snpscore/ and snpportal/ (code only),
 `release/dev` and the genome to `/srv/snpportal`; on the VM it installs Django 4.2, DuckDB 1.2.2 and gunicorn in a
 venv, Caddy for HTTPS (a site per name: an IPv4 address gets Let's Encrypt's short-lived IP certificate, renewed by
 Caddy; a `<ip-with-dashes>.sslip.io` name works too) and systemd units for the app
@@ -117,7 +117,7 @@ robust peaks that change a motif match: ticks, the two largest changes enlarged 
 every changed motif's logo over the reference sequence; windows go down to 60 bp), Regulatory elements, Chromatin
 states, Functional assays and Other annotation.
 
-Public data on the pages (R1, R3-R8 of salmo-snpscore's ROADMAP 'Push 2'):
+Public data on the pages (R1, R3-R8 of snpscore/ROADMAP.md 'Push 2'):
 - Public allele frequencies are the 504-fish reference panel's (`public_af_af`, `_maf`, `_ac`, `_an`, `_ns`); the 12
   AQUA-FAANG fish's AF and DR2 are shown apart, labelled 'AQUA-FAANG 12 fish'. The card's scope line quotes the
   manifest's `population`. Gene pages and candidate lists name their site source (the release pool's VCF, else the panel).
@@ -208,7 +208,7 @@ Vendor files say 'layout to confirm against the vendor's current template'.
    file-based cache, which lists its folder on every write; a view with the functional assays open writes ~3,000 tiles; else a per-process LocMemCache;
    `sandbox/settings.py` shows a FileBasedCache).
 3. `urls.py`: `path('snp/', include('snpportal.urls'))`. Run `collectstatic` for `snpportal/portal.css` and `portal.js`.
-4. `requirements.txt`: add `duckdb` and `snpscore @ git+<salmo-snpscore repo URL>`.
+4. `requirements.txt`: add `duckdb` and `snpscore @ git+https://github.com/garethgillard/salmo-snp#subdirectory=snpscore`.
 5. Put a release under `/datafiles` (e.g. `/datafiles/snpscore/v0.1`) and set `SNPSCORE_RELEASE` in docker-compose.
 6. Cron: `python manage.py snpportal_cleanup` (hourly). Results pages also clean up as they are viewed.
 

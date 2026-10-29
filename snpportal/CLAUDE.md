@@ -1,7 +1,7 @@
 # Notes for Claude
 
 Django app that will be copied into the salmobase repo (gitlab.com/elixir-nmbu/salmobase) as `snpportal`.
-Annotation logic lives in the sibling repo `salmo-snpscore` (see its README "Release format", ROADMAP.md and TRACKER.md, which cover both repos).
+Annotation logic lives in `../snpscore` (see its README "Release format", ROADMAP.md and TRACKER.md, which cover the whole salmo-snp repository).
 This app runs scoring jobs, shows the annotated result, and exports it. README "How it works" describes job folders and modules.
 
 ## Current phase: public demo
@@ -13,7 +13,7 @@ IP address: the script rewrites the Caddy sites and allowed hosts from the names
 - Pages extend `snpportal/base_portal.html` (which extends `salmobase/base.html` and fills its blocks `head`, `content`, `scripts`). Bootstrap 5.1.3 and jQuery are already loaded there.
 - Interactivity with htmx (one script tag, with SRI); no frontend build step, no chart libraries: figures are server-rendered SVG from `figures.py`.
 - For genome views, reuse salmobase's existing `jbrowse_react` bundle (deep links) instead of adding a new JS build.
-- Must keep working on Python 3.8, Django 4.2 and DuckDB 1.2.2 (salmobase's Docker image).
+- Must keep working on Python 3.8, Django 4.2 and DuckDB 1.2.2 until the portal's Dockerfile sets the versions (G, 2026-10-28: own container, not merged into salmobase).
 
 ## Keep it small
 - Few files, little code, readable. Don't add tests for every edge case.
@@ -50,7 +50,7 @@ strongest loci are listed and fine-mapped) and the settings form's suggestive-p 
 ## Commands
 ```bash
 pip install -r requirements.txt
-python manage.py runserver        # needs a release: SNPSCORE_RELEASE or ../salmo-snpscore/release/dev
+python manage.py runserver        # needs a release: SNPSCORE_RELEASE or ../snpscore/release/dev
 python manage.py test snpportal   # jobs run inline (SNPPORTAL_WORKERS=0)
 python manage.py snpportal_cleanup
 ```

@@ -1,6 +1,6 @@
-"""GWAS summary statistics in the portal (P7.1-P7.4), offline, on a release built from salmo-snpscore's fixture and
+"""GWAS summary statistics in the portal (P7.1-P7.4), offline, on a release built from snpscore's fixture and
 the SYNTHETIC fixture-scale GWAS of prep/make_synthetic.py (generated into tmp and offered as the release's example).
-ATAC rows of the regional plot come from SYNTHETIC bigWigs served by salmo-snpscore's tests/range_server.py."""
+ATAC rows of the regional plot come from SYNTHETIC bigWigs served by snpscore's tests/range_server.py."""
 import io
 import logging
 import os
@@ -22,7 +22,7 @@ from snpscore import bbi
 
 from . import association, jobs, locus_svg
 
-SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
+SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
 STEM = "gwas_maturation_SYNTHETIC"
 
@@ -43,7 +43,7 @@ def figure_svg(html, name):
     return part[part.index("<svg "):part.rindex("</svg>") + 6]
 
 
-@skipUnless(FIXTURE.exists(), "needs the salmo-snpscore repo next to this one")
+@skipUnless(FIXTURE.exists(), "needs snpscore/ next to snpportal/")
 class GwasTest(SimpleTestCase):
     @classmethod
     def setUpClass(cls):

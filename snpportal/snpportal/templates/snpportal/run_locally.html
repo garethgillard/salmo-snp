@@ -8,14 +8,14 @@
     <li class="mb-2">Install snpscore (Python 3.8 or newer; its only dependencies are duckdb and pyyaml):
       <pre class="sp-mono mb-0">python3 -m venv snpscore-env
 . snpscore-env/bin/activate
-pip install git+&lt;salmo-snpscore repository URL&gt;</pre></li>
+pip install "git+https://github.com/garethgillard/salmo-snp#subdirectory=snpscore"</pre></li>
     <li class="mb-2">Get release {{ release.version }}.
       {% if zip %}Download release.zip from this portal's operator and check it:
       <pre class="sp-mono mb-0">shasum -a 256 release.zip   # must print {{ zip_sha256|default:"the sha256 in release.zip.sha256" }}
 unzip release.zip -d {{ folder }}</pre>
       {% if release.sha256 %}Check that it is the same release as the portal's:
       <pre class="sp-mono mb-0">shasum -a 256 {{ folder }}/manifest.json   # {{ release.sha256 }}</pre>{% endif %}
-      {% else %}Build it from the public sources (several GB of downloads), with the salmo-snpscore repository's layers.yaml:
+      {% else %}Build it from the public sources (several GB of downloads), with the layers.yaml in the salmo-snp repository (snpscore/):
       <pre class="sp-mono mb-0">snpscore fetch
 snpscore build --out {{ folder }}</pre>
       A downloadable release.zip with its sha256 comes later.

@@ -1,9 +1,9 @@
 # Functional SNP portal: tracker
 
-Covers both repos (salmo-snpscore and salmo-snpportal). Work top to bottom; the first unticked box is the next step.
+Covers the whole salmo-snp repository (snpscore/ and snpportal/). Work top to bottom; the first unticked box is the next step.
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
-**Current phase: local prototype on test data.** No Docker, Apache, server or hosting work until the prototype works and G says go (steps 7-8).
+**Current phase: one repository, then the container (step 7, G 2026-10-28; the plan is in ../AGENTS.md).**
 
 ## Step 0: decisions and contract
 - [x] Assembly Ssal_v3.1, chromosomes named 1-29 (same as AQUA-FAANG and Ensembl)
@@ -43,7 +43,7 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - [x] Tier rules and weights in `weights.yaml`, applied by `snpscore annotate --trait` (values provisional)
 - [ ] Genome-wide release v0.1; benchmark passes thresholds set in advance
 
-## Step 5: portal MVP (salmo-snpportal)
+## Step 5: portal MVP (snpportal/)
 - [x] Upload -> sortable, paged table -> TSV download
 - [x] Trait/tissue selector and tier column (re-tiered per request, no re-annotation)
 - [x] Delete old results automatically (on upload and download, after 24 h)
@@ -55,14 +55,20 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - [x] Filters (tier, trait preset, region class, flags)
 - [x] Axiom/Illumina/KASP flank export with TOP/BOT, sidecar provenance and vendor rules (P6.4, R2)
 
-## Step 7: going online (later, once the prototype works)
-- [ ] Decide where the repos live: GitLab elixir-nmbu (like salmobase) or GitHub
-- [ ] Release folder under /datafiles on the salmobase server
-- [ ] Staging deploy; CIGENE colleagues test it
-
-## Step 8: merge into salmobase (later)
-- [ ] Copy `snpportal/` into the salmobase repo (steps in salmo-snpportal/README.md)
-- [ ] Plan the move of salmobase's Docker image off Python 3.8 (end of life; caps DuckDB at 1.2.2, Django at 4.2)
+## Step 7: one repository, a static data release and a container (G, 2026-10-28; plan in ../AGENTS.md)
+- [x] One private GitHub repository, salmo-snp, with both histories in snpscore/ and snpportal/; PolyForm Noncommercial licence
+- [ ] Move the release build (fetch, build, layers.yaml, tracks.yaml, prep/, the known-loci catalogue) to snpdata/;
+      snpdata imports snpscore for the motif scoring and file readers, never the other way round
+- [ ] Weights out of the release: the public pool's tiers and background summaries become a cache built from the release
+- [ ] Portal-only code (locus browser data, bigWig reader, Design panel, GWAS fine-mapping, exports) moves to snpportal/
+- [ ] One AGENTS.md per folder (CLAUDE.md imports it) instead of the duplicated notes; CI runs both test suites and
+      rejects data files outside tests/fixture
+- [ ] Dockerfile for the portal: same image public and local (127.0.0.1), release and genome downloaded once into a
+      volume and checked against the manifest; settles the Python version (3.8 no longer required)
+- [ ] Release folder as static files on the salmobase Apache server (versioned folders, latest.json); the nf-RASQUAL
+      and 504-fish layers only once their owners agree to redistribution
+- [ ] salmobase links to the portal with a button; staging deploy; CIGENE colleagues test it
+- [ ] Before the repository goes public: synthetic stand-ins for the fixture cuts of licence-pending data
 
 ## Portal roadmap v2 (full specs in [ROADMAP.md](ROADMAP.md))
 

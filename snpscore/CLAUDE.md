@@ -1,18 +1,18 @@
 # Notes for Claude
 
 This repo builds the annotation layers behind the salmobase functional SNP portal and annotates SNP lists against them.
-The portal lives in the sibling repo `salmo-snpportal` and depends on this package.
+The portal lives in `../snpportal` (same repository, salmo-snp) and depends on this package.
 Read README.md first: its "Release format" section is the contract with the portal. TRACKER.md says what's next.
 
 ## Current phase: public demo
 Built and tested locally on `tests/fixture` and the public inputs from `snpscore fetch`. G said go (2026-10-12) for a
-public demo on an NREC VM (salmo-snpportal `deploy/nrec.sh`). Merging into salmobase waits until G says so.
+public demo on an NREC VM (snpportal/deploy/nrec.sh). The portal becomes its own container; salmobase links to it (G, 2026-10-28).
 
 ## Keep it small
 - Minimal files, minimal code. Readable over clever. Don't add tests for every edge case.
 - Dependencies: duckdb and pyyaml only. Ask before adding any. No pandas.
 - Prefer one DuckDB SQL query over Python loops.
-- Must run on Python 3.8 (salmobase's Docker image): no `match`, no `str.removeprefix`, no `X | Y` types; use `from __future__ import annotations`.
+- Must run on Python 3.8 until the portal's Dockerfile sets the version (G, 2026-10-28: own container): no `match`, no `str.removeprefix`, no `X | Y` types; use `from __future__ import annotations`.
 
 ## Conventions
 - Assembly Ssal_v3.1, chromosomes named "1"-"29" (as AQUA-FAANG and Ensembl).
@@ -26,6 +26,11 @@ public demo on an NREC VM (salmo-snpportal `deploy/nrec.sh`). Merging into salmo
 Don't invent thresholds, weights, "active" state definitions or trait-to-tissue mappings. Ask, then record the answer below.
 
 Decided:
+- Repository and deployment (2026-10-28): one private GitHub repository, salmo-snp (snpscore/, snpportal/, later snpdata/ for the
+  release build); the release is published as static files on Apache beside salmobase; the portal is its own Docker
+  container, the same image public and local (127.0.0.1), linked from salmobase by a button; weights stay out of the
+  release; fetching public data at given locations is fine, users' SNPs are never stored online. Licence: PolyForm
+  Noncommercial 1.0.0 (commercial use only with G's permission). Details in ../AGENTS.md.
 - Primary element set: AQUA-FAANG per-condition ChromHMM states (Ensembl regulatory build may be added as a second layer).
 - RNA-seq strands (2026-10-08): the trackhub's '.forward' files are the + strand (checked at vgll3: 16x the reverse
   files' reads over the gene).

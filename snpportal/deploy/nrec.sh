@@ -4,7 +4,7 @@
 #   e.g.  bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io   (the address: https://158.39.75.9/snp/)
 # Each name gets its own Caddy site and HTTPS certificate; an IPv4 address gets Let's Encrypt's short-lived IP
 # certificate (Caddy 2.10 or newer). The first name is the one checked at the end.
-# From this Mac it copies both repos (code only), the release and the genome to /srv/snpportal, then on the VM it
+# From this Mac it copies snpscore/ and snpportal/ (code only), the release and the genome to /srv/snpportal, then on the VM it
 # installs Python packages, Caddy (HTTPS from Let's Encrypt), a 2 GB swap file if there is none, and three systemd
 # units: gunicorn, and an hourly snpportal_cleanup. DuckDB gets half the RAM and every CPU. Safe to rerun after a
 # change: results and the secret key are kept.
@@ -13,8 +13,8 @@ HOST=$1
 shift
 NAMES="$*"
 NAME=$1  # the first name, for the check at the end
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)  # the folder that holds both repos
-SNPSCORE=$ROOT/salmo-snpscore
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)  # the salmo-snp repository
+SNPSCORE=$ROOT/snpscore
 RELEASE=${RELEASE:-$SNPSCORE/release/dev}
 GENOME=$SNPSCORE/data/raw/Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz
 SKIP=(--exclude .git/ --exclude .venv/ --exclude __pycache__/ --exclude .claude/ --exclude .DS_Store
@@ -22,7 +22,7 @@ SKIP=(--exclude .git/ --exclude .venv/ --exclude __pycache__/ --exclude .claude/
 
 ssh "$HOST" 'sudo mkdir -p /srv/snpportal/genome && sudo chown -R "$USER" /srv/snpportal'
 rsync -az --delete "${SKIP[@]}" "$SNPSCORE/" "$HOST:/srv/snpportal/salmo-snpscore/"
-rsync -az --delete "${SKIP[@]}" "$ROOT/salmo-snpportal/" "$HOST:/srv/snpportal/salmo-snpportal/"
+rsync -az --delete "${SKIP[@]}" "$ROOT/snpportal/" "$HOST:/srv/snpportal/salmo-snpportal/"
 rsync -az --delete "$RELEASE/" "$HOST:/srv/snpportal/release/"
 rsync -az "$GENOME" "$GENOME.fai" "$GENOME.gzi" "$HOST:/srv/snpportal/genome/"
 

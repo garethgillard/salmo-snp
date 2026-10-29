@@ -1,4 +1,4 @@
-# salmo-snpscore
+# snpscore
 
 Builds the annotation tables behind the salmobase SNP portal, and annotates any Atlantic salmon SNP list against them.
 Layers so far: AQUA-FAANG chromatin states (21 conditions), genic region class, Ensembl regulatory build, GERP constrained

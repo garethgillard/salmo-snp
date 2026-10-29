@@ -1,4 +1,4 @@
-"""End to end on a release built from salmo-snpscore's fixture, with jobs run inline (SNPPORTAL_WORKERS=0):
+"""End to end on a release built from snpscore's fixture, with jobs run inline (SNPPORTAL_WORKERS=0):
 upload/paste/example -> job -> overview, table, card, figure and downloads; job lifecycle; palette and templates."""
 import json
 import logging
@@ -26,7 +26,7 @@ import snpscore
 
 from . import jobs, palette, results
 
-SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
+SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 APP = Path(__file__).resolve().parent
 FIXTURE = SNPSCORE / "tests" / "fixture"
 
@@ -71,7 +71,7 @@ class PaletteTest(SimpleTestCase):
                 self.assertFalse([x for x in text.splitlines() if "{#" in x and "#}" not in x], path.name)  # {# #} is one line
 
 
-@skipUnless(FIXTURE.exists(), "needs the salmo-snpscore repo next to this one")
+@skipUnless(FIXTURE.exists(), "needs snpscore/ next to snpportal/")
 class PortalTest(SimpleTestCase):
     @classmethod
     def setUpClass(cls):

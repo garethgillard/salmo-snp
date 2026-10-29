@@ -1,4 +1,4 @@
-"""Guided tour (an illustrated slide show) and the printable report (P3.5), on a release built from salmo-snpscore's
+"""Guided tour (an illustrated slide show) and the printable report (P3.5), on a release built from snpscore's
 fixture; example jobs run inline."""
 import logging
 import os
@@ -16,7 +16,7 @@ import snpscore
 
 from . import explore, jobs
 
-SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
+SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
 TOUR_DIR = Path(__file__).resolve().parent / "static" / "snpportal" / "tour"
 
@@ -37,7 +37,7 @@ def shown(html):
     return re.search(rf'<h2 id="slide-{n}"[^>]*>([^<]*)</h2>', html).group(1)
 
 
-@skipUnless(FIXTURE.exists(), "needs the salmo-snpscore repo next to this one")
+@skipUnless(FIXTURE.exists(), "needs snpscore/ next to snpportal/")
 class TourTest(SimpleTestCase):
     @classmethod
     def setUpClass(cls):

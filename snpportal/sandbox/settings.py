@@ -22,8 +22,8 @@ TEMPLATES = [{
 DATABASES = {}
 STATIC_URL = "/static/"  # served by runserver (and sandbox/urls.py) while DEBUG is on
 
-# Release folder built by salmo-snpscore (`snpscore build --out release/dev`)
-SNPSCORE_RELEASE = os.environ.get("SNPSCORE_RELEASE", str(BASE_DIR.parent / "salmo-snpscore" / "release" / "dev"))
+# Release folder built by snpscore (`snpscore build --out release/dev`)
+SNPSCORE_RELEASE = os.environ.get("SNPSCORE_RELEASE", str(BASE_DIR.parent / "snpscore" / "release" / "dev"))
 
 # Portal settings (defaults shown). Results live in SNPPORTAL_RESULTS_DIR (default: <system temp>/snpportal).
 if os.environ.get("SNPPORTAL_RESULTS_DIR"):

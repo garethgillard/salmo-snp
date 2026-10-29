@@ -1,4 +1,4 @@
-"""Overview dashboard (P3.2) and results table (P3.3) on a job scored from salmo-snpscore's fixture, run inline
+"""Overview dashboard (P3.2) and results table (P3.3) on a job scored from snpscore's fixture, run inline
 (SNPPORTAL_WORKERS=0): summary.json, every panel whose columns exist, figure downloads, bin -> table links, the
 filter whitelist, sorting, paging, the column chooser, column gating and the empty state."""
 import json
@@ -19,7 +19,7 @@ import snpscore
 
 from . import figures, jobs, results
 
-SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
+SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
 SVG = re.compile(r"<svg .*?</svg>", re.S)
 
@@ -29,7 +29,7 @@ def svgs(html):
     return [ET.fromstring(s) for s in SVG.findall(html)]
 
 
-@skipUnless(FIXTURE.exists(), "needs the salmo-snpscore repo next to this one")
+@skipUnless(FIXTURE.exists(), "needs snpscore/ next to snpportal/")
 class ResultsTest(SimpleTestCase):
     @classmethod
     def setUpClass(cls):

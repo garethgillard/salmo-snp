@@ -1,5 +1,5 @@
-"""Locus browser, evidence card and variant page on a release built from salmo-snpscore's fixture, offline: signal rows
-come from SYNTHETIC bigWigs written at test time (salmo-snpscore tests/bbi_writer.py) and served by its
+"""Locus browser, evidence card and variant page on a release built from snpscore's fixture, offline: signal rows
+come from SYNTHETIC bigWigs written at test time (snpscore/tests/bbi_writer.py) and served by its
 tests/range_server.py. With SNPSCORE_LIVE=1 one test reads the real salmobase bigWigs and prints timings."""
 import logging
 import os
@@ -21,7 +21,7 @@ from snpscore import bbi
 
 from . import jobs, locus, palette
 
-SNPSCORE = Path(__file__).resolve().parents[2] / "salmo-snpscore"
+SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 FIXTURE = SNPSCORE / "tests" / "fixture"
 CONDITIONS = ["Brain_Immature_Female", "Brain_Mature_Male", "Gonad_Mature_Male", "Liver_Immature_Female"]
 VGLL3 = "r=25:28,980,000-29,010,000"
@@ -43,7 +43,7 @@ def svg_of(html):
     return re.search(r"<svg .*?</svg>", html, re.S).group(0)
 
 
-@skipUnless(FIXTURE.exists(), "needs the salmo-snpscore repo next to this one")
+@skipUnless(FIXTURE.exists(), "needs snpscore/ next to snpportal/")
 class LocusTest(SimpleTestCase):
     @classmethod
     def setUpClass(cls):
