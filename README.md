@@ -17,6 +17,18 @@ The portal will ship as a Docker image that also runs locally, so confidential S
 computer. [AGENTS.md](AGENTS.md) has the plan, the rules and
 how to run the tests.
 
+## Run it on your own computer
+
+```bash
+pip install "git+https://github.com/garethgillard/salmo-snp#subdirectory=snpscore" \
+            "git+https://github.com/garethgillard/salmo-snp#subdirectory=snpportal"
+salmo-snp download <release URL>      # once per release: about 300 MB, every file checked against its sha256
+salmo-snp serve                       # http://127.0.0.1:8000/snp/, for this computer only
+```
+
+Your SNP lists and results stay on your computer (results in ~/.salmo-snp, kept 30 days); the portal only fetches
+public data, such as AQUA-FAANG signal for the region you view. Developers: [AGENTS.md](AGENTS.md).
+
 ## Licence
 
 [PolyForm Noncommercial 1.0.0](LICENSE): free for research, teaching and other noncommercial use, including by

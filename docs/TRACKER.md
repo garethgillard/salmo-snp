@@ -68,9 +68,10 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
       (nrec.sh read-only deploy key, github_deploy.sh Actions key)
 - [x] Gene models: a representative Ensembl isoform, expandable to every Ensembl and NCBI RefSeq isoform
       (transcripts_ncbi layer; release/dev got it added in place, the next full build includes it)
-- [ ] environment.yml (conda-forge, python 3.8) for development
-- [ ] The salmo-snp package: `salmo-snp serve --local|--public`, release download and check into a cache, local mode
-      (127.0.0.1, no 24 h deletion); NREC switches to it
+- [x] environment.yml (conda-forge, python 3.8) for development
+- [x] The salmo-snp package (snpportal/pyproject.toml): `salmo-snp download` (SHA256SUMS, written by snpdata build) and
+      `salmo-snp serve` (127.0.0.1, results kept 30 days). The public site keeps gunicorn behind Caddy (no `--public` mode
+      needed yet); the release URL comes with the Apache folder
 - [ ] Release folder as static files on the salmobase Apache server (versioned folders, latest.json); the nf-RASQUAL
       and 504-fish layers only once their owners agree to redistribution
 - [ ] v0.1.0 tag: GitHub Actions builds the wheels and a GitHub Release

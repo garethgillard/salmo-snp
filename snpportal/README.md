@@ -13,8 +13,13 @@ upload, jobs, display and export, with its plain-Python parts in `snpportal/lib/
 
 ## Run locally
 
+As users run it (`snpportal/serve.py`): `pip install` snpscore and this folder (the `salmo-snp` package), then
+`salmo-snp download <release URL>` (every file checked against the release's SHA256SUMS, into ~/.salmo-snp) and
+`salmo-snp serve` (http://127.0.0.1:8000/snp/, this computer only; results kept 30 days in ~/.salmo-snp/results).
+`salmo-snp serve --release <folder>` uses a release built with snpdata. For development:
+
 ```bash
-pip install -r requirements.txt -e ../snpdata        # also installs ../snpscore (editable); snpdata for the build and tests
+conda env create -f ../environment.yml && conda activate salmo-snp   # Python 3.8 and the three folders, editable
 cd ../snpdata
 snpdata fetch                                         # the public inputs, into data/raw
 bash prep/make_demo.sh                                # the examples (layers.yaml 'demo'): 50K public sites, the
@@ -44,7 +49,7 @@ The tab and the Table's filters live in the URL, so a view can be bookmarked or 
 `SNPSCORE_DEV=1` adds a load check: the 1.6M-site public VCF scored on the background pool against release/dev
 (about 85 s here; the POST returns at once).
 
-`sandbox/` is a minimal Django project for development only. Its `templates/salmobase/base.html` stands in for
+`snpsite/` is the minimal Django project around the app (development, `salmo-snp serve` and the NREC demo). Its `templates/salmobase/base.html` stands in for
 salmobase's real base template. It serves static files while `DEBUG` is on.
 
 ## Public demo (NREC)
@@ -60,7 +65,7 @@ it copies `snpdata/release/dev` and the genome to `/srv/snpportal`. On the VM it
 gunicorn in a venv, Caddy for HTTPS (a site per name: an IPv4 address gets Let's Encrypt's short-lived IP certificate,
 renewed by Caddy; a `<ip-with-dashes>.sslip.io` name works too) and systemd units for the app (`snpportal`) and an
 hourly `snpportal_cleanup`. Rerun it for a new release or new web names: results and the secret key are kept. The
-sandbox project serves the demo with `DJANGO_DEBUG=0` and the settings in `/srv/snpportal/env`; `SNPSCORE_GENOME`
+snpsite project serves the demo with `DJANGO_DEBUG=0` and the settings in `/srv/snpportal/env`; `SNPSCORE_GENOME`
 points snpscore at the VM's genome copy. Logs: `journalctl -u snpportal`.
 
 ### Automatic deploys

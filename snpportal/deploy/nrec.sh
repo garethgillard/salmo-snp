@@ -52,7 +52,7 @@ venv/bin/pip install -q "django>=4.2,<5" "duckdb==1.2.2" gunicorn -e salmo-snp/s
 [ -f secret_key ] || (umask 077 && python3 -c "import secrets; print(secrets.token_urlsafe(50))" > secret_key)
 mkdir -p results && chmod 700 results
 cat > env <<EOF
-DJANGO_SETTINGS_MODULE=sandbox.settings
+DJANGO_SETTINGS_MODULE=snpsite.settings
 DJANGO_DEBUG=0
 DJANGO_SECRET_KEY=$(cat secret_key)
 DJANGO_ALLOWED_HOSTS=${NAMES// /,}
@@ -74,7 +74,7 @@ After=network.target
 User=$USER
 WorkingDirectory=/srv/snpportal/salmo-snp/snpportal
 EnvironmentFile=/srv/snpportal/env
-ExecStart=/srv/snpportal/venv/bin/gunicorn sandbox.wsgi --bind 127.0.0.1:8000 --workers 1 --threads 8 --timeout 300
+ExecStart=/srv/snpportal/venv/bin/gunicorn snpsite.wsgi --bind 127.0.0.1:8000 --workers 1 --threads 8 --timeout 300
 Restart=always
 [Install]
 WantedBy=multi-user.target

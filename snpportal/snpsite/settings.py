@@ -13,14 +13,14 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")  # behind Caddy on
 STATIC_ROOT = os.environ.get("DJANGO_STATIC_ROOT")  # collectstatic's target; Caddy serves it when DEBUG is off
 INSTALLED_APPS = ["django.contrib.staticfiles", "snpportal"]
 MIDDLEWARE = ["django.middleware.common.CommonMiddleware", "django.middleware.csrf.CsrfViewMiddleware"]
-ROOT_URLCONF = "sandbox.urls"
+ROOT_URLCONF = "snpsite.urls"
 TEMPLATES = [{
     "BACKEND": "django.template.backends.django.DjangoTemplates",
-    "DIRS": [BASE_DIR / "sandbox" / "templates"],
+    "DIRS": [Path(__file__).resolve().parent / "templates"],
     "APP_DIRS": True,
 }]
 DATABASES = {}
-STATIC_URL = "/static/"  # served by runserver (and sandbox/urls.py) while DEBUG is on
+STATIC_URL = "/static/"  # served by runserver (and snpsite/urls.py) while DEBUG is on
 
 # Release folder built by snpdata (`snpdata build --out release/dev`)
 SNPSCORE_RELEASE = os.environ.get("SNPSCORE_RELEASE", str(BASE_DIR.parent / "snpdata" / "release" / "dev"))
@@ -29,7 +29,7 @@ SNPSCORE_RELEASE = os.environ.get("SNPSCORE_RELEASE", str(BASE_DIR.parent / "snp
 if os.environ.get("SNPPORTAL_RESULTS_DIR"):
     SNPPORTAL_RESULTS_DIR = os.environ["SNPPORTAL_RESULTS_DIR"]
 SNPPORTAL_WORKERS = int(os.environ.get("SNPPORTAL_WORKERS", 1))  # background job threads; 0 = run inline (tests)
-SNPPORTAL_KEEP_HOURS = 24
+SNPPORTAL_KEEP_HOURS = float(os.environ.get("SNPPORTAL_KEEP_HOURS", 24))  # salmo-snp serve keeps them 30 days
 SNPPORTAL_MAX_UPLOAD_MB = 300  # checked on Content-Length before the body is read
 SNPPORTAL_MAX_SNPS = 3_000_000
 SNPPORTAL_DUCKDB_THREADS = int(os.environ.get("SNPPORTAL_DUCKDB_THREADS", 2))  # per job; deploy/nrec.sh sizes them to the VM

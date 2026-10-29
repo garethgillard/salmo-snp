@@ -1,0 +1,24 @@
+[project]
+name = "salmo-snp"
+version = "0.1.0"
+description = "Functional SNP portal for Atlantic salmon: score SNP lists against AQUA-FAANG and public data, on your own computer"
+requires-python = ">=3.8"
+license = {text = "PolyForm-Noncommercial-1.0.0 (see LICENSE in the salmo-snp repository)"}
+dependencies = ["snpscore", "django>=4.2,<5", "duckdb>=1.2"]  # snpscore: ../snpscore (pip install it first)
+
+[project.scripts]
+salmo-snp = "snpportal.serve:main"
+
+[tool.setuptools.packages.find]
+include = ["snpportal*", "snpsite*"]
+
+[tool.setuptools.package-data]
+snpportal = ["templates/snpportal/*.html", "static/snpportal/*", "static/snpportal/*/*"]
+snpsite = ["templates/salmobase/*.html"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

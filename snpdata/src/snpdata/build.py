@@ -527,7 +527,16 @@ def build(layers_yaml, data_dir, out_dir):
             shutil.copy(here / name, out / name)
             manifest["files"][name] = hashes([out / name])[1]
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    write_sums(out)
     return out
+
+
+def write_sums(out):
+    """SHA256SUMS: one 'sha256  path' line per file of the release (what `salmo-snp download` fetches and checks). The
+    pool/ folder is left out: it is a cache of the current weights that `snpscore pool` builds where the release is used."""
+    files = sorted(p for p in Path(out).rglob("*") if p.is_file() and p.name != "SHA256SUMS"
+                   and "pool" not in p.relative_to(out).parts[:1])
+    Path(out, "SHA256SUMS").write_text("".join(f"{hashes([p])[1]}  {p.relative_to(out).as_posix()}\n" for p in files))
 
 
 def chrom_sizes(fai, ends):

@@ -138,3 +138,12 @@ def test_ncbi_transcripts(release):
     vgll3 = con.execute(f"""SELECT DISTINCT transcript_id, gene_id, strand FROM read_parquet('{release / "transcripts_ncbi.parquet"}')
                             WHERE gene_name = 'vgll3'""").fetchall()
     assert vgll3 == [("XM_014173901.2", "106586514", "+")]
+
+
+def test_sha256sums(release):
+    """SHA256SUMS lists every file of the release, as salmo-snp download fetches and checks them."""
+    import hashlib
+    sums = dict(reversed(line.split("  ", 1)) for line in (release / "SHA256SUMS").read_text().splitlines())
+    files = {p.relative_to(release).as_posix() for p in release.rglob("*") if p.is_file() and p.name != "SHA256SUMS"}
+    assert set(sums) == files and "manifest.json" in files and "catalog/known_loci.tsv" in files
+    assert sums["manifest.json"] == hashlib.sha256((release / "manifest.json").read_bytes()).hexdigest()

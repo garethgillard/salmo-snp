@@ -134,9 +134,10 @@ Open (ask G; all collected with options and recommendations in docs/DECISIONS.md
 Tests use the small fixture in `snpdata/tests/fixture`, so they need no downloads.
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -e "snpscore[test]" -e snpdata "django>=4.2,<5" "duckdb==1.2.2"
-(cd snpscore && ../.venv/bin/python -m pytest -q)
-(cd snpdata && ../.venv/bin/python -m pytest -q)
-(cd snpportal && ../.venv/bin/python -m pytest -q tests && SNPPORTAL_WORKERS=0 ../.venv/bin/python manage.py test snpportal)
+conda env create -f environment.yml && conda activate salmo-snp   # conda-forge only; installs the three folders editable
+(cd snpscore && python -m pytest -q)
+(cd snpdata && python -m pytest -q)
+(cd snpportal && python -m pytest -q tests && SNPPORTAL_WORKERS=0 python manage.py test snpportal)
+salmo-snp serve --release snpdata/release/dev          # the portal on http://127.0.0.1:8000/snp/
 ```
+Without conda: a Python 3.8 venv and `pip install -e "snpscore[test]" -e snpdata -e snpportal "duckdb==1.2.2"`.

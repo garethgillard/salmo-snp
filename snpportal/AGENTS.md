@@ -8,7 +8,7 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 
 ## Current phase: public demo
 G said go (2026-10-12): a public demo (no password) on an NREC VM at https://158.39.75.9/snp/, deployed with
-`bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io` (sandbox project, gunicorn, Caddy). Always pass the
+`bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io` (the snpsite project, gunicorn, Caddy). Always pass the
 IP address: the script rewrites the Caddy sites and allowed hosts from the names it is given.
 
 ## Look like salmobase
@@ -50,8 +50,8 @@ strongest loci are listed and fine-mapped) and the settings form's suggestive-p 
 
 ## Commands
 ```bash
-pip install -r requirements.txt
-python manage.py runserver        # needs a release: SNPSCORE_RELEASE or ../snpdata/release/dev
+salmo-snp serve --release ../snpdata/release/dev   # as users run it (snpportal/serve.py); the environment: ../AGENTS.md
+python manage.py runserver        # with autoreload: needs a release (SNPSCORE_RELEASE or ../snpdata/release/dev)
 python -m pytest -q tests         # snpportal.lib
 SNPPORTAL_WORKERS=0 python manage.py test snpportal   # the pages, jobs run inline
 python manage.py snpportal_cleanup
