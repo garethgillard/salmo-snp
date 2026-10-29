@@ -20,13 +20,23 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 2. Dependencies point one way: snpdata -> snpscore <- snpportal (snpscore's tests build their fixture release with snpdata).
 3. Scoring rules stay out of the release: weights.yaml lives in snpscore, and whatever depends on the weights (the
    public pool's tiers, `snpscore pool`) is a cache built from the release, rebuilt after a weight changes.
-4. The portal runs as its own Docker container: the same image for the public site and for running locally on
-   127.0.0.1, so a user's SNP list never leaves their computer. salmobase links to it with a button; it is not merged
-   into salmobase's Django. The release and genome are downloaded once into a volume and checked against the manifest's
-   sha256, not baked into the image.
-5. Semi-offline is fine: the portal may fetch public data at given locations (genome bases, AQUA-FAANG signal), but
-   users' SNPs and results are never stored online.
-6. A downloadable desktop program may come later, so nothing should depend on Docker-only features.
+4. One package, one entry point (G, 2026-10-29, replacing 'Docker first'): `pip install salmo-snp` brings the portal
+   and snpscore (snpscore also installs alone for pipelines; snpdata is only for whoever builds releases), and
+   `salmo-snp serve` runs it: `--local` (default) on 127.0.0.1 for one user, so a SNP list never leaves the computer;
+   `--public` behind a web server with 24 h deletion. Where it runs:
+   - development: clone, `conda env create -f environment.yml` (conda-forge only), editable installs; tests use the
+     fixture, real use downloads the published release;
+   - NREC (demo and staging): git checkout, deployed automatically after the tests pass on main (update.sh);
+   - salmobase (production): a container installing a tagged version, behind salmobase's Apache at /snp/, linked from
+     salmobase with a button (not merged into its Django), the release folder mounted from the same server;
+   - breeding companies: the package (wheel from GitHub Releases for licensees, PyPI later), release downloaded once.
+   Docker and bioconda only wrap the package. Nothing depends on Docker-only features.
+5. Data releases are versioned apart from the code and published once as static files (Apache, beside salmobase);
+   each package version names the release it expects. Fetching public data at given locations (genome bases,
+   AQUA-FAANG signal) is fine; users' SNPs and results are never stored online.
+6. GitHub: branches and pull requests; tests on every pull request; G reviews biology files (CODEOWNERS); a merge to
+   main deploys to NREC; a vX.Y.Z tag builds the wheels (and later the image) as a GitHub Release, which salmobase and
+   company users take.
 
 ## Rules
 - Never commit breeder data (genotypes, GWAS results, array manifests): not in fixtures, tests or docs either.

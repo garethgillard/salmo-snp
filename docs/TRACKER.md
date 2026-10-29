@@ -64,11 +64,16 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
       (the bigWig reader stays in snpscore: the genome reader is built on it; GWAS fine-mapping stays too, with `snpscore gwas`)
 - [x] One AGENTS.md per folder (CLAUDE.md imports it) instead of the duplicated notes; CI runs both test suites and
       rejects data files outside tests/fixture
-- [ ] Dockerfile for the portal: same image public and local (127.0.0.1), release and genome downloaded once into a
-      volume and checked against the manifest; settles the Python version (3.8 no longer required)
+- [x] Automatic deploys to NREC from main (update.sh, GitHub Actions deploy job); [ ] G approves the two keys
+      (nrec.sh read-only deploy key, github_deploy.sh Actions key)
+- [ ] Gene models: a representative Ensembl isoform, expandable to every Ensembl and NCBI RefSeq isoform
+- [ ] environment.yml (conda-forge, python 3.8) for development
+- [ ] The salmo-snp package: `salmo-snp serve --local|--public`, release download and check into a cache, local mode
+      (127.0.0.1, no 24 h deletion); NREC switches to it
 - [ ] Release folder as static files on the salmobase Apache server (versioned folders, latest.json); the nf-RASQUAL
       and 504-fish layers only once their owners agree to redistribution
-- [ ] salmobase links to the portal with a button; staging deploy; CIGENE colleagues test it
+- [ ] v0.1.0 tag: GitHub Actions builds the wheels and a GitHub Release
+- [ ] Dockerfile for salmobase (installs a tagged version; release folder mounted); salmobase links to it with a button
 - [ ] Before the repository goes public: synthetic stand-ins for the fixture cuts of licence-pending data
 
 ## Portal roadmap v2 (full specs in [ROADMAP.md](ROADMAP.md))
