@@ -1,0 +1,17 @@
+{% comment %}Breadcrumb, H1, meta line and actions. Context: title, crumbs [(label, url or None)], meta,
+   actions [{label, url, post, style, confirm, download}]. No badges in the H1: a synthetic job's title says
+   so (views.results).{% endcomment %}
+{% if crumbs %}{% include 'snpportal/_crumbs.html' %}{% endif %}
+<header class="sp-page-header">
+  <div>
+    <h1>{{ title }}</h1>
+    {% if meta %}<p class="sp-meta">{{ meta }}</p>{% endif %}
+  </div>
+  {% if actions %}<div class="sp-actions" id="sp-actions">
+    {% for a in actions %}{% if a.post %}
+    <form method="post" action="{{ a.url }}"{% if a.confirm %} data-confirm="{{ a.confirm }}" data-confirm-ok="{{ a.label }}"{% endif %}>{% csrf_token %}
+      <button class="btn btn-sm {{ a.style|default:'btn-outline-secondary' }}" type="submit">{{ a.label }}</button>
+    </form>
+    {% else %}<a class="btn btn-sm {{ a.style|default:'btn-outline-secondary' }}" href="{{ a.url }}"{% if a.download %} download{% endif %}>{{ a.label }}</a>{% endif %}{% endfor %}
+  </div>{% endif %}
+</header>

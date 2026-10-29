@@ -1,0 +1,48 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% comment %}Regional association plot (P7.3): the GWAS lane above genes, published loci, the trait's chromatin rows and
+   GERP, one SVG on one x axis; then the locus's 95% credible-set SNPs under both priors.{% endcomment %}
+{% block main %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2 sp-small" role="toolbar" aria-label="Loci and window">
+  {% for x in loci %}<a class="btn btn-sm {% if current and x.locus == current.locus %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+     href="{{ x.region }}"{% if current and x.locus == current.locus %} aria-current="page"{% endif %}>Locus {{ x.locus }} · chr{{ x.chrom }}</a>{% endfor %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ wider }}">Out &times;3</a>
+  <a class="ms-auto" href="{{ browser }}">Open in the locus browser</a>
+</div>
+{% for note in notes %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ note }}</div>{% endfor %}
+
+<figure class="sp-card sp-figure" id="fig-region" aria-label="Regional association plot">
+  <div class="sp-card-head">
+    <details class="sp-info"><summary aria-label="What does this figure show?">i</summary>
+      <p>Top: -log10 p of your summary statistics, coloured by tier for the trait; a diamond marks the lead, triangles CDS or
+        splice-region SNPs, a dark ring the 95% credible set under the functional prior. Click a point for its evidence card.
+        Below, on the same axis: genes, published loci, the trait&rsquo;s chromatin states and GERP constraint.</p></details>
+    <details class="sp-dlmenu" hx-boost="false">
+      <summary aria-label="Download the regional plot" title="Download">&#10515;</summary>
+      <div class="sp-dlmenu-items">
+        <a href="{{ svg_url }}" download>SVG</a>
+        <button type="button" data-png="fig-region" data-name="{{ file_name }}">PNG</button>
+      </div>
+    </details>
+  </div>
+  {{ svg }}
+</figure>
+
+{% if current %}<section class="sp-card mt-3" id="credible" aria-labelledby="cs-h">
+  <h2 id="cs-h">95% credible set, uniform and functional prior</h2>
+  <p class="sp-small sp-muted">One causal variant, no LD: PIPs depend on the prior SD and &lambda;.</p>
+  {% if credible %}<div class="sp-scroll"><table class="table table-sm sp-small sp-table mb-0">
+    <thead><tr><th scope="col">SNP</th><th scope="col" class="sp-num">p</th><th scope="col">Tier</th>
+      <th scope="col" class="sp-num">PIP uniform &rarr; functional</th><th scope="col">In set</th></tr></thead>
+    <tbody>{% for r in credible %}<tr>
+      <td class="sp-mono"><a href="{{ r.card }}">{{ r.id }}</a>{% if r.alleles %} <span class="sp-muted">{{ r.alleles }}</span>{% endif %}</td>
+      <td class="sp-num">{{ r.p }}</td>
+      <td>{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}</td>
+      <td class="sp-num">{{ r.pip_u|floatformat:3 }} &rarr; {{ r.pip_f|floatformat:3 }}</td>
+      <td>{{ r.set }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="sp-small mt-1 mb-0">{% if n_credible > credible|length %}<a href="{{ all_url }}">Show all {{ n_credible|thousands }}</a> · {% endif %}<a href="{{ finemap_url }}" download>Fine-mapping (TSV)</a></p>
+  {% else %}<p class="sp-small sp-muted mb-0">This locus could not be fine-mapped: that needs se (with beta or z), or N and allele frequencies.</p>{% endif %}
+</section>{% endif %}
+{% endblock main %}

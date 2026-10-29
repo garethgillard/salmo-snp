@@ -74,7 +74,7 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
       needed yet); the release URL comes with the Apache folder
 - [ ] Release folder as static files on the salmobase Apache server (versioned folders, latest.json); the nf-RASQUAL
       and 504-fish layers only once their owners agree to redistribution
-- [ ] v0.1.0 tag: GitHub Actions builds the wheels and a GitHub Release
+- [ ] v0.1.0 tag (G decides when): .github/workflows/release.yml builds the three wheels into a GitHub Release
 - [ ] Dockerfile for salmobase (installs a tagged version; release folder mounted); salmobase links to it with a button
 - [ ] Before the repository goes public: synthetic stand-ins for the fixture cuts of licence-pending data
 

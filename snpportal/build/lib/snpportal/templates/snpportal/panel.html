@@ -1,0 +1,107 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% comment %}Design panel (panel.py): the sources (Table selections added with 'Add to panel'), the comparison with an
+   existing chip, the panel at a glance, its SNPs along the genome, the downloads and the SNP list. One browser's only
+   (a cookie), deleted 24 hours after it was started. Every change is a POST to panel/change/.{% endcomment %}
+{% block main %}
+<div class="sp-stack">
+  {% if error %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ error }}</div>{% endif %}
+  {% if not sources %}
+  <section class="sp-card" aria-labelledby="empty-h">
+    <h2 id="empty-h">Your panel is empty</h2>
+    <ol class="sp-small mb-2">
+      <li>Score a SNP list, or open results you scored.</li>
+      <li>On the Table, filter down to the SNPs you want to genotype.</li>
+      <li>Click <strong>Add to panel</strong>: the whole selection comes here. Repeat with other selections or results.</li>
+      <li>Here, compare the panel with the chip you use, check the assays and download the vendor files.</li>
+    </ol>
+    <p class="sp-small sp-muted mb-0">The panel is kept in this browser only and is deleted 24 hours after you start it. To keep
+      it longer, download its TSV and score that file again later.</p>
+    <p class="mt-2 mb-0"><a class="btn btn-sm btn-primary" href="{% url 'snpportal:current' %}">Go to your results</a></p>
+  </section>
+  {% else %}
+  <div class="row g-3 sp-eq">
+    <div class="col-lg-6 d-flex flex-column gap-3">
+  <section class="sp-card" aria-labelledby="src-h">
+    <div class="sp-card-head"><h2 id="src-h">Sources</h2>
+      <form class="ms-auto" method="post" action="{% url 'snpportal:panel_change' %}" data-confirm="Remove every source and the chip from your panel?" data-confirm-ok="Clear panel">{% csrf_token %}
+        <button class="btn btn-sm btn-outline-danger" type="submit" name="clear" value="1">Clear panel</button></form></div>
+    <div class="table-responsive"><table class="table table-sm sp-table sp-small mb-1">
+      <thead><tr><th scope="col">#</th><th scope="col">Results</th><th scope="col">Selection</th><th scope="col" class="sp-num">SNPs</th><th scope="col">Added</th><th scope="col"></th></tr></thead>
+      <tbody>{% for s in sources %}<tr><td>S{{ forloop.counter }}</td><td><a href="{{ s.url }}">{{ s.label }}</a></td>
+        <td>{{ s.filters|join:" · "|default:"the whole list" }}</td><td class="sp-num">{{ s.n|thousands }}</td><td class="text-nowrap">{{ s.added_utc }}</td>
+        <td><form method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0" type="submit" name="remove" value="{{ s.id }}">Remove</button></form></td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% if n %}<p class="sp-small mb-0"><strong>{{ n|thousands }}</strong> SNPs in the panel{% if several %}; {{ several|thousands }} in more than one source{% endif %}.
+      Tiers here count all 21 conditions, so sources scored for other conditions compare.</p>{% endif %}
+  </section>
+  {% if n %}
+    <section class="sp-card" aria-labelledby="chip-h">
+      <div class="sp-card-head"><h2 id="chip-h">{% if chip %}Compared with {{ chip.label|lower }}{% else %}Your chip{% endif %}</h2>
+        {% if chip %}<form class="ms-auto" method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0" type="submit" name="chip_remove" value="1">Remove chip</button></form>{% endif %}</div>
+      {% if chip_error %}<div class="sp-status sp-status-warn sp-small" role="status">&#9888; {{ chip_error }}</div>{% endif %}
+      {% if compare %}<div class="sp-kpis">{% for value, label in compare %}<div class="sp-kpi"><b>{{ value }}</b><span>{{ label }}</span></div>{% endfor %}</div>
+      {% else %}<p class="sp-small">Most panels add SNPs to a chip already in use. Upload its SNP list (Illumina or Axiom manifest, PLINK
+        .bim/.map, VCF or a table with chrom and pos) to see which panel SNPs it already has, which are new and where it has gaps.</p>
+      <form method="post" action="{% url 'snpportal:panel_change' %}" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center sp-small">{% csrf_token %}
+        <input class="form-control form-control-sm w-auto" type="file" name="chip" aria-label="Chip SNP list">
+        <button class="btn btn-sm btn-primary" type="submit">Compare</button>
+        {% if chip_demo %}<button class="btn btn-sm btn-outline-secondary" type="submit" name="demo" value="1">Use the demo chip</button>{% endif %}
+      </form>{% endif %}
+    </section>
+  <section class="sp-card" aria-labelledby="dl-h">
+    <h2 id="dl-h">Download</h2>
+    <form method="get" action="{{ downloads.url }}" class="d-flex flex-wrap gap-2 align-items-center sp-small">
+      {% for value, label in downloads.scopes %}<label class="text-nowrap"><input class="form-check-input" type="radio" name="scope" value="{{ value }}"{% if forloop.last %} checked{% endif %}> {{ label }}</label>{% endfor %}
+      <span class="ms-2">Vendor file:</span>
+      {% for value, label in downloads.formats %}<button class="btn btn-sm btn-outline-primary" type="submit" name="format" value="{{ value }}">{{ label }}</button>{% endfor %}
+    </form>
+    <p class="sp-small mt-2 mb-0"><a href="{{ downloads.tsv }}">Download the panel (TSV)</a> &middot; score that file again to keep the
+      panel beyond 24 hours. Vendor files leave out SNPs that fail the assay check.</p>
+  </section>
+  {% endif %}
+    </div>
+    {% if n %}<div class="col-lg-6 d-flex flex-column gap-3">
+    <section class="sp-card" aria-labelledby="glance-h">
+      <h2 id="glance-h">At a glance</h2>
+      <p class="sp-small mb-2">{% for tier, k in tiers %}<span class="sp-badge sp-tier-{{ tier }}">Tier {{ tier }}: {{ k|thousands }}</span> {% endfor %}</p>
+      {% if readiness %}<div class="sp-figure">{{ readiness.svg }}</div><p class="sp-small sp-muted mb-0">{{ readiness.line }}</p>{% endif %}
+    </section>
+  <figure class="sp-card sp-figure" id="fig-panel"><div class="sp-card-head"><h2>Panel SNPs along the genome</h2></div>{{ fig }}</figure>
+    </div>{% endif %}
+  </div>
+
+  {% if n %}
+  <section class="sp-card" aria-labelledby="list-h">
+    <div class="sp-card-head flex-wrap gap-2"><h2 id="list-h">Panel SNPs</h2>
+      <span class="sp-small sp-muted">{{ n|thousands }} kept{% if dropped %}, {{ dropped|thousands }} dropped{% endif %}</span>
+      <span class="ms-auto sp-small d-flex flex-wrap gap-2 align-items-center">Order
+        <span class="btn-group btn-group-sm">          <a class="btn {% if order == 'problems' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?{% if new_only %}chip=new{% endif %}#list-h">Problems first</a>
+          <a class="btn {% if order == 'genome' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?order=genome{% if new_only %}&amp;chip=new{% endif %}#list-h">Genome</a></span>
+        {% if chip %}Show <span class="btn-group btn-group-sm">
+          <a class="btn {% if not new_only %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?{% if order == 'genome' %}order=genome{% endif %}#list-h">All</a>
+          <a class="btn {% if new_only %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?chip=new{% if order == 'genome' %}&amp;order=genome{% endif %}#list-h">Not on the chip</a></span>{% endif %}</span></div>
+    <div class="table-responsive"><table class="table table-sm sp-table sp-small sp-results mb-1">
+      <thead><tr><th scope="col" class="sp-pickcol" title="+ in the panel, − dropped: click to switch">+/&minus;</th><th scope="col">SNP</th><th scope="col">Gene</th><th scope="col">Consequence</th>
+        <th scope="col" class="sp-ctr">Tier</th><th scope="col">Assay</th><th scope="col" class="sp-num">MAF</th>
+        <th scope="col" title="Another panel SNP closer than the panel designer's minimum spacing">Too close</th>{% if chip %}<th scope="col">Chip</th>{% endif %}<th scope="col">Sources</th></tr></thead>
+      <tbody>{% for r in rows %}<tr{% if r.dropped %} class="sp-out"{% endif %}>
+        <td class="sp-pickcol"><form method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}
+          {% if order == 'genome' %}<input type="hidden" name="order" value="genome">{% endif %}{% if new_only %}<input type="hidden" name="chip" value="new">{% endif %}
+          <button class="sp-pick" type="submit" name="{% if r.dropped %}keep{% else %}drop{% endif %}" value="{{ r.key }}"
+            title="{% if r.dropped %}Dropped: click to put it back{% else %}In the panel: click to drop it{% endif %}"><span class="sp-pick-now" aria-hidden="true">{% if r.dropped %}&minus;{% else %}+{% endif %}</span><span class="sp-pick-next" aria-hidden="true">{% if r.dropped %}+{% else %}&minus;{% endif %}</span></button></form></td>
+        <td title="{{ r.position }}">{{ r.snp }}{% if r.alleles %} <span class="sp-muted">&middot; {{ r.alleles }}</span>{% endif %}</td>
+        <td>{{ r.gene }}</td><td>{{ r.region }}</td>
+        <td class="sp-ctr">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
+        <td><span class="sp-as sp-as-{{ r.assay.1 }}"><span aria-hidden="true">{{ r.assay.0 }}</span> {{ r.assay.2 }}</span>{% if r.lore %} <span class="sp-as sp-as-warn">LORe</span>{% endif %}</td>
+        <td class="sp-num">{% if r.maf %}{% if r.maf.1 %}<span class="sp-as sp-as-warn" title="Below the panel designer's minimum MAF">{{ r.maf.0 }}</span>{% else %}{{ r.maf.0 }}{% endif %}{% endif %}</td>
+        <td>{% if r.close %}<span class="sp-as sp-as-warn">{{ r.close }}</span>{% endif %}</td>
+        {% if chip %}<td>{{ r.chip }}</td>{% endif %}<td>{{ r.sources }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% if not rows %}<p class="sp-small sp-muted">{% if new_only %}Every panel SNP is on the chip.{% else %}No SNPs to list.{% endif %}</p>{% endif %}
+    {% if more %}<p class="sp-small mb-0"><a href="{{ more }}">Show all {{ n|add:dropped|thousands }}</a> (up to 2,000)</p>{% endif %}
+  </section>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock main %}

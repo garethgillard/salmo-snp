@@ -1,0 +1,11 @@
+{% load snpportal_tags %}
+{% comment %}Upload QC from snpscore's validation.json in one line; it opens by itself on any problem (results.qc_problem).{% endcomment %}
+{% if qc_line %}
+<details class="sp-more" id="qc"{% if qc_open or qc_warning or qc_alias %} open{% endif %}>
+  <summary>Upload QC: {{ qc_line }}</summary>
+  {% if qc_warning %}<div class="sp-status sp-status-warn" role="alert">&#9888; {{ qc_warning }} <a href="{% url 'snpportal:help' %}#liftover">How to convert ICSASG_v2 positions</a></div>{% endif %}
+  {% for w in qc_alias %}<div class="sp-status sp-status-warn" role="alert">&#9888; Chromosome name {{ w.from }} (read as {{ w.to }}, {{ w.rows|thousands }} rows): {{ w.message }}</div>{% endfor %}
+  <dl class="sp-dl sp-small">{% for name, value in qc_items %}<dt>{{ name }}</dt><dd>{{ value|thousands }}</dd>{% endfor %}</dl>
+  {% if rejects %}<p class="sp-small mt-2 mb-0"><a href="{% url 'snpportal:download' key %}?format=rejects">Download the rejected rows with reasons (TSV)</a></p>{% endif %}
+</details>
+{% endif %}

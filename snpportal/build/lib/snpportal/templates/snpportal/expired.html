@@ -1,0 +1,7 @@
+{% extends 'snpportal/base_portal.html' %}
+{% block main %}
+<div class="sp-card">
+  <p>These results have expired or were deleted. Results are kept for a limited time and can be deleted at any time by whoever has the link.</p>
+  <a class="btn btn-primary" href="{% url 'snpportal:upload' %}">Score a list again</a>
+</div>
+{% endblock main %}

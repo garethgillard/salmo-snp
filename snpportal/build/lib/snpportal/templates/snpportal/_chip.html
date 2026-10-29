@@ -1,0 +1,41 @@
+{% load snpportal_tags %}
+{% comment %}Chip comparison, closed at the foot of the Panel tab (open once a chip is attached). The upload is a plain
+   multipart POST (never boosted); the comparison reads chip.parquet in the job folder and expires with the job.{% endcomment %}
+<details class="sp-card" id="chip"{% if chip.info or chip.error %} open{% endif %}>
+  <summary class="sp-small">{% if chip.info %}<h2 class="d-inline">{{ chip.heading }}</h2>{% else %}Extending an existing chip? Compare it{% endif %}</summary>
+  {% if chip.error %}<div class="sp-status sp-status-fail mt-2" role="alert">&#10007; {{ chip.error }}</div>{% endif %}
+  {% if chip.info %}
+    <div class="sp-kpis mt-2" aria-label="Chip comparison">
+      {% for k in chip.kpis %}<div class="sp-kpi"><b>{{ k.value }}</b><span>{{ k.label }}</span>{% if k.note %}<small>{{ k.note }}</small>{% endif %}</div>{% endfor %}
+    </div>
+    {% if chip.fig %}<div class="mt-3">{% include 'snpportal/_figure.html' with fig=chip.fig %}</div>{% endif %}
+    {% if chip.gaps %}<h3>Largest chip gaps</h3>
+    <div class="sp-scroll">
+      <table class="table table-sm sp-table mb-0">
+        <thead><tr><th scope="col">Gap</th><th scope="col" class="sp-num">Length</th><th scope="col">Best SNP to fill it</th><th scope="col">Tier</th><th scope="col">From</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead>
+        <tbody>{% for g in chip.gaps %}<tr>
+          <td class="sp-mono">{{ g.chrom }}:{{ g.start|thousands }}–{{ g.end|thousands }}</td><td class="sp-num">{{ g.size_text }}</td>
+          {% if g.filler %}<td class="sp-mono">{% if g.card %}<a href="{{ g.card }}">{{ g.filler.id|default:g.filler.pos }}</a>{% else %}{{ g.filler.chrom }}:{{ g.filler.pos|thousands }}{% endif %}</td>
+          <td>{% if g.filler.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=g.filler.tier short=1 %}{% endif %}</td>
+          <td>{% if g.filler.source == 'pool' %}public sites{% else %}your list{% endif %}</td>
+          {% else %}<td class="sp-muted">none in your list or the public sites</td><td></td><td></td>{% endif %}
+          <td><a href="{{ g.table }}" hx-boost="true">your SNPs here</a></td>
+        </tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% if chip.n_gaps > chip.top and chip.gaps_tsv %}<p class="sp-small mt-1 mb-0"><a href="{{ chip.gaps_tsv }}" download>All {{ chip.n_gaps|thousands }} gaps (TSV)</a></p>{% endif %}{% endif %}
+    <form method="post" action="{{ chip.url }}" class="mt-2" hx-boost="false">{% csrf_token %}
+      <input type="hidden" name="trait" value="{{ trait }}"><button class="btn btn-sm btn-outline-secondary" type="submit" name="remove" value="1">Remove the chip</button>
+    </form>
+  {% else %}
+    <p class="sp-small sp-muted mt-2">Upload the chip's SNP list (manifest, PLINK .bim/.map, VCF or a chrom/pos table on Ssal_v3.1) to see
+      which of your SNPs it has, the tier 1–2 SNPs it misses and its largest gaps. It is deleted with these results.</p>
+    <form method="post" action="{{ chip.url }}" enctype="multipart/form-data" class="d-flex flex-wrap align-items-center gap-2 sp-small" hx-boost="false">{% csrf_token %}
+      <input type="hidden" name="trait" value="{{ trait }}">
+      <label for="chip-file" class="visually-hidden">Chip file</label>
+      <input class="form-control form-control-sm w-auto" type="file" id="chip-file" name="chip">
+      <button class="btn btn-sm btn-primary" type="submit">Compare</button>
+      {% if chip.demo %}<button class="btn btn-sm btn-outline-secondary" type="submit" name="demo" value="1">Use the demo chip (synthetic)</button>{% endif %}
+    </form>
+  {% endif %}
+</details>
