@@ -53,14 +53,26 @@ The demo runs at **https://158.39.75.9/snp/** (also https://158-39-75-9.sslip.io
 `bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io`. Until 2026-10-28 it was at 158.39.200.140, before the
 VM lost its network port and got a new address.
 
-`bash deploy/nrec.sh <ssh host> <web name> [<web name> ...]` puts the portal on an NREC VM (GOLD Ubuntu 22.04 on the `dualStack`
-network, so it has a public IPv4 address; ports 22, 80 and 443 open). From this Mac it copies snpscore/ and snpportal/ (code only),
-`release/dev` and the genome to `/srv/snpportal`; on the VM it installs Django 4.2, DuckDB 1.2.2 and gunicorn in a
-venv, Caddy for HTTPS (a site per name: an IPv4 address gets Let's Encrypt's short-lived IP certificate, renewed by
-Caddy; a `<ip-with-dashes>.sslip.io` name works too) and systemd units for the app
-(`snpportal`) and an hourly `snpportal_cleanup`. Rerun it after a change: results and the secret key are kept. The
+`bash deploy/nrec.sh <ssh host> <web name> [<web name> ...]` sets up an NREC VM (GOLD Ubuntu 24.04 on the `dualStack`
+network, so it has a public IPv4 address; ports 22, 80 and 443 open). The code on the VM is a clone of this repository
+(`/srv/snpportal/salmo-snp`, read with a read-only deploy key the script makes and registers with `gh`); from this Mac
+it copies `snpdata/release/dev` and the genome to `/srv/snpportal`. On the VM it installs Django 4.2, DuckDB 1.2.2 and
+gunicorn in a venv, Caddy for HTTPS (a site per name: an IPv4 address gets Let's Encrypt's short-lived IP certificate,
+renewed by Caddy; a `<ip-with-dashes>.sslip.io` name works too) and systemd units for the app (`snpportal`) and an
+hourly `snpportal_cleanup`. Rerun it for a new release or new web names: results and the secret key are kept. The
 sandbox project serves the demo with `DJANGO_DEBUG=0` and the settings in `/srv/snpportal/env`; `SNPSCORE_GENOME`
 points snpscore at the VM's genome copy. Logs: `journalctl -u snpportal`.
+
+### Automatic deploys
+
+Every push to `main` (a merged pull request, or G's own push) runs the tests on GitHub; when they pass, the `deploy`
+job in `.github/workflows/tests.yml` connects to the VM and runs `deploy/update.sh` with the tested commit. The script
+checks it out, reinstalls snpscore, collects static files and restarts the portal; if the portal doesn't answer within
+40 s it goes back to the previous commit and the job fails (Actions tab). The key GitHub uses can run nothing else on
+the VM (a forced command in `authorized_keys`). One-time setup, after `nrec.sh`:
+`bash deploy/github_deploy.sh nrec 158.39.75.9` (makes that key, stores it as the repository secret `NREC_DEPLOY_KEY`
+with the host key, and sets the variable `NREC_HOST`; rerun it to replace the key). Releases are not in git: a new
+release still goes up with `nrec.sh`.
 
 ## How it works
 

@@ -26,3 +26,22 @@ jobs:
       - run: cd snpdata && python -m pytest -q
       - run: cd snpportal && python -m pytest -q tests
       - run: cd snpportal && SNPPORTAL_WORKERS=0 python manage.py test snpportal
+
+  deploy:
+    # After the tests pass on main: update the NREC demo (snpportal/deploy/update.sh; README "Automatic deploys").
+    # The key in NREC_DEPLOY_KEY can only run update.sh on the VM. Off until the NREC_HOST variable is set.
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.NREC_HOST != ''
+    runs-on: ubuntu-latest
+    concurrency: nrec
+    steps:
+      - name: Update the demo
+        env:
+          KEY: ${{ secrets.NREC_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.NREC_KNOWN_HOSTS }}
+          HOST: ${{ vars.NREC_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes ubuntu@"$HOST" "$GITHUB_SHA"
