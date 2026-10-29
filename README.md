@@ -13,9 +13,8 @@ Public demo: https://158.39.75.9/snp/
 | [`snpscore/`](snpscore) | Scores a SNP list against a release: evidence and a tier per SNP (`snpscore`, Python) |
 | [`snpportal/`](snpportal) | The web portal: upload, results, evidence cards, locus browser, GWAS and marker-panel tools (Django) |
 
-The portal will ship as a Docker image that also runs locally, so confidential SNP lists never leave the user's
-computer. [AGENTS.md](AGENTS.md) has the plan, the rules and
-how to run the tests.
+The portal installs as one Python package (`salmo-snp`) that runs on your own computer, so confidential SNP lists never
+leave it; the public site runs the same code. [AGENTS.md](AGENTS.md) has the plan, the rules and how to run the tests.
 
 ## Run it on your own computer
 
