@@ -18,6 +18,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, SimpleTestCase, override_settings
 from django.urls import reverse
 
+import snpdata
 import snpscore
 from snpscore.fasta import Fasta
 
@@ -25,7 +26,8 @@ from . import jobs, panel, tools
 from .tests import boosted_links
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
-FIXTURE = SNPSCORE / "tests" / "fixture"
+DATA = SNPSCORE.parent / "snpdata"  # layers.yaml, the fixture, prep/, the catalogue, data/ and release/
+FIXTURE = DATA / "tests" / "fixture"
 SVG = re.compile(r"<svg .*?</svg>", re.S)
 
 
@@ -52,7 +54,7 @@ class ToolsTest(SimpleTestCase):
         if os.environ.get("SNPPORTAL_TEST_RELEASE"):
             shutil.copytree(os.environ["SNPPORTAL_TEST_RELEASE"], release)
         else:
-            snpscore.build(SNPSCORE / "layers.yaml", FIXTURE, release)
+            snpdata.build(DATA / "layers.yaml", FIXTURE, release)
         cls.override = override_settings(SNPSCORE_RELEASE=str(release), SNPPORTAL_RESULTS_DIR=str(Path(cls.tmp.name) / "results"),
                                           SNPPORTAL_WORKERS=0)
         cls.override.enable()

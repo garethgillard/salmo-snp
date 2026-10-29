@@ -17,7 +17,7 @@ TIERS = {1: ("#08519C", WHITE), 2: ("#2171B5", WHITE), 3: ("#C6DBEF", BLACK), 4:
 
 # ChromHMM state -> (colour, abbreviation shown in every cell and legend). Two palettes (G to choose, PROVISIONAL): the
 # portal's own, and AQUA-FAANG's itemRgb colours (chromatin-state-annotations/annotation_reports/state_annotations.tsv,
-# RESEARCH.md section 6). settings.SNPPORTAL_STATE_PALETTE sets the server's (apps.py calls use_states()); a viewer's
+# docs/RESEARCH.md section 6). settings.SNPPORTAL_STATE_PALETTE sets the server's (apps.py calls use_states()); a viewer's
 # cookie (the locus browser's 'Chromatin colours' links, about.state_palette) picks one per request (choose()). STATES is the
 # active one.
 ABBR = {"Active_TSS": "TSS", "Flanking_upstream": "Fl", "Flanking_downstream": "Fl", "Active_enhancer": "Enh",

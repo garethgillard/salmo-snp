@@ -2,7 +2,7 @@
 as upper-case IUPAC codes (N for indels; KASP reads lower case as 'uncertain'), and pass / warn / fail / not_checked
 rules from the weights.yaml 'assay' block (PROVISIONAL). annotate's sequence step reads the windows with iter_flanks()
 and adds the columns with assay_sql(); export.py uses read_flanks() for the longer vendor flanks. Vendor rules
-behind the defaults: RESEARCH.md section 5."""
+behind the defaults: docs/RESEARCH.md section 5."""
 from __future__ import annotations
 
 from .formats import lit, q

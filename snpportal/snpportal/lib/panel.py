@@ -14,10 +14,10 @@ import hashlib
 import json
 from pathlib import Path
 
-from . import assay
-from .annotate import connect, read_snps
-from .formats import InputError, lit, q
-from .score import scored
+from snpscore import assay
+from snpscore.annotate import connect, read_snps
+from snpscore.formats import InputError, lit, q
+from snpscore.score import scored
 
 DEFAULTS = {  # PROVISIONAL; weights.yaml 'design' overrides these
     "n_target": 384, "backbone_fraction": 0.5, "min_spacing": 20000, "min_maf": 0.05, "max_per_gene": 2,
@@ -260,7 +260,7 @@ def design(source, preset="all", n_target=None, min_spacing_bp=None, min_maf=Non
 def _finish(con, rel, columns, p, chosen, sizes, n_rows, n_ok, skipped, out):
     """The selection as table _sel, the summary, and the rows written to `out`."""
     picks = ",".join(f"{row}:{reason}:{i + 1}" for i, (row, reason) in enumerate(chosen.items()))
-    con.execute(f"""CREATE OR REPLACE TEMP TABLE _sel AS
+    con.execute("""CREATE OR REPLACE TEMP TABLE _sel AS
         SELECT c.*, s.selection_reason, s.panel_rank FROM (
             SELECT split_part(x, ':', 1)::BIGINT AS _row, split_part(x, ':', 2) AS selection_reason,
                    split_part(x, ':', 3)::INTEGER AS panel_rank

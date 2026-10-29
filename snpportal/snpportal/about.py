@@ -18,11 +18,12 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import mark_safe
 
+import snpscore
 from snpscore import formats
 
 from . import explore, figures, jobs, palette, search
 
-# AQUA-FAANG's ChromHMM states have no written definitions: the emission figure is the only one (RESEARCH.md section 6),
+# AQUA-FAANG's ChromHMM states have no written definitions: the emission figure is the only one (docs/RESEARCH.md section 6),
 # so the Methods table gives each state's label and model, and links the figure (one-line definitions: G to supply).
 EMISSIONS = "https://salmobase.org/datafiles/datasets/Aqua-Faang/figures/chromHMM.png"
 STATE_MODELS = {"Bivalent": "DevMap only", "Poised_enhancer_2": "BodyMap only"}  # BodyMap and DevMap: separate 12-state models
@@ -111,7 +112,7 @@ BENCH_FEATURES = [("chromatin", "ATAC peak"), ("evidence = active", "Active stat
                   ("evidence = utr", "UTR"), ("gerp", "GERP constrained"), ("tier <= 2", "Tier 1\u20132")]
 BENCH_AXIS = (1 / 8, 64)  # enrichment axis (log2); intervals beyond it end in an arrow
 ENA = "https://www.ebi.ac.uk/ena/browser/view/{}"
-AQUAFAANG_PROJECTS = [  # (atlas, assay, ENA project); RESEARCH.md section 6
+AQUAFAANG_PROJECTS = [  # (atlas, assay, ENA project); docs/RESEARCH.md section 6
     ("BodyMap", "RNA-seq", "PRJEB47409"), ("BodyMap", "ATAC-seq", "PRJEB47408"), ("BodyMap", "ChIP-seq", "PRJEB55063"),
     ("DevMap", "RNA-seq", "PRJEB51855"), ("DevMap", "ATAC-seq", "PRJEB51854"), ("DevMap", "ChIP-seq", "PRJEB53399")]
 BODYMAP_FISH = [("Immature female", "J8, J9, J10"), ("Immature male", "J15, J16, J18"), ("Mature female", "A14, A15, A24"),
@@ -195,7 +196,7 @@ def track_summary():
     """Track registry counts {tissues, rows: [(assay, [n per tissue], total)], n, assays, chromhmm, replicates, defaults},
     or None."""
     try:
-        from snpscore import tracks
+        from .lib import tracks
         cfg = tracks.load_tracks(jobs.release())
     except (ImportError, OSError, ValueError):
         return None
@@ -373,10 +374,10 @@ def _flat(value):
 
 
 def methods_text(m, w):
-    """(paragraphs, references) for a paper's methods: snpscore.export.methods_text when this snpscore has it, else a
+    """(paragraphs, references) for a paper's methods: lib.export.methods_text when this snpscore has it, else a
     short paragraph from the manifest."""
     try:
-        from snpscore import export
+        from .lib import export
         body, _, tail = export.methods_text(m, w, release_dir=jobs.release()).partition("\n\nReferences\n")
         cited = [x["citation"] for x in m.get("layers", []) if x.get("citation")]  # listed with their layers below
         refs = [r[2:] for r in tail.splitlines() if r.startswith("- ") and not any(r[2:].startswith(c) for c in cited)]
@@ -408,7 +409,7 @@ def citations(m):
 def help_page(request):
     """/snp/help/: quick start, questions, input formats with examples, search syntax, exports and vendor files, and
     privacy; the details are closed items that a link to their #id opens."""
-    from snpscore import export, panel
+    from .lib import export, panel
     try:
         from snpscore.annotate import ASSEMBLY_WARNING
     except ImportError:
@@ -444,7 +445,7 @@ def run_locally(request):
     # A release built locally has its own manifest.json (build date, local genome path), so it is checked by its layers:
     # one sha256 over the sorted 'name sha256' lines of the manifest's layers (each a parquet that builds byte-identically)
     lines = sorted(f"{x['name']} {x.get('sha256')}\n" for x in info["layers"])
-    weights = release / "weights.yaml"
+    weights = snpscore.score.WEIGHTS
     return render(request, "snpportal/run_locally.html", {
         "nav": "about", "title": "Run it locally", "release": info, "folder": folder,
         "cli": [(jobs.stored_preset(v, jobs.weights()["presets"]), label) for v, label in presets

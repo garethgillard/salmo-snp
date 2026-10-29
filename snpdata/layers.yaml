@@ -1,5 +1,5 @@
 # Layer registry: every data layer that goes into a release.
-# `snpscore fetch` downloads each `url` into the data folder, `snpscore build` reads each `file` from it.
+# `snpdata fetch` downloads each `url` into the data folder, `snpdata build` reads each `file` from it.
 # Types:  interval = SNP gets the values of the interval it falls in (intervals must not overlap)
 #         nearest  = SNP gets the nearest feature within max_distance, plus the distance
 #         count    = SNP gets the number of point features (1 bp, e.g. variant sites) within `window` bp either side,
@@ -7,7 +7,7 @@
 #         gene     = a table keyed by gene_id (no coordinates), joined to the SNP's nearest gene
 #         point    = SNP gets the values of the feature at its exact position (allele-aware when it has ref/alt)
 #         features = overlapping features for the viewers (e.g. transcript models); built, never annotated
-# Formats: see the READERS table in src/snpscore/build.py. A layer with several inputs lists them under `files`.
+# Formats: see the READERS table in src/snpdata/build.py. A layer with several inputs lists them under `files`.
 # Optional per layer: id: true (interval: adds <layer>_id = chrom:start-end of the interval, BED coordinates),
 # interpolate: true (interval with <column> at start and <column>_next at end, e.g. a genetic map: <layer>_<column> is
 # interpolated linearly at the SNP's position),
@@ -76,7 +76,7 @@ bgee:
 
 # Published SNPs at known loci; build copies the file to catalog/, annotate adds the nearest one within `window` bp.
 catalog:
-  file: benchmark/known_loci.tsv
+  file: catalog/known_loci.tsv
   window: 50000
 
 # Example inputs for the portal's buttons: build copies those that exist into release/<v>/demo/, with the catalogue.

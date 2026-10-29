@@ -11,9 +11,19 @@ from .formats import InputError, lit, q
 ADDED = ["tier", "tier_score", "tier_evidence", "tier_terms"]
 NOT_CONDITIONS = ("chromatin_summary", "chromatin_id")  # chromatin_* columns that aren't a condition's state
 
+# The 21 conditions with ChromHMM states in AtlanticSalmon_unified_peaks.bed (annotate columns chromatin_<condition>).
+# Gill (ATAC and ChIP only), Sperm (ChIP only) and the RNA-only embryo stages have none.
+CHROMATIN_CONDITIONS = tuple(f"{t}_{m}_{s}" for t in ("Brain", "Gonad", "Liver", "Muscle")
+                             for m in ("Immature", "Mature") for s in ("Female", "Male")) + (
+    "LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomitogenesis", "LateSomitogenesis")
 
-def load_weights(release_dir):
-    path = Path(release_dir) / "weights.yaml"
+
+WEIGHTS = Path(__file__).with_name("weights.yaml")  # the tier rules; a release holds data only
+
+
+def load_weights(path=None):
+    """The tier rules: snpscore's weights.yaml, or another copy of it (a portal job's snapshot); None if missing."""
+    path = Path(path or WEIGHTS)
     return yaml.safe_load(path.read_text()) if path.exists() else None
 
 

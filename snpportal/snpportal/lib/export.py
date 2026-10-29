@@ -4,7 +4,7 @@ classes, GFBLUP/MultiBLUP SNP sets, LDAK partitions, an annotation matrix). TSV 
 (plain=True drops them); a SYNTHETIC line is added whenever synthetic data contributes. Vendor files never hold comment
 lines (no vendor accepts them): their provenance goes in a <file>.provenance.txt sidecar and their extra columns (your
 ids, TOP/BOT, assay status) in a <file>.lookup.tsv sidecar. Vendor column headers are kept per template version in
-TEMPLATES, each 'layout to confirm against the vendor's current template'. Vendor rules: RESEARCH.md section 5."""
+TEMPLATES, each 'layout to confirm against the vendor's current template'. Vendor rules: docs/RESEARCH.md section 5."""
 from __future__ import annotations
 
 import csv
@@ -20,12 +20,14 @@ from pathlib import Path
 import duckdb
 import yaml
 
-from . import assay
-from .annotate import genome_location, write_in_order
-from .fasta import Fasta
-from .formats import InputError, lit, q
+from snpscore import assay
+from snpscore.annotate import genome_location, write_in_order
+from snpscore.fasta import Fasta
+from snpscore.formats import InputError, lit, q
+from snpscore import score as snp_score
+from snpscore.score import preset_conditions
+
 from .panel import _open, _tier_cols, vendor_checks
-from .score import preset_conditions
 
 LAYOUT_NOTE = "layout to confirm against the vendor's current template"
 _ILLUMINA = ["Locus_Name", "Target_Type", "Sequence", "Chromosome", "Coordinate", "Genome_Build_Version", "Source",
@@ -98,7 +100,7 @@ def provenance(manifest, weights, meta=None):
         + (f"; job created {meta['created_utc']}" if meta.get("created_utc") else "")
         + (f"; input sha256 {meta['input_sha256']}" if meta.get("input_sha256") else ""),
         f"preset {preset} ({conditions}); filters: {filters}" + (f"; panel {meta['panel']}" if meta.get("panel") else ""),
-        "PROVISIONAL rules (prototype values, under review): " + ", ".join(manifest.get("provisional") or ["tiers"]),
+        "PROVISIONAL rules (prototype values, under review): " + ", ".join((manifest.get("provisional") or []) + (weights.get("provisional") or []) or ["tiers"]),
     ]
     if meta.get("vendor"):
         lines.append(f"{meta['vendor']} submission file: {LAYOUT_NOTE}")
@@ -363,7 +365,7 @@ def export(source, fmt, out, release_dir, preset="all", meta=None, include_faile
             raise InputError(f"Unknown {fmt} template '{template}'. Choose from: {', '.join(TEMPLATES[fmt])}")
     release, out = Path(release_dir).resolve(), Path(out).resolve()
     manifest = manifest or release / "manifest.json"
-    weights = weights or (release / "weights.yaml" if (release / "weights.yaml").exists() else None)
+    weights = weights or snp_score.WEIGHTS
     meta = {"preset": preset, **(meta or {}), **({"vendor": fmt} if fmt in VENDORS else {})}
     header = [] if plain else provenance(manifest, weights, meta)
     m, w = _load(manifest, weights)[:2]
@@ -432,7 +434,7 @@ def bundle_zip(out, source, release_dir, preset="all", meta=None, formats=("tsv"
     synthetic data contributes. Returns the zip path."""
     release, out = Path(release_dir).resolve(), Path(out).resolve()
     manifest = manifest or release / "manifest.json"
-    weights = weights or (release / "weights.yaml" if (release / "weights.yaml").exists() else None)
+    weights = weights or snp_score.WEIGHTS
     m, w, _, _ = _load(manifest, weights)
     header = provenance(manifest, weights, {"preset": preset, **(meta or {})})
     synthetic = is_synthetic(m, meta)
@@ -541,7 +543,7 @@ def priors(source, out, release_dir, preset="all", meta=None, categories=None, t
     'classes': [(class, category, n)]}."""
     release, out = Path(release_dir).resolve(), Path(out).resolve()
     manifest = manifest or release / "manifest.json"
-    weights = weights or (release / "weights.yaml" if (release / "weights.yaml").exists() else None)
+    weights = weights or snp_score.WEIGHTS
     m, w = _load(manifest, weights)[:2]
     synthetic = [l["name"] for l in m.get("layers", []) if l.get("synthetic")]
     con, rel, columns = _open(source, table, [release], out, preset, w, synthetic)
@@ -573,7 +575,7 @@ def priors(source, out, release_dir, preset="all", meta=None, categories=None, t
         files = ["bayesrc_classes.txt", "annot.tsv", *[f"sets/{c}.txt" for c in names],
                  *[f"ldak_partitions/partition{k}" for k, _, _ in classes], *(["snp_lookup.tsv"] if made else [])]
         command = (f"snpscore annotate <your list> --release <release {m.get('version')}> --trait {preset} -o "
-                   f"annotated.parquet; snpscore export annotated.parquet --release <release {m.get('version')}> "
+                   f"annotated.parquet; python -m snpportal.lib.cli export annotated.parquet --release <release {m.get('version')}> "
                    f"--preset {preset} --format priors")
         readme = _priors_readme(m, w, preset, cats, counts, classes, n, made,
                                 provenance(manifest, weights, {"preset": preset, "command": command, **(meta or {})}))

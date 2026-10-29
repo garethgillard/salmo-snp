@@ -9,17 +9,19 @@ import tempfile
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from unittest import skipUnless
+from unittest import mock, skipUnless
 
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 
+import snpdata
 import snpscore
 
 from . import explore, jobs, locus_svg, palette, search
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
-FIXTURE = SNPSCORE / "tests" / "fixture"
+DATA = SNPSCORE.parent / "snpdata"  # layers.yaml, the fixture, prep/, the catalogue, data/ and release/
+FIXTURE = DATA / "tests" / "fixture"
 VGLL3, VGLL3_CHR21 = "ENSSSAG00000053708", "ENSSSAG00000099564"
 
 
@@ -33,7 +35,7 @@ class ExploreTest(SimpleTestCase):
         if os.environ.get("SNPPORTAL_TEST_RELEASE"):
             shutil.copytree(os.environ["SNPPORTAL_TEST_RELEASE"], cls.release)
         else:
-            snpscore.build(SNPSCORE / "layers.yaml", FIXTURE, cls.release)
+            snpdata.build(DATA / "layers.yaml", FIXTURE, cls.release)
         shutil.rmtree(cls.release / "pool", ignore_errors=True)  # the pool is tested on a copy below
         cls.override = override_settings(SNPSCORE_RELEASE=str(cls.release), SNPPORTAL_RESULTS_DIR=str(Path(cls.tmp.name) / "results"),
                                           SNPPORTAL_WORKERS=0)
@@ -244,13 +246,13 @@ class ExploreTest(SimpleTestCase):
         self.assertIn("Methods text for a paper", methods)
 
         release = self.copy()  # editing weights.yaml changes the tables; extra blocks are shown and badged
-        weights = release / "weights.yaml"
-        text = weights.read_text().replace("active: 3", "active: 7").replace("provisional: [", "provisional: [assay, ")
+        weights = release / "edited_weights.yaml"
+        text = snpscore.score.WEIGHTS.read_text().replace("active: 3", "active: 7").replace("provisional: [", "provisional: [assay, ")
         weights.write_text(text + "\nassay:\n  gc: [0.3, 0.7]\n  max_homopolymer: 6\n")
         (release / "benchmark.tsv").write_text("# SYNTHETIC test data written by tests_explore (seed 0): not real results\n"
                                                "feature\tpositives\tcontrols\tshare_pos\tshare_ctrl\tenrichment\n"
                                                "chromatin\t6\t60\t0.5\t0.1\t5.0\nregion\t6\t60\t0.0\t0.2\t0.0\n")
-        with override_settings(SNPSCORE_RELEASE=str(release)):
+        with override_settings(SNPSCORE_RELEASE=str(release)), mock.patch.object(snpscore.score, "WEIGHTS", weights):
             edited = self.client.get(reverse("snpportal:methods")).content.decode()
             tsv = self.client.get(reverse("snpportal:methods"), {"download": "benchmark.tsv"}).content.decode()
             local = self.client.get(reverse("snpportal:run_locally"), {"trait": "maturation"})
@@ -295,11 +297,11 @@ class ExploreTest(SimpleTestCase):
             palette.choose(None)
 
 
-@skipUnless(os.environ.get("SNPSCORE_DEV") and (SNPSCORE / "release" / "dev").exists(), "SNPSCORE_DEV=1 with release/dev")
+@skipUnless(os.environ.get("SNPSCORE_DEV") and (DATA / "release" / "dev").exists(), "SNPSCORE_DEV=1 with release/dev")
 class ExploreDevTest(SimpleTestCase):
     def test_timings(self):
         """P5.1: suggest/ timings on release/dev (reported, not asserted), and the gene page."""
-        with override_settings(SNPSCORE_RELEASE=str((SNPSCORE / "release" / "dev").resolve())):
+        with override_settings(SNPSCORE_RELEASE=str((DATA / "release" / "dev").resolve())):
             times = {}
             for q in ("vgll3", "VGLL3", "six", "cadherin", "ENSSSAG0000005", "25:28996360"):
                 self.client.get(reverse("snpportal:suggest"), {"q": q})

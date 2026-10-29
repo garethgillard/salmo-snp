@@ -17,13 +17,15 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import reverse
 
+import snpdata
 import snpscore
 from snpscore import bbi
 
 from . import association, jobs, locus_svg
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
-FIXTURE = SNPSCORE / "tests" / "fixture"
+DATA = SNPSCORE.parent / "snpdata"  # layers.yaml, the fixture, prep/, the catalogue, data/ and release/
+FIXTURE = DATA / "tests" / "fixture"
 STEM = "gwas_maturation_SYNTHETIC"
 
 
@@ -48,8 +50,8 @@ class GwasTest(SimpleTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        for folder in ("tests", "prep"):
-            sys.path.insert(0, str(SNPSCORE / folder))
+        for folder in (SNPSCORE / "tests", DATA / "prep"):
+            sys.path.insert(0, str(folder))
         import make_synthetic
         from bbi_writer import synthetic_registry
         from range_server import RangeServer
@@ -59,7 +61,7 @@ class GwasTest(SimpleTestCase):
         if os.environ.get("SNPPORTAL_TEST_RELEASE"):
             shutil.copytree(os.environ["SNPPORTAL_TEST_RELEASE"], cls.release)
         else:
-            snpscore.build(SNPSCORE / "layers.yaml", FIXTURE, cls.release)
+            snpdata.build(DATA / "layers.yaml", FIXTURE, cls.release)
         cls.synthetic = root / "synthetic"
         make_synthetic.gwas(FIXTURE / "12_samples_genotype_filtered_on_504.vcf.gz", cls.synthetic, "fixture")
         (cls.release / "demo").mkdir(exist_ok=True)

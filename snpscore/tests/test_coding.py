@@ -9,11 +9,13 @@ import duckdb
 import pytest
 import yaml
 
-from snpscore import annotate, build, scored
+from snpscore import WEIGHTS, annotate, scored
+from snpdata import build
 from snpscore.coding import COLUMNS
 
 ROOT = Path(__file__).resolve().parent.parent
-FIXTURE = ROOT / "tests" / "fixture"
+DATA = ROOT.parent / "snpdata"  # the release build: layers.yaml, fixture, prep/, catalogue, data/, release/
+FIXTURE = DATA / "tests" / "fixture"
 VGLL3, BCO1L = "ENSSSAT00000230965", "ENSSSAT00000139328"  # canonical transcripts of vgll3 (+) and bco1l (-)
 # First codon not ATG (no other CDS there): TAC with a 5' UTR (+), AAG without one (-, a 5'-incomplete model)
 TAC, AAG = "ENSSSAT00000230643", "ENSSSAT00000139339"
@@ -44,7 +46,7 @@ CASES = [  # id, chrom, pos, ref, alt, consequence, hgvsp, codons, transcript
 
 @pytest.fixture(scope="module")
 def release(tmp_path_factory):
-    return build(ROOT / "layers.yaml", FIXTURE, tmp_path_factory.mktemp("release") / "test")
+    return build(DATA / "layers.yaml", FIXTURE, tmp_path_factory.mktemp("release") / "test")
 
 
 def run(release, tmp_path, lines, header="id\tchrom\tpos\tref\talt"):
@@ -90,7 +92,7 @@ def test_alleles(release, tmp_path):
 def test_tiers_unchanged(release, tmp_path):
     # The coding weight counts every CDS change but synonymous ones, the synonymous weight (equal by default) the rest
     rows, out = run(release, tmp_path, [c[:5] for c in CASES])
-    weights = yaml.safe_load((Path(release) / "weights.yaml").read_text())
+    weights = yaml.safe_load(WEIGHTS.read_text())
     con = duckdb.connect()
     con.execute(f"CREATE TABLE a AS SELECT * FROM read_parquet('{out}')")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE a)").fetchall()]

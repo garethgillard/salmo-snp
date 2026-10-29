@@ -1,0 +1,10 @@
+# G (garethgillard) reviews every change to the biology: tier rules, layers and their settings, the known-loci
+# catalogue, the decisions and the shared rules (AGENTS.md "Biology decisions belong to G").
+/snpscore/src/snpscore/weights.yaml   @garethgillard
+/snpdata/layers.yaml                  @garethgillard
+/snpdata/tracks.yaml                  @garethgillard
+/snpdata/catalog/                     @garethgillard
+/docs/DECISIONS.md                    @garethgillard
+/AGENTS.md                            @garethgillard
+/LICENSE                              @garethgillard
+/.github/                             @garethgillard

@@ -82,7 +82,7 @@ def benchmark_sets(specs, background, release_dir, out_path=None, controls=10, t
     it was made, then set, trait and the row columns."""
     release = Path(release_dir).resolve()
     manifest = json.loads((release / "manifest.json").read_text())
-    weights = load_weights(release)
+    weights = load_weights()
     synthetic = [x["name"] for x in manifest["layers"] if x.get("synthetic")]
     layer = next((x for x in manifest["layers"] if x["name"] == "molqtl"), None)
     background = Path(background).resolve() if background else release / "pool" / "pool.parquet"

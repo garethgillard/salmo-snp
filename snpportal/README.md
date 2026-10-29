@@ -1,33 +1,36 @@
 # snpportal
 
-Django app for salmobase.org: score a SNP list against AQUA-FAANG functional maps and tier it by its evidence in all 21
+The salmo-snp web portal (a Django app, linked from salmobase.org): score a SNP list against AQUA-FAANG functional maps and tier it by its evidence in all 21
 sample conditions, then explore the result (overview, a table filtered on its columns, an evidence card per SNP in the
 table's drawer), collect selections in a Design panel, compare it with an existing chip, export it (TSV, Parquet, BED, Illumina-, Axiom- and KASP-style files, genomic-prediction priors, or a zip bundle) and
 print a one-page report.
 GWAS summary statistics get an Association page (Manhattan, tier-stratified QQ, loci, regional plot and fine-mapping
 with a functional prior). Without a list: search (genes, NCBI LOC symbols, rs IDs, positions), gene pages, a locus
 browser with live salmobase signal, published associations and molQTL leads, the known-loci catalogue (39 published SNPs
-and a gene region across 8 traits, with evidence badges) and a guided tour (an illustrated slide show). All annotation logic lives in
-[snpscore/](../snpscore) (same repository); this app handles upload, jobs, display and export.
+and a gene region across 8 traits, with evidence badges) and a guided tour (an illustrated slide show). Scoring lives in
+[snpscore/](../snpscore) and the release it reads is built by [snpdata/](../snpdata) (same repository); this app handles
+upload, jobs, display and export, with its plain-Python parts in `snpportal/lib/`.
 
 ## Run locally
 
 ```bash
-pip install -r requirements.txt                       # also installs ../snpscore (editable)
-cd ../snpscore
-snpscore fetch                                        # the public inputs, into data/raw
+pip install -r requirements.txt -e ../snpdata        # also installs ../snpscore (editable); snpdata for the build and tests
+cd ../snpdata
+snpdata fetch                                         # the public inputs, into data/raw
 bash prep/make_demo.sh                                # the examples (layers.yaml 'demo'): 50K public sites, the
                                                       # SYNTHETIC demo chip and the SYNTHETIC maturation GWAS
-snpscore build --out release/dev                      # copies the examples that exist into release/dev/demo/
+snpdata build --out release/dev                       # copies the examples that exist into release/dev/demo/
+snpscore pool --release release/dev --background data/raw/12_samples_genotype_filtered_on_504.vcf.gz
 cd ../snpportal
 python manage.py runserver                            # http://127.0.0.1:8000/snp/
-python manage.py test snpportal                       # builds a release from snpscore/tests/fixture
+python -m pytest -q tests                             # snpportal.lib
+SNPPORTAL_WORKERS=0 python manage.py test snpportal   # the pages; builds a release from snpdata/tests/fixture
 ```
 
-`snpscore build` copies only the examples that exist, so run it again after making them. To try the portal, use the
+`snpdata build` copies only the examples that exist, so run it again after making them. To try the portal, use the
 Examples on the Score page, which is the home page `/snp/` (the release's `demo/` inputs: known loci, the SYNTHETIC demo chip and the
 SYNTHETIC maturation GWAS; `example=public_50k` still works but is not offered), paste a few positions or rs IDs, upload
-`../snpscore/tests/fixture/snps.vcf`, or follow the guided tour (`/snp/tour/`). The Score page's tabs (Upload SNPs,
+`../snpdata/tests/fixture/snps.vcf`, or follow the guided tour (`/snp/tour/`). The Score page's tabs (Upload SNPs,
 Paste positions, Genes or regions, GWAS) open with `?input=file|paste|regions|gwas` (or `#gwas`). On the Design panel,
 'Use the demo chip' compares the panel with the SYNTHETIC demo chip.
 `python manage.py tour_images [--base http://localhost:8000/snp/]` retakes the tour's screenshots (`static/snpportal/tour/`)
@@ -117,7 +120,7 @@ robust peaks that change a motif match: ticks, the two largest changes enlarged 
 every changed motif's logo over the reference sequence; windows go down to 60 bp), Regulatory elements, Chromatin
 states, Functional assays and Other annotation.
 
-Public data on the pages (R1, R3-R8 of snpscore/ROADMAP.md 'Push 2'):
+Public data on the pages (R1, R3-R8 of docs/ROADMAP.md 'Push 2'):
 - Public allele frequencies are the 504-fish reference panel's (`public_af_af`, `_maf`, `_ac`, `_an`, `_ns`); the 12
   AQUA-FAANG fish's AF and DR2 are shown apart, labelled 'AQUA-FAANG 12 fish'. The card's scope line quotes the
   manifest's `population`. Gene pages and candidate lists name their site source (the release pool's VCF, else the panel).
@@ -194,23 +197,87 @@ weights sha256, preset, filters, panel hash, PROVISIONAL rules, SYNTHETIC inputs
 command): `#` lines in text files (`?plain=1` drops them), Parquet key-value metadata, `provenance.txt` in the bundle.
 Vendor files say 'layout to confirm against the vendor's current template'.
 
-## Merging into salmobase
+## Breeder tools: assay QC, panel designer, chip comparison, exports
 
-1. Copy `snpportal/` into `salmobase/salmobase/`.
-2. `settings.py`: add `"snpportal"` to `INSTALLED_APPS` and `SNPSCORE_RELEASE = getenv("SNPSCORE_RELEASE")`. Optional
-   settings (defaults): `SNPPORTAL_RESULTS_DIR` (`<system temp>/snpportal`), `SNPPORTAL_KEEP_HOURS` (24),
-   `SNPPORTAL_WORKERS` (1 background thread per process; 0 runs jobs inline), `SNPPORTAL_MAX_UPLOAD_MB` (300, checked
-   before the body is read), `SNPPORTAL_MAX_SNPS` (3,000,000), `SNPPORTAL_DUCKDB_THREADS` (2), `SNPPORTAL_DUCKDB_MEMORY` (2GB),
-   `SNPPORTAL_TRACKS` (a tracks.yaml overriding the release's), `SNPPORTAL_STATE_PALETTE` (`portal`, or `aquafaang`
-   for AQUA-FAANG's own state colours; viewers can switch), `SNPPORTAL_SIGNAL_DEADLINE` (4.0 s for live signal
-   rows), `SNPPORTAL_MAX_VENDOR_SNPS` (50,000 SNPs per Illumina/Axiom/KASP file or bundle; larger requests get a 400),
-   `SNPPORTAL_MAX_CHIP_SNPS` (1,000,000 chip markers, at most `SNPPORTAL_MAX_SNPS`; longer chips are refused) and a `CACHES['snpportal_tiles']` entry for the locus browser's public tiles (Redis or Memcached on a server, not the
-   file-based cache, which lists its folder on every write; a view with the functional assays open writes ~3,000 tiles; else a per-process LocMemCache;
-   `sandbox/settings.py` shows a FileBasedCache).
-3. `urls.py`: `path('snp/', include('snpportal.urls'))`. Run `collectstatic` for `snpportal/portal.css` and `portal.js`.
-4. `requirements.txt`: add `duckdb` and `snpscore @ git+https://github.com/garethgillard/salmo-snp#subdirectory=snpscore`.
-5. Put a release under `/datafiles` (e.g. `/datafiles/snpscore/v0.1`) and set `SNPSCORE_RELEASE` in docker-compose.
-6. Cron: `python manage.py snpportal_cleanup` (hourly). Results pages also clean up as they are viewed.
+All defaults are PROVISIONAL and live in weights.yaml (`assay` and `design` blocks, listed in manifest `provisional`).
 
-The job queue and heartbeats are per process (fine under mod_wsgi or gunicorn for the prototype).
-salmobase's Docker image uses Python 3.8, which limits DuckDB to 1.2.2 and Django to 4.2. Both are tested and work.
+`snpportal.lib.panel.design(source, preset='all', n_target, min_spacing_bp, min_maf, backbone_fraction, max_per_gene,
+max_per_element, require_assay_pass, exclude_flags, must_include, weights=, chrom_sizes=, table='v', out=None,
+coordinate=None)`: `source` is an annotate/pool parquet (or TSV) path, or a DuckDB connection with a table or view
+`table`. Parameters left None come from `weights['design']`. Steps: must-include ids first; a backbone of
+round(n_target x backbone_fraction) SNPs, the best per genome-length-proportional bin; then the rest by
+`design_score` = score.tier x tier_score / max + score.assay x (pass 1, warn 0.5) + score.maf x MAF / 0.5. Every pick
+keeps `min_spacing_bp` (bisect per chromosome; `coordinate(chrom, pos)` can map bp to cM later), at most
+`max_per_gene` per `gene_id` and `max_per_element` per `chromatin_id`. Filters: MAF (your `maf`/`af` column, else
+`public_af_maf`; unknown passes), assay (`fail` dropped, or all but `pass` with require_assay_pass), and
+`exclude_flags` (columns true or > 0, e.g. blacklist, lore, strand_ambiguous, flank_variants, near_chip). Tiers come
+from `tier__<preset>` when present (pool, the portal's tiers.parquet); a parquet/TSV path without them holds the
+tiers of the preset it was annotated with, so its tier columns are recomputed for `preset` with `weights` (the CLI
+passes the release's; `synthetic=` names the layers that never count), and a connection's `tier` is used as it is. A
+TSV/CSV source reads `chrom`, `id`, `ref`, `alt` and `genome_base` as text. Ties go to the lower row number.
+Returns {`params`, `hash` (same input and params -> same hash and parquet sha256), `summary`, `selected`}; `out` gets
+the source columns plus `source_row` (0-based row in the source), `selection_reason` (`must_include`, `backbone`,
+`functional` = tier 1-3, `fill` = tier 4), `panel_rank` and `design_score`, ordered by panel_rank. `summary`:
+`n_target`, `n_selected`, `n_rows`, `n_candidates`, `reasons`, `tiers`, `per_chromosome` [{chrom, n, length}],
+`spacing` {min, median, max}, `largest_gaps` [{chrom, start, end, size}] (chromosome ends included),
+`region_class`, `assay_status`, `missing_must_include`, and `binding` (why fewer than n_target were found).
+`python -m snpportal.lib.cli panel` also writes `<out stem>.summary.json`.
+
+`snpportal.lib.panel.compare_sql(rel, chip, window_bp, tier='tier')` adds `on_chip`, `dist_to_chip` (bp to the nearest
+chip SNP on the chromosome), `near_chip` (<= window_bp) and `novel_functional` (tier 1-2 and not near_chip).
+`compare(source, chip, preset, window_bp, gap_bp, pool=, weights=, chrom_sizes=)` returns `summary` {total, shared,
+novel_functional, other (the three add up to total), chip_snps, window_bp, gap_bp, gaps} and `gaps` [{chrom, start,
+end, size, filler: {chrom, pos, id, tier, source: list | pool} or None}] for chip gaps over gap_bp (design
+`chip_window` 10 kb and `chip_gap` 1 Mb). `read_chip(path, release, out, max_snps=CHIP_MAX)` reads any input layout
+through the aliases into chrom, pos, id, and stops with InputError past `max_snps` rows (3,000,000).
+
+`snpportal.lib.export`: `provenance(manifest, weights, meta)` -> '# ' lines (release, manifest and weights sha256,
+versions, preset, filters, panel, PROVISIONAL rules, SYNTHETIC when synthetic data contributes, the equivalent
+command); `methods_text(manifest, weights, preset, release_dir, finemap=None)` -> methods paragraphs and references
+(layer citations, each '; '-separated part once and 'DOI to add' where it has no doi:, GERP++, the catalogue's DOIs;
+with `finemap`, the GWAS settings used, a loci and fine-mapping paragraph and Wakefield 2009); `export(source, fmt, out,
+release_dir, preset, meta, include_failed, plain, flank=, template=, sidecars=True)` for tsv, parquet (provenance in
+the KV metadata), bed, and the vendor layouts (`illumina`, `axiom`, `kasp`; columns per template version in
+`TEMPLATES`, each 'layout to confirm against the vendor's current template'). A path source's tiers are recomputed
+for `preset` as in design(). Rows keep the source's order (a connection's view is written in sorted `_row` ranges).
+- Vendor files hold one row per SNP and no comment lines. `Sequence` is `<flank>[REF/ALT]<flank>` on the forward (+)
+  strand, upper case, neighbouring public variants as IUPAC codes (N for indels); REF/ALT are the input's alleles
+  (complemented for `strand_flip`), else the public site's. Flanks: illumina 60 bp (60-200), axiom 35 bp, kasp 50 bp
+  (50-100). Columns: illumina (designstudio-2026) `Locus_Name, Target_Type, Sequence, Chromosome, Coordinate,
+  Genome_Build_Version, Source, Source_Version, Sequence_Orientation, Plus_Minus, Species, Force_Infinium_I,
+  Replication_Count` (iselect-2016 also available); axiom `SNP_ID, Chromosome, Position, Strand, Sequence`; kasp
+  `SNP ID, Sequence, Position`. Locus names are `Ssa<chromosome>p<position>` (chromosome 0 off 1-29).
+- Next to each vendor file: `<file>.provenance.txt` (the '# ' provenance, template, flank, left-out counts and panel
+  warnings) and `<file>.lookup.tsv` (`locus_name, id, chrom, pos, ref, alt, topbot, allele_a, allele_b, two_probes,
+  assay_status, assay_reasons, export_notes`: TOP/BOT by Illumina's rules incl. the sequence walk for A/T and C/G,
+  with Illumina's A/B alleles).
+- Left out: SNPs without known biallelic alleles or a full flank, and unless include_failed (then kept, with the
+  reason in `export_notes`) assay fail and not_checked SNPs and, for illumina, SNPs whose TOP/BOT strand cannot be
+  determined (code 103).
+
+`--format priors` (`export.priors(source, out, release_dir, preset, meta, categories=None)`) writes a zip of
+genomic-prediction prior files: `bayesrc_classes.txt` (SNP<TAB>class, no header, input order), `sets/<category>.txt`
+(GFBLUP/MultiBLUP sets, which overlap), `ldak_partitions/partition1..K` (disjoint, covering every SNP), `annot.tsv`
+(CHR, BP, SNP, a 0/1 column per category, tier_score, `active_<condition>` for the 21 conditions), `snp_lookup.tsv`
+(only when some ids are missing: names `Ssa<chrom>p<pos>`), `README.txt` (provenance, category definitions and counts,
+a methods paragraph, references) and `methods.txt`. Categories: tier1_2, active, coding (non-synonymous
+`coding_consequence`, else region_class CDS), constrained, regulatory, none; a SNP's class is the first category it is
+in, in the PROVISIONAL weights.yaml `priors: order`.
+
+`bundle_zip(out, source, release_dir, preset, meta, formats, svgs)` zips the exports, manifest.json,
+weights.yaml, methods.txt, provenance.txt, README.txt and figures/*.svg. `filename(fmt, release, preset, tag)` names
+files `snpscore_<release>_<preset>[_<tag>][_<vendor>].<ext>`.
+
+## Locus views and remote tracks
+
+`snpportal.lib.locus` serves the portal's locus browser, card and variant page from the release (BED coordinates; SNP `pos`
+1-based): `locus(release, chrom, start, end)` returns every lane of a window up to 2 Mb (gene models, peaks with their
+21 states, regbuild, GERP, blacklist, LORe, public variants, known loci); `parse_region(text, release)` reads
+`25:28,980,000-29,010,000`, `ssa25:28.98-29.01Mb` or `25:28996360` (aliases through alias.parquet);
+`signal(tracks, chrom, start, end, cache=)` and `segments(...)` read bigWig/bigBed tracks from `tracks.yaml` on a fixed
+public tile grid (cache keys never hold a user's position; a track that misses the 4 s deadline is None);
+`annotate_position(release, chrom, pos, ref, alt, trait)` annotates one position on the fly (same row as a full
+annotate). Remote files are read with HTTP range requests by `snpscore.bbi` and `snpscore.fasta`, https only and
+only on allowlisted hosts (`SNPSCORE_ALLOWED_HOSTS`, default salmobase.org and ftp.ensembl.org); set
+`SNPSCORE_CA_FILE` when Python lacks CA certificates. `snpdata tracks` regenerates `tracks.yaml` from the
+salmobase track hubs.

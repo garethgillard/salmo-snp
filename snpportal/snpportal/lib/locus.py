@@ -15,10 +15,10 @@ import tempfile
 import time
 from pathlib import Path
 
-from . import bbi
-from .annotate import annotate, connect
-from .formats import lit
-from .tracks import CHROMATIN_CONDITIONS
+from snpscore import bbi
+from snpscore.annotate import annotate, connect
+from snpscore.formats import lit
+from snpscore.score import CHROMATIN_CONDITIONS
 
 MIN_WINDOW, MAX_WINDOW = 60, 2_000_000  # annotation lanes (60 bp: the browser's motif logos are readable from 150 bp)
 MAX_SIGNAL = 500_000  # signal and ChromHMM rows are read only in windows up to this wide
@@ -334,7 +334,7 @@ def annotate_position(release_dir, chrom, pos, ref=None, alt=None, trait="all", 
                                           AND start < {int(pos) + 2} AND "end" > {int(pos) - 3}))
                                 TO {lit(mini / src.name)} (FORMAT parquet)""")
         con.close()
-        for name in ("manifest.json", "weights.yaml", "alias.parquet", (manifest.get("catalog") or {}).get("file")):
+        for name in ("manifest.json", "alias.parquet", (manifest.get("catalog") or {}).get("file")):
             if name and (release / name).exists():
                 (mini / name).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy(release / name, mini / name)

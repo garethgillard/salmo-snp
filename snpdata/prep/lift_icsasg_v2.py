@@ -1,4 +1,4 @@
-"""Move a published SNP from ICSASG_v2 to Ssal_v3.1 by matching its flanking sequence. Used for benchmark/known_loci.tsv.
+"""Move a published SNP from ICSASG_v2 to Ssal_v3.1 by matching its flanking sequence. Used for catalog/known_loci.tsv.
 Usage: python prep/lift_icsasg_v2.py <v2 RefSeq/GenBank accession> <v2 pos> <v3.1 chrom> <window start> <window end>
 e.g.   python prep/lift_icsasg_v2.py NC_027324.1 28656101 25 28500000 29500000   (vgll3 Met54Thr -> 25:28996360)
 Prints every position in the v3.1 window where 60 bp either side of the SNP match exactly, on either strand.

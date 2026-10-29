@@ -1,7 +1,7 @@
 """Reference implementation of Illumina's TOP/BOT strand and A/B allele rule,
 checked against every example in Illumina tech note 370-2006-018
 (https://www.illumina.com/documents/products/technotes/technote_topbot.pdf).
-Written independently of snpscore during the research sweep (RESEARCH.md section 5) and kept unchanged as the
+Written independently of snpscore during the research sweep (docs/RESEARCH.md section 5) and kept unchanged as the
 oracle for tests/test_vendor.py. Python 3.8 compatible."""
 from __future__ import annotations
 

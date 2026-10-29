@@ -42,7 +42,6 @@ from snpscore.pool import maf_bin_sql
 log = logging.getLogger("snpportal")
 STALE = 300  # seconds without a heartbeat before a queued or running job is given up (server restarted)
 MAX_QUEUED = 10
-SNAPSHOT = ("weights.yaml", "manifest.json")
 TIER_COLUMNS = ("tier", "tier_score", "tier_evidence", "tier_terms")
 PUBLIC_AF = "504-fish panel: mostly wild and farmed fish from Bertolotti et al. 2020 plus the 12 AQUA-FAANG fish"  # public_af (R1)
 
@@ -123,7 +122,7 @@ def sha256(path):
 def _cached(kind, path, mtime):
     p = Path(path)
     if kind == "weights":
-        w = snpscore.load_weights(p.parent)
+        w = snpscore.load_weights(p)
         if w and "presets" in w:
             w["presets"] = Presets(w["presets"])
         return w
@@ -141,9 +140,9 @@ def manifest(where=None):
 
 
 def weights(where=None):
-    """weights.yaml of a job's snapshot folder, or of the current release (None if missing); its presets also take
+    """weights.yaml of a job's snapshot folder, or snpscore's current one (None if missing); its presets also take
     Active-in keys (Presets)."""
-    return _file("weights", Path(where or release()) / "weights.yaml")
+    return _file("weights", Path(where) / "weights.yaml" if where else snpscore.score.WEIGHTS)
 
 
 def release_info():
@@ -155,9 +154,9 @@ def release_info():
 
 
 def release_changed(job):
-    """True when the current release's manifest or weights differ from the job's snapshot."""
+    """True when the current release's manifest or snpscore's weights differ from the job's snapshot."""
     return (job.get("manifest_sha256"), job.get("weights_sha256")) != (
-        _file("sha256", release() / "manifest.json"), _file("sha256", release() / "weights.yaml"))
+        _file("sha256", release() / "manifest.json"), _file("sha256", snpscore.score.WEIGHTS))
 
 
 def presets(where=None):
@@ -379,9 +378,9 @@ def create(src, suffix, input_kind="snps", preset="all", label="", input_format=
     key = uuid.uuid4()
     d = folder(key)
     d.mkdir(mode=0o700)
-    for name in SNAPSHOT:
-        if (release() / name).exists():
-            shutil.copyfile(release() / name, d / name)
+    for kept in (release() / "manifest.json", snpscore.score.WEIGHTS):  # the job keeps the data and rules it was scored with
+        if kept.exists():
+            shutil.copyfile(kept, d / kept.name)
     (os.replace if move else shutil.copyfile)(src, d / f"input{suffix}")
     lock_down(d)
     now = time.time()
@@ -503,7 +502,7 @@ def precompute(d):
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
     n = con.execute("SELECT count(*) FROM r").fetchone()[0]
-    w = snpscore.load_weights(d)
+    w = snpscore.load_weights(d / "weights.yaml")
     if w and w.get("presets"):
         # A chain of projections, one per preset, each renaming its tier columns to <column>__<preset>: one streaming
         # pass with no joins, so 1.6M SNPs fit the 2 GB DuckDB limit. scored() replaces any tier columns it is given.
@@ -637,7 +636,7 @@ def refresh_summary(d):
     con = connect([d], d)
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
-    s = summarise(con, d, columns, snpscore.load_weights(d))
+    s = summarise(con, d, columns, snpscore.load_weights(d / "weights.yaml"))
     _write_json(d / "summary.json", s)
     return s
 

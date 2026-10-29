@@ -1,6 +1,6 @@
 """The locus browser page (/snp/locus/): tracks in groups on one axis, each track its own SVG beside an HTML label, so a
 group opens in place (combined track always, one track per condition when open). Release lanes come from
-snpscore.locus; ChromHMM and the per-condition peaks are read live from salmobase (tracks.yaml) on snpscore's tile
+lib.locus; ChromHMM and the per-condition peaks are read live from salmobase (tracks.yaml) on snpscore's tile
 grid; the functional assays (RNA-seq, ATAC-seq, ChIP-seq, means over replicates) load one assay at a time when their
 section is opened (/snp/locus/assay/). A red band marks the centre: the SNP the view was opened on, else the middle.
 ?open= lists the open groups, so a link keeps them. The single-SVG figure (locus_svg.locus) stays the download and
@@ -16,7 +16,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 
-from snpscore import locus as sl
+from .lib import locus as sl
 from snpscore.formats import lit
 
 from . import explore, jobs, locus, locus_svg, palette
@@ -236,7 +236,7 @@ def genes_group(request, s, ax, data):
 
 def snp_sets(s, data):
     """{set: [(pos, maf, tip)]} of the public SNP datasets in the window: the 504-fish panel and its 12 AQUA-FAANG fish
-    (public_af), the Synchrosmolt parents and the Axiom array (snpscore.locus PUBLIC_SNPS)."""
+    (public_af), the Synchrosmolt parents and the Axiom array (lib.locus PUBLIC_SNPS)."""
     num, out = locus_svg._num, {}
 
     def add(key, v, maf, text):

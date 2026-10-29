@@ -10,7 +10,7 @@ import zlib
 from pathlib import Path
 
 BIGWIG = 0x888FFC26
-FIXTURE_PEAKS = Path(__file__).parent / "fixture" / "AtlanticSalmon_unified_peaks.bed"
+FIXTURE_PEAKS = Path(__file__).resolve().parents[2] / "snpdata" / "tests" / "fixture" / "AtlanticSalmon_unified_peaks.bed"
 
 
 def _rtree(blocks, chrom_ids):
@@ -114,9 +114,9 @@ def synthetic_atac(path, seed=42, chrom="25", start=28_950_000, end=29_050_000, 
 def synthetic_registry(folder, base_url, conditions, replicates=("R1",), slow=(), seed=42):
     """SYNTHETIC ATAC bigWigs for conditions x replicates in `folder`, and folder/tracks_SYNTHETIC.yaml listing them at
     base_url (a RangeServer url on that folder). Tracks of conditions in `slow` use the server's slow mode.
-    Returns the yaml path, for snpscore.tracks.load_tracks (allow the server's host and http in snpscore.bbi first)."""
+    Returns the yaml path, for snpportal.lib.tracks.load_tracks (allow the server's host and http in snpscore.bbi first)."""
     import yaml
-    from snpscore.tracks import DEFAULTS, parse_trackdb
+    from snpdata.trackhub import DEFAULTS, parse_trackdb
 
     names = [f"AtlanticSalmon_ATAC_{c}_{r}.SYNTHETIC.bigWig" for c in conditions for r in replicates]
     for i, name in enumerate(names):

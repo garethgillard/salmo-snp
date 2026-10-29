@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Recreate the portal's demo inputs from data/raw. Run from the repo root after `snpscore fetch`, then
-# `snpscore build --out release/dev` copies them into release/dev/demo/ (layers.yaml `demo`).
+# Recreate the portal's demo inputs from data/raw. Run in snpdata/ after `snpdata fetch`, then
+# `snpdata build --out release/dev` copies them into release/dev/demo/ (layers.yaml `demo`).
 #   data/demo/public_50k.vcf     every 32nd site of the public 12-fish VCF (50,708 sites; first 8 columns, no genotypes)
 #   data/synthetic/              SYNTHETIC demo chip and maturation GWAS (prep/make_synthetic.py chip, gwas; seed 42)
 set -euo pipefail

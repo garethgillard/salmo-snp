@@ -1,5 +1,5 @@
-# Tier rules. PROVISIONAL: chosen by Claude so the prototype works; G decides the real ones (see CLAUDE.md).
-# `snpscore build` copies this file into the release; `snpscore annotate --trait <preset>` applies it.
+# Tier rules. PROVISIONAL: chosen by Claude so the prototype works; G decides the real ones (see AGENTS.md at the repository root).
+# Ships with snpscore (snpscore.WEIGHTS), not in the release; `snpscore annotate --trait <preset>` applies it.
 # Each SNP gets tier_score = sum of the weights of the evidence it has, then a tier from the cut-offs.
 # Layers marked synthetic: true in the release manifest never count.
 
@@ -56,7 +56,7 @@ assay:
   warn_flags: [lore, blacklist, strand_ambiguous]  # warn when these annotate columns are true
   fail_ref_check: [mismatch, not_snp]              # fail on these ref_check values
 
-# Panel designer defaults (snpscore panel, the portal's Panel tab) and chip comparison. PROVISIONAL: chosen by Claude
+# Panel designer defaults (the portal's Design panel; python -m snpportal.lib.cli panel) and chip comparison. PROVISIONAL: chosen by Claude
 # so the prototype works; G to confirm.
 design:
   n_target: 384
@@ -84,6 +84,6 @@ finemap:
   trait_sd: 1.0             # betas are divided by this (1 = a standardised trait); replaced by the SD that se, N and af
                             # imply when the statistics have them (gwas.settings)
 
-# Genomic-prediction priors (snpscore export --format priors). PROVISIONAL: chosen by Claude so the prototype works; G to confirm.
+# Genomic-prediction priors (the portal's priors export). PROVISIONAL: chosen by Claude so the prototype works; G to confirm.
 priors:
   order: [tier1_2, active, coding, constrained, regulatory]  # BayesRC class / LDAK partition = the first category a SNP is in; 'none' is always last

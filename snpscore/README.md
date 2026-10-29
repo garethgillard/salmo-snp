@@ -1,39 +1,31 @@
 # snpscore
 
-Builds the annotation tables behind the salmobase SNP portal, and annotates any Atlantic salmon SNP list against them.
+Annotates any Atlantic salmon SNP list against a release built by ../snpdata, and gives each SNP a tier.
 Layers so far: AQUA-FAANG chromatin states (21 conditions), genic region class, Ensembl regulatory build, GERP constrained
 elements, blacklist, late-rediploidized (LORe) regions, nearest gene (with description, expression per tissue and human
 and zebrafish ortholog names), known variants within 35 bp (probe flank), allele frequency in the public 504-fish panel,
 nf-RASQUAL caQTL/eQTL lead SNPs, genetic map position (cM), and the known-loci catalogue. rs IDs (EVA release 9) place
-SNP lists that have only rs IDs or ICSASG_v2 positions. Each SNP also gets a tier for a trait preset (rules in `weights.yaml`; provisional until agreed).
-On top of that: assay designability QC, a panel designer, chip comparison, vendor exports, and GWAS summary statistics
-(loci and fine-mapping with a functional prior).
+SNP lists that have only rs IDs or ICSASG_v2 positions. Each SNP also gets a tier for a trait preset (rules in `src/snpscore/weights.yaml`; provisional until agreed).
+On top of that: assay designability QC, the public background pool, a benchmark against known loci, and GWAS summary
+statistics (loci and fine-mapping with a functional prior). The panel designer, chip comparison and vendor exports are
+the portal's (../snpportal/README.md).
 
 ## Quick start
 
 ```bash
-pip install -e ".[test]"                         # the test extra adds pytest
-snpscore fetch                                   # download public inputs into data/raw (~1.5 GB kept; about 7 min)
-bash prep/make_demo.sh                           # portal demo inputs before build: public_50k, SYNTHETIC chip and GWAS (~20 s)
-snpscore build --out release/v0.1                # standardise every layer in layers.yaml, copy weights.yaml
-snpscore annotate my_snps.vcf.gz --release release/v0.1 --trait maturation -o my_snps_annotated.parquet  # or .tsv
-snpscore rsid rs863754587 --release release/v0.1  # Ssal_v3.1 and ICSASG_v2 position of an rs ID
-snpscore pool --release release/v0.1 --assay --memory 8GB  # public background pool: release/v0.1/pool/ (about 100 s)
-snpscore benchmark --release release/v0.1 -o release/v0.1/benchmark.tsv   # known loci; controls from the pool
-snpscore benchmark --release release/v0.1 --positives molqtl:ca molqtl:e --by-tissue -o release/v0.1/benchmark_molqtl.tsv
-snpscore panel my_snps_annotated.parquet --release release/v0.1 --preset maturation --n 384 -o panel.parquet
-snpscore export panel.parquet --release release/v0.1 --preset maturation --format illumina  # or axiom, kasp, bed, priors, ...
-snpscore compare my_snps_annotated.parquet --chip my_chip.csv --release release/v0.1 --pool
-python prep/make_synthetic.py chip --scale fixture  # SYNTHETIC demo chip for the tests (tests/fixture/synthetic)
-snpscore gwas sumstats.tsv --release release/v0.1 --trait maturation -o gwas_out/   # loci.tsv, finemap.tsv
-pytest -q                                        # tests run on the small regions in tests/fixture
+pip install -e ".[test]"                         # the test extra adds pytest; the tests also need ../snpdata
+R=../snpdata/release/v0.1                        # a release built with snpdata (or downloaded)
+snpscore annotate my_snps.vcf.gz --release $R --trait maturation -o my_snps_annotated.parquet  # or .tsv
+snpscore rsid rs863754587 --release $R           # Ssal_v3.1 and ICSASG_v2 position of an rs ID
+snpscore pool --release $R --assay --memory 8GB  # public background pool, a cache of the current weights: $R/pool/
+snpscore benchmark --release $R -o $R/benchmark.tsv   # known loci; controls from the pool
+snpscore benchmark --release $R --positives molqtl:ca molqtl:e --by-tissue -o $R/benchmark_molqtl.tsv
+snpscore gwas sumstats.tsv --release $R --trait maturation -o gwas_out/   # loci.tsv, finemap.tsv
+python -m pytest -q                              # tests run on the small regions in ../snpdata/tests/fixture
 ```
 
-`fetch` needs a current CA bundle on old Python/OpenSSL builds: `SSL_CERT_FILE=/path/to/cert.pem snpscore fetch`.
-It streams the 975 MB 504-fish VCF and writes only its sites and frequencies (`sites_only` in layers.yaml: CHROM to
-INFO with AF, MAF, AC, AN, NS; 88 MB): genotypes and sample names never reach the disk. A source with `count_gt: true`
-(the Synchrosmolt parents, whose VCF has no frequencies) gets AC, AN, NS, AF and MAF counted from its genotypes as it
-streams, and only those are kept.
+The tier rules ship with the package (`snpscore.WEIGHTS`), so changing a weight needs no new release: rebuild the
+pool (`snpscore pool`) and rescore.
 
 ## Input SNPs
 
@@ -67,114 +59,6 @@ HG993268.2, HG993270.2, HG993277.2, HG993285.2). `HG993277.1` is an older chromo
   `CM003303.1`) but not its Ssal_v3.1 one: moved to Ssal_v3.1 (`position_source` = `ICSASG_v2 <chrom>:<pos>` as
   given), alleles complemented where EVA's two placements are on opposite strands. EVA's Ssal_v3.1 positions are
   EVA's remaps of the older submissions.
-
-## Release format (the contract with the portal)
-
-A release is one folder, named by its version:
-
-```
-release/v0.1/
-  manifest.json          see below
-  <layer>.parquet        one file per layer in layers.yaml
-  alias.parquet          alias (lower case), chrom, warning: every chromosome name annotate accepts (warning: shown
-                         in the validation report, e.g. for HG993277.1)
-  rsid.parquet           rs (BIGINT, the number), chrom, pos, ref, alt (Ssal_v3.1), v2_chrom, v2_pos, v2_ref, v2_alt
-                         (ICSASG_v2; NULL unless on exactly one ICSASG_v2 line) from EVA release 9, sorted by rs, zstd;
-                         rs IDs on several Ssal_v3.1 lines are left out. `snpscore.rsid(release, rs)` looks one up
-  synteny.parquet        Ss4R homeologous blocks (salmobase synteny 2021-11), each block once from each side: chrom,
-                         start, end (BED), partner, partner_start, partner_end, pairs, aore, lore; not annotated
-  bgee.parquet           Bgee 16.0 RNA-seq per gene_id and tissue (anatomical entity): libraries, present (libraries
-                         calling the gene present), median_tpm, studies; not annotated
-  catalog/known_loci.tsv the known-loci catalogue (copy of benchmark/known_loci.tsv)
-  weights.yaml           tier rules and trait presets; PROVISIONAL `assay`, `design` and `finemap` blocks
-  tracks.yaml            track registry for the locus browser (if tracks.yaml is next to layers.yaml): `tracks`
-                         (bigWigs), `chromhmm` and `peaks` (one bigBed per condition: ChromHMM segmentation, robust
-                         ATAC peaks; the name field is the state)
-  benchmark.tsv          optional: `snpscore benchmark` output for this release (known loci)
-  benchmark_molqtl.tsv   optional: `snpscore benchmark --positives molqtl:ca molqtl:e --by-tissue` (nf-RASQUAL leads
-                         vs matched controls); same columns as benchmark.tsv (see "Benchmark")
-  demo/                  example inputs for the portal's buttons (layers.yaml `demo`): known_loci.tsv, public_50k.vcf
-                         (dev only), chip_demo_SYNTHETIC.tsv and gwas_maturation_SYNTHETIC.tsv (dev only; made by
-                         prep/make_demo.sh, the last two through prep/make_synthetic.py)
-  pool/pool.parquet      optional: `snpscore pool` (see "Public background pool"); annotate never reads it
-  pool/background.json   optional: the pool's shares, for the dashboard
-```
-
-`manifest.json`:
-- `version`, `assembly`, `chromosomes`, `created`, `snpscore_version`, `duckdb_version`
-- `chrom_sizes`: {chrom: length} of the numbered chromosomes, from the genome `.fai` (or the layers' largest end where
-  that is larger, or the `.fai` lacks the chromosome, as in the test fixture). annotate's known chromosomes.
-- `provisional`: the rules G still has to confirm (keys of weights.yaml and layers.yaml, e.g. `weights`, `catalog.window`)
-- `genome`: `url`, and `path` of the local copy if the build machine had it (for the sequence checks); on another machine
-  `SNPSCORE_GENOME` names its own copy (bgzipped, with `.fai` and `.gzi`), else the URL is read remotely
-- `alias`, `rsid` (`file`, `rows`, `left_out`, `source_file`, `urls`, `citation`, `source_sha256`, `sha256`), `catalog`
-  (`file`, `window`, `rows`, `sha256`), `files` (sha256 of the copied weights.yaml and tracks.yaml), `demo` ([{`file`,
-  `sha256`, `synthetic`}])
-- `layers`: per layer its layers.yaml settings (type, format, url, description, `licence`, `population`, ...), `urls`
-  (layers with several inputs), `synthetic` (true = test or stand-in data: label it, it never counts in tiers),
-  `citation`, `source_file`, `md5` and `source_sha256` of the inputs, `file` and `sha256` of the parquet, `rows`,
-  `columns` (the value columns)
-
-Every positional `<layer>.parquet` has `chrom`, `start`, `end` in BED coordinates (0-based start, end exclusive), sorted
-by chrom and start, followed by the layer's value columns. `gene` layers are keyed by `gene_id` instead. Layer
-parquets are zstd-compressed.
-
-| Layer type | In the parquet | Columns annotate adds |
-| --- | --- | --- |
-| `interval` | non-overlapping intervals (`build` checks) | `<layer>` (true if inside an interval), `<layer>_<column>`; with `id: true` also `<layer>_id` = `chrom:start-end` of the interval (BED coordinates); with `interpolate: true` the parquet has `<column>` (value at start) and `<column>_next` (value at end) and `<layer>_<column>` is interpolated linearly at pos (3 decimals) |
-| `nearest` | features, may overlap | `<layer>_<column>` of the nearest feature within `max_distance` and `<layer>_distance` (0 = inside; ties go to the lower start) |
-| `count` | 1-bp features, one per position (`build` checks) | `<layer>`: number of features within `window` bp either side, not counting the SNP's own position |
-| `point` | 1-bp features with `ref`, `alt`, one per position and allele pair (`build` checks) | `<layer>` (true if a feature with the SNP's alleles is at its position), `<layer>_<column>` for the columns other than ref/alt; with input alleles `<layer>_alleles` (`same`, `swapped`, `strand_flip`, `strand_flip_swapped`, `other`), and `af` and `*_af` (as 1 - af) and `ac` (as an - ac) turned to the input's alt. `other` = a different variant at the position: `<layer>` is false and every `<layer>_<column>` NULL. Without input alleles a feature at the position is a hit |
-| `gene` | one row per `gene_id` (`build` checks) | `<layer>_<column>` for the SNP's nearest gene |
-| `features` | overlapping features for the viewers | nothing (never annotated) |
-
-Layers today: `chromatin` (interval with `chromatin_id`), `region`, `regbuild`, `gerp`, `blacklist`, `lore` (interval),
-`gene` (nearest: strand, id, name, biotype, description), `transcripts` (features), `gene_ortholog` (gene: human,
-zebrafish), `ss4r` (gene: ohnolog, ohnolog_chrom, class; AQUA-FAANG Ss4R duplicates), `flank_variants` (count, 504-fish panel sites), `public_af` (point: af, maf, ac, an, ns, aquafaang12_af,
-aquafaang12_dr2), `synchrosmolt_af` (point: af, maf, ac, an, ns), `molqtl` (point: n, tissues, kinds, best_bf, features), `cm` (interval, interpolate: male, female),
-`expression` (gene: one column per tissue).
-
-- `public_af`: the nf-rasqual 504-fish reference panel (Beagle-phased; sites with HWE p < 1e-6 removed; MAF > 0.01;
-  7,572,808 SNPs; NS = 504 and AN = 1008 at every site): 479 wild and farmed fish of European and North American descent
-  from Bertolotti et al. 2020 (ENA PRJEB38061), the 12 AQUA-FAANG BodyMap fish and 13 others. Pooled frequencies
-  hide population structure, and the 12 AQUA-FAANG fish are among the 504.
-  `aquafaang12_af` and `aquafaang12_dr2` are the 12-fish VCF's INFO AF and DR2 (frequency in those 12 fish and their
-  imputation quality); every 12-fish site is a panel site. vgll3 Met54Thr (25:28996360 C/T): af 0.480159 (504 fish),
-  aquafaang12_af 0.67. layers.yaml records the `population` and `licence: to confirm`.
-- `synchrosmolt_af`: the 108 whole-genome sequenced parents of the Synchrosmolt family experiment (NMBU; ENA
-  PRJEB114348, 411,908 SNPs, Beagle-phased; chromosomes ssa01-ssa29, mapped to 1-29 with `rename_chrom` through the
-  alias table). The ENA analysis also has 2,730 offspring imputed from these parents: 99.97% of their sites are
-  parent sites and their frequencies follow the crosses (100 full-sib families), so only the parents are used.
-  247,196 sites are also 504-fish panel sites.
-- Not added: the CGD Axiom array VCF (ENA PRJEB107807) says Ssal_v3.1 but its contig lengths are Ssal_v3's (chr1
-  158,978,050 bp, chr2 72,924,950 bp), EVA files it under Ssal_v3, and its 63,809 positions hit WGS panel sites at
-  chance level (0.26%); its reference alleles were set from a genome, so they look right anyway. It needs a lift
-  from Ssal_v3 to Ssal_v3.1 (or a v3.1 file from the submitters) first; layers.yaml takes it back with
-  `id_as: probe` and `rename_chrom: true`.
-- `molqtl`: nf-RASQUAL (Nguyen et al. 2025) eigenMT tables from github.com/datngu/nf-RASQUAL_paper: caQTL for Brain,
-  Gonad, Liver and Muscle ATAC (Gill ATAC left out: the assay was discarded) and eQTL for Brain, Gill, Gonad, Liver and
-  Muscle RNA. The tables hold one lead SNP per feature (12 fish), so this is not fine-mapping and coloc can't run on it.
-  A lead counts when its eigenMT-adjusted p (`BF`) is below `max_bf` 0.1 (the paper's rule, PROVISIONAL; it gives the
-  paper's counts, e.g. Liver 276 eGenes and 308 caPeaks): 2,656 SNPs, 3,585 features. `kinds` = `ca` and/or `e`;
-  `features` = '; '-separated `<tissue> <kind> <feature> (BF <bf>, pi <pi>)`, best first, with genes as Ensembl 106
-  IDs (all 1,175 significant ones are in Ensembl 116) and peaks as `chrom:start-end` (BED; the table's 1-based
-  `Interval_N:chrom:start:end` minus 1 at the start, unverified). pi is RASQUAL's effect size; which allele it refers
-  to is not confirmed. The tables' `FDR` column is a copy of `pvalue` and is not read. Weight 0 (display only);
-  `licence: to confirm with the authors`.
-- `cm`: Brekke et al. 2023 linkage map (AquaGen, 34,842 markers, native Ssal_v3.1, CC BY 4.0; bioRxiv supplement
-  media-1.txt, whose `Mb` column holds base pairs): `cm_male` and `cm_female` interpolated between the flanking
-  markers; `cm` false and NULL values before a chromosome's first and after its last marker (unmarked ends up to 12 Mb,
-  e.g. the right end of chr17). The male map misses crossovers on chromosomes 2, 8 and 17 (19.5, 2.0 and 3.8 cM).
-
-`transcripts.parquet`: `chrom, start, end, transcript_id, gene_id, gene_name, strand, part` (exon, CDS,
-five_prime_UTR, three_prime_UTR), `phase, canonical` (Ensembl_canonical tag), `biotype`.
-
-`catalog/known_loci.tsv`: `chrom, pos, id, ref, alt, locus, ensembl_gene, trait, evidence, effect, effect_allele,
-effect_direction, icsasg_v2, source` (DOIs), `rsid`, `caveat`, `note`. `effect_allele` is on the Ssal_v3.1 forward
-strand and filled only where the paper is unambiguous (12 rows). `trait` is one of age_at_maturity, ipn_resistance,
-pd_resistance, cms_resistance, sea_lice_resistance, flesh_colour, smoltification, sex_determination. `icsasg_v2` is
-the published ICSASG_v2 position, or EVA release 9's for natively Ssal_v3.1 rows. `caveat` says why a row needs care
-(farmed strain only, suggestive, inferred position, not a SNP, ...).
 
 ## Annotate output
 
@@ -275,77 +159,6 @@ site (the 1.6M sites of the 12 AQUA-FAANG fish, all of them 504-panel sites) (se
   `flags` {chromatin, regbuild, gerp, blacklist, lore, public_af, strand_ambiguous}; `assay_reasons` (with `--assay`)
   {reason: {`n`, `share`}}: warn and fail reasons by name as in validation.json, share = of all sites.
 
-## Breeder tools: assay QC, panel designer, chip comparison, exports
-
-All defaults are PROVISIONAL and live in weights.yaml (`assay` and `design` blocks, listed in manifest `provisional`).
-
-`snpscore.panel.design(source, preset='all', n_target, min_spacing_bp, min_maf, backbone_fraction, max_per_gene,
-max_per_element, require_assay_pass, exclude_flags, must_include, weights=, chrom_sizes=, table='v', out=None,
-coordinate=None)`: `source` is an annotate/pool parquet (or TSV) path, or a DuckDB connection with a table or view
-`table`. Parameters left None come from `weights['design']`. Steps: must-include ids first; a backbone of
-round(n_target x backbone_fraction) SNPs, the best per genome-length-proportional bin; then the rest by
-`design_score` = score.tier x tier_score / max + score.assay x (pass 1, warn 0.5) + score.maf x MAF / 0.5. Every pick
-keeps `min_spacing_bp` (bisect per chromosome; `coordinate(chrom, pos)` can map bp to cM later), at most
-`max_per_gene` per `gene_id` and `max_per_element` per `chromatin_id`. Filters: MAF (your `maf`/`af` column, else
-`public_af_maf`; unknown passes), assay (`fail` dropped, or all but `pass` with require_assay_pass), and
-`exclude_flags` (columns true or > 0, e.g. blacklist, lore, strand_ambiguous, flank_variants, near_chip). Tiers come
-from `tier__<preset>` when present (pool, the portal's tiers.parquet); a parquet/TSV path without them holds the
-tiers of the preset it was annotated with, so its tier columns are recomputed for `preset` with `weights` (the CLI
-passes the release's; `synthetic=` names the layers that never count), and a connection's `tier` is used as it is. A
-TSV/CSV source reads `chrom`, `id`, `ref`, `alt` and `genome_base` as text. Ties go to the lower row number.
-Returns {`params`, `hash` (same input and params -> same hash and parquet sha256), `summary`, `selected`}; `out` gets
-the source columns plus `source_row` (0-based row in the source), `selection_reason` (`must_include`, `backbone`,
-`functional` = tier 1-3, `fill` = tier 4), `panel_rank` and `design_score`, ordered by panel_rank. `summary`:
-`n_target`, `n_selected`, `n_rows`, `n_candidates`, `reasons`, `tiers`, `per_chromosome` [{chrom, n, length}],
-`spacing` {min, median, max}, `largest_gaps` [{chrom, start, end, size}] (chromosome ends included),
-`region_class`, `assay_status`, `missing_must_include`, and `binding` (why fewer than n_target were found).
-`snpscore panel` also writes `<out stem>.summary.json`.
-
-`snpscore.panel.compare_sql(rel, chip, window_bp, tier='tier')` adds `on_chip`, `dist_to_chip` (bp to the nearest
-chip SNP on the chromosome), `near_chip` (<= window_bp) and `novel_functional` (tier 1-2 and not near_chip).
-`compare(source, chip, preset, window_bp, gap_bp, pool=, weights=, chrom_sizes=)` returns `summary` {total, shared,
-novel_functional, other (the three add up to total), chip_snps, window_bp, gap_bp, gaps} and `gaps` [{chrom, start,
-end, size, filler: {chrom, pos, id, tier, source: list | pool} or None}] for chip gaps over gap_bp (design
-`chip_window` 10 kb and `chip_gap` 1 Mb). `read_chip(path, release, out, max_snps=CHIP_MAX)` reads any input layout
-through the aliases into chrom, pos, id, and stops with InputError past `max_snps` rows (3,000,000).
-
-`snpscore.export`: `provenance(manifest, weights, meta)` -> '# ' lines (release, manifest and weights sha256,
-versions, preset, filters, panel, PROVISIONAL rules, SYNTHETIC when synthetic data contributes, the equivalent
-command); `methods_text(manifest, weights, preset, release_dir, finemap=None)` -> methods paragraphs and references
-(layer citations, each '; '-separated part once and 'DOI to add' where it has no doi:, GERP++, the catalogue's DOIs;
-with `finemap`, the GWAS settings used, a loci and fine-mapping paragraph and Wakefield 2009); `export(source, fmt, out,
-release_dir, preset, meta, include_failed, plain, flank=, template=, sidecars=True)` for tsv, parquet (provenance in
-the KV metadata), bed, and the vendor layouts (`illumina`, `axiom`, `kasp`; columns per template version in
-`TEMPLATES`, each 'layout to confirm against the vendor's current template'). A path source's tiers are recomputed
-for `preset` as in design(). Rows keep the source's order (a connection's view is written in sorted `_row` ranges).
-- Vendor files hold one row per SNP and no comment lines. `Sequence` is `<flank>[REF/ALT]<flank>` on the forward (+)
-  strand, upper case, neighbouring public variants as IUPAC codes (N for indels); REF/ALT are the input's alleles
-  (complemented for `strand_flip`), else the public site's. Flanks: illumina 60 bp (60-200), axiom 35 bp, kasp 50 bp
-  (50-100). Columns: illumina (designstudio-2026) `Locus_Name, Target_Type, Sequence, Chromosome, Coordinate,
-  Genome_Build_Version, Source, Source_Version, Sequence_Orientation, Plus_Minus, Species, Force_Infinium_I,
-  Replication_Count` (iselect-2016 also available); axiom `SNP_ID, Chromosome, Position, Strand, Sequence`; kasp
-  `SNP ID, Sequence, Position`. Locus names are `Ssa<chromosome>p<position>` (chromosome 0 off 1-29).
-- Next to each vendor file: `<file>.provenance.txt` (the '# ' provenance, template, flank, left-out counts and panel
-  warnings) and `<file>.lookup.tsv` (`locus_name, id, chrom, pos, ref, alt, topbot, allele_a, allele_b, two_probes,
-  assay_status, assay_reasons, export_notes`: TOP/BOT by Illumina's rules incl. the sequence walk for A/T and C/G,
-  with Illumina's A/B alleles).
-- Left out: SNPs without known biallelic alleles or a full flank, and unless include_failed (then kept, with the
-  reason in `export_notes`) assay fail and not_checked SNPs and, for illumina, SNPs whose TOP/BOT strand cannot be
-  determined (code 103).
-
-`--format priors` (`export.priors(source, out, release_dir, preset, meta, categories=None)`) writes a zip of
-genomic-prediction prior files: `bayesrc_classes.txt` (SNP<TAB>class, no header, input order), `sets/<category>.txt`
-(GFBLUP/MultiBLUP sets, which overlap), `ldak_partitions/partition1..K` (disjoint, covering every SNP), `annot.tsv`
-(CHR, BP, SNP, a 0/1 column per category, tier_score, `active_<condition>` for the 21 conditions), `snp_lookup.tsv`
-(only when some ids are missing: names `Ssa<chrom>p<pos>`), `README.txt` (provenance, category definitions and counts,
-a methods paragraph, references) and `methods.txt`. Categories: tier1_2, active, coding (non-synonymous
-`coding_consequence`, else region_class CDS), constrained, regulatory, none; a SNP's class is the first category it is
-in, in the PROVISIONAL weights.yaml `priors: order`.
-
-`bundle_zip(out, source, release_dir, preset, meta, formats, svgs)` zips the exports, manifest.json,
-weights.yaml, methods.txt, provenance.txt, README.txt and figures/*.svg. `filename(fmt, release, preset, tag)` names
-files `snpscore_<release>_<preset>[_<tag>][_<vendor>].<ext>`.
-
 ## GWAS summary statistics and fine-mapping
 
 `snpscore gwas SUMSTATS --release R --trait T -o OUT` (`snpscore.gwas.run`) reads GCTA-fastGWA, PLINK2 `.glm`, regenie,
@@ -381,20 +194,6 @@ like any list, and writes into OUT: `sumstats.parquet` (as read), `gwas.parquet`
   `.glm.linear`, `_ponly.tsv`, `_truth.tsv` with the planted causal SNPs and lambda) over public sites; the same seed
   gives the same files.
 
-## Locus views and remote tracks
-
-`snpscore.locus` serves the portal's locus browser, card and variant page from the release (BED coordinates; SNP `pos`
-1-based): `locus(release, chrom, start, end)` returns every lane of a window up to 2 Mb (gene models, peaks with their
-21 states, regbuild, GERP, blacklist, LORe, public variants, known loci); `parse_region(text, release)` reads
-`25:28,980,000-29,010,000`, `ssa25:28.98-29.01Mb` or `25:28996360` (aliases through alias.parquet);
-`signal(tracks, chrom, start, end, cache=)` and `segments(...)` read bigWig/bigBed tracks from `tracks.yaml` on a fixed
-public tile grid (cache keys never hold a user's position; a track that misses the 4 s deadline is None);
-`annotate_position(release, chrom, pos, ref, alt, trait)` annotates one position on the fly (same row as a full
-annotate). Remote files are read with HTTP range requests by `snpscore.bbi` and `snpscore.fasta`, https only and
-only on allowlisted hosts (`SNPSCORE_ALLOWED_HOSTS`, default salmobase.org and ftp.ensembl.org); set
-`SNPSCORE_CA_FILE` when Python lacks CA certificates. `python -m snpscore.tracks` regenerates `tracks.yaml` from the
-salmobase track hubs.
-
 ## Benchmark
 
 `snpscore benchmark --release R [--positives FILE|molqtl[:ca|e][:Tissue] ...] [--by-tissue] [--background FILE]`
@@ -410,8 +209,8 @@ enrichment_low/high, after '#' provenance lines. caQTLs share the AQUA-FAANG ATA
 their chromatin enrichment is partly circular; eQTLs are the fairer test; leads come from 12 fish (winner's curse).
 
 Positive sets:
-- `benchmark/known_loci.tsv` (also the release catalogue): 40 rows (39 published SNPs and the sdY gene region) across 8 traits, from
-  the verified 2026-10 research catalogue (36 rows; RESEARCH.md section 2), the earlier six6_lead_2022, and the three
+- `../snpdata/catalog/known_loci.tsv` (the release catalogue): 40 rows (39 published SNPs and the sdY gene region) across 8 traits, from
+  the verified 2026-10 research catalogue (36 rows; docs/RESEARCH.md section 2), the earlier six6_lead_2022, and the three
   chromosome 14 'hubsmolt' SNPs of the Synchrosmolt preprint (Saitou et al. 2025, Fig. 4; added 2026-10-20). Positions
   are Ssal_v3.1 through EVA release 9 rs IDs, flank matches (`prep/lift_icsasg_v2.py`) or the paper; `caveat` flags
   the inferred ones. bco1l rs863785818: A on the + strand = red flesh (the paper's T, other strand). vgll3 Met54Thr is
@@ -420,14 +219,3 @@ Positive sets:
 - nf-rasqual caQTL/eQTL lead SNPs (`molqtl`, `molqtl:ca`, `molqtl:e`, `molqtl:e:Gill`, ...): the release `molqtl` layer
   (BF < `max_bf` 0.1, PROVISIONAL); the molqtl row itself is left out (true for every positive).
 
-## Adding a layer
-
-1. Add an entry to `layers.yaml` (name, type, format, file, url, description, citation). If the input needs heavy processing (VEP, model scores), put the script that makes it in `prep/` and leave out `url`.
-2. If the file format is new, add one reader function to `READERS` in `src/snpscore/build.py`.
-3. Add a slice of it to `tests/fixture` (see `prep/make_fixture.sh`; the fixture covers the vgll3, six6, bco1l and IPN
-   (nae1) loci; catalogue rows on other chromosomes are rejected there as unknown chromosomes) and a check in `tests/`.
-   New columns change the golden hash of the fixture annotate output: `pytest -k golden` prints the new value for
-   `GOLDEN` in `tests/test_snpscore.py`; update it on purpose and say why in the commit.
-4. If it should count towards tiers, add a weight in `weights.yaml` and a term in `src/snpscore/score.py`.
-
-Progress and next steps: [TRACKER.md](TRACKER.md).

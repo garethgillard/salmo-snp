@@ -1,7 +1,7 @@
 """Breeder tools on a finished job (ROADMAP P6.3, P6.4, P6.6): the Panel tab (compare with a chip, then design a
 panel), the Export tab and its downloads, and the figures of both.
 
-snpscore.panel and snpscore.export do the work. This module turns whitelisted URL parameters into their arguments,
+lib.panel and lib.export do the work. This module turns whitelisted URL parameters into their arguments,
 keeps each panel as panels/<hash>.parquet (+ .json) and the chip as chip.parquet (+ chip.json) in the job folder (they
 expire with the job), and draws the figures. The hash is of the parameters, so the same URL gives the same file. The
 designer's form is POSTed (must-include ids are the user's SNP names: never in a URL) and shows the panel by its hash.
@@ -30,7 +30,7 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 
 import snpscore
-from snpscore import export as snp_export, panel as snp_panel
+from .lib import export as snp_export, panel as snp_panel
 from snpscore.formats import lit
 
 from . import figures, jobs, palette, results
@@ -51,10 +51,10 @@ REASONS = {"must_include": ("must include", "One of your must-include ids"),  # 
            "functional": ("functional", "Tier 1–3, by design score"), "fill": ("fill", "Tier 4, by design score")}
 BINDING = {"min_spacing": "the minimum spacing", "min_spacing_cm": "the minimum spacing in cM", "max_per_gene": "the per-gene cap",
            "max_per_element": "the per-element cap"}
-CM_MAPS = {"mean": "sex-averaged", "female": "female", "male": "male"}  # snpscore.panel.CM_MAPS
+CM_MAPS = {"mean": "sex-averaged", "female": "female", "male": "male"}  # lib.panel.CM_MAPS
 FORMATS = [  # (format, label, contents) of the Export tab's rows; vendor rows add their counts and checks
     ("tsv", "Table (TSV)", "Every annotation column, one row per SNP."),
-    ("kasp", "KASP", ""), ("illumina", "Illumina", ""), ("axiom", "Axiom", ""),  # no Agena layout: not checked (RESEARCH.md 10)
+    ("kasp", "KASP", ""), ("illumina", "Illumina", ""), ("axiom", "Axiom", ""),  # no Agena layout: not checked (docs/RESEARCH.md 10)
     ("bundle", "Everything (zip)", "The table, BED and vendor files, with methods, provenance and figures."),
 ]
 MORE_FORMATS = [("parquet", "Parquet", "the same columns; provenance in the file's metadata"),
@@ -71,7 +71,7 @@ CHIP_ERRORS = {  # ?chip_error= -> message (codes only: no file content or names
               "a VCF, PLINK or Illumina/Axiom manifest layout: see Help for the accepted formats.",
     "empty": "None of the chip's positions are on Ssal_v3.1 chromosomes 1–29. Are they on another assembly (ICSASG_v2)?",
     "rows": "The chip file has more than {cap} markers. Keep only the markers you need, or compare it on your own "
-            "computer with snpscore compare (see Run it locally).",
+            "computer with python -m snpportal.lib.cli compare (see Run it locally).",
 }
 MAX_CHIP = 1_000_000  # chip markers read in the request (SNPPORTAL_MAX_CHIP_SNPS, at most SNPPORTAL_MAX_SNPS)
 MUST = re.compile(r"[\w.:-]{1,60}")
@@ -137,7 +137,7 @@ def _synthetic(job, chip_used=False):
 
 
 def _meta(job, trait, synthetic, filters=None, panel=None, command=None):
-    """Provenance fields for snpscore.export (never SNPs or file names)."""
+    """Provenance fields for lib.export (never SNPs or file names)."""
     meta = {"tool": "salmobase functional SNP portal", "preset": trait, "filters": filters or {}, "panel": panel,
             "synthetic": synthetic, "created_utc": job.get("created_utc"), "input_sha256": job.get("input_sha256"),
             "manifest_sha256": job.get("manifest_sha256"), "weights_sha256": job.get("weights_sha256")}
@@ -481,7 +481,7 @@ def _panel_view(d, info, gap_bp=None):
 def vendor_checks(con, rel):
     """snpscore's panel-level vendor checks of the SNPs in `rel`: {infinium_bins, close_pairs, warnings, bins (text)}.
     Illumina Infinium bins (A/T, C/G and the rest) need at least 100 (I) or 1,000 (II) SNPs each, markers within 60 bp
-    interfere (snpscore.panel.vendor_checks; vendor rules, RESEARCH.md section 5)."""
+    interfere (lib.panel.vendor_checks; vendor rules, docs/RESEARCH.md section 5)."""
     cols, alleles = _columns(con, rel), []
     for i, c in enumerate(("ref", "alt")):  # the list's alleles, else those of the assay flank (the public ones), as vendor files
         found = ([f"nullif({c}::VARCHAR, '')"] if c in cols else []) + (
@@ -830,8 +830,8 @@ def _command(job, trait, tag, fmt="<format>"):
     name = jobs.cli_trait(trait) or "all"  # snpscore's name for these conditions (others: all, and the portal's tiers differ)
     base = f"snpscore annotate <your list> --release <release {job.get('release')}> --trait {name} -o annotated.parquet"
     if tag and tag.startswith("panel-") and fmt != "priors":
-        return base + f"; snpscore panel annotated.parquet --release <release {job.get('release')}> --preset {name} (parameters in panels/{tag[6:]}.json of the job)"
-    return base + f"; snpscore export annotated.parquet --release <release {job.get('release')}> --preset {name} --format {fmt}"
+        return base + f"; python -m snpportal.lib.cli panel annotated.parquet --release <release {job.get('release')}> --preset {name} (parameters in panels/{tag[6:]}.json of the job)"
+    return base + f"; python -m snpportal.lib.cli export annotated.parquet --release <release {job.get('release')}> --preset {name} --format {fmt}"
 
 
 def export(request, key, job, fmt):
@@ -942,7 +942,7 @@ def recent_panels(d, trait, keep=None, n=3):
 
 def _vendor_notes(con, rel, n):
     """{format: [text]} for the Export tab's vendor rows: how many of the n SNPs the file includes (assay fail, not
-    checked and unknown alleles are left out, as snpscore.export does) and that file's own checks of what it holds."""
+    checked and unknown alleles are left out, as lib.export does) and that file's own checks of what it holds."""
     ok = f"(SELECT * FROM {rel} WHERE coalesce(assay_status, '') NOT IN ('fail', 'not_checked'))" if "assay_status" in _columns(con, rel) else rel
     left = n - con.execute(f"SELECT count(*) FROM {ok}").fetchone()[0]
     c = vendor_checks(con, ok)

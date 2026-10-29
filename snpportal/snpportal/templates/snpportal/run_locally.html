@@ -15,14 +15,14 @@ pip install "git+https://github.com/garethgillard/salmo-snp#subdirectory=snpscor
 unzip release.zip -d {{ folder }}</pre>
       {% if release.sha256 %}Check that it is the same release as the portal's:
       <pre class="sp-mono mb-0">shasum -a 256 {{ folder }}/manifest.json   # {{ release.sha256 }}</pre>{% endif %}
-      {% else %}Build it from the public sources (several GB of downloads), with the layers.yaml in the salmo-snp repository (snpscore/):
-      <pre class="sp-mono mb-0">snpscore fetch
-snpscore build --out {{ folder }}</pre>
+      {% else %}Build it from the public sources (several GB of downloads), with snpdata from the salmo-snp repository (<code>pip install "git+https://github.com/garethgillard/salmo-snp#subdirectory=snpdata"</code>, then run it in a copy of the repository's snpdata/ folder, next to its layers.yaml):
+      <pre class="sp-mono mb-0">snpdata fetch
+snpdata build --out {{ folder }}</pre>
       A downloadable release.zip with its sha256 comes later.
       {% if layers_sha256 %}Your manifest.json differs from the portal's (it holds the build date and your genome's path), so
       check the layers and the rules instead: both commands must print the value after the #.
       <pre class="sp-mono mb-0">{{ layers_check }}   # {{ layers_sha256 }}{% if weights_sha256 %}
-shasum -a 256 {{ folder }}/weights.yaml   # {{ weights_sha256 }}{% endif %}</pre>{% endif %}{% endif %}</li>
+shasum -a 256 "$(python3 -c 'import snpscore; print(snpscore.WEIGHTS)')"   # {{ weights_sha256 }}{% endif %}</pre>{% endif %}{% endif %}</li>
     <li class="mb-2">Score your list (VCF, SNP table, PLINK .bim/.map or chip manifest), tiers for all 21 conditions as in the portal:
       <pre class="sp-mono mb-0">{{ command }}</pre>
       Add <code>--threads 4 --memory 4GB</code> to change DuckDB's limits, or <code>-o my_snps.parquet</code> for Parquet.

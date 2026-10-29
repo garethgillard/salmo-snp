@@ -303,7 +303,7 @@ def _tsv(header_lines, names, rows):
 
 def provenance(what, trait=None):
     """'#' lines for public downloads: what it is, the release and its hashes, the preset, PROVISIONAL and SYNTHETIC."""
-    info, weights = jobs.release_info(), jobs.release() / "weights.yaml"
+    info, weights = jobs.release_info(), snpscore.score.WEIGHTS
     lines = [f"salmobase functional SNP portal: {what}; exported {jobs.utc()}",
              f"release {info['version']} ({info['assembly']}); manifest sha256 {info['sha256']}; "
              f"weights sha256 {jobs.sha256(weights) if weights.exists() else None}"]

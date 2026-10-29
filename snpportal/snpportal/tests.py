@@ -22,13 +22,15 @@ from django.test import Client, SimpleTestCase, override_settings
 from django.urls import reverse
 from django.views.debug import ExceptionReporter
 
+import snpdata
 import snpscore
 
 from . import jobs, palette, results
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
+DATA = SNPSCORE.parent / "snpdata"  # layers.yaml, the fixture, prep/, the catalogue, data/ and release/
 APP = Path(__file__).resolve().parent
-FIXTURE = SNPSCORE / "tests" / "fixture"
+FIXTURE = DATA / "tests" / "fixture"
 
 
 class PaletteTest(SimpleTestCase):
@@ -81,11 +83,11 @@ class PortalTest(SimpleTestCase):
         if os.environ.get("SNPPORTAL_TEST_RELEASE"):  # reuse a release already built from the fixture (a copy)
             shutil.copytree(os.environ["SNPPORTAL_TEST_RELEASE"], cls.release)
         else:
-            snpscore.build(SNPSCORE / "layers.yaml", FIXTURE, cls.release)
+            snpdata.build(DATA / "layers.yaml", FIXTURE, cls.release)
         demo = Path(cls.release) / "demo"
         if not demo.exists():  # releases from before the demo/ folder: add the known loci as an example
             demo.mkdir()
-            shutil.copy(SNPSCORE / "benchmark" / "known_loci.tsv", demo / "known_loci.tsv")
+            shutil.copy(DATA / "catalog" / "known_loci.tsv", demo / "known_loci.tsv")
         cls.results = Path(cls.tmp.name) / "results"
         cls.override = override_settings(SNPSCORE_RELEASE=str(cls.release), SNPPORTAL_RESULTS_DIR=str(cls.results),
                                           SNPPORTAL_WORKERS=0)
@@ -258,7 +260,7 @@ class PortalTest(SimpleTestCase):
         self.assertFalse(list((self.results / self.key(response)).glob("input*")))
         self.assertTrue(all(p.stat().st_mode & 0o777 == 0o600 for p in (self.results / self.key(response)).iterdir()))
         self.assertEqual(self.leftovers(), [])
-        with open(SNPSCORE / "layers.yaml", "rb") as f:
+        with open(DATA / "layers.yaml", "rb") as f:
             self.assertContains(self.client.post(reverse("snpportal:upload"), {"snps": f}), "This file type", status_code=400)
         self.assertEqual(self.leftovers(), [])
 
@@ -312,17 +314,14 @@ class PortalTest(SimpleTestCase):
     def test_release_edit_keeps_job_tiers_and_shows_banner(self):
         key = self.key(self.upload())
         before = jobs.read_json(self.results / key / "summary.json")["tiers"]
-        weights = Path(self.release) / "weights.yaml"
-        original = weights.read_text()
-        try:
-            weights.write_text(original.replace("active: 3", "active: 0"))
+        weights = Path(self.release).parent / "edited_weights.yaml"  # snpscore's rules with one weight changed
+        weights.write_text(snpscore.score.WEIGHTS.read_text().replace("active: 3", "active: 0"))
+        with mock.patch.object(snpscore.score, "WEIGHTS", weights):
             page = self.client.get(reverse("snpportal:results", args=[key]) + "?tab=table")
             self.assertContains(page, "The release has changed since")
             tiers = dict((t, n) for t, n in results.open_result(mock.Mock(GET=QueryDict()), key)[0].execute(
                 "SELECT tier, count(*) FROM v GROUP BY 1").fetchall())
             self.assertEqual({str(t): n for t, n in tiers.items()}, before["all"])
-        finally:
-            weights.write_text(original)
 
     def test_score_page_lists_this_browsers_results(self):
         a = jobs.create_from_rows([("25", 28996360, "vgll3", "C", "T")], "First list")
@@ -402,15 +401,15 @@ class PortalTest(SimpleTestCase):
         self.assertIsNone(results.qc({"ref_check": counts, "assembly": {"verdict": "ok"}})[1])
 
 
-@skipUnless(os.environ.get("SNPSCORE_DEV") and (SNPSCORE / "release" / "dev").exists(), "SNPSCORE_DEV=1 with release/dev")
+@skipUnless(os.environ.get("SNPSCORE_DEV") and (DATA / "release" / "dev").exists(), "SNPSCORE_DEV=1 with release/dev")
 class DevLoadTest(SimpleTestCase):
     def test_public_vcf_scores_in_the_background(self):
         """P1.3: the 1.6M-site public VCF: the POST returns at once and the job finishes on the pool; then the heavy
         pages (a deep sort, the panel, a whole-list export) at the 2 GB DuckDB limit (timings printed)."""
         with tempfile.TemporaryDirectory() as tmp, override_settings(
-                SNPSCORE_RELEASE=str(SNPSCORE / "release" / "dev"), SNPPORTAL_RESULTS_DIR=tmp, SNPPORTAL_WORKERS=1):
+                SNPSCORE_RELEASE=str(DATA / "release" / "dev"), SNPPORTAL_RESULTS_DIR=tmp, SNPPORTAL_WORKERS=1):
             t0 = time.time()
-            with open(SNPSCORE / "data" / "raw" / "12_samples_genotype_filtered_on_504.vcf.gz", "rb") as f:
+            with open(DATA / "data" / "raw" / "12_samples_genotype_filtered_on_504.vcf.gz", "rb") as f:
                 response = self.client.post(reverse("snpportal:upload"), {"snps": f})
             posted = time.time() - t0
             self.assertEqual(response.status_code, 302)

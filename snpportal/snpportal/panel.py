@@ -24,8 +24,8 @@ from django.utils.datastructures import MultiValueDict
 from django.utils.safestring import mark_safe
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
-from snpscore import export as snp_export
-from snpscore import panel as snp_panel
+from .lib import export as snp_export
+from .lib import panel as snp_panel
 from snpscore.formats import lit
 
 from . import figures, jobs, results, tools

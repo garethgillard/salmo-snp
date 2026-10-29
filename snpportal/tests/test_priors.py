@@ -9,7 +9,8 @@ import duckdb
 import pytest
 import yaml
 
-from snpscore import cli, export
+from snpportal.lib import cli, export
+from snpscore import WEIGHTS, gwas
 from snpscore.formats import InputError
 from test_tools import annotated, release, rows  # noqa: F401 (module fixtures)
 
@@ -40,7 +41,7 @@ def test_priors_zip(release, annotated, tmp_path):  # noqa: F811
     assert [r["SNP"] for r in annot] == [name for name, _ in classes]
     cats = list(stats["categories"])
     assert cats == ["tier1_2", "active", "coding", "constrained", "regulatory", "none"]
-    weights = yaml.safe_load((release / "weights.yaml").read_text())
+    weights = yaml.safe_load(WEIGHTS.read_text())
     assert all((r["tier1_2"] == "1") == (int(r["tier_score"]) >= weights["tiers"][1]) for r in annot)  # maturation tiers
     assert all((r["none"] == "1") == (not any(r[c] == "1" for c in cats[:-1])) for r in annot)
     # README counts match the table, the sets and the partitions
@@ -71,7 +72,7 @@ def test_priors_names_order_and_categories(release, annotated, tmp_path):  # noq
     con.execute(f"""CREATE VIEW v AS SELECT * REPLACE (CASE WHEN file_row_number % 3 = 0 THEN NULL
                         WHEN file_row_number % 3 = 1 THEN '.' ELSE id END AS id{', ' + planted if had else ''})
                     {'' if had else ', ' + planted} FROM {src} ORDER BY random()""")
-    weights = yaml.safe_load((release / "weights.yaml").read_text())
+    weights = yaml.safe_load(WEIGHTS.read_text())
     weights["priors"] = {"order": ["coding", "active", "tier1_2"]}
     stats = export.priors(con, tmp_path / "p.zip", release, "liver", weights=weights)
     files = unzip(tmp_path / "p.zip")
@@ -94,8 +95,17 @@ def test_priors_names_order_and_categories(release, annotated, tmp_path):  # noq
 
 
 def test_priors_cli(release, annotated, tmp_path, monkeypatch, capsys):  # noqa: F811
-    monkeypatch.setattr(sys, "argv", ["snpscore", "export", str(annotated["snps.vcf"]), "--release", str(release),
+    monkeypatch.setattr(sys, "argv", ["snpportal", "export", str(annotated["snps.vcf"]), "--release", str(release),
                                       "--format", "priors", "-o", str(tmp_path / "p.zip")])
     cli.main()
     assert "2519 SNPs" in capsys.readouterr().out
     assert zipfile.ZipFile(tmp_path / "p.zip").namelist()[0] == "README.txt"
+
+
+def test_methods_text_describes_finemapping(release):
+    """The methods text describes the fine-mapping settings used (a GWAS report or bundle passes them) and then cites
+    Wakefield 2009; without them it doesn't."""
+    given = gwas.settings(None, {"trait_sd_estimate": 50}, trait_sd=1.0)
+    methods = export.methods_text(release / "manifest.json", WEIGHTS, "maturation", finemap=given)
+    assert "Wakefield 2009" in methods and "trait SD 1 (given)" in methods and "doi:10.1002/gepi.20359" in methods
+    assert "Wakefield" not in export.methods_text(release / "manifest.json", WEIGHTS, "maturation")

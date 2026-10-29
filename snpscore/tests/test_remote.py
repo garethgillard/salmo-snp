@@ -1,7 +1,6 @@
-"""Remote reader (bbi, fasta) against a local range server with SYNTHETIC bigWigs written at test time, and the
-track registry. Offline, except the timings test (SNPSCORE_LIVE=1) and the release/dev check (SNPSCORE_DEV=1)."""
+"""Remote reader (bbi, fasta) against a local range server with SYNTHETIC bigWigs written at test time. Offline,
+except the timings test (SNPSCORE_LIVE=1)."""
 import gc
-import json
 import os
 import shutil
 import threading
@@ -11,16 +10,17 @@ from pathlib import Path
 import pytest
 import yaml
 
-from bbi_writer import synthetic_atac, synthetic_registry
+from bbi_writer import synthetic_atac
 from range_server import RangeServer
-from snpscore import bbi, tracks
+from snpscore import bbi
 from snpscore.fasta import Fasta
 
 ROOT = Path(__file__).resolve().parent.parent
+DATA = ROOT.parent / "snpdata"  # the release build: layers.yaml, fixture, prep/, catalogue, data/, release/
 GENOME = "Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz"
 CONDITIONS = ["Brain_Immature_Female", "Brain_Mature_Male", "Gonad_Mature_Male"]
 NAME = "ATAC_Brain_Immature_Female_R1_SYNTHETIC.bw"
-REGISTRY = ROOT / "tracks.yaml"  # the repo copy that `snpscore build` copies into releases
+REGISTRY = DATA / "tracks.yaml"  # the repo copy that `snpdata build` copies into releases
 
 
 def live(test):
@@ -40,7 +40,7 @@ def folder(tmp_path_factory):
     d = tmp_path_factory.mktemp("tracks")
     items = {c: synthetic_atac(d / f"ATAC_{c}_R1_SYNTHETIC.bw", seed=i) for i, c in enumerate(CONDITIONS)}
     for ext in ("", ".fai", ".gzi"):
-        shutil.copy(ROOT / "tests" / "fixture" / (GENOME + ext), d)
+        shutil.copy(DATA / "tests" / "fixture" / (GENOME + ext), d)
     return d, items
 
 
@@ -147,99 +147,11 @@ def test_remote_fasta(folder, remote):
     assert len(local.fetch("25", 28_996_300, 28_996_420)) == 120
 
 
-TRACKDB = """track ATAC_bigWig
-superTrack off
-shortLabel bigWig
-
-track ATAC_bigWig_AtlanticSalmon_ATAC_Gill_Mature_Male_R2_mLb_clN_bigWig
-bigDataUrl ATAC/bigWig/AtlanticSalmon_ATAC_Gill_Mature_Male_R2.mLb.clN.bigWig
-type bigWig
-parent ATAC_bigWig
-
-
-track RNA_bigWig_x
-bigDataUrl RNA/bigWig/AtlanticSalmon_RNA_Liver_Immature_Female_R3.reverse.bigWig
-type bigWig
-
-track ChIP_bigWig_x
-bigDataUrl ChIP/bigWig/AtlanticSalmon_ChIP-input_MidGastrulation_R1.bigWig
-type bigWig
-
-track ATAC_bam_x
-bigDataUrl ATAC/bam/AtlanticSalmon_ATAC_Brain_Immature_Female_R1.mLb.clN.sorted.bam
-type bam
-"""
-CHROMHMM = """chromatin_states/AtlanticSalmon/BodyMap/AtlanticSalmon_Brain_Immature_Female.bb
-chromatin_states/AtlanticSalmon/DevMap/AtlanticSalmon_LateBlastulation.bb
-"""
-
-
-def test_parse_trackdb():
-    gill, rna, chip = tracks.parse_trackdb(TRACKDB, tracks.HUB + "BodyMap/", "BodyMap")
-    assert gill["id"] == "ATAC_Gill_Mature_Male_R2" and gill["chromatin_condition"] is None
-    assert (gill["tissue"], gill["maturity"], gill["sex"], gill["replicate"]) == ("Gill", "Mature", "Male", "R2")
-    assert gill["url"] == tracks.HUB + "BodyMap/ATAC/bigWig/AtlanticSalmon_ATAC_Gill_Mature_Male_R2.mLb.clN.bigWig"
-    assert rna["strand"] == "-" and rna["chromatin_condition"] == "chromatin_Liver_Immature_Female"
-    assert (chip["assay"], chip["tissue"], chip["stage"], chip["chromatin_condition"]) == (
-        "Input", "Embryo", "MidGastrulation", "chromatin_MidGastrulation")
-    brain, blast = tracks.parse_bigbeds(CHROMHMM, "https://salmobase.org/datafiles/datasets/Aqua-Faang/")
-    assert (brain["id"], brain["source"], brain["kind"], brain["chromatin_condition"]) == (
-        "ChromHMM_Brain_Immature_Female", "BodyMap", "bigBed", "chromatin_Brain_Immature_Female")
-    assert (blast["tissue"], blast["stage"]) == ("Embryo", "LateBlastulation")
-    assert blast["url"] == "https://salmobase.org/datafiles/datasets/Aqua-Faang/" + CHROMHMM.split()[1]
-
-
-def check_registry(cfg):
-    """P4.1 acceptance: 60 BodyMap ATAC bigWigs = 20 conditions x 3 replicates, Gill without ChromHMM states, and the
-    bigWigs' chromatin conditions are the annotate chromatin_<condition> columns."""
-    atac = [t for t in cfg["tracks"] if t["assay"] == "ATAC" and t["source"] == "BodyMap"]
-    assert len(atac) == 60 and len({t["condition"] for t in atac}) == 20 and {t["replicate"] for t in atac} == {"R1", "R2", "R3"}
-    assert {t["chromatin_condition"] for t in atac if t["tissue"] == "Gill"} == {None}
-    assert {t["chromatin_condition"] for t in cfg["tracks"]} - {None} == {f"chromatin_{c}" for c in tracks.CHROMATIN_CONDITIONS}
-
-
-def test_registry(tmp_path):
-    cfg = tracks.load_tracks(REGISTRY)
-    check_registry(cfg)
-    hmm = cfg["chromhmm"]  # one ChromHMM bigBed per chromatin condition
-    assert sorted(t["condition"] for t in hmm) == sorted(tracks.CHROMATIN_CONDITIONS) and {t["kind"] for t in hmm} == {"bigBed"}
-    with pytest.raises(FileNotFoundError, match="snpscore build"):
-        tracks.load_tracks(tmp_path)  # a release folder without tracks.yaml: no fallback to the repo copy
-    presets = yaml.safe_load((ROOT / "weights.yaml").read_text())["presets"]
-    rows = tracks.default_tracks(cfg, "maturation", presets)
-    assert len(rows) == 8 and all(t["replicate"] == "R1" and t["tissue"] in ("Brain", "Gonad") for t in rows)
-    # 'all': one row per tissue and an embryo stage; gill only for ChIP, as AQUA-FAANG discarded gill ATAC
-    assert {t["tissue"] for t in tracks.default_tracks(cfg, "all", presets)} == {"Brain", "Gonad", "Liver", "Muscle", "Embryo"}
-    assert "Gill" in {t["tissue"] for t in tracks.select(cfg, "H3K27ac", cfg["defaults"]["presets"]["all"])}
-    assert not tracks.select(cfg, "ATAC", ["Gill"])
-
-
-def test_registry_policy(tmp_path, remote):
-    path = tmp_path / "tracks.yaml"
-    path.write_text(yaml.safe_dump({"hosts": ["127.0.0.1"], "tracks": [{"id": "x", "url": "https://example.org/x.bw"}]}))
-    with pytest.raises(ValueError):
-        tracks.load_tracks(path)
-    path = synthetic_registry(remote.root, remote.url, CONDITIONS, slow=CONDITIONS[2:])
-    rows = tracks.select(tracks.load_tracks(path), conditions=["Brain", "Gonad"])
-    assert [t["id"] for t in rows] == [f"ATAC_{c}_R1" for c in CONDITIONS]
-    out = tracks.signal(rows, "25", 28_990_000, 29_000_000, 10, deadline=1.0)
-    assert [len(r["bins"] or []) for r in out] == [10, 10, 0]
-
-
-@dev
-def test_registry_matches_release():
-    release = ROOT / "release" / "dev"
-    manifest = json.loads((release / "manifest.json").read_text())
-    columns = next(layer["columns"] for layer in manifest["layers"] if layer["name"] == "chromatin")
-    assert {f"chromatin_{c}" for c in columns if c not in ("summary", "id")} == {f"chromatin_{c}" for c in tracks.CHROMATIN_CONDITIONS}
-    check_registry(tracks.load_tracks(release))
-
-
 @live
 def test_live_timings(capsys):
     """Cold and warm timings and request counts for 1 and 8 salmobase ATAC bigWigs (reported, not a gate)."""
-    rows = tracks.default_tracks(tracks.load_tracks(REGISTRY), "maturation", {"maturation": ["Brain", "Gonad"]})
-    urls = [t["url"] for t in rows]
+    cfg = yaml.safe_load(REGISTRY.read_text())
+    urls = [t["url"] for t in cfg["tracks"] if t["assay"] == "ATAC" and t["replicate"] == "R1" and t["tissue"] in ("Brain", "Gonad")][:8]
     lines = []
 
     def run(label, us, start, end):

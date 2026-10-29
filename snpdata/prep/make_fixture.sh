@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Cut the small test regions out of data/raw into tests/fixture. Run from the repo root after `snpscore fetch`.
+# Cut the small test regions out of data/raw into tests/fixture. Run in snpdata/ after `snpdata fetch`.
 # Regions: chr21 32-34 Mb (Ensembl "vgll3", the ohnolog of the chr25 maturation gene), chr25 28.5-29.5 Mb (vgll3, akap11),
 #          chr26 14-16 Mb (nae1, IPN QTL), chr1 110-111 Mb (LORe region 1-18), chr9 23-25 Mb (six6),
-#          chr26 18.5-19.5 Mb (bco1l): the vgll3, six6, bco1l and IPN loci of benchmark/known_loci.tsv.
+#          chr26 18.5-19.5 Mb (bco1l): the vgll3, six6, bco1l and IPN loci of catalog/known_loci.tsv.
 # SNPs come from the public 12-fish nf-rasqual VCF (every 3rd SNP, genotypes dropped).
-# Also cut: the 504-fish panel sites (frequencies only, as `snpscore fetch` keeps them), the nf-RASQUAL lead SNPs with
+# Also cut: the 504-fish panel sites (frequencies only, as `snpdata fetch` keeps them), the nf-RASQUAL lead SNPs with
 # BF < 1, the Brekke genetic map (plus the marker either side of each region) and EVA rs IDs (every 40th in the regions
 # plus the catalogue's, with their ICSASG_v2 lines).
 # tests/fixture/snps.tsv is hand-written: positions with known answers, checked in tests/.
@@ -44,7 +44,7 @@ awk "$HIT NR == 1 { print; next } { h = hit(\$1, \$3 - 1, \$3) } h && !was && pr
      { prev = \$0; was = h }" "$RAW/brekke2023_linkage_map.txt" > "$OUT/brekke2023_linkage_map.txt"
 V31=8030_GCA_905237065.2_current_ids.vcf.gz
 V2=8030_GCA_000233375.4_current_ids.vcf.gz
-cut -f15 benchmark/known_loci.tsv | grep '^rs' > "$OUT/rs.tmp"
+cut -f15 catalog/known_loci.tsv | grep '^rs' > "$OUT/rs.tmp"
 gzip -dc "$RAW/$V31" | awk -F'\t' -v OFS='\t' "$HIT NR == FNR { keep[\$1]; next } /^#CHROM/ { print; next } /^#/ { next }
      { c = \$1; sub(/^ssa0?/, \"\", c) } hit(c, \$2 - 1, \$2) && (++n % 40 == 0 || \$3 in keep) { print \$1,\$2,\$3,\$4,\$5,\".\",\".\",\".\" }" \
   "$OUT/rs.tmp" - | gzip -9 > "$OUT/$V31"

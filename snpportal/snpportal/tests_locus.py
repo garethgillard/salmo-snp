@@ -16,13 +16,15 @@ from django.template.loader import render_to_string
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 
+import snpdata
 import snpscore
 from snpscore import bbi
 
 from . import jobs, locus, palette
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
-FIXTURE = SNPSCORE / "tests" / "fixture"
+DATA = SNPSCORE.parent / "snpdata"  # layers.yaml, the fixture, prep/, the catalogue, data/ and release/
+FIXTURE = DATA / "tests" / "fixture"
 CONDITIONS = ["Brain_Immature_Female", "Brain_Mature_Male", "Gonad_Mature_Male", "Liver_Immature_Female"]
 VGLL3 = "r=25:28,980,000-29,010,000"
 SIGNAL_PATH = 'fill-opacity="0.85"'  # one per drawn signal row
@@ -57,7 +59,7 @@ class LocusTest(SimpleTestCase):
         if os.environ.get("SNPPORTAL_TEST_RELEASE"):
             shutil.copytree(os.environ["SNPPORTAL_TEST_RELEASE"], cls.release)
         else:
-            snpscore.build(SNPSCORE / "layers.yaml", FIXTURE, cls.release)
+            snpdata.build(DATA / "layers.yaml", FIXTURE, cls.release)
         (root / "tracks").mkdir()
         cls.patches = [mock.patch.object(bbi, "ALLOWED_HOSTS", {"127.0.0.1"}), mock.patch.object(bbi, "ALLOWED_SCHEMES", ("http",))]
         [p.start() for p in cls.patches]
@@ -279,7 +281,7 @@ class LocusTest(SimpleTestCase):
 class LiveLocusTest(SimpleTestCase):
     def test_live_atac_rows(self):
         """P4.3b: the maturation preset at vgll3 renders 8 real Brain/Gonad ATAC rows; cold and warm timings printed."""
-        dev = SNPSCORE / "release" / "dev"
+        dev = DATA / "release" / "dev"
         with override_settings(**({"SNPSCORE_RELEASE": str(dev)} if dev.exists() else {})), \
                 mock.patch.object(locus, "tile_cache", return_value=Tiles()):
             bbi.clear_caches()

@@ -1,6 +1,6 @@
 """Build a release: read every layer in layers.yaml, standardise it, write Parquet files + manifest.json,
-plus the chromosome aliases, the known-loci catalogue, the portal's example inputs (demo/), and copies of weights.yaml
-and tracks.yaml."""
+plus the chromosome aliases, the known-loci catalogue, the portal's example inputs (demo/) and a copy of tracks.yaml.
+A release holds data only: the tier rules (weights.yaml) belong to snpscore, so changing a weight needs no rebuild."""
 from __future__ import annotations
 
 import datetime
@@ -17,9 +17,9 @@ from pathlib import Path
 import duckdb
 import yaml
 
-from . import motif
-from .bbi import BBIFile
-from .formats import lit, q
+from snpscore import motif
+from snpscore.bbi import BBIFile
+from snpscore.formats import lit, q
 
 GFF3 = ["chrom", "source", "type", "start", "end", "score", "strand", "phase", "attributes"]
 
@@ -319,7 +319,7 @@ def fetch(layers_yaml, data_dir):
 
 def download(url, target):
     # Some hosts (bioRxiv) refuse urllib's default User-Agent.
-    request = urllib.request.Request(url, headers={"User-Agent": "snpscore (salmobase SNP portal build)"})
+    request = urllib.request.Request(url, headers={"User-Agent": "snpdata (salmobase SNP portal build)"})
     with urllib.request.urlopen(request, timeout=120) as r, open(target, "wb") as out:
         shutil.copyfileobj(r, out, 1 << 20)
 
@@ -344,10 +344,10 @@ def sites_only(url, target, keys, count_gt=False):
     any the file has: only these per-site numbers are kept."""
     keys = {k.encode() for k in keys}
     counted = {k for k in GT_INFO if k in keys} if count_gt else set()
-    request = urllib.request.Request(url, headers={"User-Agent": "snpscore (salmobase SNP portal build)"})
+    request = urllib.request.Request(url, headers={"User-Agent": "snpdata (salmobase SNP portal build)"})
     with urllib.request.urlopen(request, timeout=120) as r, gzip.GzipFile(fileobj=r) as vcf, \
             gzip.open(target, "wb", compresslevel=6) as out:
-        out.write(b"##fileformat=VCFv4.2\n##snpscore=sites only (genotypes dropped) from " + url.encode() + b"\n")
+        out.write(b"##fileformat=VCFv4.2\n##snpdata=sites only (genotypes dropped) from " + url.encode() + b"\n")
         rest, n = b"", 0
         while True:
             chunk = vcf.read(1 << 24)
@@ -360,7 +360,7 @@ def sites_only(url, target, keys, count_gt=False):
                     if line.startswith(b"##INFO=<ID=") and key in keys and key not in counted:
                         kept.append(line)
                 elif line.startswith(b"#"):
-                    kept += [b"##INFO=<ID=%s,Number=1,Type=%s,Description=\"Counted from the genotypes by snpscore fetch\">"
+                    kept += [b"##INFO=<ID=%s,Number=1,Type=%s,Description=\"Counted from the genotypes by snpdata fetch\">"
                              % (k, GT_INFO[k]) for k in sorted(counted)]
                     kept.append(b"\t".join(line.split(b"\t", 8)[:8]))
                 elif line:
@@ -390,8 +390,8 @@ def hashes(paths):
 
 
 def build(layers_yaml, data_dir, out_dir):
-    """Write every layer as Parquet, plus alias.parquet, rsid.parquet, catalog/known_loci.tsv, the tier rules and track
-    registry (weights.yaml and tracks.yaml next to layers.yaml) and manifest.json, which records versions, hashes,
+    """Write every layer as Parquet, plus alias.parquet, rsid.parquet, catalog/known_loci.tsv, the track registry
+    (tracks.yaml next to layers.yaml) and manifest.json, which records versions, hashes,
     chromosome sizes, provisional rules and where the genome is (local path if present, else its URL) for sequence
     checks."""
     cfg = load_yaml(layers_yaml)
@@ -400,11 +400,9 @@ def build(layers_yaml, data_dir, out_dir):
     con = duckdb.connect()
     try:
         from importlib.metadata import version
-        snpscore_version = version("snpscore")
+        snpscore_version = version("snpscore")  # motif scoring and file readers come from snpscore
     except Exception:  # not installed, e.g. run from a source tree
         snpscore_version = "unknown"
-    weights_file = here / "weights.yaml"
-    weights = load_yaml(weights_file) if weights_file.exists() else {}
     manifest = {
         "version": out.name,
         "assembly": cfg["assembly"],
@@ -412,7 +410,7 @@ def build(layers_yaml, data_dir, out_dir):
         "created": datetime.date.today().isoformat(),
         "snpscore_version": snpscore_version,
         "duckdb_version": duckdb.__version__,
-        "provisional": cfg.get("provisional", []) + weights.get("provisional", []),
+        "provisional": cfg.get("provisional", []),
         "layers": [],
     }
     genome = cfg.get("genome")
@@ -502,7 +500,7 @@ def build(layers_yaml, data_dir, out_dir):
         manifest["demo"] = [{"file": f"demo/{src.name}", "sha256": hashes([src])[1], "synthetic": "SYNTHETIC" in src.name}
                             for src in demo]
     manifest["files"] = {}
-    for name in ("weights.yaml", "tracks.yaml"):
+    for name in ("tracks.yaml",):
         if (here / name).exists():
             shutil.copy(here / name, out / name)
             manifest["files"][name] = hashes([out / name])[1]

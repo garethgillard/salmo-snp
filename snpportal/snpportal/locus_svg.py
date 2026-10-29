@@ -1,4 +1,4 @@
-"""SVG for the locus browser and the evidence card: pure functions from plain data (snpscore.locus dicts, signal
+"""SVG for the locus browser and the evidence card: pure functions from plain data (lib.locus dicts, signal
 values, tracks.yaml entries, annotated rows) to standalone SVG strings. Colours are literal hex values from
 palette.py; figures.svg() adds role="img", <title>, <desc> and the SYNTHETIC watermark. No Django imports."""
 from __future__ import annotations
@@ -91,7 +91,7 @@ class Axis:
 def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=None, hmm=None, chosen=(),
           mark=None, gene_url=None, width=WIDTH, gutter=GUTTER, compact=False, synthetic=False, uid="lc", gwas=None, legend_on=True,
           lanes=None, heading=True):
-    """The locus figure. data: snpscore.locus.locus() dict. snps: [{pos, id, tier, tier_score, title, url}] (the user's
+    """The locus figure. data: lib.locus.locus() dict. snps: [{pos, id, tier, tier_score, title, url}] (the user's
     SNPs, drawn at render time). signal: {title, start, rung, rows: [{track, label, values or None}], note, scale}.
     hmm: [{condition, segments or None}] to draw the genome-wide ChromHMM segmentation instead of states in peaks.
     chosen: preset conditions (highlighted). mark: a 1-based position to mark. gene_url(gene_id) links genes.

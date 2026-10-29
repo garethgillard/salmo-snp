@@ -3,17 +3,19 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from snpscore import InputError, build
+from snpscore import InputError
+from snpdata import build
 from snpscore.benchmark import benchmark_sets, molqtl_spec, ratio_interval, wilson
 from snpscore.pool import build_pool
 
 ROOT = Path(__file__).resolve().parent.parent
-FIXTURE = ROOT / "tests" / "fixture"
+DATA = ROOT.parent / "snpdata"  # the release build: layers.yaml, fixture, prep/, catalogue, data/, release/
+FIXTURE = DATA / "tests" / "fixture"
 
 
 @pytest.fixture(scope="module")
 def release(tmp_path_factory):
-    out = build(ROOT / "layers.yaml", FIXTURE, tmp_path_factory.mktemp("release") / "test")
+    out = build(DATA / "layers.yaml", FIXTURE, tmp_path_factory.mktemp("release") / "test")
     build_pool(out, FIXTURE / "12_samples_genotype_filtered_on_504.vcf.gz", assay=True, threads=2, memory_limit="1GB")
     return out
 
@@ -57,7 +59,7 @@ def test_molqtl_positives_and_matched_controls(release, tmp_path):
 
 
 def test_file_positives_with_the_pool(release):
-    trait, rows = benchmark_sets([ROOT / "benchmark" / "known_loci.tsv"], None, release)["known_loci"]
+    trait, rows = benchmark_sets([DATA / "catalog" / "known_loci.tsv"], None, release)["known_loci"]
     features = {r[0]: r for r in rows}
     assert features["region_class = CDS"][3] > 0 and "tier <= 2" in features and "evidence = active" in features
     columns = duckdb.sql(f"DESCRIBE SELECT * FROM '{release / 'pool' / 'pool.parquet'}'").fetchall()

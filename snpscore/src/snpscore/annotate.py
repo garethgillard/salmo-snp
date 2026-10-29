@@ -11,7 +11,7 @@ import duckdb
 
 from . import assay, coding, motif
 from .fasta import Fasta
-from .formats import ACCEPTED, RESERVED, InputError, TooMany, detect, lit, q, source  # noqa: F401 (RESERVED re-exported)
+from .formats import ACCEPTED, InputError, TooMany, detect, lit, q, source
 from .score import load_weights, scored
 
 FLANK = 35  # probe flank either side of the SNP (Axiom); also used for GC and repeat content
@@ -359,7 +359,7 @@ def annotate(snps_path, release_dir, out_path, trait="all", sequence=True, progr
     path, release, out = Path(snps_path).resolve(), Path(release_dir).resolve(), Path(out_path).resolve()
     step = progress or (lambda stage: None)
     manifest = json.loads((release / "manifest.json").read_text())
-    weights = load_weights(release)
+    weights = load_weights()
     if weights and trait not in weights["presets"]:
         raise InputError(f"Unknown trait preset '{trait}'. Choose from: {', '.join(weights['presets'])}")
     con = connect([path.parent, release], out.parent, threads, memory_limit)

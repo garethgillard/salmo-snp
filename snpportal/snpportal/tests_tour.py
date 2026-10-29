@@ -12,12 +12,14 @@ from unittest import skipUnless
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 
+import snpdata
 import snpscore
 
 from . import explore, jobs
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
-FIXTURE = SNPSCORE / "tests" / "fixture"
+DATA = SNPSCORE.parent / "snpdata"  # layers.yaml, the fixture, prep/, the catalogue, data/ and release/
+FIXTURE = DATA / "tests" / "fixture"
 TOUR_DIR = Path(__file__).resolve().parent / "static" / "snpportal" / "tour"
 
 
@@ -48,7 +50,7 @@ class TourTest(SimpleTestCase):
         if os.environ.get("SNPPORTAL_TEST_RELEASE"):
             shutil.copytree(os.environ["SNPPORTAL_TEST_RELEASE"], cls.release)
         else:
-            snpscore.build(SNPSCORE / "layers.yaml", FIXTURE, cls.release)
+            snpdata.build(DATA / "layers.yaml", FIXTURE, cls.release)
         cls.override = override_settings(SNPSCORE_RELEASE=str(cls.release), SNPPORTAL_RESULTS_DIR=str(root / "results"),
                                           SNPPORTAL_WORKERS=0)
         cls.override.enable()

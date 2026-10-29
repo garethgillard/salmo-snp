@@ -11,19 +11,21 @@ from statistics import NormalDist
 import duckdb
 import pytest
 
-from snpscore import build, export, gwas
+from snpscore import gwas
+from snpdata import build
 
 ROOT = Path(__file__).resolve().parent.parent
-FIXTURE = ROOT / "tests" / "fixture"
+DATA = ROOT.parent / "snpdata"  # the release build: layers.yaml, fixture, prep/, catalogue, data/, release/
+FIXTURE = DATA / "tests" / "fixture"
 VCF = FIXTURE / "12_samples_genotype_filtered_on_504.vcf.gz"
 STEM = "gwas_maturation_SYNTHETIC"
-sys.path.insert(0, str(ROOT / "prep"))
+sys.path.insert(0, str(DATA / "prep"))
 import make_synthetic  # noqa: E402
 
 
 @pytest.fixture(scope="module")
 def release(tmp_path_factory):
-    return build(ROOT / "layers.yaml", FIXTURE, tmp_path_factory.mktemp("release") / "test")
+    return build(DATA / "layers.yaml", FIXTURE, tmp_path_factory.mktemp("release") / "test")
 
 
 @pytest.fixture(scope="module")
@@ -149,10 +151,6 @@ def test_trait_sd_follows_the_units(synthetic, release, runs, tmp_path):
     given = gwas.settings(None, report50, trait_sd=1.0)
     assert "imply 50" in gwas.trait_sd_warning(report50, given) and given["trait_sd_source"] == "given"
     assert gwas.trait_sd_implied(report50, given) == pytest.approx(50, rel=0.01) and not gwas.trait_sd_implied(report50, gwas.settings(None, report50))
-    # The methods text describes the settings used (a GWAS report or bundle passes them) and then cites Wakefield 2009
-    methods = export.methods_text(release / "manifest.json", release / "weights.yaml", "maturation", finemap=given)
-    assert "Wakefield 2009" in methods and "trait SD 1 (given)" in methods and "doi:10.1002/gepi.20359" in methods
-    assert "Wakefield" not in export.methods_text(release / "manifest.json", release / "weights.yaml", "maturation")
 
 
 def test_rs_moved_rows_keep_their_statistics(release, tmp_path):
@@ -207,8 +205,8 @@ def test_detect_formats(tmp_path, header, fmt):
 
 @pytest.mark.skipif(not os.environ.get("SNPSCORE_DEV"), reason="SNPSCORE_DEV=1: dev-scale synthetic GWAS on release/dev")
 def test_dev_scale_adds_six6(tmp_path):
-    make_synthetic.gwas(ROOT / "data" / "raw" / VCF.name, tmp_path / "in", "dev")
-    _, loci, _ = gwas.run(tmp_path / "in" / f"{STEM}.tsv", ROOT / "release" / "dev", tmp_path / "out", trait="maturation",
+    make_synthetic.gwas(DATA / "data" / "raw" / VCF.name, tmp_path / "in", "dev")
+    _, loci, _ = gwas.run(tmp_path / "in" / f"{STEM}.tsv", DATA / "release" / "dev", tmp_path / "out", trait="maturation",
                           threads=4, memory_limit="4GB")
     significant = [x for x in loci if x["significant"]]
     assert {"25", "26", "21", "1", "9"} == {x["chrom"] for x in significant} and len(significant) == 5

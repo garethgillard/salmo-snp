@@ -1,4 +1,4 @@
-"""Vendor export rules (R2, RESEARCH.md section 5): TOP/BOT against Illumina's published examples (topbot_reference.py
+"""Vendor export rules (R2, docs/RESEARCH.md section 5): TOP/BOT against Illumina's published examples (topbot_reference.py
 is the oracle), vendor-safe locus names, numeric build, chromosome 0, flank lengths and templates, upper-case IUPAC
 neighbours, sidecar provenance, the assay rules (per-side flank variants, base-specific runs, repeat share, Illumina
 code 103) and the panel-level checks (Infinium bins, markers within 60 bp, spacing in cM)."""
@@ -9,12 +9,13 @@ import re
 import duckdb
 import pytest
 
-from snpscore import assay, export, panel
+from snpscore import assay
+from snpportal.lib import export, panel
 from snpscore.formats import InputError
 from test_tools import annotated, release, rows  # noqa: F401 (module fixtures)
 from topbot_reference import CASES, topbot
 
-VGLL3 = "GCTGGGTGTTTACAGTAGGATGCAGCAGGACAGCA[C/T]GGAGCAGCAGTTTCCAGGGCGGAGACAGCAACAGC"  # RESEARCH.md section 5
+VGLL3 = "GCTGGGTGTTTACAGTAGGATGCAGCAGGACAGCA[C/T]GGAGCAGCAGTTTCCAGGGCGGAGACAGCAACAGC"  # docs/RESEARCH.md section 5
 BACKGROUND = "ACGTTGCAAGCTTCGATCAG" * 2  # GC 0.5, longest run 2
 RC = str.maketrans("ACGTacgt[]", "TGCAtgca][")
 

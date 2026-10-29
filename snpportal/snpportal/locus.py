@@ -3,7 +3,7 @@
 - /snp/locus/svg/?r=25:28980000-29010000[&trait=][&assay=ATAC|H3K27ac|H3K4me3][&hmm=1][&scale=track][&key=<job>[&row=]]
   is the locus figure as one SVG file (the browser's download); htmx swaps of #locus-view (HX-Target) get the browser
   page's fragment instead.
-- Signal and ChromHMM come from tracks.yaml through snpscore.locus on a fixed public tile grid, cached in the Django
+- Signal and ChromHMM come from tracks.yaml through lib.locus on a fixed public tile grid, cached in the Django
   cache 'snpportal_tiles' (if configured) or a LocMemCache of 5,000 entries. Views opened from a job (key=) only read
   that cache: their tiles would record, for days, where the job's SNPs are.
 - The evidence card is addressed by job and row, so its URLs carry no coordinates; its locus view (the robust ATAC
@@ -26,16 +26,16 @@ from django.urls import reverse
 from django.utils.safestring import mark_safe
 
 import snpscore
-from snpscore import locus as sl
 from snpscore import motif as sm
 from snpscore.annotate import genome_location
 from snpscore.fasta import Fasta
-from snpscore import panel as snp_panel
-from snpscore import tracks as st
 from snpscore.formats import lit
 from snpscore.score import NOT_CONDITIONS, preset_conditions
 
 from . import explore, figures, jobs, locus_svg, palette, results, search
+from .lib import locus as sl
+from .lib import panel as snp_panel
+from .lib import tracks as st
 from .views import finished, private
 
 DEFAULT_WIDTH = 20_000  # a single position (a card's SNP) opens this wide: the card's mini browser (+- MINI_FLANK), larger
@@ -198,7 +198,7 @@ def molqtl_rows(chrom, start, end):
 
 
 def lanes(chrom, start, end):
-    """snpscore.locus lanes plus the evidence kind of each published association and the molQTL leads."""
+    """lib.locus lanes plus the evidence kind of each published association and the molQTL leads."""
     data = sl.locus(jobs.release(), chrom, start, end)
     names = explore.aliases()
     for g in data.get("genes", []):  # one label per gene everywhere: the catalogue's name for genes Ensembl leaves unnamed

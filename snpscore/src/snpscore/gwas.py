@@ -510,7 +510,7 @@ def run(sumstats, release_dir, out_dir, trait="all", threads=2, memory_limit="2G
     finally:
         snps.unlink(missing_ok=True)
     report = attach(out, threads, memory_limit)
-    cfg = settings(load_weights(release), report, **changes)
+    cfg = settings(load_weights(), report, **changes)
     report["finemap"] = {k: cfg[k] for k in [*DEFAULTS, "trait_sd_source"]}
     report["warnings"] = [w for w in [trait_sd_warning(report, cfg)] if w]
     (out / "gwas.json").write_text(json.dumps(report, indent=1))

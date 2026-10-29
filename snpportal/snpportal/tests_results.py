@@ -15,12 +15,14 @@ from unittest import skipUnless
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import reverse
 
+import snpdata
 import snpscore
 
 from . import figures, jobs, results
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
-FIXTURE = SNPSCORE / "tests" / "fixture"
+DATA = SNPSCORE.parent / "snpdata"  # layers.yaml, the fixture, prep/, the catalogue, data/ and release/
+FIXTURE = DATA / "tests" / "fixture"
 SVG = re.compile(r"<svg .*?</svg>", re.S)
 
 
@@ -39,7 +41,7 @@ class ResultsTest(SimpleTestCase):
         if os.environ.get("SNPPORTAL_TEST_RELEASE"):
             shutil.copytree(os.environ["SNPPORTAL_TEST_RELEASE"], release)
         else:
-            snpscore.build(SNPSCORE / "layers.yaml", FIXTURE, release)
+            snpdata.build(DATA / "layers.yaml", FIXTURE, release)
         cls.override = override_settings(SNPSCORE_RELEASE=str(release), SNPPORTAL_RESULTS_DIR=str(Path(cls.tmp.name) / "results"),
                                           SNPPORTAL_WORKERS=0)
         cls.override.enable()
@@ -325,15 +327,15 @@ class ResultsTest(SimpleTestCase):
         ET.fromstring(mark)
 
 
-@skipUnless(os.environ.get("SNPSCORE_DEV") and (SNPSCORE / "release" / "dev").exists()
-            and (SNPSCORE / "data" / "demo" / "public_50k.vcf").exists(), "SNPSCORE_DEV=1 with release/dev and data/demo")
+@skipUnless(os.environ.get("SNPSCORE_DEV") and (DATA / "release" / "dev").exists()
+            and (DATA / "data" / "demo" / "public_50k.vcf").exists(), "SNPSCORE_DEV=1 with release/dev and data/demo")
 class DevTimingTest(SimpleTestCase):
     def test_public_50k_overview_and_sorted_table(self):
         """P3.2/P3.3: warm render times for the 50K public demo list on release/dev (reported, not gated)."""
         with tempfile.TemporaryDirectory() as tmp, override_settings(
-                SNPSCORE_RELEASE=str(SNPSCORE / "release" / "dev"), SNPPORTAL_RESULTS_DIR=tmp, SNPPORTAL_WORKERS=0):
+                SNPSCORE_RELEASE=str(DATA / "release" / "dev"), SNPPORTAL_RESULTS_DIR=tmp, SNPPORTAL_WORKERS=0):
             t0 = time.time()
-            with open(SNPSCORE / "data" / "demo" / "public_50k.vcf", "rb") as f:
+            with open(DATA / "data" / "demo" / "public_50k.vcf", "rb") as f:
                 url = self.client.post(reverse("snpportal:upload"), {"snps": f}).url.split("?")[0]
             scored = time.time() - t0
             timings = {}

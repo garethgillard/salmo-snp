@@ -1,0 +1,22 @@
+[project]
+name = "snpdata"
+version = "0.1.0"
+description = "Collect the public Atlantic salmon sources and build the annotation release that snpscore and the portal read"
+requires-python = ">=3.8"
+dependencies = ["snpscore", "duckdb>=1.2", "pyyaml"]  # snpscore: the motif scoring and file readers (install ../snpscore first)
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+snpdata = "snpdata.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+markers = [
+    "live: needs salmobase.org (run with SNPSCORE_LIVE=1)",
+    "dev: needs the genome-wide release/dev (run with SNPSCORE_DEV=1)",
+]

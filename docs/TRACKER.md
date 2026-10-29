@@ -1,6 +1,6 @@
 # Functional SNP portal: tracker
 
-Covers the whole salmo-snp repository (snpscore/ and snpportal/). Work top to bottom; the first unticked box is the next step.
+Covers the whole salmo-snp repository (snpdata/, snpscore/ and snpportal/). Work top to bottom; the first unticked box is the next step.
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
 **Current phase: one repository, then the container (step 7, G 2026-10-28; the plan is in ../AGENTS.md).**
@@ -57,11 +57,12 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 
 ## Step 7: one repository, a static data release and a container (G, 2026-10-28; plan in ../AGENTS.md)
 - [x] One private GitHub repository, salmo-snp, with both histories in snpscore/ and snpportal/; PolyForm Noncommercial licence
-- [ ] Move the release build (fetch, build, layers.yaml, tracks.yaml, prep/, the known-loci catalogue) to snpdata/;
+- [x] Move the release build (fetch, build, layers.yaml, tracks.yaml, prep/, the known-loci catalogue) to snpdata/;
       snpdata imports snpscore for the motif scoring and file readers, never the other way round
-- [ ] Weights out of the release: the public pool's tiers and background summaries become a cache built from the release
-- [ ] Portal-only code (locus browser data, bigWig reader, Design panel, GWAS fine-mapping, exports) moves to snpportal/
-- [ ] One AGENTS.md per folder (CLAUDE.md imports it) instead of the duplicated notes; CI runs both test suites and
+- [x] Weights out of the release: the public pool's tiers and background summaries become a cache built from the release
+- [x] Portal-only code (locus browser data, Design panel, exports, the track registry reader) moves to snpportal/lib/
+      (the bigWig reader stays in snpscore: the genome reader is built on it; GWAS fine-mapping stays too, with `snpscore gwas`)
+- [x] One AGENTS.md per folder (CLAUDE.md imports it) instead of the duplicated notes; CI runs both test suites and
       rejects data files outside tests/fixture
 - [ ] Dockerfile for the portal: same image public and local (127.0.0.1), release and genome downloaded once into a
       volume and checked against the manifest; settles the Python version (3.8 no longer required)

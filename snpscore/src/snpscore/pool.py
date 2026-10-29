@@ -41,7 +41,7 @@ def build_pool(release_dir, background, assay=False, threads=4, memory_limit="4G
                  memory_limit=memory_limit)
         step("pool")
         validation = json.loads((work / "annotated.validation.json").read_text())
-        weights, manifest = load_weights(release), json.loads((release / "manifest.json").read_text())
+        weights, manifest = load_weights(), json.loads((release / "manifest.json").read_text())
         synthetic = [l["name"] for l in manifest["layers"] if l.get("synthetic")]
         con = connect([work], out, threads, memory_limit)
         con.execute(f"CREATE TABLE a AS SELECT * FROM read_parquet({lit(work / 'annotated.parquet')}, file_row_number=true)")

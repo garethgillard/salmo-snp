@@ -15,8 +15,8 @@ NAMES="$*"
 NAME=$1  # the first name, for the check at the end
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)  # the salmo-snp repository
 SNPSCORE=$ROOT/snpscore
-RELEASE=${RELEASE:-$SNPSCORE/release/dev}
-GENOME=$SNPSCORE/data/raw/Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz
+RELEASE=${RELEASE:-$ROOT/snpdata/release/dev}
+GENOME=$ROOT/snpdata/data/raw/Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz
 SKIP=(--exclude .git/ --exclude .venv/ --exclude __pycache__/ --exclude .claude/ --exclude .DS_Store
       --exclude /data/ --exclude /release/ --exclude /results/)
 

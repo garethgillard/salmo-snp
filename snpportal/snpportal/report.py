@@ -33,7 +33,7 @@ def methods(job, d, trait, finemap=None):
     job's fine-mapping settings: its paragraph and Wakefield 2009); ([], []) when this snpscore has none. The
     known-loci DOIs come from the current release while it is the job's."""
     try:
-        from snpscore.export import methods_text
+        from .lib.export import methods_text
         weights = d / "weights.yaml"
         text = methods_text(d / "manifest.json", weights if weights.exists() else None, trait,
                             None if jobs.release_changed(job) else jobs.release(), **({"finemap": finemap} if finemap else {}))

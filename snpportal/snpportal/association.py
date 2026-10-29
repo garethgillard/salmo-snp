@@ -29,12 +29,12 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 
 from snpscore import gwas as sg
-from snpscore import locus as sl
-from snpscore import panel as snp_panel
 from snpscore.formats import lit
 
 from . import explore, figures, jobs, locus, locus_svg, palette, results, views
 from .jobs import ident
+from .lib import locus as sl
+from .lib import panel as snp_panel
 
 G = palette.GREY
 SUFFIXES = (".fastgwa", ".linear", ".logistic", ".hybrid", ".regenie", ".mlma", ".assoc", ".stats", ".tsv", ".txt",
@@ -156,7 +156,7 @@ def settings(request, weights, report=None):
 
 def finemap_used(a):
     """The settings used, as snpscore gwas records them in gwas.json 'finemap' (the DEFAULTS keys and trait_sd_source),
-    for snpscore.export.methods_text(finemap=). An snpscore whose settings() has no trait_sd_source: worked out here."""
+    for lib.export.methods_text(finemap=). An snpscore whose settings() has no trait_sd_source: worked out here."""
     cfg = a["cfg"]
     source = cfg.get("trait_sd_source") or (
         "given" if cfg["trait_sd"] != a["defaults"]["trait_sd"] else "estimated from se, N and allele frequency"

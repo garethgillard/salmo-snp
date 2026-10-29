@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.utils.safestring import mark_safe
 
 import snpscore
-from snpscore import panel as snp_panel
+from .lib import panel as snp_panel
 from snpscore.coding import AA
 from snpscore.formats import lit
 
@@ -155,7 +155,7 @@ EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tie
 def chip_view(con, d, rel, weights):
     """SQL adding on_chip, dist_to_chip, near_chip and novel_functional (tier 1-2, not near the chip) to `rel` by row
     number, or None without a chip. The per-row columns are computed once per chip, on chrom and pos only, into
-    chip_rows_<sha>.parquet (snpscore.panel.compare_sql), so pages never ASOF-join the whole result."""
+    chip_rows_<sha>.parquet (lib.panel.compare_sql), so pages never ASOF-join the whole result."""
     chip = d / "chip.parquet"
     if not chip.exists() or not weights:
         return None

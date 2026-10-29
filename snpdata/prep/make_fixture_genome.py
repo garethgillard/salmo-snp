@@ -1,6 +1,6 @@
 """Write tests/fixture's genome: real sequence in small windows around the known loci and N elsewhere, so positions
 match Ssal_v3.1. Each chromosome ends at its window, so SNPs further along it are outside the genome.
-Bgzipped with .fai and .gzi like the real file. Run from the repo root after `snpscore fetch`."""
+Bgzipped with .fai and .gzi like the real file. Run in snpdata/ after `snpdata fetch`."""
 import struct
 import sys
 import zlib

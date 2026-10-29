@@ -1,4 +1,4 @@
-"""snpscore.locus on the fixture release: the lanes of a window, regions, one-position annotation, and signal and
+"""snpportal.lib.locus on the fixture release: the lanes of a window, regions, one-position annotation, and signal and
 ChromHMM tiles read from SYNTHETIC bigWig and bigBed files written at test time and served by a local range server."""
 import struct
 import zlib
@@ -9,16 +9,19 @@ import pytest
 
 from bbi_writer import _rtree, synthetic_registry
 from range_server import RangeServer
-from snpscore import annotate, bbi, build, tracks
-from snpscore import locus as sl
+from snpscore import annotate, bbi
+from snpdata import build
+from snpportal.lib import tracks
+from snpportal.lib import locus as sl
 
 ROOT = Path(__file__).resolve().parent.parent
-FIXTURE = ROOT / "tests" / "fixture"
+DATA = ROOT.parent / "snpdata"  # the release build: layers.yaml, fixture, prep/, catalogue, data/, release/
+FIXTURE = DATA / "tests" / "fixture"
 
 
 @pytest.fixture(scope="module")
 def release(tmp_path_factory):
-    return build(ROOT / "layers.yaml", FIXTURE, tmp_path_factory.mktemp("release") / "test")
+    return build(DATA / "layers.yaml", FIXTURE, tmp_path_factory.mktemp("release") / "test")
 
 
 @pytest.fixture
