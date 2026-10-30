@@ -104,6 +104,7 @@ class LocusTest(SimpleTestCase):
         self.assertIn("Synchrosmolt: MAF", page)  # the 108 Synchrosmolt parents
         self.assertIn('class="sp-set-synchrosmolt_af"', page)  # in the group's legend
         self.assertIn("vgll3_Met54Thr", page)
+        self.assertIn("Published loci", page.split('id="g-public"')[1].split('id="g-motifs"')[0])  # known loci, in Public SNPs
         self.assertNotIn("g-bgee", page)  # no Bgee expression on the locus browser
         self.assertIn("conditions with the peak", page)  # regulatory elements: the unified robust peaks
         self.assertIn("inside robust peaks", page)  # no ChromHMM in this registry: states in peaks

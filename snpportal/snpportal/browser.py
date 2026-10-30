@@ -211,10 +211,6 @@ def genes_group(request, s, ax, data, open_=()):
                    f'<circle cx="{x:.1f}" cy="{40 - h:.1f}" r="4" fill="{fill}" stroke="{G[900]}" stroke-width="0.6"><title>{escape(p["title"])}</title></circle>')
             body.append(f'<a href="{escape(p["url"])}">{dot}</a>' if p.get("url") else dot)
         rows.append(row("Your SNPs", trk(44, "".join(body)), f"tiers: {s['trait'].replace('_', ' ')}"))
-    if data.get("known"):
-        body = []
-        h = locus_svg._published(body, ax, data["known"], 0, noop, {})
-        rows.append(row("Published loci", trk(h, "".join(body))))
     if data.get("molqtl"):
         body = []
         for m in data["molqtl"]:
@@ -290,10 +286,14 @@ def public_group(s, ax, data, open_):
             rows.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="26" y2="{26 - t:.1f}" stroke="{palette.SNP_SETS[key]}">'
                         f'<title>{escape(tip)}</title></line>')
         more.append(row(label, trk(28, "".join(rows)), sub))
+    rows = [row("Combined", trk(h + 1, "".join(body)), "datasets with the SNP")]
+    if data.get("known"):  # the known-loci catalogue, under the combined row
+        body = []
+        h = locus_svg._published(body, ax, data["known"], 0, lambda *a, **k: None, {})
+        rows.append(row("Published loci", trk(h, "".join(body)), "known loci"))
     legend = [(f"sp-set-{key}", label) for key, label, _ in sets]
     return group("public", "Public SNPs", "sites in public datasets; open for one row each, height = MAF",
-                 [row("Combined", trk(h + 1, "".join(body)), "datasets with the SNP")], more, f"{len(more)} datasets",
-                 open_, legend)
+                 rows, more, f"{len(more)} datasets", open_, legend)
 
 
 # ---- regulatory elements and chromatin states ----
