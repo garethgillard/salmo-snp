@@ -64,8 +64,8 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
       (the bigWig reader stays in snpscore: the genome reader is built on it; GWAS fine-mapping stays too, with `snpscore gwas`)
 - [x] One AGENTS.md per folder (CLAUDE.md imports it) instead of the duplicated notes; CI runs both test suites and
       rejects data files outside tests/fixture
-- [x] Automatic deploys to NREC from main (update.sh, GitHub Actions deploy job); [ ] G approves the two keys
-      (nrec.sh read-only deploy key, github_deploy.sh Actions key)
+- [x] Automatic deploys to NREC from main (update.sh, GitHub Actions deploy job); both keys in place (nrec.sh read-only
+      deploy key, github_deploy.sh Actions key): 03b0ef3 deployed on 2026-10-29
 - [x] Gene models: a representative Ensembl isoform, expandable to every Ensembl and NCBI RefSeq isoform
       (transcripts_ncbi layer; release/dev got it added in place, the next full build includes it)
 - [x] environment.yml (conda-forge, python 3.8) for development
