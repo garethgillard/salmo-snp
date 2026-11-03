@@ -31,8 +31,11 @@ salmo-snp download --from <data address>   # once: the release (~300 MB) and the
 salmo-snp serve                            # then open http://127.0.0.1:8000/snp/ (only this computer can reach it)
 ```
 
-`<data address>` is where the data is published (a web address, once it is hosted on salmobase, or a folder: a copy of
-the published data on a disk or share works the same, for computers without internet access). Use conda-forge, not
+`<data address>` is where the data is published: a web address once it is hosted on salmobase, or a folder (a copy of
+the published data on a disk or share works the same, for computers without internet access). Until then the data is
+a private GitHub Release of this repository; with the GitHub CLI (`gh`, logged in with access to the repository), from
+a clone of the repository: `bash tools/get_data.sh` replaces the download line (it fetches the GitHub Release and runs
+`salmo-snp download --from` on it). Use conda-forge, not
 Anaconda's default channel, which needs a paid licence at larger organisations.
 
 - **Where things are kept**: one data folder, shown by `salmo-snp info`: `~/Library/Application Support/salmo-snp`

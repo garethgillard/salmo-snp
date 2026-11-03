@@ -151,3 +151,22 @@ salmo-snp serve --release snpdata/release/dev          # the portal on http://12
 Without conda: a Python 3.8 venv and `pip install -e "snpscore[test]" -e snpdata -e snpportal "duckdb==1.2.2"`.
 `bash tools/user_install_test.sh [python]` checks a new user's install (wheels, newest allowed dependencies,
 publish -> download -> annotate -> serve); run it after changing packaging, dependencies or serve.py.
+
+The data for real use (not needed for the tests): `bash tools/get_data.sh`, the GitHub data release named after
+serve.py RELEASE (temporary hosting until salmobase), checked and copied into the salmo-snp data folder; then
+`salmo-snp serve`. A new release goes up from G's Mac: `snpdata build`, then `bash prep/github_release.sh <release>`.
+
+## Cloud sessions (Claude Code on the web)
+- Setup: `.claude/settings.json` runs `tools/cloud_setup.sh` at session start (only when CLAUDE_CODE_REMOTE=true): it
+  makes `.venv` (Python 3.12 through uv) with the three folders editable and puts it on PATH. The commands above then
+  work as written; the tests need no network and no data. Local auto-memory doesn't reach the cloud: these AGENTS.md
+  files are the memory, so record decisions and how-tos here.
+- Network: the default (Trusted) allows GitHub, its release downloads and PyPI, so the tests and
+  `tools/get_data.sh` work. The locus browser's AQUA-FAANG tracks and the genome URL need `salmobase.org`; rebuilding
+  the data (`snpdata fetch`) needs salmobase.org, ftp.ensembl.org, jun2026.archive.ensembl.org, ftp.ebi.ac.uk,
+  ftp.sra.ebi.ac.uk, ftp.ncbi.nlm.nih.gov, jaspar.elixir.no, www.bgee.org and www.biorxiv.org: add them under the
+  environment's Network access, Custom, keeping the default list.
+- Checking pages: run `salmo-snp serve` (or manage.py runserver) in the background and fetch pages with curl, or use
+  headless Chrome (/usr/bin/google-chrome); `bash tools/user_install_test.sh` checks the whole user path.
+- Changes: work on a branch and open a pull request; CI runs the tests and the user-install check; G merges (as admin)
+  and the merge deploys to the NREC demo. `deploy/nrec.sh` and new data releases need G's Mac (SSH key, data/raw).

@@ -77,6 +77,9 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
       sequence checks); platform data folder, results kept until deleted (SNPPORTAL_LOCAL); salmo-snp info; download
       from a URL or a folder; snpdata publish (releases/ + raw/ mirror) and fetch --mirror; CI user-install job
 - [x] release/2026-11-03 rebuilt cleanly (with transcripts_ncbi); serve.py RELEASE names it
+- [x] Temporary data hosting: GitHub Release data-2026-11-03 (snpdata/prep/github_release.sh; tools/get_data.sh);
+      delete it once the data is on salmobase
+- [x] Cloud sessions: tools/cloud_setup.sh (SessionStart hook in .claude/settings.json), AGENTS.md "Cloud sessions"
 - [ ] Host the published folder (`snpdata publish --raw`: releases/, latest.json, raw/) on salmobase's Apache and set
       serve.py DATA_URL; the nf-RASQUAL and 504-fish layers only once their owners agree to redistribution
 - [ ] v0.1.0 tag (G decides when): .github/workflows/release.yml builds the three wheels into a GitHub Release

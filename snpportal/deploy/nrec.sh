@@ -16,7 +16,8 @@ shift
 NAMES="$*"
 NAME=$1  # the first name, for the check at the end
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)  # the salmo-snp repository
-RELEASE=${RELEASE:-$ROOT/snpdata/release/dev}
+VERSION=$(sed -n 's/^RELEASE = "\([^"]*\)".*/\1/p' "$ROOT/snpportal/snpportal/serve.py")  # the release this code expects
+RELEASE=${RELEASE:-$ROOT/snpdata/release/$VERSION}
 GENOME=$ROOT/snpdata/data/raw/Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz
 REPO=garethgillard/salmo-snp
 

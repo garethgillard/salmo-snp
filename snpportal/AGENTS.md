@@ -1,15 +1,18 @@
 # snpportal: notes
 
 The web portal: a Django app that runs scoring jobs with ../snpscore against a release built by ../snpdata, shows the
-result and exports it. It runs as its own container, linked from salmobase by a button (G, 2026-10-28). Read
+result and exports it. Users run it locally (`salmo-snp serve`, snpportal/serve.py); the live site goes on salmobase
+later, linked from salmobase by a button (G, 2026-11-03). Read
 ../AGENTS.md first (plan, rules, biology decisions); README "How it works" describes job folders and modules.
 `snpportal/lib/` is plain Python with no Django (locus data, panel design, exports, the track registry); its pytest
 tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 
 ## Current phase: public demo
-G said go (2026-10-12): a public demo (no password) on an NREC VM at https://158.39.75.9/snp/, deployed with
-`bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io` (the snpsite project, gunicorn, Caddy). Always pass the
-IP address: the script rewrites the Caddy sites and allowed hosts from the names it is given.
+A public demo (no password) runs on an NREC VM at https://158.39.75.9/snp/ (G, 2026-10-12). Code deploys itself: a
+push or merged pull request on main runs the tests, then GitHub Actions runs `deploy/update.sh` on the VM (README
+"Automatic deploys"). A new data release goes up with `bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io`,
+which needs G's Mac (the VM's SSH key and the release folder); always pass the IP address, as the script rewrites the
+Caddy sites and allowed hosts from the names it is given.
 
 ## Look like salmobase
 - Pages extend `snpportal/base_portal.html` (which extends `salmobase/base.html` and fills its blocks `head`, `content`, `scripts`). Bootstrap 5.1.3 and jQuery are already loaded there.
