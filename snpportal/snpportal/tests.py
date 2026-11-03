@@ -311,6 +311,22 @@ class PortalTest(SimpleTestCase):
         self.assertFalse((self.results / old).exists())
         self.assertFalse(stray.exists())
 
+    def test_local_install_keeps_results(self):
+        """salmo-snp serve (SNPPORTAL_LOCAL): the pages say the results stay on this computer, nothing expires and the
+        cleanup deletes nothing, however old."""
+        key = self.key(self.upload())
+        with override_settings(SNPPORTAL_LOCAL=True):
+            self.assertContains(self.client.get(reverse("snpportal:upload")), "Running on this computer")
+            page = self.client.get(reverse("snpportal:results", args=[key]))
+            self.assertContains(page, "Kept on this computer until you delete it")
+            self.assertNotContains(page, "Deleted after")
+            self.assertContains(self.client.get(reverse("snpportal:help")), "never\n      leave it")
+            old = time.time() - 365 * 86400
+            os.utime(self.results / key / "job.json", (old, old))
+            self.assertEqual(jobs.cleanup(), 0)
+            self.assertTrue((self.results / key).exists())
+        self.assertIsNotNone(jobs.expires(key))  # the public site still deletes after 24 h
+
     def test_release_edit_keeps_job_tiers_and_shows_banner(self):
         key = self.key(self.upload())
         before = jobs.read_json(self.results / key / "summary.json")["tiers"]

@@ -82,8 +82,10 @@
     </form>
   </div>
 </section>
-<p class="sp-small sp-muted mb-0" id="privacy">Results are kept for {{ keep_hours }} h; anyone with their link can open them.
-  Confidential? <a href="{% url 'snpportal:run_locally' %}">Run it locally</a>.</p>
+{% if local %}<p class="sp-small sp-muted mb-0" id="privacy">Running on this computer: your lists and results stay here, in
+  {{ results_dir }}, until you delete them.</p>
+{% else %}<p class="sp-small sp-muted mb-0" id="privacy">Results are kept for {{ keep_hours }} h; anyone with their link can open them.
+  Confidential? <a href="{% url 'snpportal:run_locally' %}">Run it locally</a>.</p>{% endif %}
 </div>
 
 <aside class="col-lg-5">

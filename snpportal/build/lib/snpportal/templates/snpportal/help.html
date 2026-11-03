@@ -39,11 +39,11 @@
         choose, an active state) in at least one of the conditions you tick.</p></details>
     <details id="my-results"><summary>Where are my results?</summary>
       <p class="sp-small">The <a href="{% url 'snpportal:upload' %}">Score</a> page lists the results this browser opened, newest
-        first, until they are deleted ({{ keep_hours }} hours after scoring, or Delete). The list lives in your browser; anyone
-        with a results link can open those results.</p></details>
+        first, until they are deleted ({% if local %}with Delete: this copy runs on your computer and keeps them until then{% else %}{{ keep_hours }} hours after scoring, or Delete{% endif %}).
+        The list lives in your browser{% if not local %}; anyone with a results link can open those results{% endif %}.</p></details>
     <details id="design-panel"><summary>Who can see my Design panel?</summary>
-      <p class="sp-small">Only this browser: a cookie names the panel, never a link. It is deleted {{ keep_hours }} hours after you
-        start it; to keep it longer, download its TSV and score that file again later.</p></details>
+      <p class="sp-small">Only this browser: a cookie names the panel, never a link. {% if local %}It is kept until you clear it.{% else %}It is deleted {{ keep_hours }} hours after you
+        start it; to keep it longer, download its TSV and score that file again later.{% endif %}</p></details>
     <details id="states"><summary>What do tiers, evidence terms and chromatin colours mean?</summary>
       <p class="sp-small"><a href="{% url 'snpportal:methods' %}">Methods</a> defines the tiers, the evidence weights, the
         chromatin states with their colours, and a glossary.</p></details>
@@ -90,11 +90,14 @@
   </section>
 
   <section class="sp-card" id="privacy"><h2>Privacy</h2>
+    {% if local %}<p class="sp-small mt-2 mb-0">This copy of the portal runs on your computer: your files and results never
+      leave it, and stay in the results folder until you delete them. It fetches public data only, such as AQUA-FAANG
+      signal for the region you view.</p>{% else %}
     <p class="sp-small mt-2 mb-0">Uploaded files are deleted as soon as they have been scored. From a VCF only CHROM, POS, ID, REF
       and ALT are read, so genotypes are never stored. Other columns of a SNP table, and GWAS summary statistics, are kept with
       the results for {{ keep_hours }} hours; anyone with the results link can see them. <em>Delete now</em> removes them sooner.
       The server never logs SNPs or file names. Besides the form-protection cookie, the portal's own cookies remember the
-      results this browser opened (for the Score page), your Design panel and, if you switch chromatin colours, your choice. For confidential lists, <a href="{% url 'snpportal:run_locally' %}">run it locally</a>.</p>
+      results this browser opened (for the Score page), your Design panel and, if you switch chromatin colours, your choice. For confidential lists, <a href="{% url 'snpportal:run_locally' %}">run it locally</a>.</p>{% endif %}
   </section>
 </div>
 {% endblock main %}

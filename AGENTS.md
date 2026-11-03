@@ -20,23 +20,29 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 2. Dependencies point one way: snpdata -> snpscore <- snpportal (snpscore's tests build their fixture release with snpdata).
 3. Scoring rules stay out of the release: weights.yaml lives in snpscore, and whatever depends on the weights (the
    public pool's tiers, `snpscore pool`) is a cache built from the release, rebuilt after a weight changes.
-4. One package, one entry point (G, 2026-10-29, replacing 'Docker first'): `pip install salmo-snp` brings the portal
-   and snpscore (snpscore also installs alone for pipelines; snpdata is only for whoever builds releases), and
-   `salmo-snp serve` runs it: `--local` (default) on 127.0.0.1 for one user, so a SNP list never leaves the computer;
-   `--public` behind a web server with 24 h deletion. Where it runs:
-   - development: clone, `conda env create -f environment.yml` (conda-forge only), editable installs; tests use the
-     fixture, real use downloads the published release;
-   - NREC (demo and staging): git checkout, deployed automatically after the tests pass on main (update.sh);
-   - salmobase (production): a container installing a tagged version, behind salmobase's Apache at /snp/, linked from
-     salmobase with a button (not merged into its Django), the release folder mounted from the same server;
-   - breeding companies: the package (wheel from GitHub Releases for licensees, PyPI later), release downloaded once.
+4. The local install is the main product (G, 2026-11-03): users install from this GitHub repository and run the
+   portal on their own computer, safe for industry SNPs. `pip install` snpscore and snpportal (the `salmo-snp`
+   package), `salmo-snp download` (a release snapshot and the genome, every file checked), `salmo-snp serve`
+   (127.0.0.1 only; `SNPPORTAL_LOCAL`: results kept in the platform data folder until deleted, never expired, pages say
+   so), `salmo-snp info`. snpscore installs alone for pipelines; snpdata is only for whoever builds releases. The
+   README's "Run it on your own computer" is the user guide; tools/user_install_test.sh is that path as a test (CI).
+   Where it runs:
+   - development: clone, `conda env create -f environment.yml` (conda-forge only), editable installs;
+   - NREC (demo and staging until salmobase): git checkout, deployed automatically after the tests pass on main;
+   - salmobase (the live installation, later): a container installing a tagged version behind salmobase's Apache at
+     /snp/, linked from salmobase with a button (not merged into its Django), the release folder mounted;
+   - breeding companies and everyone else: the local install.
    Docker and bioconda only wrap the package. Nothing depends on Docker-only features.
-5. Data releases are versioned apart from the code and published once as static files (Apache, beside salmobase);
-   each package version names the release it expects. Fetching public data at given locations (genome bases,
-   AQUA-FAANG signal) is fine; users' SNPs and results are never stored online.
+5. The data is hosted online (salmobase or any static web server) as one folder made by `snpdata publish --raw`:
+   releases/<version>/ (the snapshot `salmo-snp download` fetches, with SHA256SUMS), releases/latest.json, and raw/
+   (the input files, genome included, that `snpdata fetch --mirror` rebuilds from). Releases are versioned apart from
+   the code; each salmo-snp version names the one it expects (serve.py RELEASE), and serve.py DATA_URL gets the
+   folder's address once it is hosted. A copy of the folder on a disk works the same (`--from <folder>`), for
+   computers without internet. Fetching public data at given locations (AQUA-FAANG signal for a viewed region) is
+   fine; users' SNPs and results are never sent or stored online. Never edit a release by hand: rebuild it
+   (snpscore.release.check refuses damaged ones).
 6. GitHub: branches and pull requests; tests on every pull request; G reviews biology files (CODEOWNERS); a merge to
-   main deploys to NREC; a vX.Y.Z tag builds the wheels (and later the image) as a GitHub Release, which salmobase and
-   company users take.
+   main deploys to NREC; a vX.Y.Z tag builds the wheels (and later the image) as a GitHub Release.
 
 ## Rules
 - Never commit breeder data (genotypes, GWAS results, array manifests): not in fixtures, tests or docs either.
@@ -143,3 +149,5 @@ conda env create -f environment.yml && conda activate salmo-snp   # conda-forge 
 salmo-snp serve --release snpdata/release/dev          # the portal on http://127.0.0.1:8000/snp/
 ```
 Without conda: a Python 3.8 venv and `pip install -e "snpscore[test]" -e snpdata -e snpportal "duckdb==1.2.2"`.
+`bash tools/user_install_test.sh [python]` checks a new user's install (wheels, newest allowed dependencies,
+publish -> download -> annotate -> serve); run it after changing packaging, dependencies or serve.py.

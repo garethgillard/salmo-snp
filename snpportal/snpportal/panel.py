@@ -39,8 +39,8 @@ SCOPES = {"all": "all panel SNPs", "new": "SNPs not on the chip"}
 
 # ---- the panel folder: this browser's only ----
 
-def _keep():
-    return 3600 * float(jobs.setting("SNPPORTAL_KEEP_HOURS", 24))
+def _age(d):
+    return time.time() - (d / "created").stat().st_mtime
 
 
 def _folder(request):
@@ -50,7 +50,7 @@ def _folder(request):
     except ValueError:
         return None
     try:
-        fresh = time.time() - (d / "created").stat().st_mtime < _keep()
+        fresh = jobs.keep_seconds() is None or _age(d) < jobs.keep_seconds()
     except FileNotFoundError:
         return None
     return d if fresh and (d / "panel.json").exists() else None
@@ -65,7 +65,8 @@ def _new():
 
 
 def _cookie(response, d):
-    left = max(0, int(_keep() - (time.time() - (d / "created").stat().st_mtime)))
+    keep = jobs.keep_seconds()
+    left = jobs.FOREVER if keep is None else max(0, int(keep - _age(d)))
     response.set_cookie(COOKIE, d.name[len("panel-"):], max_age=left, httponly=True, samesite="Lax")
     return response
 
@@ -234,7 +235,7 @@ def page(request):
     """/snp/panel/: the sources, the panel at a glance, the chip comparison, the assay check, the SNP list and the
     downloads; an empty panel says how to fill it."""
     d = _folder(request)
-    ctx = {"nav": "panel", "title": "Design panel", "error": request.GET.get("error")}
+    ctx = {"nav": "panel", "title": "Design panel", "error": request.GET.get("error"), "local": jobs.local()}
     if d is None:
         return render(request, "snpportal/panel.html", ctx)
     s = jobs.read_json(d / "panel.json")
@@ -243,7 +244,8 @@ def page(request):
     synthetic = any(x.get("synthetic") for x in s["sources"]) or bool(chip.get("synthetic"))
     ctx.update(sources=[{**x, "url": f"{reverse('snpportal:results', args=[x['job']])}?{x['selection'] + '&' if x['selection'] else ''}tab=table"}
                         for x in s["sources"]],
-               meta=f"Deleted after {jobs.utc((d / 'created').stat().st_mtime + _keep())} · only this browser can open it",
+               meta=("Kept until you clear it" if jobs.keep_seconds() is None
+                     else f"Deleted after {jobs.utc((d / 'created').stat().st_mtime + jobs.keep_seconds())}") + " · only this browser can open it",
                chip=chip, chip_demo=(jobs.release() / "demo" / "chip_demo_SYNTHETIC.tsv").is_file(),
                chip_error=tools.CHIP_ERRORS.get(request.GET.get("chip_error"), "").format(cap=f"{tools.chip_cap():,}") or None)
     if rel is None:

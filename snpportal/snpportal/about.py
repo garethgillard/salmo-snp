@@ -418,7 +418,7 @@ def help_page(request):
         "nav": "help", "title": "Help", "formats": FORMATS,
         "aliases": [(name, ", ".join(names)) for name, names in formats.ALIASES.items()],
         "chrom_aliases": chrom_aliases("25"), "assembly_share": f"{ASSEMBLY_WARNING:.0%}",
-        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "searches": search.EXAMPLES,
+        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(), "searches": search.EXAMPLES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}", "max_snps": int(jobs.setting("SNPPORTAL_MAX_SNPS", 3_000_000)),
         "vendor_cap": int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000)), "locus_name": export.locus_name("25", 28996360, {"25"}),
         "bins": (panel.INFINIUM_I_MIN, panel.INFINIUM_I_POLYPLOID, panel.INFINIUM_II_MIN), "close_bp": panel.CLOSE_BP})
@@ -437,10 +437,6 @@ def run_locally(request):
     """/snp/run-locally/: how to score a confidential list on your own computer with the same release and settings
     (tiers for all conditions, as the portal; snpscore's single-tissue presets named as an aside)."""
     info, presets = jobs.release_info(), jobs.presets()
-    release = jobs.release()
-    checksum = None
-    if (release / "release.zip.sha256").exists():
-        checksum = ((release / "release.zip.sha256").read_text().split() or [None])[0]
     folder = f"release/{info['version']}"
     # A release built locally has its own manifest.json (build date, local genome path), so it is checked by its layers:
     # one sha256 over the sorted 'name sha256' lines of the manifest's layers (each a parquet that builds byte-identically)
@@ -450,13 +446,12 @@ def run_locally(request):
         "nav": "about", "title": "Run it locally", "release": info, "folder": folder,
         "cli": [(jobs.stored_preset(v, jobs.weights()["presets"]), label) for v, label in presets
                 if v != "all" and jobs.stored_preset(v, jobs.weights()["presets"])],
-        "zip": (release / "release.zip").exists(), "zip_sha256": checksum,
         "layers_sha256": hashlib.sha256("".join(lines).encode()).hexdigest() if lines else None,
         "weights_sha256": jobs.sha256(weights) if weights.exists() else None,
         "layers_check": (f"python3 -c \"import hashlib, json; m = json.load(open('{folder}/manifest.json')); print(hashlib.sha256(''.join("
                          "sorted(x['name'] + ' ' + str(x.get('sha256')) + chr(10) for x in m['layers'])).encode()).hexdigest())\""),
         "command": f"snpscore annotate my_snps.vcf.gz --release {folder} --trait all -o my_snps.tsv",
-        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}"})
+        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local()})
 
 
 def state_palette(request):

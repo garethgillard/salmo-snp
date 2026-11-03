@@ -29,7 +29,8 @@ SNPSCORE_RELEASE = os.environ.get("SNPSCORE_RELEASE", str(BASE_DIR.parent / "snp
 if os.environ.get("SNPPORTAL_RESULTS_DIR"):
     SNPPORTAL_RESULTS_DIR = os.environ["SNPPORTAL_RESULTS_DIR"]
 SNPPORTAL_WORKERS = int(os.environ.get("SNPPORTAL_WORKERS", 1))  # background job threads; 0 = run inline (tests)
-SNPPORTAL_KEEP_HOURS = float(os.environ.get("SNPPORTAL_KEEP_HOURS", 24))  # salmo-snp serve keeps them 30 days
+SNPPORTAL_KEEP_HOURS = float(os.environ.get("SNPPORTAL_KEEP_HOURS", 24))
+SNPPORTAL_LOCAL = os.environ.get("SNPPORTAL_LOCAL") == "1"  # salmo-snp serve: nothing expires, the pages say it is local
 SNPPORTAL_MAX_UPLOAD_MB = 300  # checked on Content-Length before the body is read
 SNPPORTAL_MAX_SNPS = 3_000_000
 SNPPORTAL_DUCKDB_THREADS = int(os.environ.get("SNPPORTAL_DUCKDB_THREADS", 2))  # per job; deploy/nrec.sh sizes them to the VM

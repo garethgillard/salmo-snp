@@ -145,7 +145,8 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
         "tries": [dict(found[name], name=name, gwas=name.startswith("gwas_")) for name in TRY if name in found],
         "targets": targets, "flanks": FLANKS, "flank": FLANK, "paste_lines": PASTE_LINES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}",
-        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}",
+        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(),
+        "results_dir": jobs.results_dir(),
     }, status=status))
 
 
@@ -251,7 +252,7 @@ def results(request, key):
     context = {"nav": "score", "job": job, "key": key, "tab": tab, "gwas": gwas,
                "title": " · ".join(x for x in [label + (" (synthetic data)" if synthetic and "synthetic" not in label.lower() else ""),
                                                f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None] if x),
-               "meta": f"Deleted after {jobs.utc(jobs.expires(key))}",
+               "meta": f"Deleted after {jobs.utc(jobs.expires(key))}" if jobs.expires(key) else "Kept on this computer until you delete it",
                "synthetic": synthetic}
     if job["state"] == "done":
         d = jobs.folder(key)
@@ -342,7 +343,7 @@ def _mine_keys(request):
 
 
 def keep_mine(response, keys):
-    response.set_cookie(MINE, ",".join(keys[:MAX_MINE]), max_age=int(3600 * float(jobs.setting("SNPPORTAL_KEEP_HOURS", 24))),
+    response.set_cookie(MINE, ",".join(keys[:MAX_MINE]), max_age=int(jobs.keep_seconds() or jobs.FOREVER),
                         httponly=True, samesite="Lax")
     return response
 

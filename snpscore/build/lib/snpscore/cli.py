@@ -56,6 +56,9 @@ def main():
         return gwas_main(rest)
     args = p.parse_args()
     if args.cmd == "annotate":
+        from .release import check
+        if check(args.release):
+            sys.exit(f"snpscore: {args.release} can't be used:\n  " + "\n  ".join(check(args.release)))
         try:
             annotate(args.snps, args.release, args.out, args.trait, threads=args.threads, memory_limit=args.memory,
                      max_snps=args.max_snps)

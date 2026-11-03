@@ -309,19 +309,28 @@ def flatten(features, classes):
         SELECT chrom, min(start) AS start, max("end") AS "end", class FROM runs GROUP BY chrom, run, class"""
 
 
-def fetch(layers_yaml, data_dir):
-    """Download every `url` in layers.yaml (layers, genome, aliases, rsid, synteny, bgee) that isn't in data_dir yet. A
-    bigBed url with a .bed `file` is converted to BED; a `query` is sent as ?query=... (Ensembl BioMart); a source with
-    `sites_only` is streamed through sites_only()."""
-    data = Path(data_dir)
-    data.mkdir(parents=True, exist_ok=True)
-    cfg = load_yaml(layers_yaml)
+def raw_sources(cfg):
+    """Every input layers.yaml names ({file, url, ...}): the layers' sources, the genome and its indexes, aliases,
+    synteny, rs IDs and Bgee; what fetch puts in data/raw and publish --raw mirrors."""
     genome = cfg.get("genome")
     extra = [{"file": genome["file"] + ext, "url": genome["url"] + ext} for ext in (".fai", ".gzi", "")] if genome else []
     extra += [cfg[k] for k in ("aliases", "synteny") if cfg.get(k)]
     extra += cfg["rsid"]["files"] if cfg.get("rsid") else []
     extra += bgee_sources(cfg.get("bgee"))
-    for layer in [s for layer in cfg["layers"] for s in sources(layer)] + extra:
+    return [s for layer in cfg["layers"] for s in sources(layer)] + extra
+
+
+def fetch(layers_yaml, data_dir, mirror=None):
+    """Download every `url` in layers.yaml (layers, genome, aliases, rsid, synteny, bgee) that isn't in data_dir yet. A
+    bigBed url with a .bed `file` is converted to BED; a `query` is sent as ?query=... (Ensembl BioMart); a source with
+    `sites_only` is streamed through sites_only(). With `mirror` (a URL or folder made by `snpdata publish --raw`), every
+    file comes from <mirror>/raw/ instead, as published (already processed), checked against its SHA256SUMS."""
+    data = Path(data_dir)
+    data.mkdir(parents=True, exist_ok=True)
+    cfg = load_yaml(layers_yaml)
+    if mirror:
+        return fetch_mirror(raw_sources(cfg), data, mirror)
+    for layer in raw_sources(cfg):
         target = data / layer["file"]
         if layer.get("url") and not target.exists():
             url = layer["url"] + ("?query=" + urllib.parse.quote(layer["query"]) if layer.get("query") else "")
@@ -337,6 +346,25 @@ def fetch(layers_yaml, data_dir):
             else:
                 download(url, part)
             part.rename(target)
+
+
+def fetch_mirror(sources_, data, mirror):
+    """fetch() from a published raw/ folder (URL or path): each missing file, checked against raw/SHA256SUMS."""
+    base, remote = str(mirror).rstrip("/") + "/raw/", "://" in str(mirror)
+    text = urllib.request.urlopen(base + "SHA256SUMS", timeout=120).read() if remote else Path(base, "SHA256SUMS").read_bytes()
+    sums = {name: digest for digest, name in (line.split("  ", 1) for line in text.decode().splitlines() if line.strip())}
+    for name in dict.fromkeys(s["file"] for s in sources_):
+        target = data / name
+        if target.exists() or name not in sums:
+            continue
+        print(f"downloading {base}{name} -> {target}", flush=True)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        part = target.with_name(target.name + ".part")
+        (download if remote else shutil.copyfile)(base + name, part)
+        if hashes([part])[1] != sums[name]:
+            part.unlink()
+            raise SystemExit(f"snpdata: {name} from the mirror does not match its sha256")
+        part.rename(target)
 
 
 def download(url, target):
@@ -438,7 +466,10 @@ def build(layers_yaml, data_dir, out_dir):
     genome = cfg.get("genome")
     if genome:
         local = (data / genome["file"]).resolve()
-        manifest["genome"] = {"url": genome["url"], "path": str(local) if local.exists() else None}
+        manifest["genome"] = {"url": genome["url"], "file": genome["file"], "path": str(local) if local.exists() else None}
+        if local.exists():  # salmo-snp download checks its copy against these
+            manifest["genome"]["sha256"] = {ext or "fa.gz": hashes([Path(str(local) + ext)])[1]
+                                            for ext in ("", ".fai", ".gzi") if Path(str(local) + ext).exists()}
     aliases = cfg.get("aliases")
     if aliases and (data / aliases["file"]).exists():  # for layers with rename_chrom
         con.execute(f"CREATE TABLE chrom_alias AS {alias_sql(data / aliases['file'], aliases.get('extra', []))}")
@@ -529,6 +560,32 @@ def build(layers_yaml, data_dir, out_dir):
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
     write_sums(out)
     return out
+
+
+def publish(release_dir, site, layers_yaml=None, data_dir=None):
+    """Lay out the folder that goes online (salmobase or any static web server): site/releases/<version>/ (the release
+    without its pool/ cache, with SHA256SUMS), site/releases/latest.json, and with layers_yaml and data_dir also
+    site/raw/ (every input file of data/raw that layers.yaml names, with SHA256SUMS: `snpdata fetch --mirror` rebuilds
+    from it). Refuses a release that snpscore.release.check() finds damaged."""
+    from snpscore.release import check
+    release_dir, site = Path(release_dir), Path(site)
+    problems = check(release_dir)
+    if problems:
+        raise SystemExit("snpdata: not publishing " + str(release_dir) + ":\n  " + "\n  ".join(problems))
+    version = json.loads((release_dir / "manifest.json").read_text())["version"]
+    target = site / "releases" / version
+    shutil.copytree(release_dir, target, ignore=shutil.ignore_patterns("pool", "SHA256SUMS", ".*"), dirs_exist_ok=True)
+    write_sums(target)
+    (site / "releases" / "latest.json").write_text(json.dumps({"version": version}) + "\n")
+    if layers_yaml:
+        raw, data = site / "raw", Path(data_dir)
+        raw.mkdir(parents=True, exist_ok=True)
+        for name in dict.fromkeys(s["file"] for s in raw_sources(load_yaml(layers_yaml))):
+            if (data / name).is_file() and not (raw / name).exists():
+                (raw / name).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(data / name, raw / name)
+        write_sums(raw)
+    return target
 
 
 def write_sums(out):

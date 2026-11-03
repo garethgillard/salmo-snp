@@ -15,8 +15,8 @@
       <li>Click <strong>Add to panel</strong>: the whole selection comes here. Repeat with other selections or results.</li>
       <li>Here, compare the panel with the chip you use, check the assays and download the vendor files.</li>
     </ol>
-    <p class="sp-small sp-muted mb-0">The panel is kept in this browser only and is deleted 24 hours after you start it. To keep
-      it longer, download its TSV and score that file again later.</p>
+    <p class="sp-small sp-muted mb-0">{% if local %}The panel is kept in this browser only, until you clear it.{% else %}The panel is kept in this browser only and is deleted 24 hours after you start it. To keep
+      it longer, download its TSV and score that file again later.{% endif %}</p>
     <p class="mt-2 mb-0"><a class="btn btn-sm btn-primary" href="{% url 'snpportal:current' %}">Go to your results</a></p>
   </section>
   {% else %}
@@ -56,8 +56,8 @@
       <span class="ms-2">Vendor file:</span>
       {% for value, label in downloads.formats %}<button class="btn btn-sm btn-outline-primary" type="submit" name="format" value="{{ value }}">{{ label }}</button>{% endfor %}
     </form>
-    <p class="sp-small mt-2 mb-0"><a href="{{ downloads.tsv }}">Download the panel (TSV)</a> &middot; score that file again to keep the
-      panel beyond 24 hours. Vendor files leave out SNPs that fail the assay check.</p>
+    <p class="sp-small mt-2 mb-0"><a href="{{ downloads.tsv }}">Download the panel (TSV)</a>{% if not local %} &middot; score that file again to keep the
+      panel beyond 24 hours{% endif %}. Vendor files leave out SNPs that fail the assay check.</p>
   </section>
   {% endif %}
     </div>

@@ -13,10 +13,12 @@ upload, jobs, display and export, with its plain-Python parts in `snpportal/lib/
 
 ## Run locally
 
-As users run it (`snpportal/serve.py`): `pip install` snpscore and this folder (the `salmo-snp` package), then
-`salmo-snp download <release URL>` (every file checked against the release's SHA256SUMS, into ~/.salmo-snp) and
-`salmo-snp serve` (http://127.0.0.1:8000/snp/, this computer only; results kept 30 days in ~/.salmo-snp/results).
-`salmo-snp serve --release <folder>` uses a release built with snpdata. For development:
+As users run it (the root README's guide; `snpportal/serve.py`): `pip install` snpscore and this folder (the
+`salmo-snp` package), `salmo-snp download --from <data>` (the release and genome, checked against SHA256SUMS and the
+manifest, into the platform data folder) and `salmo-snp serve` (http://127.0.0.1:8000/snp/, this computer only). serve
+sets `SNPPORTAL_LOCAL`: results are never expired (`jobs.keep_seconds()` is None, cleanup deletes nothing) and the
+Score, Help, Design panel and Run locally pages say the results stay on this computer. `salmo-snp serve --release
+<folder>` uses a release built with snpdata. For development:
 
 ```bash
 conda env create -f ../environment.yml && conda activate salmo-snp   # Python 3.8 and the three folders, editable

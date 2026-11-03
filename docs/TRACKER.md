@@ -72,8 +72,13 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - [x] The salmo-snp package (snpportal/pyproject.toml): `salmo-snp download` (SHA256SUMS, written by snpdata build) and
       `salmo-snp serve` (127.0.0.1, results kept 30 days). The public site keeps gunicorn behind Caddy (no `--public` mode
       needed yet); the release URL comes with the Apache folder
-- [ ] Release folder as static files on the salmobase Apache server (versioned folders, latest.json); the nf-RASQUAL
-      and 504-fish layers only once their owners agree to redistribution
+- [x] Local install hardened after a newcomer test (2026-11-03): duckdb<2; snpscore.release.check (serve, annotate,
+      download and publish refuse a damaged release); genome downloaded with the release (no positions sent for
+      sequence checks); platform data folder, results kept until deleted (SNPPORTAL_LOCAL); salmo-snp info; download
+      from a URL or a folder; snpdata publish (releases/ + raw/ mirror) and fetch --mirror; CI user-install job
+- [x] release/2026-11-03 rebuilt cleanly (with transcripts_ncbi); serve.py RELEASE names it
+- [ ] Host the published folder (`snpdata publish --raw`: releases/, latest.json, raw/) on salmobase's Apache and set
+      serve.py DATA_URL; the nf-RASQUAL and 504-fish layers only once their owners agree to redistribution
 - [ ] v0.1.0 tag (G decides when): .github/workflows/release.yml builds the three wheels into a GitHub Release
 - [ ] Dockerfile for salmobase (installs a tagged version; release folder mounted); salmobase links to it with a button
 - [ ] Before the repository goes public: synthetic stand-ins for the fixture cuts of licence-pending data

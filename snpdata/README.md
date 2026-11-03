@@ -26,6 +26,31 @@ INFO with AF, MAF, AC, AN, NS; 88 MB): genotypes and sample names never reach th
 (the Synchrosmolt parents, whose VCF has no frequencies) gets AC, AN, NS, AF and MAF counted from its genotypes as it
 streams, and only those are kept.
 
+## Publishing the data
+
+```bash
+snpdata publish release/2026-11-03 --to site --raw    # then copy site/ to the web server (e.g. rsync to salmobase)
+```
+
+`site/` is what goes online, in one folder on any static web server (Apache beside salmobase):
+
+```
+site/releases/<version>/     the snapshot `salmo-snp download` fetches (no pool/: a cache of the current weights)
+site/releases/<version>/SHA256SUMS   one line per file; download checks every file against it
+site/releases/latest.json    {"version": ...}: `salmo-snp download latest`
+site/raw/                    with --raw: every input file of data/raw that layers.yaml names, the genome and its
+                             indexes included, with SHA256SUMS: `snpdata fetch --mirror <site URL>` rebuilds from it,
+                             and `salmo-snp download` takes the genome from here
+```
+
+A published version never changes: build a new version folder instead. `publish` refuses a release that
+`snpscore.release.check` finds damaged (a layer missing from the manifest, a missing file), the check `serve` and
+`annotate` make too; never edit a release by hand. `build` writes SHA256SUMS and the genome's sha256 into the
+manifest. Before publishing, the licence of each layer must allow redistribution (layers.yaml `licence`; the nf-RASQUAL
+and 504-fish layers are still to confirm with their owners, AGENTS.md "Open"): `--raw` redistributes the inputs as
+well as the derived tables. Each salmo-snp version names the release it expects (`snpportal/snpportal/serve.py`
+`RELEASE`), and `DATA_URL` there gets the site's address once it is hosted.
+
 ## Release format (the contract with snpscore and the portal)
 
 A release is one folder, named by its version:
@@ -55,6 +80,7 @@ release/v0.1/
                          prep/make_demo.sh, the last two through prep/make_synthetic.py)
   pool/pool.parquet      optional: `snpscore pool` (see "Public background pool"); annotate never reads it
   pool/background.json   optional: the pool's shares, for the dashboard
+  SHA256SUMS             'sha256  path' of every file but pool/ (what `salmo-snp download` checks)
 ```
 
 `manifest.json`:
@@ -62,7 +88,8 @@ release/v0.1/
 - `chrom_sizes`: {chrom: length} of the numbered chromosomes, from the genome `.fai` (or the layers' largest end where
   that is larger, or the `.fai` lacks the chromosome, as in the test fixture). annotate's known chromosomes.
 - `provisional`: the rules G still has to confirm (layers.yaml keys, e.g. `catalog.window`; snpscore's weights.yaml lists its own)
-- `genome`: `url`, and `path` of the local copy if the build machine had it (for the sequence checks); on another machine
+- `genome`: `url`, `file`, `sha256` ({fa.gz, fai, gzi}: what `salmo-snp download` checks its copy against) and `path` of
+  the local copy if the build machine had it (for the sequence checks); on another machine
   `SNPSCORE_GENOME` names its own copy (bgzipped, with `.fai` and `.gzi`), else the URL is read remotely
 - `alias`, `rsid` (`file`, `rows`, `left_out`, `source_file`, `urls`, `citation`, `source_sha256`, `sha256`), `catalog`
   (`file`, `window`, `rows`, `sha256`), `files` (sha256 of the copied tracks.yaml), `demo` ([{`file`,

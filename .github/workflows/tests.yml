@@ -27,10 +27,21 @@ jobs:
       - run: cd snpportal && python -m pytest -q tests
       - run: cd snpportal && SNPPORTAL_WORKERS=0 python manage.py test snpportal
 
+  user-install:
+    # A new user's install: the built wheels on the newest Python with the newest dependencies they allow, then
+    # download, annotate and serve (tools/user_install_test.sh). The tests job above pins the server's versions.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"  # the newest Django 4.2 supports
+      - run: bash tools/user_install_test.sh python
+
   deploy:
     # After the tests pass on main: update the NREC demo (snpportal/deploy/update.sh; README "Automatic deploys").
     # The key in NREC_DEPLOY_KEY can only run update.sh on the VM. Off until the NREC_HOST variable is set.
-    needs: tests
+    needs: [tests, user-install]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.NREC_HOST != ''
     runs-on: ubuntu-latest
     concurrency: nrec

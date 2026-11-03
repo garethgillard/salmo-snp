@@ -342,9 +342,24 @@ def status(key):
     return job
 
 
+FOREVER = 10 * 365 * 86400  # cookie lifetime on a local install, where results and panels stay until deleted
+
+
+def local():
+    """True when the portal runs on the user's own computer (salmo-snp serve sets SNPPORTAL_LOCAL): nothing expires and
+    nothing is shared, and the pages say so."""
+    return bool(setting("SNPPORTAL_LOCAL", False))
+
+
+def keep_seconds():
+    """How long results and Design panels are kept: SNPPORTAL_KEEP_HOURS (24), or None (until deleted) when local()."""
+    return None if local() else 3600 * float(setting("SNPPORTAL_KEEP_HOURS", 24))
+
+
 def expires(key):
-    """Unix time when cleanup() will delete the job."""
-    return (folder(key) / "job.json").stat().st_mtime + 3600 * float(setting("SNPPORTAL_KEEP_HOURS", 24))
+    """Unix time when cleanup() will delete the job, or None when it is kept until deleted (local())."""
+    keep = keep_seconds()
+    return None if keep is None else (folder(key) / "job.json").stat().st_mtime + keep
 
 
 # ---- creating and running jobs ----
@@ -745,9 +760,11 @@ def delete(key):
 
 def cleanup():
     """Delete job folders whose job.json is older than SNPPORTAL_KEEP_HOURS (default 24), Design panel folders whose
-    'created' marker is, and stray upload files. Safe to run concurrently: anything already gone is skipped. Returns
-    the number of entries removed."""
-    cutoff = time.time() - 3600 * float(setting("SNPPORTAL_KEEP_HOURS", 24))
+    'created' marker is, and stray upload files; nothing on a local install. Safe to run concurrently: anything already
+    gone is skipped. Returns the number of entries removed."""
+    if keep_seconds() is None:
+        return 0
+    cutoff = time.time() - keep_seconds()
     removed = 0
     for p in results_dir().iterdir():
         try:
