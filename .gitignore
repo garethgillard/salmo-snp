@@ -4,3 +4,7 @@ __pycache__/
 .claude/settings.local.json
 .claude/launch.json
 *.egg-info/
+/snpscore/build/
+/snpdata/build/
+/snpportal/build/
+dist/

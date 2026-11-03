@@ -1,3 +1,0 @@
-{% if hits %}<ul class="list-unstyled sp-small mt-2 mb-0" aria-label="Suggestions">{% for h in hits %}
-  <li class="py-1"><a href="{{ h.url }}">{{ h.label }}</a> <span class="sp-muted">{{ h.kind }} · {{ h.detail }}</span></li>{% endfor %}
-</ul>{% elif query|length > 1 %}<p class="sp-small sp-muted mt-2 mb-0">No gene, known locus, rs ID, position or region matches &ldquo;{{ query }}&rdquo; yet.</p>{% endif %}
