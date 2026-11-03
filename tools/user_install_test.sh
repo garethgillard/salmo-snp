@@ -30,7 +30,8 @@ for page in /snp/ /snp/known-loci/ "/snp/locus/?r=25:28980000-29020000&open=gene
   echo "$code $page"
   [ "$code" = 200 ] || { cat "$T/serve.log"; exit 1; }
 done
-curl -fs http://127.0.0.1:8765/snp/ | grep -q "Running on this computer" || { echo "the Score page doesn't say it is local"; exit 1; }
+curl -fs -o "$T/score.html" http://127.0.0.1:8765/snp/  # (not piped into grep -q: with pipefail that races)
+grep -q "Running on this computer" "$T/score.html" || { echo "the Score page doesn't say it is local"; exit 1; }
 # score a pasted list through the portal's job queue, as a user would
 curl -fs -c "$T/cookies" -o /dev/null http://127.0.0.1:8765/snp/
 token=$(awk '/csrftoken/ {print $7}' "$T/cookies")
