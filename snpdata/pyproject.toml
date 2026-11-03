@@ -3,7 +3,7 @@ name = "snpdata"
 version = "0.1.0"
 description = "Collect the public Atlantic salmon sources and build the annotation release that snpscore and the portal read"
 requires-python = ">=3.8"
-dependencies = ["snpscore", "duckdb>=1.2", "pyyaml"]  # snpscore: the motif scoring and file readers (install ../snpscore first)
+dependencies = ["snpscore", "duckdb>=1.2,<2", "pyyaml"]  # snpscore: the motif scoring and file readers (install ../snpscore first)
 
 [project.optional-dependencies]
 test = ["pytest"]

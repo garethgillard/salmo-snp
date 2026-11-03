@@ -45,6 +45,8 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 - Dependencies: duckdb and pyyaml (plus Django for the portal). Ask G before adding any. No pandas.
 - Python 3.8 until the portal's Dockerfile sets the version: no `match`, no `str.removeprefix`, no `X | Y` types; use
   `from __future__ import annotations`.
+- DuckDB below 2 (the packages say `duckdb>=1.2,<2`): DuckDB 2.0 drops the `x -> ...` lambdas our SQL uses, and their
+  replacement (`lambda x: ...`, DuckDB 1.3+) doesn't exist in 1.2.2, the last DuckDB for Python 3.8. Move both together.
 - Assembly Ssal_v3.1, chromosomes named "1"-"29" (as AQUA-FAANG and Ensembl). Layers use BED coordinates; SNPs use
   1-based `pos`; a SNP is inside an interval when start < pos <= end.
 - Changes go through pull requests; G reviews anything touching the biology (CODEOWNERS).
