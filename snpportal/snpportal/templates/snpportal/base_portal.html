@@ -30,7 +30,8 @@
             <li><a href="{% url 'snpportal:about_data' %}#cite">How to cite</a></li>
           </ul></details></li>
       </ul>
-      <span class="sp-release" title="Annotation release and genome assembly">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</span>
+      {% if rel.several %}<a class="sp-release" href="{% url 'snpportal:releases' %}" title="Annotation release and genome assembly of this page: switch the release new work uses">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</a>
+      {% else %}<span class="sp-release" title="Annotation release and genome assembly">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</span>{% endif %}
     </div>
   </nav>
   <main id="sp-main" class="sp-main">

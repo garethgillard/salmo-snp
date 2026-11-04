@@ -33,6 +33,7 @@ urlpatterns = [
     path("about/methods/", about.methods, name="methods"),
     path("help/", about.help_page, name="help"),
     path("run-locally/", about.run_locally, name="run_locally"),
+    path("releases/", about.releases, name="releases"),
     path("colours/", about.state_palette, name="state_palette"),
     path("results/<uuid:key>/", views.results, name="results"),
     path("results/<uuid:key>/status/", views.status, name="status"),

@@ -135,7 +135,8 @@ def open_in_panel(d, n):
     jobs._write_json(out / "panel.json", {"sources": [{"id": 1, "project": d.name, "version": n, "label": f"{name}, version {n}",
                                                        "n": meta["n"], "selection": "", "filters": [meta.get("note") or "saved panel"],
                                                        "synthetic": False, "added_utc": jobs.utc()}],
-                                          "next": 2, "created_utc": jobs.utc()})
+                                          "next": 2, "created_utc": jobs.utc(),
+                                          "release": meta.get("release") or jobs.manifest().get("version")})  # I17: its own
     return out
 
 

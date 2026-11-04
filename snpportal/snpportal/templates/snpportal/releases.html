@@ -1,0 +1,22 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% comment %}The releases a local install holds (about.releases, ROADMAP I17), which one new work uses, and a switch.{% endcomment %}
+{% block main %}
+<div class="sp-stack sp-narrow">
+  <section class="sp-card" aria-labelledby="rel-h">
+    <h2 id="rel-h">Data releases</h2>
+    <p class="sp-small">New lists are scored with the release in use. Results, Design panels and saved versions keep reading the
+      release they were made with, so nothing mixes two releases; a Design panel takes SNPs of one release only.</p>
+    <div class="table-responsive"><table class="table table-sm sp-table sp-small mb-2">
+      <thead><tr><th scope="col">Release</th><th scope="col">Assembly</th><th scope="col">Built</th><th scope="col" class="sp-num">Layers</th>
+        <th scope="col">Genome</th><th scope="col">Public pool</th><th scope="col"></th></tr></thead>
+      <tbody>{% for r in rows %}<tr><th scope="row">{{ r.version }}{% if r.expected %} <span class="sp-muted">(this version's)</span>{% endif %}</th>
+        <td>{{ r.assembly }}</td><td class="text-nowrap">{{ r.created|default_if_none:"" }}</td><td class="sp-num">{{ r.layers }}</td>
+        <td>{{ r.genome }}</td><td>{% if r.pool %}built{% else %}not yet{% endif %}</td>
+        <td>{% if r.using %}<strong>in use</strong>{% else %}<form method="post">{% csrf_token %}<button class="btn btn-sm btn-outline-primary" type="submit" name="version" value="{{ r.version }}">Use this release</button></form>{% endif %}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <p class="sp-small sp-muted mb-0">Get another with <code>salmo-snp download &lt;version&gt;</code>; it appears here. A release on another
+      assembly expects SNP positions on that assembly.</p>
+  </section>
+</div>
+{% endblock main %}

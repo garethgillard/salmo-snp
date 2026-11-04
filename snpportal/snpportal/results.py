@@ -665,7 +665,9 @@ def table(request, key, job=None):
         "last": min(page * size, matching), "chosen": chosen, "query": urlencode({"trait": chosen["trait"], **settings}),
         "added": int(get("added")) if get("added", "").isdecimal() else None,
         "panel_error": {"empty": "No SNPs in this selection to add.",
-                        "many": f"Narrow the selection to at most {int(jobs.setting('SNPPORTAL_MAX_PANEL_SNPS', 50_000)):,} SNPs to add it to the panel."
+                        "many": f"Narrow the selection to at most {int(jobs.setting('SNPPORTAL_MAX_PANEL_SNPS', 50_000)):,} SNPs to add it to the panel.",
+                        "release": "Your Design panel holds SNPs scored with another release: clear it, or save it as a project "
+                                   "version, before adding these.",
                         }.get(get("panel_error", "")),
         "dds": dds, "pick": pick, "n_selected": n_every - n_out, "n_out": n_out,
         "shown_tiers": [(x, k) for x, k in shown_tiers if x is not None and k],

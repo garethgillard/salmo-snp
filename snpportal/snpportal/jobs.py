@@ -13,6 +13,7 @@ A job folder (0700, files 0600) holds:
 Log lines carry an event name, job_ref (a hash of the key), counts and timings: never SNPs or file names."""
 from __future__ import annotations
 
+import contextvars
 import gc
 import gzip
 import hashlib
@@ -66,8 +67,96 @@ def setting(name, default):
     return getattr(settings, name, default)
 
 
+_current = contextvars.ContextVar("snpportal_release", default=None)  # I17: the release of this request or job
+
+
 def release():
-    return Path(settings.SNPSCORE_RELEASE).resolve()  # resolved: DuckDB's allowed_directories refuses symlinks
+    """The release folder a page or job reads: the job's own, the Design panel's own, or the one chosen on a local
+    install (I17: set per request by `middleware`, per job by `run`), else settings.SNPSCORE_RELEASE."""
+    return _current.get() or Path(settings.SNPSCORE_RELEASE).resolve()  # resolved: DuckDB's allowed_directories refuses symlinks
+
+
+# ---- several releases (ROADMAP I17; local installs) ----
+
+def installed():
+    """{version: folder} of the releases this install holds: settings.SNPSCORE_RELEASE and, on a local install, every
+    release under SNPPORTAL_RELEASES_DIR (salmo-snp's data folder releases/)."""
+    base = Path(settings.SNPSCORE_RELEASE).resolve()
+    out = {manifest(base).get("version") or base.name: base}
+    where = setting("SNPPORTAL_RELEASES_DIR", None)
+    if where and local():
+        for m in sorted(Path(where).glob("*/manifest.json")):
+            out.setdefault(manifest(m.parent).get("version") or m.parent.name, m.parent.resolve())
+    return out
+
+
+def _choice():
+    return results_dir().parent / "release-in-use.json"
+
+
+def chosen():
+    """The release the user picked on the Releases page (a local install with several), or None for the default."""
+    if not local():
+        return None
+    return installed().get(read_json(_choice()).get("version"))
+
+
+def choose(version):
+    """Use release `version` (installed) for new work; None: back to the default."""
+    if version is None:
+        _choice().unlink(missing_ok=True)
+    elif version in installed():
+        _write_json(_choice(), {"version": version, "chosen_utc": utc()})
+
+
+def release_for(version):
+    """The installed folder of release `version`, or None (not installed)."""
+    return installed().get(version) if version else None
+
+
+JOB_URL = re.compile(r"/results/([0-9a-f-]{36})/")
+
+
+def for_request(request):
+    """The release a request reads (I17): a job's pages read the job's own release (job.json), the Design panel its
+    own (panel.json), a saved project version its own (meta.json); other pages the one chosen. None: the default."""
+    if not local() or len(installed()) < 2:
+        return None
+    m = JOB_URL.search(request.path)
+    if m:
+        try:
+            own = release_for(read_json(folder(m.group(1)) / "job.json").get("release"))
+        except ValueError:
+            own = None
+        if own:
+            return own
+    if "/panel/" in request.path:
+        from . import panel
+        d = panel._folder(request)
+        own = release_for(read_json(d / "panel.json").get("release")) if d else None
+        if own:
+            return own
+    m = re.search(r"/projects/([^/]+)/(\d+)/", request.path)
+    if m:
+        try:
+            from . import projects
+            own = release_for(read_json(projects.root() / m.group(1) / f"v{int(m.group(2))}" / "meta.json").get("release"))
+        except (OSError, ValueError):
+            own = None
+        if own:
+            return own
+    return chosen()
+
+
+def middleware(get_response):
+    """settings.MIDDLEWARE 'snpportal.jobs.middleware': each request reads its own release (for_request)."""
+    def with_release(request):
+        token = _current.set(for_request(request))
+        try:
+            return get_response(request)
+        finally:
+            _current.reset(token)
+    return with_release
 
 
 def results_dir():
@@ -436,7 +525,20 @@ def submit(key):
 
 def run(key):
     """Annotate a job's input, precompute tiers for every preset and write summary.json. Runs on the pool (or
-    inline); never raises: failures end in state 'failed' with an error_code and a message for the user."""
+    inline), reading the release the job was created with (I17); never raises: failures end in state 'failed' with
+    an error_code and a message for the user."""
+    try:
+        own = release_for(read_json(folder(key) / "job.json").get("release"))
+    except ValueError:
+        own = None
+    token = _current.set(own or _current.get())
+    try:
+        _run(key)
+    finally:
+        _current.reset(token)
+
+
+def _run(key):
     key = str(key)
     with _lock:
         _queued.discard(key)

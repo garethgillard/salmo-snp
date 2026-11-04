@@ -62,7 +62,8 @@ def _new():
     d = jobs.results_dir() / f"panel-{uuid.uuid4()}"
     d.mkdir(mode=0o700)
     (d / "created").touch(mode=0o600)  # never changes: cleanup counts the 24 hours from it
-    jobs._write_json(d / "panel.json", {"sources": [], "next": 1, "created_utc": jobs.utc()})
+    jobs._write_json(d / "panel.json", {"sources": [], "next": 1, "created_utc": jobs.utc(),
+                                        "release": jobs.manifest().get("version")})  # its sources' release (I17)
     return d
 
 
@@ -129,7 +130,10 @@ def add(request, key):
     rows = jd / f".panel-rows-{uuid.uuid4().hex}.parquet"
     con.execute(f"COPY (SELECT file_row_number FROM v {where}) TO '{rows}' (FORMAT parquet)")
     con.close()
-    d = _folder(request) or _new()
+    d = _folder(request)
+    if d is not None and jobs.read_json(d / "panel.json").get("release") not in (None, job.get("release")):
+        return redirect(f"{back}&panel_error=release")  # I17: a panel holds SNPs of one release
+    d = d or _new()
     s = jobs.read_json(d / "panel.json")
     i = s["next"]
     try:

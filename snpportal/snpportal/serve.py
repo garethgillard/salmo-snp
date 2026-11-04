@@ -170,11 +170,11 @@ def serve(release=None, port=8000):
     ensure_pool(release)
     os.environ.update({
         "DJANGO_SETTINGS_MODULE": "snpsite.settings", "DJANGO_DEBUG": "0",
-        "SNPSCORE_RELEASE": str(release.resolve()), "SNPPORTAL_RESULTS_DIR": str(HOME / "results"), "SNPPORTAL_LOCAL": "1"})
+        "SNPSCORE_RELEASE": str(release.resolve()), "SNPPORTAL_RESULTS_DIR": str(HOME / "results"), "SNPPORTAL_LOCAL": "1",
+        "SNPPORTAL_RELEASES_DIR": str(HOME / "releases"),  # the others installed, to switch to (I17)
+        "SNPSCORE_GENOME_DIR": str(HOME / "genome")})  # each release's genome by its file name, so assemblies never mix
     # 127.0.0.1 only either way; a cloud session's preview pane may name the host otherwise (AGENTS.md "Cloud sessions")
     os.environ.setdefault("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost")
-    if genome:
-        os.environ["SNPSCORE_GENOME"] = str(genome)
     (HOME / "results").mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("DJANGO_SECRET_KEY", secret())
     import django

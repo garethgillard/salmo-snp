@@ -488,3 +488,17 @@ def test_variant_score_layer(tmp_path, monkeypatch):  # I15: a SYNTHETIC per-var
     terms = {(c, p): [t["term"] for t in tt] for c, p, tt in con.execute(
         f"SELECT chrom, pos, tier_terms FROM ({scored('a', weights, columns, 'all')})").fetchall()}
     assert "synscore" in terms[sites[2][0], int(sites[2][1])] and "synscore" not in terms[sites[0][0], int(sites[0][1])]
+
+
+def test_genome_location_by_file_name(tmp_path, monkeypatch):  # I17: a data folder may hold the genomes of several releases
+    from snpscore.annotate import genome_location
+    m = {"genome": {"file": "g.fa.gz", "url": "https://example.org/g.fa.gz", "path": "/nowhere/g.fa.gz"}}
+    monkeypatch.delenv("SNPSCORE_GENOME", raising=False)
+    monkeypatch.setenv("SNPSCORE_GENOME_DIR", str(tmp_path))
+    assert genome_location(m) == "https://example.org/g.fa.gz"  # not there (yet): the URL
+    for ext in ("", ".fai", ".gzi"):
+        (tmp_path / f"g.fa.gz{ext}").write_text("")
+    assert genome_location(m) == str(tmp_path / "g.fa.gz")
+    assert genome_location({"genome": {**m["genome"], "file": "other.fa.gz"}}) == "https://example.org/g.fa.gz"  # another release's
+    monkeypatch.setenv("SNPSCORE_GENOME", "/srv/genome.fa.gz")  # a server's own copy comes first
+    assert genome_location(m) == "/srv/genome.fa.gz"
