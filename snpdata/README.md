@@ -65,6 +65,10 @@ release/2026-11-03/
   rsid.parquet           rs (BIGINT, the number), chrom, pos, ref, alt (Ssal_v3.1), v2_chrom, v2_pos, v2_ref, v2_alt
                          (ICSASG_v2; NULL unless on exactly one ICSASG_v2 line) from EVA release 9, sorted by rs, zstd;
                          rs IDs on several Ssal_v3.1 lines are left out. `snpscore.rsid(release, rs)` looks one up
+  flank_keys.parquet     key (UBIGINT: the 16 bases either side of a site, packed 2 bits each, on the strand that sorts
+                         first), chrom, pos, canonical (the genome's forward strand is the one keyed): every site of the
+                         layers layers.yaml `flank_keys.sites` names, read from the genome; keys at more than one site
+                         left out. snpscore.placement places manifests by their flank sequences with it (I18); optional
   synteny.parquet        Ss4R homeologous blocks (salmobase synteny 2021-11), each block once from each side: chrom,
                          start, end (BED), partner, partner_start, partner_end, pairs, aore, lore; not annotated
   bgee.parquet           Bgee 16.0 RNA-seq per gene_id and tissue (anatomical entity): libraries, present (libraries

@@ -63,6 +63,13 @@ HG993268.2, HG993270.2, HG993277.2, HG993285.2). `HG993277.1` is an older chromo
   given), alleles complemented where EVA's two placements are on opposite strands. EVA's Ssal_v3.1 positions are
   EVA's remaps of the older submissions.
 
+With `--place-by-flank` (`annotate(..., place_by_flank=True)`, ROADMAP I18), the positions are taken to be on another
+assembly, as in an ICSASG_v2 chip manifest: each row is placed by its flank sequence (a column `Flank`, `SourceSeq` or
+`TopGenomicSeq` holding `LEFT[A/B]RIGHT`) where the 16 bases either side match a known variant site of the release's
+`flank_keys.parquet` exactly, on either strand (alleles complemented when given on the other one; `position_source` =
+`flank`); else by its rs ID as above; else it is rejected as `flank_not_found`. The validation report's `flank` counts
+them.
+
 ## Annotate output
 
 `snpscore annotate` (and `snpscore.annotate()`) writes one row per kept input SNP, in input order (TSV, or Parquet/CSV

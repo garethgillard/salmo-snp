@@ -48,7 +48,9 @@ in tracks.yaml `defaults`, or in a named constant; Methods, the report and every
 `SNPPORTAL_MAX_VENDOR_SNPS` (50,000 per vendor file), `SNPPORTAL_MAX_CHIP_SNPS` (1,000,000 chip markers), the panel gap highlight (3x the mean spacing, rounded), the
 candidate flank (50 kb around a gene), the Manhattan thinning (p > 0.01 thinned to the top SNP per 50 kb),
 the regional plot window (lead +- credible set + 20 kb, 50-250 kb), the GWAS loci cap (`association.MAX_LOCI`: the 200
-strongest loci are listed and fine-mapped) and the settings form's suggestive-p ceiling (0.01).
+strongest loci are listed and fine-mapped) and the settings form's suggestive-p ceiling (0.01); Push 3: the probe
+uniqueness check's cap (`panel.UNIQUENESS_MAX`, 5,000 SNPs), its 50 kb margin and 2 Mb region cap (lib/uniqueness.py)
+and its 7-nt seeds (matches with up to 4 mismatches in 35 nt).
 
 ## Data safety
 - Uploaded files are deleted right after scoring; results are deleted on 'Delete now', and on a server after
