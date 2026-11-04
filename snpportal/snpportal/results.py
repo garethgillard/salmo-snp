@@ -129,6 +129,8 @@ COLUMNS = {
                ("molqtl",), [("molqtl_best_bf", True)]),
     "gerp": ("GERP", "GERP constrained-element score (65 fish)", ("gerp_score",), [("gerp_score", True)]),
     "regbuild": ("Ensembl reg.", "Ensembl 116 regulatory build feature", ("regbuild_type",), [("regbuild_type", True)]),
+    "scores": ("Scores", "Per-variant scores (such as DeepFARM): the score, and how high it ranks among the variants the "
+               "model scored; 'not scored' outside them", ("variant_scores",), []),
     "maf": ("MAF", MAF_TIP, ("maf", "af", "public_af_maf"), [("{maf}", True)]),
     "cm": ("cM (F/M)", "Genetic map position, female / male cM (Brekke et al. 2023 linkage map, interpolated)",
            ("cm_female",), [("cm_female", True)]),
@@ -197,11 +199,13 @@ def _open(request, key, write=False, chip=False):
             con.execute(f"CREATE VIEW v0 AS {jobs.scored_sql('r', weights, columns, trait, d)}")
     else:
         con.execute("CREATE VIEW v0 AS SELECT * FROM r")
+    scores = variant_scores_sql([(n, label) for n, label in jobs.score_layers(d) if n + "_percentile" in columns])
+    extra = f", {scores} AS variant_scores" if scores else ""
     if (d / "gwas.parquet").exists():  # GWAS jobs: the association statistics for the Table's p and beta columns
-        con.execute(f"CREATE VIEW v1 AS SELECT v0.*, s.neglog10p, s.beta, s.se FROM v0 "
+        con.execute(f"CREATE VIEW v1 AS SELECT v0.*, s.neglog10p, s.beta, s.se{extra} FROM v0 "
                     f"LEFT JOIN read_parquet('{d / 'gwas.parquet'}') s USING (file_row_number)")
     else:
-        con.execute("CREATE VIEW v1 AS SELECT * FROM v0")
+        con.execute(f"CREATE VIEW v1 AS SELECT *{extra} FROM v0")
     chipped = chip and chip_view(con, d, "v1", weights)  # the Panel tab's chip (P6.6), for the pages that use its columns
     con.execute(f"CREATE VIEW v AS {chipped or 'SELECT * FROM v1'}")
     types = dict(con.execute("SELECT column_name, column_type FROM (DESCRIBE v)").fetchall())
@@ -728,6 +732,34 @@ def locus_note(g):
     return " · ".join(x for x in (where, alleles) if x)
 
 
+def variant_scores_sql(layers):
+    """The view's variant_scores column for the release's score layers [(name, label)] (I15): a list of {label, score,
+    percentile}, both NULL where the SNP is outside a model's scored set. None without score layers."""
+    if not layers:
+        return None
+    items = ", ".join(f"{{'label': {lit(label)}, 'score': CASE WHEN {ident(n)} THEN {ident(n + '_score')} END, "
+                      f"'percentile': CASE WHEN {ident(n)} THEN {ident(n + '_percentile')} END}}" for n, label in layers)
+    return f"[{items}]"
+
+
+def row_scores(snp):
+    """A row's variant scores as variant_scores_sql gives them: the view's column, or (a variant page's row, annotated
+    on the fly) built from the release's score layers' own columns."""
+    if "variant_scores" in snp:
+        return snp["variant_scores"] or []
+    return [{"label": label, "score": snp.get(n + "_score") if snp.get(n) else None,
+             "percentile": snp.get(n + "_percentile") if snp.get(n) else None}
+            for n, label in jobs.score_layers() if n + "_percentile" in snp]
+
+
+def score_text(s):
+    """(label, text, tooltip) of one variant score: '0.82 · top 5%', or 'not scored'."""
+    if s["score"] is None:
+        return s["label"], "not scored", "Outside the variants this model scored: no score, not a low one"
+    top = max(1, round(100 * (1 - s["percentile"])))
+    return s["label"], f"{s['score']:.2f} · top {top}%", f"Higher than {100 * s['percentile']:.1f}% of the variants scored"
+
+
 def _row(r, groups, in_preset, active_states, caveats):
     """One table row as display values (the template adds the markup)."""
     from snpscore.gwas import p_text
@@ -747,6 +779,7 @@ def _row(r, groups, in_preset, active_states, caveats):
            "p": p_text(g("neglog10p")), "beta": "" if g("beta") is None else f"{g('beta'):.3f}" + (f" ({g('se'):.3f})" if g("se") is not None else ""),
            "pip": "" if g("pip_uniform") is None else f"{g('pip_uniform'):.2f} → {g('pip_functional'):.2f}"}
     out["gene_tip"] = UNNAMED if out["gene"].startswith("~") else out["gene_id"]
+    out["scores"] = [score_text(s) for s in g("variant_scores") or []]
     if g("molqtl"):  # 'Brain, Gonad (e, ca)', the features as the tooltip
         out["molqtl"] = (f"{(g('molqtl_tissues') or '').replace(',', ', ')} ({(g('molqtl_kinds') or '').replace(',', ', ')})",
                          g("molqtl_features") or "")

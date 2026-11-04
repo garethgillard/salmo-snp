@@ -200,6 +200,10 @@ def compare(con, weights, trait, synthetic, molqtl=False):
     if "tier_terms" in both and weights:
         features += [(f"evidence = {term}", f"list_contains(list_transform(tier_terms, lambda x: x.term), {lit(term)})")
                      for term in weights["weights"] if not (molqtl and term == "molqtl")]
+    for c in both:  # I15 score layers (<layer>_score and _percentile): the top tenth and the top hundredth, descriptive
+        if c.endswith("_percentile") and c[:-len("_percentile")] + "_score" in both:
+            features += [(f"{c[:-len('_percentile')]} top {share}", f"{q(c)} >= {cut}")
+                         for share, cut in (("10%", 0.9), ("1%", 0.99))]
     categories = [c for c in both if c == "region_class" or is_consequence(c)]
     for c in categories:
         if pos[c] == ctrl[c] == "VARCHAR":

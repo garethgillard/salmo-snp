@@ -177,4 +177,23 @@ the published ICSASG_v2 position, or EVA release 9's for natively Ssal_v3.1 rows
    value for `GOLDEN` in `../snpscore/tests/test_snpscore.py`; update it on purpose and say why in the commit.
 4. If it should count towards tiers, add a weight in snpscore's `weights.yaml` (G decides it) and a term in `../snpscore/src/snpscore/score.py`.
 
+**A per-variant score** (ROADMAP I15: DeepFARM, a CADD-like score) needs no code: a tab-separated file (gzip optional)
+with the header `chrom pos ref alt score` (pos 1-based, Ssal_v3.1, chromosomes 1-29) and one layers.yaml entry:
+
+```yaml
+  - name: deepfarm
+    type: point
+    format: variant_scores
+    file: deepfarm_scores.tsv.gz
+    label: DeepFARM                 # how the portal names it
+    description: DeepFARM regulatory-effect score of the alt allele (what the model scored, e.g. public sites in peaks)
+    citation: ...
+    licence: ...
+```
+
+`build` adds `percentile` (the share of the scored set with a lower score). annotate gives `deepfarm` (true when the
+variant was scored), `deepfarm_score` and `deepfarm_percentile`; the portal shows them in the Table's Scores column, the
+card and a locus-browser row, and the benchmark compares the top 10% and 1% with matched controls. It counts in tiers only
+once G sets `variant_scores: {deepfarm: <percentile>}` and a `deepfarm` weight in snpscore's weights.yaml.
+
 Progress and next steps: [docs/TRACKER.md](../docs/TRACKER.md).

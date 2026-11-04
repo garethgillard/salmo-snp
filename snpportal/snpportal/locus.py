@@ -197,8 +197,20 @@ def molqtl_rows(chrom, start, end):
             for pos, ref, alt, tissues, kinds, bf, features in rows]
 
 
+def score_rows(chrom, start, end, limit=20000):
+    """{label: [(pos, ref, alt, score, percentile)]} of the release's per-variant score layers (I15) in a window."""
+    out = {}
+    for name, label in jobs.score_layers():
+        path = jobs.release() / f"{name}.parquet"
+        if path.exists():
+            out[label] = jobs.connect([jobs.release()]).execute(
+                f"SELECT \"end\", ref, alt, score, percentile FROM read_parquet({lit(path)}) "
+                f"WHERE chrom = ? AND \"end\" > ? AND \"end\" <= ? ORDER BY \"end\" LIMIT {int(limit)}", [chrom, start, end]).fetchall()
+    return out
+
+
 def lanes(chrom, start, end):
-    """lib.locus lanes plus the evidence kind of each published association and the molQTL leads."""
+    """lib.locus lanes plus the evidence kind of each published association, the molQTL leads and the variant scores."""
     data = sl.locus(jobs.release(), chrom, start, end)
     names = explore.aliases()
     for g in data.get("genes", []):  # one label per gene everywhere: the catalogue's name for genes Ensembl leaves unnamed
@@ -207,6 +219,7 @@ def lanes(chrom, start, end):
     for k in data.get("known", []):
         k["kind"] = explore.evidence_kind(k)
     data["molqtl"] = molqtl_rows(chrom, start, end)
+    data["scores"] = score_rows(chrom, start, end)
     return data
 
 
@@ -463,7 +476,7 @@ def conditions_text(items):
     return ", ".join([x for x in names if x not in results.STAGES] + embryo)
 
 
-FACT_ORDER = ("gene", "region", "gwas", "chromatin", "known", "molqtl")
+FACT_ORDER = ("gene", "region", "gwas", "chromatin", "known", "molqtl", "scores")
 
 
 def chip(text, cls="", tip="", key="", url=None):
@@ -504,6 +517,9 @@ def facts(snp, ev, states, chosen, active_states):
                         f"Known locus {k['id']}" + (f" ({k['trait']})" if k["trait"] else ""), "known"))
     if g("molqtl"):
         out.append(chip("molQTL lead", "", f"{(g('molqtl_tissues') or '').replace(',', ', ')}: display only, not counted in tiers", "molqtl"))
+    for s in results.row_scores(snp):  # I15: per-variant scores (DeepFARM, ...), 'not scored' outside a model's set
+        label, text, tip = results.score_text(s)
+        out.append(chip(f"{label} {text}", "" if s["score"] is not None else "muted", tip, "scores"))
     return ordered(out)
 
 

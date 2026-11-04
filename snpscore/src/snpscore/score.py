@@ -84,6 +84,10 @@ def scored(table, weights, columns, trait, synthetic=()):
         terms.append(("motif", "motif", f"coalesce(motif_changed, false){in_peak}", "'motif: ' || motif_tfs"))
     if "molqtl" in columns and "molqtl" in w:  # nf-RASQUAL lead SNP: display only while its weight is 0
         terms.append(("molqtl", "molqtl", "molqtl", "'molQTL lead: ' || molqtl_tissues"))
+    for name, cutoff in (weights.get("variant_scores") or {}).items():  # I15: a score layer counts from G's percentile
+        if f"{name}_percentile" in columns and name in w:
+            terms.append((name, name, f"coalesce({q(name + '_percentile')} >= {float(cutoff)}, false)",
+                          f"{lit(name + ' ')} || printf('%.2f', {q(name + '_score')})"))
     terms = [t for t in terms if t[0] not in synthetic]
 
     def weight(term):  # whole numbers, so tier_score and tier_terms keep their INTEGER type in every release

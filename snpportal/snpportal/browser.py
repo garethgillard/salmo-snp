@@ -585,8 +585,14 @@ def other_group(s, ax, data):
                     f'fill-opacity="{0.35 + 0.65 * (g.get("score") or 0) / top:.2f}"><title>GERP constrained element (65 fish), score {g.get("score")}</title></rect>')
     if not data.get("gerp"):
         gerp.append(locus_svg._t(4, 10, "none in this window", 9.5, G[700]))
-    return group("other", "Other annotation", "", [row("Ensembl regulatory", trk(13, "".join(body)), "build 116"),
-                                                   row("GERP constrained", trk(13, "".join(gerp)), "65 fish")])
+    rows = [row("Ensembl regulatory", trk(13, "".join(body)), "build 116"), row("GERP constrained", trk(13, "".join(gerp)), "65 fish")]
+    for label, sites in (data.get("scores") or {}).items():  # I15: per-variant scores, tick height = percentile
+        ticks = [f'<rect x="{ax.x(pos - 1):.1f}" y="{13 - 11 * p:.1f}" width="1.5" height="{max(1, 11 * p):.1f}" fill="{G[900]}">'
+                 f'<title>{escape(label)} {score:.2f} ({ref}&gt;{alt}): higher than {100 * p:.1f}% of the variants scored</title></rect>'
+                 for pos, ref, alt, score, p in sites]
+        rows.append(row(label, trk(14, "".join(ticks) or locus_svg._t(4, 10, "no scored variants in this window", 9.5, G[700])),
+                        "variant score; height = rank"))
+    return group("other", "Other annotation", "", rows)
 
 
 # ---- the page ----

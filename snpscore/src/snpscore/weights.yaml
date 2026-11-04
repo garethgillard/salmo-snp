@@ -25,6 +25,11 @@ weights:  # whole numbers (tier_score is an integer)
   motif: 1             # G (2026-10-19): inside a robust ATAC peak, one allele matches a JASPAR 2024 motif at p < 1e-5 and
                        # the other doesn't, with at least 4 bits between them (layers.yaml `motif`; about 15% of in-peak SNPs)
 
+# Per-variant score layers (layers.yaml format variant_scores, ROADMAP I15: DeepFARM, a CADD-like score): a SNP counts
+# when its percentile among the scored variants is at least the value here, with the weight of the same name under
+# `weights:`. Both are G's to set; until then a score layer is shown but never counted. e.g. deepfarm: 0.9
+variant_scores: {}
+
 # Minimum tier_score for tiers 1, 2 and 3; anything lower is tier 4.
 # e.g. tier 1 = active + constrained, or CDS + constrained; tier 2 = active, or CDS; tier 3 = any weaker evidence.
 tiers: [5, 3, 1]

@@ -145,6 +145,13 @@ def weights(where=None):
     return _file("weights", Path(where) / "weights.yaml" if where else snpscore.score.WEIGHTS)
 
 
+def score_layers(where=None):
+    """[(name, label)] of the per-variant score layers (layers.yaml format variant_scores, ROADMAP I15) of a job's
+    snapshot or the current release; the label is the layer's `label`, else its name."""
+    return [(layer["name"], layer.get("label") or layer["name"]) for layer in manifest(where).get("layers", [])
+            if layer.get("format") == "variant_scores"]
+
+
 def release_info():
     """Version, assembly, build date, manifest sha256 and synthetic layers of the current release."""
     m = manifest()
