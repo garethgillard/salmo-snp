@@ -306,6 +306,7 @@ def test_exports(release, annotated, tmp_path):
         text = files[fmt] if fmt in ("tsv", "bed") else (tmp_path / (out.name + ".provenance.txt")).read_text()
         header = [line for line in text.splitlines() if line.startswith("#")]
         assert "sha256" in header[1] and any("PROVISIONAL" in line for line in header)
+        assert "installed salmo-snp " in header[2] and " snpscore " in header[2]  # I4: the versions in use
         assert (fmt in ("tsv", "bed")) == files[fmt].startswith("#")
     assert "maturation" in export.filename("illumina", "test", "maturation")
     illumina = list(csv.DictReader(io.StringIO(files["illumina"])))

@@ -207,7 +207,9 @@ def size(path):
 
 
 def info():
+    from snpportal.lib.export import installed
     gb = lambda n: f"{n / 1e9:.2f} GB" if n >= 1e9 else f"{n / 1e6:.0f} MB"  # noqa: E731
+    print("versions      " + ", ".join(f"{k} {v}" for k, v in installed().items()) + f", Python {sys.version.split()[0]}")
     print(f"data folder   {HOME}")
     for r in releases():
         print(f"release       {r.name} ({gb(size(r))})" + ("  <- this version's" if r.name == RELEASE else ""))

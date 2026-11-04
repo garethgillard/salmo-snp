@@ -80,6 +80,18 @@ def is_synthetic(manifest, meta=None):
     return bool((meta or {}).get("synthetic")) or any(l.get("synthetic") for l in manifest.get("layers", []))
 
 
+def installed():
+    """{name: version} of the installed salmo-snp, snpscore and DuckDB (I4: every export names them)."""
+    from importlib.metadata import PackageNotFoundError, version
+    out = {}
+    for name in ("salmo-snp", "snpscore"):
+        try:
+            out[name] = version(name)
+        except PackageNotFoundError:
+            out[name] = "unknown"
+    return {**out, "duckdb": duckdb.__version__}
+
+
 def provenance(manifest, weights, meta=None):
     """'# ' header lines: release, hashes, versions, preset and filters, PROVISIONAL rules, a SYNTHETIC line when
     synthetic data contributes, the UTC time and the equivalent snpscore command. `manifest` and `weights` are dicts
@@ -96,7 +108,8 @@ def provenance(manifest, weights, meta=None):
         f"{meta.get('tool', 'snpscore')} export, {now}",
         f"release {manifest.get('version')} ({manifest.get('assembly')}, built {manifest.get('created')}); "
         f"manifest sha256 {meta.get('manifest_sha256') or m_sha or 'n/a'}; weights sha256 {meta.get('weights_sha256') or w_sha or 'n/a'}",
-        f"snpscore {manifest.get('snpscore_version')}; duckdb {manifest.get('duckdb_version')}"
+        "installed " + ", ".join(f"{k} {v}" for k, v in installed().items())
+        + f"; release built with snpscore {manifest.get('snpscore_version')}, duckdb {manifest.get('duckdb_version')}"
         + (f"; job created {meta['created_utc']}" if meta.get("created_utc") else "")
         + (f"; input sha256 {meta['input_sha256']}" if meta.get("input_sha256") else ""),
         f"preset {preset} ({conditions}); filters: {filters}" + (f"; panel {meta['panel']}" if meta.get("panel") else ""),

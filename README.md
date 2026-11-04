@@ -27,6 +27,9 @@ You need:
                "git+https://github.com/garethgillard/salmo-snp#subdirectory=snpportal"
    ```
    Use conda-forge, not Anaconda's default channel, which needs a paid licence at larger organisations.
+   Once versions are tagged, install one by its tag (add `@v0.1.0` after `salmo-snp` in both lines) and, to get
+   exactly the versions it was checked with, its `constraints.txt` from the GitHub Release: `pip install -c
+   constraints.txt ...`. `salmo-snp info` and every exported file name the versions in use.
 2. Get the data, once: the release and the genome, every file checked against its sha256. Until the data is hosted on
    salmobase it is a GitHub Release of this repository, named after the release this version of salmo-snp expects
    (`salmo-snp info` names it):
