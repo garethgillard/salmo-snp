@@ -35,6 +35,17 @@ class ProjectsTest(SimpleTestCase):
         url = self.client.post(reverse("snpportal:upload"), {"paste": paste}).url.split("?")[0]
         key = url.rstrip("/").split("/")[-1]
         self.client.post(reverse("snpportal:panel_add", args=[key]))
+        # I9: the user's own population, from (SYNTHETIC) genotypes: counts only, the upload deleted
+        vcf = io.BytesIO(b"##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tf1\tf2\tf3\tf4\n"
+                         b"25\t28996360\t.\tC\tT\t.\t.\t.\tGT\t0/0\t0/1\t1/1\t./.\n")
+        vcf.name = "broodstock_SYNTHETIC.vcf"
+        self.client.post(reverse("snpportal:panel_change"), {"population": vcf, "population_name": "Broodstock 2025"})
+        shown = self.client.get(reverse("snpportal:design_panel")).content.decode()
+        self.assertIn("MAF (Broodstock 2025)", shown)
+        self.assertIn("Your population: 3 fish, call rate 0.75", shown)  # the vgll3 SNP's tooltip
+        left = [p.name for p in (tmp / "results").glob("panel-*/**/*") if p.is_file() and p.suffix not in (".parquet", ".json")]
+        self.assertEqual(left, ["created"])  # the genotype file is gone: only the counts (Parquet) are kept
+        self.assertEqual([p.name for p in (tmp / "results").glob(".upload-*")], [])  # nor the upload handler's file
         save = reverse("snpportal:panel_save")
         self.assertEqual(self.client.post(save, {"name": "Smolt chip 2027", "note": "first draft"}).status_code, 302)
         self.client.post(reverse("snpportal:panel_change"), {"drop": "25:28998410:C:G"})
@@ -53,6 +64,7 @@ class ProjectsTest(SimpleTestCase):
         f.name = "project.zip"
         self.client.post(reverse("snpportal:project_import"), {"project": f})
         self.assertTrue((tmp / "projects" / "Smolt-chip-2027-2" / "v2" / "panel.parquet").exists())
+        self.assertTrue((tmp / "projects" / "Smolt-chip-2027-2" / "v2" / "populations" / "broodstock_2025.parquet").exists())
         bad = io.BytesIO(b"not a zip")
         bad.name = "x.zip"
         self.assertIn("not a project", self.client.post(reverse("snpportal:project_import"), {"project": bad}, follow=True).content.decode())

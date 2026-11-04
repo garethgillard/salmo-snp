@@ -9,10 +9,12 @@ other conditions compare."""
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 import time
 import uuid
+from pathlib import Path
 from urllib.parse import urlencode
 
 import duckdb
@@ -184,13 +186,20 @@ def _open(d):
                     AS file_row_number, {key} AS snp_key, list_contains({'[' + ', '.join(dropped) + ']' if dropped else '[]::VARCHAR[]'}, {key})
                     AS dropped FROM (SELECT *, row_number() OVER (PARTITION BY {same} ORDER BY panel_source, source_row) AS _n,
                     list(DISTINCT panel_source) OVER (PARTITION BY {same}) AS sources FROM u) WHERE _n = 1""")
-    con.execute("CREATE VIEW p0 AS SELECT * FROM pa0 WHERE NOT dropped")
+    pops = [(p["slug"], d / "populations" / f"{p['slug']}.parquet") for p in populations(d)
+            if (d / "populations" / f"{p['slug']}.parquet").exists()]
+    if pops and "ref" in columns and "alt" in columns:  # I9: the user's populations' frequencies, call rate and HWE p
+        from .lib import population
+        con.execute(f"CREATE VIEW pa1 AS {population.join_sql('pa0', pops)}")
+    else:
+        con.execute("CREATE VIEW pa1 AS SELECT * FROM pa0")
+    con.execute("CREATE VIEW p0 AS SELECT * FROM pa1 WHERE NOT dropped")
     chip = d / "chip.parquet"
     if chip.exists():
         window = snp_panel.settings(jobs.weights())["chip_window"]
-        con.execute(f"CREATE VIEW pa AS {snp_panel.compare_sql('pa0', f'read_parquet({chr(39)}{chip}{chr(39)})', window)}")
+        con.execute(f"CREATE VIEW pa AS {snp_panel.compare_sql('pa1', f'read_parquet({chr(39)}{chip}{chr(39)})', window)}")
     else:
-        con.execute("CREATE VIEW pa AS SELECT * FROM pa0")
+        con.execute("CREATE VIEW pa AS SELECT * FROM pa1")
     con.execute("CREATE VIEW p AS SELECT * FROM pa WHERE NOT dropped")
     con.execute("CREATE VIEW v AS SELECT * FROM p")  # tools.assay_readiness reads v
     return con, "p"
@@ -243,6 +252,7 @@ def page(request):
         return render(request, "snpportal/panel.html", ctx)
     s = jobs.read_json(d / "panel.json")
     con, rel = _open(d)
+    ctx["populations"] = populations(d)
     chip = jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}
     synthetic = any(x.get("synthetic") for x in s["sources"]) or bool(chip.get("synthetic"))
     ctx.update(sources=[{**x, "url": f"{reverse('snpportal:projects')}#{x['project']}" if x.get("project") else
@@ -291,10 +301,12 @@ def _rows(con, types, sources, limit, order="problems", new_only=False):
     names = {x["id"]: f"S{i + 1}" for i, x in enumerate(sources)}
     cfg = snp_panel.settings(jobs.weights())
     spacing, low = int(cfg["min_spacing"]), float(cfg["min_maf"])
+    own = next((c for c in types if c.startswith("pop_") and c.endswith("_maf")), None)  # I9: the first own population
+    extra = (own, own[:-3] + "call_rate", own[:-3] + "hwe_p", own[:-3] + "n") if own else ()
     cols = [c for c in ("chrom", "pos", "id", "ref", "alt", "gene_name", "gene_id", "gene_ortholog_human", "region_class", "coding_consequence",
                         "coding_hgvsp", "tier", "assay_status", "public_af_maf", "lore", "on_chip", "near_chip", "dist_to_chip", "sources",
-                        "snp_key", "dropped") if c in types]
-    maf = "public_af_maf" if "public_af_maf" in types else "NULL"
+                        "snp_key", "dropped") + extra if c in types]
+    maf = own or ("public_af_maf" if "public_af_maf" in types else "NULL")
     lore = "coalesce(lore, false)" if "lore" in types else "false"
     sql = f"""WITH k AS (SELECT snp_key, chrom, pos, coalesce(nullif(id, '.'), chrom || ':' || pos) AS name FROM p),
               n AS (SELECT snp_key, pos - lag(pos) OVER w AS dp, lag(name) OVER w AS np, lead(pos) OVER w - pos AS dn,
@@ -320,10 +332,26 @@ def _rows(con, types, sources, limit, order="problems", new_only=False):
                     "position": f"{g('chrom')}:{g('pos'):,}", "alleles": results._alleles(g),
                     "gene": results.gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")), "region": results.region_text(g),
                     "tier": g("tier"), "assay": (results.ASSAY.get(status, ("?", "not_checked")) + (status.replace("_", " "),)),
-                    "maf": None if g("public_af_maf") is None else (f"{g('public_af_maf'):.2f}", g("public_af_maf") < low),
+                    "maf": _maf_cell(g, own, low),
                     "lore": bool(g("lore")), "close": f"{tools._bp(g('close_bp'))} from {g('close_to')}" if near else "",
                     "chip": chip, "sources": " ".join(names.get(x, "?") for x in g("sources") or [])})
     return out
+
+
+def _maf_cell(g, own, low):
+    """(MAF text, below the designer's minimum, tooltip) from the user's population when there is one, else the public
+    panel's; None when unknown."""
+    if own:
+        m = g(own)
+        if m is None:
+            return ("–", False, "Not in your population's file")
+        base = own[:-3]
+        tip = f"Your population: {g(base + 'n') or 0} fish" + (f", call rate {g(base + 'call_rate'):.2f}" if g(base + "call_rate") is not None else "") \
+            + (f", HWE p {g(base + 'hwe_p'):.2g}" if g(base + "hwe_p") is not None else "") \
+            + (f"; public panel {g('public_af_maf'):.2f}" if g("public_af_maf") is not None else "")
+        return (f"{m:.2f}", m < low, tip)
+    m = g("public_af_maf")
+    return None if m is None else (f"{m:.2f}", m < low, "504 public fish, pooled")
 
 
 def _downloads(con, chip, n):
@@ -384,7 +412,42 @@ def _change(request):
         for path in (d / "chip.parquet", d / "chip.json"):
             path.unlink(missing_ok=True)
         return back
+    if request.FILES.get("population") or request.POST.get("population_remove"):
+        return _population(request, d)
     return _chip(request, d)
+
+
+def populations(d):
+    """[{slug, label, format, sites, fish, added_utc}] of the panel folder's own populations (I9; local installs)."""
+    return jobs.read_json(d / "populations.json").get("populations", []) if (d / "populations.json").exists() else []
+
+
+def _population(request, d):
+    """POST population=<file> (VCF genotypes or a frequency table) with population_name, or population_remove=<slug>:
+    per-SNP counts only (lib.population) in populations/<slug>.parquet; the upload is deleted once counted."""
+    back = reverse("snpportal:design_panel")
+    pops = populations(d)
+    if request.POST.get("population_remove"):
+        gone = request.POST["population_remove"]
+        (d / "populations" / f"{gone}.parquet").unlink(missing_ok=True)
+        jobs._write_json(d / "populations.json", {"populations": [p for p in pops if p["slug"] != gone]})
+        return redirect(back)
+    if not jobs.local():  # a server never takes genotypes, even as counts
+        return redirect(f"{back}?error=Your own population is only for a copy of the portal on your computer.")
+    from .lib import population
+    upload = request.FILES["population"]
+    label = (request.POST.get("population_name") or "My population").strip()[:40]
+    slug = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")[:24] or "pop"
+    (d / "populations").mkdir(mode=0o700, exist_ok=True)
+    try:
+        info = population.count(Path(upload.path), jobs.release(), d / "populations" / f"{slug}.parquet")
+    except snpscore.InputError as e:
+        return redirect(f"{back}?{urlencode({'error': str(e)})}")
+    finally:
+        Path(upload.path).unlink(missing_ok=True)
+    pops = [p for p in pops if p["slug"] != slug] + [{"slug": slug, "label": label, **info, "added_utc": jobs.utc()}]
+    jobs._write_json(d / "populations.json", {"populations": pops})
+    return redirect(f"{back}#list-h")
 
 
 def _chip(request, d):

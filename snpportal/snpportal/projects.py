@@ -94,12 +94,22 @@ def save(panel_dir, name, note=""):
     for f in ("chip.parquet", "chip.json"):
         if chip and (panel_dir / f).exists():
             shutil.copyfile(panel_dir / f, v / f)
+    copy_populations(panel_dir, v)
     jobs._write_json(v / "meta.json", {
         "version": n, "created_utc": jobs.utc(), "note": str(note).strip()[:500], "n": len(keys),
         "hash": hashlib.sha256("\n".join(keys).encode()).hexdigest()[:16],
         "sources": [x.get("label") for x in s.get("sources", [])], "chip": chip.get("label"),
         "release": jobs.manifest().get("version"), "weights_sha256": jobs._file("sha256", snpscore_weights())})
     return folder, n
+
+
+def copy_populations(src, dst):
+    """The user's populations (I9: per-SNP counts only) from one panel or version folder to another."""
+    if (src / "populations.json").exists():
+        shutil.copyfile(src / "populations.json", dst / "populations.json")
+        (dst / "populations").mkdir(mode=0o700, exist_ok=True)
+        for f in (src / "populations").glob("*.parquet"):
+            shutil.copyfile(f, dst / "populations" / f.name)
 
 
 def open_in_panel(d, n):
@@ -114,6 +124,7 @@ def open_in_panel(d, n):
     for f in ("chip.parquet", "chip.json"):
         if (v / f).exists():
             shutil.copyfile(v / f, out / f)
+    copy_populations(v, out)
     jobs._write_json(out / "panel.json", {"sources": [{"id": 1, "project": d.name, "version": n, "label": f"{name}, version {n}",
                                                        "n": meta["n"], "selection": "", "filters": [meta.get("note") or "saved panel"],
                                                        "synthetic": False, "added_utc": jobs.utc()}],
@@ -238,7 +249,8 @@ def import_zip(request):
     upload = request.FILES.get("project")
     if not upload:
         return redirect(f"{reverse('snpportal:projects')}?error=Choose a project zip to import.")
-    allowed = re.compile(r"^[^/]+/(project\.json|v\d+/(meta\.json|panel\.parquet|chip\.parquet|chip\.json))$")
+    allowed = re.compile(r"^[^/]+/(project\.json|v\d+/(meta\.json|panel\.parquet|chip\.parquet|chip\.json|populations\.json"
+                         r"|populations/[a-z0-9_]+\.parquet))$")
     try:
         with zipfile.ZipFile(upload) as z:
             names = [i for i in z.infolist() if allowed.match(i.filename)]

@@ -66,6 +66,21 @@
       <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
       <a class="ms-auto" href="{% url 'snpportal:projects' %}">Saved projects</a></form>{% endif %}
   </section>
+  {% if local %}
+  <section class="sp-card" aria-labelledby="pop-h">
+    <h2 id="pop-h">Your population</h2>
+    {% if populations %}<ul class="sp-small mb-2">{% for p in populations %}<li><strong>{{ p.label }}</strong>: {{ p.sites|thousands }} SNPs from a {{ p.format }}{% if p.fish %}
+      of {{ p.fish|thousands }} fish{% endif %} ({{ p.added_utc }})
+      <form class="d-inline" method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0 align-baseline" type="submit" name="population_remove" value="{{ p.slug }}">Remove</button></form></li>{% endfor %}</ul>{% endif %}
+    <form class="d-flex flex-wrap gap-2 align-items-center sp-small" method="post" action="{% url 'snpportal:panel_change' %}" enctype="multipart/form-data">{% csrf_token %}
+      <input class="form-control form-control-sm w-auto" type="file" name="population" aria-label="Genotypes (VCF) or allele frequencies">
+      <input class="form-control form-control-sm w-auto" name="population_name" maxlength="40" placeholder="name, e.g. 2025 broodstock" aria-label="Population name">
+      <button class="btn btn-sm btn-outline-primary" type="submit">Add</button></form>
+    <p class="sp-small sp-muted mt-2 mb-0">Genotypes (a VCF) or a table of allele frequencies (chrom, pos, ref, alt, af) for the fish
+      the panel is for: the list then shows their MAF, call rate and HWE p instead of the public panel's. Only those numbers are
+      kept, on this computer; the genotypes are never stored.</p>
+  </section>
+  {% endif %}
   {% endif %}
     </div>
     {% if n %}<div class="col-lg-6 d-flex flex-column gap-3">
@@ -90,7 +105,7 @@
           <a class="btn {% if new_only %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?chip=new{% if order == 'genome' %}&amp;order=genome{% endif %}#list-h">Not on the chip</a></span>{% endif %}</span></div>
     <div class="table-responsive"><table class="table table-sm sp-table sp-small sp-results mb-1">
       <thead><tr><th scope="col" class="sp-pickcol" title="+ in the panel, − dropped: click to switch">+/&minus;</th><th scope="col">SNP</th><th scope="col">Gene</th><th scope="col">Consequence</th>
-        <th scope="col" class="sp-ctr">Tier</th><th scope="col">Assay</th><th scope="col" class="sp-num">MAF</th>
+        <th scope="col" class="sp-ctr">Tier</th><th scope="col">Assay</th><th scope="col" class="sp-num">{% if populations %}MAF ({{ populations.0.label }}){% else %}MAF{% endif %}</th>
         <th scope="col" title="Another panel SNP closer than the panel designer's minimum spacing">Too close</th>{% if chip %}<th scope="col">Chip</th>{% endif %}<th scope="col">Sources</th></tr></thead>
       <tbody>{% for r in rows %}<tr{% if r.dropped %} class="sp-out"{% endif %}>
         <td class="sp-pickcol"><form method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}
@@ -101,7 +116,7 @@
         <td>{{ r.gene }}</td><td>{{ r.region }}</td>
         <td class="sp-ctr">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
         <td><span class="sp-as sp-as-{{ r.assay.1 }}"><span aria-hidden="true">{{ r.assay.0 }}</span> {{ r.assay.2 }}</span>{% if r.lore %} <span class="sp-as sp-as-warn">LORe</span>{% endif %}</td>
-        <td class="sp-num">{% if r.maf %}{% if r.maf.1 %}<span class="sp-as sp-as-warn" title="Below the panel designer's minimum MAF">{{ r.maf.0 }}</span>{% else %}{{ r.maf.0 }}{% endif %}{% endif %}</td>
+        <td class="sp-num">{% if r.maf %}{% if r.maf.1 %}<span class="sp-as sp-as-warn" title="Below the panel designer's minimum MAF · {{ r.maf.2 }}">{{ r.maf.0 }}</span>{% else %}<span title="{{ r.maf.2 }}">{{ r.maf.0 }}</span>{% endif %}{% endif %}</td>
         <td>{% if r.close %}<span class="sp-as sp-as-warn">{{ r.close }}</span>{% endif %}</td>
         {% if chip %}<td>{{ r.chip }}</td>{% endif %}<td>{{ r.sources }}</td></tr>{% endfor %}</tbody>
     </table></div>
