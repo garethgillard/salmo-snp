@@ -21,7 +21,7 @@ from django.utils.safestring import mark_safe
 import snpscore
 from snpscore import formats
 
-from . import explore, figures, jobs, palette, search
+from . import explore, figures, jobs, palette, search, serve
 
 # AQUA-FAANG's ChromHMM states have no written definitions: the emission figure is the only one (docs/RESEARCH.md section 6),
 # so the Methods table gives each state's label and model, and links the figure (one-line definitions: G to supply).
@@ -451,7 +451,8 @@ def run_locally(request):
         "layers_check": (f"python3 -c \"import hashlib, json; m = json.load(open('{folder}/manifest.json')); print(hashlib.sha256(''.join("
                          "sorted(x['name'] + ' ' + str(x.get('sha256')) + chr(10) for x in m['layers'])).encode()).hexdigest())\""),
         "command": f"snpscore annotate my_snps.vcf.gz --release {folder} --trait all -o my_snps.tsv",
-        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local()})
+        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(),
+        "data_url": serve.DATA_URL})  # unset while the data is a GitHub Release (temporary hosting)
 
 
 def state_palette(request):

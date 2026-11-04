@@ -144,7 +144,7 @@ def local_genome(release):
 
 
 def serve(release=None, port=8000):
-    release = pick_release(release)
+    given, release = release, pick_release(release)
     if not release or not (release / "manifest.json").exists():
         sys.exit("salmo-snp: no release: run `salmo-snp download` first, or give --release <folder>")
     from snpscore.release import check
@@ -163,6 +163,9 @@ def serve(release=None, port=8000):
     from django.core.management import call_command
     django.setup()
     print(f"salmo-snp: release {release.name}, results in {HOME / 'results'}")
+    if not given and release.name != RELEASE:
+        print(f"salmo-snp: this version expects release {RELEASE}, which isn't downloaded: using {release.name} until "
+              f"you download {RELEASE}")
     if not genome:
         print("salmo-snp: no local genome, so sequence checks read it from salmobase (that sends genome positions near your "
               "SNPs there): `salmo-snp download` fetches it")
