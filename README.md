@@ -50,9 +50,8 @@ You need:
   another. It holds `releases/`, `genome/` and `results/`. Results stay until you delete them (Delete in the portal,
   or remove the folder).
 - **What leaves your computer**: nothing you upload or score. The portal fetches public data only: AQUA-FAANG signal
-  and chromatin tracks for the region you view in the locus browser (from salmobase). Your browser loads the pages'
-  styles and scripts (Bootstrap and htmx) from cdn.jsdelivr.net. With `--no-genome`, sequence checks also read the
-  genome from salmobase, near your SNPs' positions; the default download avoids that.
+  and chromatin tracks for the region you view in the locus browser (from salmobase). With `--no-genome`, sequence
+  checks also read the genome from salmobase, near your SNPs' positions; the default download avoids that.
 - **Scripts and pipelines**: `snpscore annotate my_snps.vcf --release <release folder> -o out.tsv` scores without the
   portal (`snpscore -h`; the release folder is the one `salmo-snp info` lists). snpscore installs on its own too.
 - **Updating**: rerun the `pip install` with `--force-reinstall` (pip skips a GitHub install whose version number
@@ -67,9 +66,8 @@ You need:
 - The port is taken: `salmo-snp serve --port 8001`.
 - Certificate errors (old Python builds, or a network that inspects HTTPS): point Python at your CA bundle, e.g.
   `SSL_CERT_FILE=/path/to/ca.pem salmo-snp serve` (downloads and the locus browser's public tracks both read it).
-- Without internet the pages lose their layout and don't update by themselves (Bootstrap and htmx come from
-  cdn.jsdelivr.net until they ship with the package), and the locus browser's signal rows show as unavailable.
-  Scoring still works: reload the results page to see a finished job.
+- Without internet everything works except the locus browser's signal rows, which come from salmobase and show as
+  unavailable.
 
 ## The repository
 
