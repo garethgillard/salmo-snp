@@ -44,7 +44,11 @@ def main():
 
     o = sub.add_parser("pool", help="annotate the public sites into <release>/pool (pool.parquet, background.json)")
     o.add_argument("--release", required=True)
-    o.add_argument("--background", default="data/raw/12_samples_genotype_filtered_on_504.vcf.gz", help="public sites (VCF)")
+    o.add_argument("--background", help="public sites as a VCF (default: the release's own public_af sites, --sites)")
+    o.add_argument("--sites", choices=("aquafaang12", "panel"), default=None,
+                   help="which of the release's public sites: the 12 AQUA-FAANG fish's (default) or the whole 504-fish panel")
+    o.add_argument("--if-stale", action="store_true",
+                   help="only if the release has no pool, or one made with other weights or another snpscore version")
     o.add_argument("--assay", action="store_true",
                    help="also run the sequence and assay checks (1.6M sites: about 80 s with --memory 8GB; 4GB is too little)")
     o.add_argument("--threads", type=int, default=4)
@@ -123,9 +127,12 @@ def pool(args):
     """Annotate the public sites into <release>/pool: a cache of the current weights' tiers, rebuilt after a change."""
     import time
 
-    from .pool import build_pool
+    from .pool import SITES, build_pool, stale
 
+    if args.if_stale and not stale(args.release):
+        print(f"{Path(args.release) / 'pool'}: up to date")
+        return
     t0 = time.time()
-    out = build_pool(Path(args.release), args.background, args.assay, args.threads, args.memory)
+    out = build_pool(Path(args.release), args.background, args.assay, args.threads, args.memory, sites=args.sites or SITES)
     print(f"{out / 'pool.parquet'}: {json.loads((out / 'background.json').read_text())['n_sites']} sites "
           f"in {time.time() - t0:.0f} s")

@@ -132,8 +132,8 @@ def public_source():
     """Where candidate public variants come from: the release pool's VCF, else the 504-fish panel sites (public_af)."""
     if (jobs.release() / "pool" / "pool.parquet").exists():
         source = jobs.read_json(jobs.release() / "pool" / "background.json").get("source") or ""
-        return ("sites of the 12 AQUA-FAANG fish's VCF (release pool)" if source.startswith("12_samples")
-                else "sites of the 504-fish reference panel (release pool)" if source.startswith("ALL_chrome")
+        return ("sites of the 12 AQUA-FAANG fish (release pool)" if source.startswith("12_samples") or "aquafaang12" in source
+                else "sites of the 504-fish reference panel (release pool)" if source.startswith("ALL_chrome") or "panel" in source
                 else "the release pool of public sites")
     return "sites of the 504-fish reference panel"
 

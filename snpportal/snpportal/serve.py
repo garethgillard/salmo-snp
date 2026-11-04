@@ -104,8 +104,23 @@ def download(version=None, source=None, genome=True):
         sys.exit("salmo-snp: the downloaded release is damaged:\n  " + "\n  ".join(problems))
     if genome:
         download_genome(folder, source)
+    ensure_pool(folder)
     print("done: start it with `salmo-snp serve`")
     return folder
+
+
+def ensure_pool(release):
+    """The release's public background pool (snpscore pool: the Overview's comparison with public sites, gene-page
+    candidates), built when it is missing or was made for other rules or another snpscore; about a minute."""
+    from snpscore.pool import build_pool, stale
+    if not stale(release):
+        return
+    print("salmo-snp: scoring the release's public sites for comparison (about a minute, once per release and rules)",
+          flush=True)
+    try:
+        build_pool(release, threads=max(2, min(8, os.cpu_count() or 2)), memory_limit="4GB")
+    except Exception as e:  # the portal works without it: the Overview then leaves out the public comparison
+        print(f"salmo-snp: could not build the public pool ({type(e).__name__}): the Overview leaves out its comparison")
 
 
 def download_genome(release, source):
@@ -152,6 +167,7 @@ def serve(release=None, port=8000):
     if problems:
         sys.exit(f"salmo-snp: {release} can't be used:\n  " + "\n  ".join(problems))
     genome = local_genome(release)
+    ensure_pool(release)
     os.environ.update({
         "DJANGO_SETTINGS_MODULE": "snpsite.settings", "DJANGO_DEBUG": "0",
         "SNPSCORE_RELEASE": str(release.resolve()), "SNPPORTAL_RESULTS_DIR": str(HOME / "results"), "SNPPORTAL_LOCAL": "1"})

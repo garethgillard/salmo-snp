@@ -20,8 +20,7 @@ pip install -e ".[test]"                         # the test extra adds pytest; t
 R=~/.local/share/salmo-snp/releases/2026-11-03  # a downloaded release (`salmo-snp info`), or one built with snpdata
 snpscore annotate my_snps.vcf.gz --release $R --trait maturation -o my_snps_annotated.parquet  # or .tsv
 snpscore rsid rs863754587 --release $R           # Ssal_v3.1 and ICSASG_v2 position of an rs ID
-snpscore pool --release $R --assay --memory 8GB --background 12_samples_genotype_filtered_on_504.vcf.gz
-                                                 # public background pool, a cache of the current weights: $R/pool/
+snpscore pool --release $R --if-stale           # public background pool, a cache of the current weights: $R/pool/
 snpscore benchmark --release $R -o $R/benchmark.tsv   # known loci; controls from the pool
 snpscore benchmark --release $R --positives molqtl:ca molqtl:e --by-tissue -o $R/benchmark_molqtl.tsv
 snpscore gwas sumstats.tsv --release $R --trait maturation -o gwas_out/   # loci.tsv, finemap.tsv
@@ -150,13 +149,17 @@ see "Biology decisions" in ../AGENTS.md and `provisional` in the manifest.
 
 ## Public background pool
 
-`snpscore pool --release R [--background VCF] [--assay]` (`snpscore.pool.build_pool`) annotates every public 12-fish
-site (the 1.6M sites of the 12 AQUA-FAANG fish, all of them 504-panel sites) (sequence and assay checks only with
-`--assay`, which needs `--memory 8GB` for the 1.6M sites and takes about 100 s; the default run takes about 40 s with
-4 threads and 4 GB) and writes, under `R/pool/`:
+`snpscore pool --release R [--sites aquafaang12|panel] [--background VCF] [--assay] [--if-stale]`
+(`snpscore.pool.build_pool`) annotates public sites taken from the release itself: by default every site of the 12
+AQUA-FAANG fish (`public_af` rows with `aquafaang12_af`, the 1.6M sites of their VCF, all of them 504-panel sites;
+`--sites panel`: all 7.6M panel sites; `snpscore.pool.SITES`, DECISIONS #15), or the sites of a VCF. Sequence and assay
+checks run only with `--assay`, which needs `--memory 8GB` for the 1.6M sites and takes about 100 s; the default run
+takes about 35-40 s with 4 threads and 4 GB. It writes, under `R/pool/`:
 - `pool.parquet`: the annotate columns (tiers for the `all` preset), then `tier__<preset>` and `tier_score__<preset>`
   for every preset in weights.yaml (wide, one row per site, in genome order).
-- `background.json`: `n_sites`, `rows_read`, `rejected`, `release`, `created`, `source`, `assay_checked`, `seconds`;
+- `background.json`: `n_sites`, `rows_read`, `rejected`, `release`, `created`, `source`, `assay_checked`, `seconds`,
+  `weights_sha256` and `snpscore_version` (`stale()`: no pool, or one made for another release version, other weights
+  or another snpscore; `--if-stale` builds only then, as `salmo-snp download` and `serve` and the NREC deploys do);
   categories as {key: {`n`, `share`}} whose shares sum to 1: `tiers` {preset: {tier}}, `region_class` (NULL =
   `intergenic`), `maf_histogram` (public MAF in bins of 0.05, `0.00-0.05` ... `0.45-0.50`), `assay_status` (with
   `--assay`); independent shares (share of sites): `active_by_condition` {condition: share with an active state},

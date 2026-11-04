@@ -33,7 +33,8 @@ You need:
    ```bash
    gh release download data-2026-11-03 -R garethgillard/salmo-snp      # two files, ~1.1 GB
    tar -xf salmo-snp-data-2026-11-03.tar && tar -xf salmo-snp-genome-Ssal_v3.1.tar
-   salmo-snp download --from site      # checks every file and copies it into the data folder; then delete site/
+   salmo-snp download --from site      # checks every file, copies it into the data folder and scores the public
+                                       # sites for comparison (about a minute); then delete site/
    ```
    In a clone of the repository, `bash tools/get_data.sh` does the same. Once the data is hosted online,
    `salmo-snp download` alone will do (or `--from <address>`; a copy of the published folder on a disk or a share

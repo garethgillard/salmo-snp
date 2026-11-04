@@ -18,8 +18,8 @@ python -m pytest -q                              # tests run on the small region
 ```
 
 Then score the public sites once per release and weights change: `snpscore pool --release release/2026-11-03
---assay --memory 8GB` (../snpscore/README.md); `salmo-snp download` leaves the pool out (it is a cache of the
-current weights), so a downloaded release has none (../docs/TRACKER.md step 8).
+--assay --memory 8GB` (../snpscore/README.md). A published release leaves the pool out (a cache of the current
+weights): `salmo-snp download` and `serve` build it from the release's own sites.
 
 `fetch` needs a current CA bundle on old Python/OpenSSL builds: `SSL_CERT_FILE=/path/to/cert.pem snpdata fetch`.
 It streams the 975 MB 504-fish VCF and writes only its sites and frequencies (`sites_only` in layers.yaml: CHROM to
