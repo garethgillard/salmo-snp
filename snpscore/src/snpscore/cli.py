@@ -21,6 +21,8 @@ def main():
     a.add_argument("--threads", type=int, default=4)
     a.add_argument("--memory", default="4GB", help="DuckDB memory limit")
     a.add_argument("--max-snps", type=int, help="refuse files with more SNPs than this")
+    a.add_argument("--place-by-flank", action="store_true", help="the positions are on another assembly (e.g. an ICSASG_v2 "
+                   "chip manifest): place the SNPs by their flank sequences (Flank, SourceSeq or TopGenomicSeq column)")
 
     m = sub.add_parser("benchmark", help="positives vs controls matched on gene distance and public MAF, per layer, "
                                          "evidence term, region class, consequence and tier, with 95%% intervals")
@@ -65,7 +67,7 @@ def main():
             sys.exit(f"snpscore: {args.release} can't be used:\n  " + "\n  ".join(check(args.release)))
         try:
             annotate(args.snps, args.release, args.out, args.trait, threads=args.threads, memory_limit=args.memory,
-                     max_snps=args.max_snps)
+                     max_snps=args.max_snps, place_by_flank=args.place_by_flank)
         except InputError as e:
             sys.exit(f"snpscore: {e}")
         out = Path(args.out)
@@ -76,6 +78,10 @@ def main():
             r = report["rsid"]
             print(f"rs IDs: {r['placed']} placed, {r['moved_from_icsasg_v2']} moved from ICSASG_v2 "
                   f"({r['alleles_complemented']} with complemented alleles), {r['unknown']} unknown")
+        if report.get("flank"):
+            f = report["flank"]
+            print(f"by flank sequence: {f['placed']} placed ({f['complemented']} with complemented alleles), "
+                  f"{f['not_found']} not found among the known sites")
         for w in report.get("alias_warnings", []):
             print(f"warning ({w['rows']} rows): {w['message']}")
         if report.get("assembly", {}).get("message"):

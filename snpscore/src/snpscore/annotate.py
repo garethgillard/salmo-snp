@@ -55,18 +55,27 @@ def user_message(error):
     return next((m for cls, m in ERRORS if isinstance(error, cls)), "The file could not be annotated. " + ACCEPTED)
 
 
-def read_snps(con, path, known, alias=None, max_snps=None, rsid=None):
+def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys=None):
     """Load a SNP file into table `snps` (idx = input row, chrom, pos, then the other columns) and the rows that can't
     be used into `rejects` (row, chrom, pos, ..., reason). Chromosome names go through `alias` (alias.parquet);
     `known` lists the release's chromosomes. With `rsid` (rsid.parquet), a row whose id is an rs ID is placed on
     Ssal_v3.1 when it has no position, or moved there when its position is the rs ID's ICSASG_v2 position
-    (column position_source; alleles complemented where the two assemblies' strands differ). Returns the counts."""
+    (column position_source; alleles complemented where the two assemblies' strands differ). With `flank_keys`
+    (flank_keys.parquet, I18), the input's positions are taken to be on another assembly: each row is placed by its
+    flank sequence (placement.place), else by its rs ID, else rejected (flank_not_found). Returns the counts."""
     layout = detect(path)
     limit = int(max_snps) + 1 if max_snps else None
     con.execute(f"CREATE OR REPLACE TABLE raw AS SELECT row_number() OVER () AS idx, * FROM ({source(path, layout, limit)})")
     rows = con.execute("SELECT count(*) FROM raw").fetchone()[0]
     if max_snps and rows > max_snps:
         raise TooMany(f"The file has more than {max_snps:,} SNPs. Split it, or run snpscore locally.")
+    by_flank = None
+    if flank_keys:
+        from . import placement
+        by_flank = placement.place(con, flank_keys)
+        if by_flank is None:
+            raise InputError("Placing by flank sequence needs a column of probe or flank sequences (Axiom 'Flank', "
+                             "Illumina 'SourceSeq' or 'TopGenomicSeq', with the SNP as [A/B]).")
     cols = [r[0] for r in con.execute("DESCRIBE raw").fetchall()]
     con.execute("CREATE OR REPLACE TEMP TABLE known AS SELECT unnest(?::VARCHAR[]) AS chrom", [list(known)])
     mapped, join, warning = "trim(r.chrom)", "", "NULL"
@@ -107,8 +116,13 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None):
                     WHEN chrom NOT IN (SELECT chrom FROM known) THEN 'unknown_chrom'
                     WHEN row_number() OVER (PARTITION BY {key} ORDER BY idx) > 1 THEN 'duplicate' END AS reason
         FROM d""")
+    if by_flank:  # placed by flank sequence (I18): say so; the rows it could not place, unless their rs ID did, say why
+        con.execute("UPDATE checked SET position_source = 'flank' WHERE _flank = 'flank' AND position_source IS NULL")
+        con.execute("UPDATE checked SET reason = 'flank_not_found' WHERE _flank = 'flank_not_found' AND position_source IS NULL "
+                    "AND reason IN ('missing_chrom', 'bad_pos', 'unknown_rsid')")
     placed = con.execute("SELECT count(*) FROM checked WHERE position_source IS NOT NULL AND reason IS NULL").fetchone()[0]
-    helper = "input_chrom, input_pos, reason, alias_warning, is_rs, flip" + ("" if placed else ", position_source")
+    helper = "input_chrom, input_pos, reason, alias_warning, is_rs, flip" + ("" if placed else ", position_source") \
+        + (", _flank" if by_flank else "")
     con.execute(f"CREATE OR REPLACE TABLE snps AS SELECT * EXCLUDE ({helper}) FROM checked WHERE reason IS NULL")
     extra = "".join(f", {c}" for c in ("id", "ref", "alt") if c in cols)
     con.execute(f"""CREATE OR REPLACE TABLE rejects AS SELECT idx AS row, input_chrom AS chrom, input_pos AS pos{extra}, reason
@@ -141,6 +155,8 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None):
                       count(*) FILTER (WHERE starts_with(position_source, 'ICSASG_v2') AND reason IS NULL),
                       count(*) FILTER (WHERE flip AND reason IS NULL), count(*) FILTER (WHERE reason = 'unknown_rsid')
                FROM checked""")[0]))
+    if by_flank:
+        report["flank"] = {k: by_flank[k] for k in ("placed", "complemented", "not_found")}
     report["duplicates_merged"] = report["rejected"].get("duplicate", 0)
     if alleles:
         report["indels"], report["multiallelic"] = fetch("""SELECT count(*) FILTER (WHERE (length(ref) <> 1 OR length(alt) <> 1)
@@ -356,11 +372,13 @@ def add_sequence_checks(con, location, write_dir, weights=None, public_af=None):
 
 
 def annotate(snps_path, release_dir, out_path, trait="all", sequence=True, progress=None, max_snps=None,
-             threads=2, memory_limit="2GB"):
+             threads=2, memory_limit="2GB", place_by_flank=False):
     """Write the annotated SNPs to out_path: Parquet if it ends in .parquet, CSV if .csv, otherwise TSV, and next to it
     <stem>.validation.json and <stem>.rejects.tsv. Adds the release's layers, the known-loci catalogue, the sequence
     checks and assay QC (if the release knows where the genome is and `sequence`) and the tier columns for the preset.
-    `progress(stage)` is called with stage names. Problems with the input raise InputError with a safe message."""
+    `progress(stage)` is called with stage names. `place_by_flank` (I18): the input's positions are on another assembly,
+    so its SNPs are placed by their flank sequences (read_snps). Problems with the input raise InputError with a safe
+    message."""
     path, release, out = Path(snps_path).resolve(), Path(release_dir).resolve(), Path(out_path).resolve()
     step = progress or (lambda stage: None)
     manifest = json.loads((release / "manifest.json").read_text())
@@ -369,7 +387,7 @@ def annotate(snps_path, release_dir, out_path, trait="all", sequence=True, progr
         raise InputError(f"Unknown trait preset '{trait}'. Choose from: {', '.join(weights['presets'])}")
     con = connect([path.parent, release], out.parent, threads, memory_limit)
     try:
-        report = _annotate(con, path, release, out, manifest, weights, trait, sequence, step, max_snps)
+        report = _annotate(con, path, release, out, manifest, weights, trait, sequence, step, max_snps, place_by_flank)
     except duckdb.Error as e:
         if os.environ.get("SNPSCORE_DEBUG"):
             raise
@@ -381,14 +399,17 @@ def annotate(snps_path, release_dir, out_path, trait="all", sequence=True, progr
     return Path(out_path)
 
 
-def _annotate(con, path, release, out, manifest, weights, trait, sequence, step, max_snps):
+def _annotate(con, path, release, out, manifest, weights, trait, sequence, step, max_snps, place_by_flank=False):
     step("reading")
     known = manifest.get("chrom_sizes") or [r[0] for r in con.execute(" UNION ".join(
         f"SELECT DISTINCT chrom FROM read_parquet({lit(release / (l['name'] + '.parquet'))})"
         for l in manifest["layers"] if l["type"] == "interval")).fetchall()]
     alias, rsid_table = release / "alias.parquet", release / "rsid.parquet"
+    flank_keys = release / "flank_keys.parquet"
+    if place_by_flank and not flank_keys.exists():
+        raise InputError("This release has no flank keys (flank_keys.parquet), so SNPs can't be placed by their flank sequence.")
     report = read_snps(con, path, known, alias if alias.exists() else None, max_snps,
-                       rsid_table if rsid_table.exists() else None)
+                       rsid_table if rsid_table.exists() else None, flank_keys if place_by_flank else None)
     stem = out.parent / out.stem
     if report["snps_kept"]:
         cols = [r[0] for r in con.execute("DESCRIBE snps").fetchall()]

@@ -502,3 +502,35 @@ def test_genome_location_by_file_name(tmp_path, monkeypatch):  # I17: a data fol
     assert genome_location({"genome": {**m["genome"], "file": "other.fa.gz"}}) == "https://example.org/g.fa.gz"  # another release's
     monkeypatch.setenv("SNPSCORE_GENOME", "/srv/genome.fa.gz")  # a server's own copy comes first
     assert genome_location(m) == "/srv/genome.fa.gz"
+
+
+def test_place_by_flank(release, tmp_path):  # I18: SYNTHETIC manifest rows on 'another assembly', placed by their flanks
+    from snpscore.fasta import Fasta
+    from snpscore.placement import COMPLEMENT
+    genome = Fasta(FIXTURE / "Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz")
+    sites = duckdb.sql(f"SELECT chrom, pos FROM read_parquet('{release / 'flank_keys.parquet'}') ORDER BY chrom, pos LIMIT 4").fetchall()
+    rc = lambda s: s.upper().translate(COMPLEMENT)[::-1]  # noqa: E731
+    lines = ["chrom\tpos\tid\tref\talt\tFlank"]
+    for i, (chrom, pos) in enumerate(sites):
+        left, base, right = (genome.fetch(chrom, pos - 36, pos - 1), genome.fetch(chrom, pos - 1, pos).upper(),
+                             genome.fetch(chrom, pos, pos + 35))
+        other = "A" if base != "A" else "G"
+        if i == 3:  # given on the other strand, alleles too
+            lines.append(f"1\t{1000 + i}\tm{i}\t{rc(base)}\t{rc(other)}\t{rc(right)}[{rc(base)}/{rc(other)}]{rc(left)}")
+        else:
+            lines.append(f"1\t{1000 + i}\tm{i}\t{base}\t{other}\t{left}[{base}/{other}]{right}")
+    lines.append("1\t2000\tnowhere\tA\tG\t" + "ACGTTGCA" * 5 + "[A/G]" + "TTGGCCAA" * 5)
+    path = tmp_path / "v2_manifest_SYNTHETIC.tsv"
+    path.write_text("\n".join(lines) + "\n")
+    m = json.loads((release / "manifest.json").read_text())
+    con = connect([tmp_path, release])
+    report = read_snps(con, path, m["chrom_sizes"], None, None, None, release / "flank_keys.parquet")
+    got = {i: (c, p, r, s) for i, c, p, r, s in con.execute("SELECT id, chrom, pos, ref, position_source FROM snps").fetchall()}
+    assert report["flank"] == {"placed": 4, "complemented": 1, "not_found": 1}
+    for i, (chrom, pos) in enumerate(sites):
+        assert got[f"m{i}"][:2] == (chrom, pos) and got[f"m{i}"][3] == "flank"
+        assert got[f"m{i}"][2] == genome.fetch(chrom, pos - 1, pos).upper()  # the reverse row's alleles complemented back
+    assert report["rejected"] == {"flank_not_found": 1}
+    with pytest.raises(InputError):  # no flank column
+        (tmp_path / "plain.tsv").write_text("chrom\tpos\n1\t5\n")
+        read_snps(con, tmp_path / "plain.tsv", m["chrom_sizes"], None, None, None, release / "flank_keys.parquet")

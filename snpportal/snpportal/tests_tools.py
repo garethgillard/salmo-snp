@@ -220,6 +220,23 @@ class ToolsTest(SimpleTestCase):
         self.assertContains(self.client.get(url + "?tab=panel"), 'id="selected-h"')
         self.assertEqual(self.client.get(reverse("snpportal:download", args=[url.split("/")[-2]]), {"scope": "all", "format": "kasp"}).status_code, 200)
 
+    def test_chip_placed_by_flank(self):  # I18: a SYNTHETIC manifest on 'another assembly', placed by its flank sequences
+        self.client.get(self.url, {"tab": "table"})
+        self.client.post(reverse("snpportal:panel_add", args=[self.key]))
+        genome = Fasta(FIXTURE / "Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz")
+        sites = duckdb.sql(f"SELECT chrom, pos FROM read_parquet('{self.release / 'flank_keys.parquet'}') ORDER BY pos LIMIT 3").fetchall()
+        lines = ["Name\tChr\tMapInfo\tSourceSeq"] + [
+            f"m{i}\t1\t{100 + i}\t{genome.fetch(c, p - 41, p - 1)}[{genome.fetch(c, p - 1, p).upper()}/N]{genome.fetch(c, p, p + 40)}"
+            for i, (c, p) in enumerate(sites)] + ["lost\t1\t999\t" + "ACGT" * 10 + "[A/G]" + "TTGA" * 10]
+        chip = SimpleUploadedFile("v2_chip_SYNTHETIC.tsv", ("\n".join(lines) + "\n").encode())
+        self.client.post(reverse("snpportal:panel_change"), {"chip": chip, "by_flank": "1"})
+        page = self.client.get(reverse("snpportal:design_panel")).content.decode()
+        self.assertIn("Placed by flank sequence: 3 markers; 1 not found among the known variant sites", page)
+        self.assertIn('name="by_flank"', page)
+        plain = SimpleUploadedFile("plain_SYNTHETIC.tsv", b"chrom\tpos\n9\t23007708\n")
+        response = self.client.post(reverse("snpportal:panel_change"), {"chip": plain, "by_flank": "1"})
+        self.assertIn("chip_error=flank", response.url)  # no flank column
+
     def test_panel_purpose(self):  # I8: a purpose sets the designer's defaults; the panel, report and exports name it
         self.client.get(self.url, {"tab": "table"})
         page = self.client.get(self.url, {"tab": "panel", "purpose": "parentage"}).content.decode()

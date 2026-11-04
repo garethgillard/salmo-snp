@@ -263,6 +263,7 @@ def page(request):
     con, rel = _open(d)
     ctx["populations"] = populations(d)
     ctx["genome"] = genome() is not None
+    ctx["flank_keys"] = (jobs.release() / "flank_keys.parquet").exists()  # I18: chips on another assembly
     chip = jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}
     synthetic = any(x.get("synthetic") for x in s["sources"]) or bool(chip.get("synthetic"))
     ctx.update(sources=[{**x, "url": f"{reverse('snpportal:projects')}#{x['project']}" if x.get("project") else
@@ -588,10 +589,11 @@ def _chip(request, d):
         label = (request.POST.get("chip_name") or "").strip()[:40] or f"Chip {len(chips(d)) + 2}"
     new = d / ".chip-new.parquet"
     try:
-        report = snp_panel.read_chip(src, jobs.release(), new, max_snps=tools.chip_cap())
+        report = snp_panel.read_chip(src, jobs.release(), new, max_snps=tools.chip_cap(),
+                                     place_by_flank=bool(request.POST.get("by_flank")) and src != demo)
     except (snpscore.InputError, duckdb.Error):
         new.unlink(missing_ok=True)
-        return redirect(f"{reverse('snpportal:design_panel')}?chip_error=format")
+        return redirect(f"{reverse('snpportal:design_panel')}?chip_error={'flank' if request.POST.get('by_flank') else 'format'}")
     finally:
         if src != demo:
             src.unlink(missing_ok=True)
@@ -604,7 +606,8 @@ def _chip(request, d):
         (d / "chips").mkdir(mode=0o700, exist_ok=True)
         os.replace(new, d / "chips" / f"{slug}.parquet")
         jobs._write_json(d / "chips.json", {"chips": [c for c in chips(d) if c["slug"] != slug] + [
-            {"slug": slug, "label": label, "synthetic": synthetic, "kept": report["snps_kept"], "created_utc": jobs.utc()}]})
+            {"slug": slug, "label": label, "synthetic": synthetic, "kept": report["snps_kept"], "created_utc": jobs.utc(),
+             **({"flank": report["flank"]} if report.get("flank") else {})}]})
         return redirect(back)
     con = jobs.connect([d], d)
     density = [list(x) for x in con.execute(f"SELECT chrom, (pos - 1) // 1000000, count(*) FROM read_parquet('{new}') "
@@ -613,7 +616,8 @@ def _chip(request, d):
     os.replace(new, d / "chip.parquet")
     jobs._write_json(d / "chip.json", {"label": label, "synthetic": synthetic, "kept": report["snps_kept"],
                                        "rejected": {k: v for k, v in (report.get("rejected") or {}).items() if v},
-                                       "density": density, "created_utc": jobs.utc()})
+                                       "density": density, "created_utc": jobs.utc(),
+                                       **({"flank": report["flank"]} if report.get("flank") else {})})
     return redirect(back)
 
 
