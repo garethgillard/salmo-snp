@@ -55,6 +55,17 @@ class ProjectsTest(SimpleTestCase):
         self.assertIn("without Asn323Lys", page)
         self.assertIn("0 SNPs added, 1 removed", page)
         self.assertIn("25:28,998,410", page)  # the SNP dropped by hand, listed as removed
+        # I12: the design report of version 2, and of the working panel
+        report = self.client.get(reverse("snpportal:project_report", args=["Smolt-chip-2027", 2])).content.decode()
+        self.assertIn("Smolt chip 2027, version 2", report)
+        self.assertIn("<b>2</b><span>SNPs</span>", report)  # as meta.json and panel.parquet hold
+        self.assertIn("Since version 1: 0 SNPs added,\n      1 removed.", report)
+        self.assertIn("Broodstock 2025: mean call rate 0.75", report)
+        self.assertIn("Markers per chromosome", report)
+        self.assertIn("Release ", report)
+        working = self.client.get(reverse("snpportal:panel_report"))
+        self.assertContains(working, "Panel SNPs along the genome")
+        self.assertEqual(self.client.get(reverse("snpportal:project_report", args=["Smolt-chip-2027", 9])).status_code, 404)
         tsv = b"".join(self.client.get(reverse("snpportal:project_download", args=["Smolt-chip-2027", 2])).streaming_content).decode()
         self.assertTrue(tsv.startswith("#"))  # provenance lines
         self.assertIn("28996360", tsv)

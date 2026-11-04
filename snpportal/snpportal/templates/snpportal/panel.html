@@ -88,7 +88,7 @@
       <span class="ms-2">Vendor file:</span>
       {% for value, label in downloads.formats %}<button class="btn btn-sm btn-outline-primary" type="submit" name="format" value="{{ value }}">{{ label }}</button>{% endfor %}
     </form>
-    <p class="sp-small mt-2 mb-0"><a href="{{ downloads.tsv }}">Download the panel (TSV)</a>{% if not local %} &middot; score that file again to keep the
+    <p class="sp-small mt-2 mb-0"><a href="{% url 'snpportal:panel_report' %}">Design report</a> (printable) &middot; <a href="{{ downloads.tsv }}">Download the panel (TSV)</a>{% if not local %} &middot; score that file again to keep the
       panel beyond 24 hours{% endif %}. Vendor files leave out SNPs that fail the assay check.</p>
     {% if local %}<form class="d-flex flex-wrap gap-2 align-items-center sp-small mt-2" method="post" action="{% url 'snpportal:panel_save' %}">{% csrf_token %}
       <label for="save-name">Save as version of</label>

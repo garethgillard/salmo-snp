@@ -174,14 +174,14 @@ def _open(d):
     novel_functional (snp_panel.compare_sql). View pa also holds the SNPs dropped by hand (dropped: true), for the
     list to show them; downloads, the chip comparison and every count read p."""
     con = jobs.connect([d, jobs.release()], d)
-    files = sorted(d.glob("source_*.parquet"))
+    files = sorted(d.glob("source_*.parquet")) or [f for f in [d / "panel.parquet"] if f.exists()]  # or a saved version (I7)
     if not files:
         return con, None
     con.execute("CREATE VIEW u AS SELECT * FROM read_parquet([" + ", ".join(f"'{f}'" for f in files) + "], union_by_name=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE u)").fetchall()]
     same = ", ".join(["chrom", "pos"] + [f"coalesce({c}, '')" for c in ("ref", "alt") if c in columns])
     key = "concat_ws(':', " + ", ".join(["chrom", "pos"] + [f"coalesce({c}, '')" for c in ("ref", "alt") if c in columns]) + ")"
-    dropped = [lit(k) for k in jobs.read_json(d / "panel.json").get("dropped", [])]
+    dropped = [lit(k) for k in (jobs.read_json(d / "panel.json").get("dropped", []) if (d / "panel.json").exists() else [])]
     con.execute(f"""CREATE VIEW pa0 AS SELECT * EXCLUDE (_n), row_number() OVER (ORDER BY TRY_CAST(chrom AS INTEGER), chrom, pos) - 1
                     AS file_row_number, {key} AS snp_key, list_contains({'[' + ', '.join(dropped) + ']' if dropped else '[]::VARCHAR[]'}, {key})
                     AS dropped FROM (SELECT *, row_number() OVER (PARTITION BY {same} ORDER BY panel_source, source_row) AS _n,

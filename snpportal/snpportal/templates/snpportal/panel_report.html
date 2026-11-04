@@ -1,0 +1,77 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% comment %}Printable design report of a panel (panel_report.py, ROADMAP I12): the working Design panel or a saved project
+   version. portal.css /* report */ sets A4; the browser's 'Save as PDF' makes the PDF.{% endcomment %}
+{% block main %}
+<div class="sp-report sp-stack">
+  <p class="sp-noprint sp-small sp-muted mb-0"><button type="button" class="btn btn-sm btn-primary" onclick="window.print()">Print or save as PDF</button>
+    Choose &lsquo;Save as PDF&rsquo; in the print dialog for a PDF.</p>
+  <div class="sp-status sp-status-not_checked" role="note">Prototype scoring: tiers rank annotated evidence, not proven effects;
+    rules and design thresholds are provisional.{% if r.synthetic %} Made from SYNTHETIC test data.{% endif %}</div>
+
+  <section class="sp-card" aria-labelledby="what-h">
+    <h2 id="what-h">{{ r.title }}</h2>
+    {% if r.note %}<p class="sp-small mb-2">{{ r.note }}</p>{% endif %}
+    <div class="sp-kpis">
+      <div class="sp-kpi"><b>{{ r.n|thousands }}</b><span>SNPs</span></div>
+      <div class="sp-kpi"><b>{{ r.chroms|length }}</b><span>chromosomes</span></div>
+      {% for tier, k in r.tiers %}{% if tier <= 2 %}<div class="sp-kpi"><b>{{ k|thousands }}</b><span>tier {{ tier }}</span></div>{% endif %}{% endfor %}
+      {% if r.known is not None %}<div class="sp-kpi"><b>{{ r.known|thousands }}</b><span>near a known locus</span></div>{% endif %}
+    </div>
+    {% if r.previous %}<p class="sp-small mb-0 mt-2">Since version {{ r.previous.version }}: {{ r.previous.added|thousands }} SNPs added,
+      {{ r.previous.removed|thousands }} removed.</p>{% endif %}
+    <p class="sp-small sp-muted mb-0 mt-1">Designer settings: at least {{ r.settings.min_spacing|thousands }} bp apart, MAF ≥ {{ r.settings.min_maf }},
+      at most {{ r.settings.max_per_gene }} per gene and {{ r.settings.max_per_element }} per AQUA-FAANG element (the Design panel flags SNPs outside them).</p>
+  </section>
+
+  <div class="row g-2">
+    <div class="col-6">
+  <section class="sp-card" aria-labelledby="chrom-h">
+    <h2 id="chrom-h">Markers per chromosome</h2>
+    <table class="table table-sm sp-small mb-0">
+      <thead><tr><th scope="col">Chr</th><th scope="col" class="sp-num">SNPs</th><th scope="col" class="sp-num">Median spacing</th>
+        <th scope="col" class="sp-num">Largest gap</th>{% if r.has_cm %}<th scope="col" class="sp-num">Median cM</th><th scope="col" class="sp-num">Span cM</th>{% endif %}</tr></thead>
+      <tbody>{% for c in r.chroms %}<tr><th scope="row" class="fw-normal">{{ c.chrom }}</th><td class="sp-num">{{ c.markers|thousands }}</td>
+        <td class="sp-num">{{ c.median|default_if_none:"" }}</td><td class="sp-num">{{ c.largest|default_if_none:"" }}</td>
+        {% if r.has_cm %}<td class="sp-num">{{ c.median_cm|default_if_none:"" }}</td><td class="sp-num">{{ c.span_cm|default_if_none:"" }}</td>{% endif %}</tr>{% endfor %}</tbody>
+    </table>
+    {% if r.has_cm %}<p class="sp-small sp-muted mb-0 mt-1">cM on the sex-averaged linkage map.</p>{% endif %}
+  </section>
+    </div>
+    <div class="col-6 d-flex flex-column gap-2">
+  {% if r.mafs %}<section class="sp-card" aria-labelledby="maf-h">
+    <h2 id="maf-h">Minor allele frequency</h2>
+    <table class="table table-sm sp-small mb-0">
+      <thead><tr><th scope="col"></th>{% for label, k in r.mafs.0.1.bins %}<th scope="col" class="sp-num">{{ label }}</th>{% endfor %}<th scope="col" class="sp-num">Unknown</th><th scope="col" class="sp-num">Median</th></tr></thead>
+      <tbody>{% for name, m in r.mafs %}<tr><th scope="row" class="fw-normal">{{ name }}</th>{% for label, k in m.bins %}<td class="sp-num">{{ k|thousands }}</td>{% endfor %}
+        <td class="sp-num">{{ m.unknown|thousands }}</td><td class="sp-num">{{ m.median|default_if_none:"" }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% for name, m in r.mafs %}{% if m.call_rate is not None %}<p class="sp-small mb-0 mt-1">{{ name }}: mean call rate {{ m.call_rate }};
+      {{ m.hwe_low|thousands }} SNPs with HWE p below {{ r.settings.upgrade_min_hwe_p }}.</p>{% endif %}{% endfor %}
+  </section>{% endif %}
+  {% if r.readiness %}<section class="sp-card" aria-labelledby="assay-h">
+    <h2 id="assay-h">Assay check</h2>
+    <div class="sp-figure">{{ r.readiness.svg }}</div><p class="sp-small sp-muted mb-0">{{ r.readiness.line }}</p>
+  </section>{% endif %}
+  {% if r.regions %}<section class="sp-card" aria-labelledby="fn-h">
+    <h2 id="fn-h">Functional content</h2>
+    <p class="sp-small mb-1">{% for tier, k in r.tiers %}<span class="sp-badge sp-tier-{{ tier }}">Tier {{ tier }}: {{ k|thousands }}</span> {% endfor %}</p>
+    <p class="sp-small mb-0">{% for name, k in r.regions %}{{ name }} {{ k|thousands }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+  </section>{% endif %}
+  {% if r.chip %}<section class="sp-card" aria-labelledby="chip-h">
+    <h2 id="chip-h">Compared with {{ r.chip.label|lower }}</h2>
+    <p class="sp-small mb-0">{{ r.chip.markers|thousands }} chip markers. {{ r.chip.on|thousands }} panel SNPs are on the chip and
+      {{ r.chip.new|thousands }} are not; {{ r.chip.novel|thousands }} tier 1–2 SNPs have no chip marker within {{ r.chip.window }};
+      the chip has {{ r.chip.gaps|thousands }} gaps over {{ r.chip.gap }}.{% if r.chip.others %} Also compared with: {{ r.chip.others|join:", " }}.{% endif %}</p>
+  </section>{% endif %}
+    </div>
+  </div>
+
+  <figure class="sp-card sp-figure" id="fig-panel"><h2>Panel SNPs along the genome</h2>{{ r.fig }}</figure>
+
+  <section class="sp-card sp-report-text" aria-labelledby="prov-h">
+    <h2 id="prov-h">Provenance</h2>
+    <ul class="sp-report-prov">{% for line in r.provenance %}<li>{{ line }}</li>{% endfor %}</ul>
+  </section>
+</div>
+{% endblock main %}
