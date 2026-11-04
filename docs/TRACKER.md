@@ -9,7 +9,7 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - Phase: feature work on the local install, the main product (AGENTS.md plan 4, G 2026-11-03); the live site moves
   to salmobase later.
 - main is green on GitHub (tests, user-install, deploy). The NREC demo https://158.39.75.9/snp/ runs the latest main
-  with release 2026-11-03 (cloud sessions reach it as https://158-39-75-9.sslip.io/snp/: their proxy refuses bare IPs).
+  with release 2026-11-03 (cloud sessions use https://158-39-75-9.sslip.io/snp/: the bare IP didn't connect through their proxy).
 - The data for real use: the private GitHub Release data-2026-11-03 (`bash tools/get_data.sh`); not on salmobase yet.
 - Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
 

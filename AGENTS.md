@@ -179,11 +179,15 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
 - Network: the default (Trusted) allows GitHub, its release downloads and PyPI, so the tests and
   `tools/get_data.sh` work. The locus browser's AQUA-FAANG tracks and the genome URL need `salmobase.org`; rebuilding
   the data (`snpdata fetch`) needs salmobase.org, ftp.ensembl.org, jun2026.archive.ensembl.org, ftp.ebi.ac.uk,
-  ftp.sra.ebi.ac.uk, ftp.ncbi.nlm.nih.gov, jaspar.elixir.no, www.bgee.org and www.biorxiv.org: add them under the
-  environment's Network access, Custom, keeping the default list.
+  ftp.sra.ebi.ac.uk, ftp.ncbi.nlm.nih.gov, jaspar.elixir.no, www.bgee.org and www.biorxiv.org: in the environment's
+  settings (the cloud environment menu in the session's title bar, then Edit), Network access, add them under Allowed
+  domains (the Limited level; Custom in older apps) with Allow package managers left ticked, or choose a broader level
+  (https://code.claude.com/docs/en/cloud-environments#network-access). This environment reached all of them on
+  2026-11-04, so check before changing anything.
 - GitHub: the cloud proxy refuses GitHub's GraphQL API, so `gh` works only through `gh api` (REST): no
   `gh release download` or `gh pr create`. Pull requests, their checks and comments go through the GitHub MCP tools.
-- The NREC demo: https://158-39-75-9.sslip.io/snp/ (the proxy refuses the bare https://158.39.75.9/snp/).
+- The NREC demo: https://158-39-75-9.sslip.io/snp/ (the bare https://158.39.75.9/snp/ didn't connect through the
+  session's proxy on 2026-11-04).
 - Checking pages: run `salmo-snp serve` (or manage.py runserver) in the background and fetch pages with curl, or use
   headless Chrome (/usr/bin/google-chrome); `bash tools/user_install_test.sh` checks the whole user path.
 - Changes: work on a branch and open a pull request; CI runs the tests and the user-install check; G merges (as admin)
