@@ -12,6 +12,8 @@ and the portal.
 - data/ and release/ are never committed. Never edit files in data/raw by hand.
 - The motif layer uses snpscore's motif scoring, so a release records the snpscore version it was built with.
 - After changing layers, re-cut the test fixture: `bash prep/make_fixture.sh`.
+- `fetch` and `build` need data/raw (~1.5 GB) and, in a cloud session, the hosts listed in ../AGENTS.md "Cloud
+  sessions"; the published release (../tools/get_data.sh) is enough for everything else.
 
 ```bash
 python -m pytest -q

@@ -11,14 +11,15 @@ served as static files; snpscore and the portal read it.
 pip install -e ../snpscore -e ".[test]"           # snpdata uses snpscore's motif scoring and file readers
 snpdata fetch                                    # download public inputs into data/raw (~1.5 GB kept; about 7 min)
 bash prep/make_demo.sh                           # portal demo inputs before build: public_50k, SYNTHETIC chip and GWAS (~20 s)
-snpdata build --out release/v0.1                 # standardise every layer in layers.yaml
+snpdata build --out release/2026-11-03           # standardise every layer in layers.yaml (versions are dates)
 snpdata tracks                                   # regenerate tracks.yaml from the AQUA-FAANG trackhub (rarely needed)
 python prep/make_synthetic.py chip --scale fixture  # SYNTHETIC demo chip for the tests (tests/fixture/synthetic)
 python -m pytest -q                              # tests run on the small regions in tests/fixture
 ```
 
-Then score the public sites once per release and weights change: `snpscore pool --release release/v0.1 --assay
---memory 8GB` (../snpscore/README.md).
+Then score the public sites once per release and weights change: `snpscore pool --release release/2026-11-03
+--assay --memory 8GB` (../snpscore/README.md); `salmo-snp download` leaves the pool out (it is a cache of the
+current weights), so a downloaded release has none (../docs/TRACKER.md step 8).
 
 `fetch` needs a current CA bundle on old Python/OpenSSL builds: `SSL_CERT_FILE=/path/to/cert.pem snpdata fetch`.
 It streams the 975 MB 504-fish VCF and writes only its sites and frequencies (`sites_only` in layers.yaml: CHROM to
@@ -53,10 +54,10 @@ well as the derived tables. Each salmo-snp version names the release it expects 
 
 ## Release format (the contract with snpscore and the portal)
 
-A release is one folder, named by its version:
+A release is one folder, named by its version (the date it was built):
 
 ```
-release/v0.1/
+release/2026-11-03/
   manifest.json          see below
   <layer>.parquet        one file per layer in layers.yaml
   alias.parquet          alias (lower case), chrom, warning: every chromosome name annotate accepts (warning: shown
@@ -69,6 +70,7 @@ release/v0.1/
   bgee.parquet           Bgee 16.0 RNA-seq per gene_id and tissue (anatomical entity): libraries, present (libraries
                          calling the gene present), median_tpm, studies; not annotated
   catalog/known_loci.tsv the known-loci catalogue (copy of catalog/known_loci.tsv)
+  motif.meme             the JASPAR motifs the motif layer was scored with (the evidence card redraws hits from it)
   tracks.yaml            track registry for the locus browser (if tracks.yaml is next to layers.yaml): `snpdata tracks`
                          (bigWigs), `chromhmm` and `peaks` (one bigBed per condition: ChromHMM segmentation, robust
                          ATAC peaks; the name field is the state)
@@ -113,9 +115,11 @@ parquets are zstd-compressed.
 | `features` | overlapping features for the viewers | nothing (never annotated) |
 
 Layers today: `chromatin` (interval with `chromatin_id`), `region`, `regbuild`, `gerp`, `blacklist`, `lore` (interval),
-`gene` (nearest: strand, id, name, biotype, description), `transcripts` (features), `gene_ortholog` (gene: human,
-zebrafish), `ss4r` (gene: ohnolog, ohnolog_chrom, class; AQUA-FAANG Ss4R duplicates), `flank_variants` (count, 504-fish panel sites), `public_af` (point: af, maf, ac, an, ns, aquafaang12_af,
-aquafaang12_dr2), `synchrosmolt_af` (point: af, maf, ac, an, ns), `molqtl` (point: n, tissues, kinds, best_bf, features), `cm` (interval, interpolate: male, female),
+`gene` (nearest: strand, id, name, biotype, description), `transcripts` and `transcripts_ncbi` (features),
+`gene_ortholog` (gene: human, zebrafish), `ss4r` (gene: ohnolog, ohnolog_chrom, class; AQUA-FAANG Ss4R duplicates), `flank_variants` (count, 504-fish panel sites), `public_af` (point: af, maf, ac, an, ns, aquafaang12_af,
+aquafaang12_dr2), `synchrosmolt_af` (point: af, maf, ac, an, ns), `motif` (point: changed, n, tfs, delta; JASPAR 2024 motif changes at
+public sites in robust peaks, scored by snpscore.motif), `molqtl` (point: n, tissues, kinds, best_bf, features), `cm`
+(interval, interpolate: male, female),
 `expression` (gene: one column per tissue).
 
 - `public_af`: the nf-rasqual 504-fish reference panel (Beagle-phased; sites with HWE p < 1e-6 removed; MAF > 0.01;
@@ -166,11 +170,11 @@ the published ICSASG_v2 position, or EVA release 9's for natively Ssal_v3.1 rows
 ## Adding a layer
 
 1. Add an entry to `layers.yaml` (name, type, format, file, url, description, citation). If the input needs heavy processing (VEP, model scores), put the script that makes it in `prep/` and leave out `url`.
-2. If the file format is new, add one reader function to `READERS` in `src/snpscore/build.py`.
+2. If the file format is new, add one reader function to `READERS` in `src/snpdata/build.py`.
 3. Add a slice of it to `tests/fixture` (see `prep/make_fixture.sh`; the fixture covers the vgll3, six6, bco1l and IPN
    (nae1) loci; catalogue rows on other chromosomes are rejected there as unknown chromosomes) and a check in `tests/`.
-   New columns change the golden hash of the fixture annotate output: `pytest -k golden` prints the new value for
-   `GOLDEN` in `tests/test_snpscore.py`; update it on purpose and say why in the commit.
+   New columns change the golden hash of the fixture annotate output: `pytest -k golden` in ../snpscore prints the new
+   value for `GOLDEN` in `../snpscore/tests/test_snpscore.py`; update it on purpose and say why in the commit.
 4. If it should count towards tiers, add a weight in snpscore's `weights.yaml` (G decides it) and a term in `../snpscore/src/snpscore/score.py`.
 
 Progress and next steps: [docs/TRACKER.md](../docs/TRACKER.md).

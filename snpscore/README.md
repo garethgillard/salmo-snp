@@ -1,11 +1,14 @@
 # snpscore
 
 Annotates any Atlantic salmon SNP list against a release built by ../snpdata, and gives each SNP a tier.
-Layers so far: AQUA-FAANG chromatin states (21 conditions), genic region class, Ensembl regulatory build, GERP constrained
-elements, blacklist, late-rediploidized (LORe) regions, nearest gene (with description, expression per tissue and human
-and zebrafish ortholog names), known variants within 35 bp (probe flank), allele frequency in the public 504-fish panel,
-nf-RASQUAL caQTL/eQTL lead SNPs, genetic map position (cM), and the known-loci catalogue. rs IDs (EVA release 9) place
-SNP lists that have only rs IDs or ICSASG_v2 positions. Each SNP also gets a tier for a trait preset (rules in `src/snpscore/weights.yaml`; provisional until agreed).
+Layers so far: AQUA-FAANG chromatin states (21 conditions), genic region class and the coding consequence (VEP-lite),
+Ensembl regulatory build, GERP constrained elements, blacklist, late-rediploidized (LORe) regions, nearest gene (with
+description, expression per tissue, human and zebrafish ortholog names and its Ss4R duplicate), known variants within
+35 bp (probe flank), allele frequencies (the public 504-fish panel, the Synchrosmolt parents), TF motif changes
+(JASPAR 2024, in robust ATAC peaks), nf-RASQUAL caQTL/eQTL lead SNPs, genetic map position (cM), and the known-loci
+catalogue. rs IDs (EVA release 9) place SNP lists that have only rs IDs or ICSASG_v2 positions. Each SNP gets a tier
+from the rules in `src/snpscore/weights.yaml` (provisional until G agrees them): for all 21 conditions by default, as
+the portal always counts them, or for a trait preset (`--trait`).
 On top of that: assay designability QC, the public background pool, a benchmark against known loci, and GWAS summary
 statistics (loci and fine-mapping with a functional prior). The panel designer, chip comparison and vendor exports are
 the portal's (../snpportal/README.md).
@@ -14,10 +17,11 @@ the portal's (../snpportal/README.md).
 
 ```bash
 pip install -e ".[test]"                         # the test extra adds pytest; the tests also need ../snpdata
-R=../snpdata/release/v0.1                        # a release built with snpdata (or downloaded)
+R=~/.local/share/salmo-snp/releases/2026-11-03  # a downloaded release (`salmo-snp info`), or one built with snpdata
 snpscore annotate my_snps.vcf.gz --release $R --trait maturation -o my_snps_annotated.parquet  # or .tsv
 snpscore rsid rs863754587 --release $R           # Ssal_v3.1 and ICSASG_v2 position of an rs ID
-snpscore pool --release $R --assay --memory 8GB  # public background pool, a cache of the current weights: $R/pool/
+snpscore pool --release $R --assay --memory 8GB --background 12_samples_genotype_filtered_on_504.vcf.gz
+                                                 # public background pool, a cache of the current weights: $R/pool/
 snpscore benchmark --release $R -o $R/benchmark.tsv   # known loci; controls from the pool
 snpscore benchmark --release $R --positives molqtl:ca molqtl:e --by-tissue -o $R/benchmark_molqtl.tsv
 snpscore gwas sumstats.tsv --release $R --trait maturation -o gwas_out/   # loci.tsv, finemap.tsv
@@ -142,7 +146,7 @@ Ensembl regulatory feature where AQUA-FAANG has no peak, and an nf-RASQUAL molQT
 Tiers are score cut-offs. A preset is a list of condition
 prefixes (e.g. `maturation: [Brain, Gonad]`). Weights are whole numbers, so `tier_score` is always an integer. Layers
 marked `synthetic: true` never count. All of this is provisional:
-see "Biology decisions" in CLAUDE.md and `provisional` in the manifest.
+see "Biology decisions" in ../AGENTS.md and `provisional` in the manifest.
 
 ## Public background pool
 

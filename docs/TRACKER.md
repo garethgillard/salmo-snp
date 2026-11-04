@@ -1,16 +1,30 @@
-# Functional SNP portal: tracker
+# salmo-snp: tracker
 
-Covers the whole salmo-snp repository (snpdata/, snpscore/ and snpportal/). Work top to bottom; the first unticked box is the next step.
+What's next for the whole repository (snpdata/, snpscore/ and snpportal/). **Next** is the order of work; the
+sections after it record what was built (ticked when built and tested), and their open boxes are the backlog.
+Specs: [ROADMAP.md](ROADMAP.md). Questions only G can answer: [DECISIONS.md](DECISIONS.md) (ask, don't decide).
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
-**Current phase: feature work on the local install (AGENTS.md plan, G 2026-11-03); the live site moves to salmobase later.**
-
-Where things stand (2026-11-04, for a new session, e.g. in the cloud):
-- main is green on GitHub (tests, user-install, deploy); the NREC demo https://158.39.75.9/snp/ runs the latest main
-  with release 2026-11-03.
+## Where things stand (2026-11-04)
+- Phase: feature work on the local install, the main product (AGENTS.md plan 4, G 2026-11-03); the live site moves
+  to salmobase later.
+- main is green on GitHub (tests, user-install, deploy). The NREC demo https://158.39.75.9/snp/ runs the latest main
+  with release 2026-11-03 (cloud sessions reach it as https://158-39-75-9.sslip.io/snp/: their proxy refuses bare IPs).
 - The data for real use: the private GitHub Release data-2026-11-03 (`bash tools/get_data.sh`); not on salmobase yet.
-- Next: G's feature requests; the open boxes below (step 7, the roadmap, "More public data"). Questions only G can
-  answer are in AGENTS.md "Open" and DECISIONS.md: ask, don't decide.
+- Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
+
+## Next
+1. **G's feature requests** (G, 2026-11-04: coming next). Each becomes a box in step 9 below, in G's order, with a
+   spec in ROADMAP.md when it needs more than a line.
+2. **Off end-of-life versions** (step 8; needs G's yes, DECISIONS.md #24): Python 3.8 and Django 4.2 get no more
+   security fixes, and the public demo runs on them.
+3. **A public background pool for every install** (step 8): no release in use has one, so the Overview's
+   comparisons with public sites are never drawn.
+4. **Before the local install is shared beyond collaborators** (step 8, and step 7's open boxes): Bootstrap and htmx
+   shipped with the package (the pages need cdn.jsdelivr.net today), a v0.1.0 tag, the package names on PyPI, the data
+   on salmobase, the citation and privacy text, macOS and Windows checks.
+5. **Backlog**: the other open boxes below, in the order G picks, and the questions in DECISIONS.md (the tier rules,
+   #1-#5, come before the genome-wide release v0.1 of step 4).
 
 ## Step 0: decisions and contract
 - [x] Assembly Ssal_v3.1, chromosomes named 1-29 (same as AQUA-FAANG and Ensembl)
@@ -91,9 +105,43 @@ Where things stand (2026-11-04, for a new session, e.g. in the cloud):
 - [ ] Dockerfile for salmobase (installs a tagged version; release folder mounted); salmobase links to it with a button
 - [ ] Before the repository goes public: synthetic stand-ins for the fixture cuts of licence-pending data
 
+## Step 8: platform, pool and sharing (review of 2026-11-04)
+- [ ] Off end-of-life versions (G to agree: DECISIONS.md #24). Python 3.8 has had no fixes since 2024-10-07, Django
+      4.2 none since 2026-04-07 (4.2.30, its last), and DuckDB is held at 1.2.2 (2025-04) for Python 3.8; the public
+      demo runs on them, and Django 4.2 supports Python 3.8-3.12 only (users on 3.13 or 3.14 get it anyway: it works,
+      unsupported). The reason for 3.8, salmobase's container, went when the portal got its own (2026-10-28).
+      Proposal: Python >= 3.10 (3.12 on NREC and in the container), Django 5.2 LTS (fixes to 2028-04-30, Python
+      3.10-3.14), DuckDB 1.5.
+      Measured 2026-11-04: on Python 3.12, Django 5.2.19 and DuckDB 1.5.6 every suite passes but one test,
+      `test_viewer_palette_cookie_asgi`: under ASGI, Django 5 sends `request_started` in another context, so the
+      colour choice (a ContextVar set in apps.py) never reaches the view; a middleware fixes it. WSGI (gunicorn,
+      runserver) is unaffected. Then: requires-python and pins in the pyproject files, CI, environment.yml,
+      tools/cloud_setup.sh, deploy/nrec.sh and the AGENTS.md rules
+- [ ] DuckDB 2 (Python >= 3.11): the `x -> ...` lambdas become `lambda x: ...` (AGENTS.md "Rules")
+- [ ] Public background pool for every install. `salmo-snp download` leaves `pool/` out (a cache of the current
+      weights), `snpscore pool` needs the 12-fish VCF in data/raw (a release builder's), and the demo's release has
+      none either. So the Overview's thin bars and ticks for public sites, and the '×' fold of 'Active chromatin per
+      condition', are never drawn, though their (i) texts describe them, and gene-page candidates are annotated on the
+      fly. Proposal: `snpscore pool` takes its sites from the release's public_af (the 12 AQUA-FAANG fish's sites, as
+      now, or the 504-fish panel: DECISIONS.md #15); `salmo-snp download` and nrec.sh build it (~40 s for 1.6M sites)
+- [ ] Bootstrap 5.1.3 and htmx 2.0.4 shipped with the package (static files, MIT and BSD licences; G to OK) instead of
+      cdn.jsdelivr.net, which every page loads them from: offline, or where a company network blocks the CDN, a local
+      install's pages lose their layout and the job progress panel never refreshes (its `<noscript>` fallback needs
+      JavaScript off). salmobase's own base template brings Bootstrap there. Then the README's and Help's 'fetches
+      public data only' are complete
+- [ ] Install by tag once v0.1.0 exists (README: `...salmo-snp@v0.1.0#subdirectory=...`), so a reinstall needs no
+      `--force-reinstall` and users can say which version they ran
+- [ ] The package names on PyPI (DECISIONS.md #25): snpscore, snpdata and salmo-snp are unregistered, and salmo-snp
+      depends on `snpscore` by name
+- [ ] The user-install check on macOS and Windows (DECISIONS.md #26); Windows also needs tools/user_install_test.sh
+      to find `Scripts\` instead of `bin/`
+
+## Step 9: G's feature requests (2026-11-04)
+G sends these next; one box each, in G's order.
+
 ## Portal roadmap v2 (full specs in [ROADMAP.md](ROADMAP.md))
 
-First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked when built and tested.
+First push = waves A-C (items marked **now**), then wave D (GWAS, M7). Ticked when built and tested.
 
 ### M1 Foundations: safe, traceable, testable, consistent
 - [x] P1.1 Sanitise user columns and sandbox DuckDB (confirmed SQL-injection path) (S, must, **now**)
@@ -164,7 +212,7 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [x] P6.9 Genetic map (cM) layer and cM-based spacing (M, should) (Brekke 2023: R5)
 - [ ] P6.10 Multi-population allele frequencies (M, could)
 
-### M7 GWAS summary statistics and functional fine-mapping (next push, Wave D)
+### M7 GWAS summary statistics and functional fine-mapping (Wave D)
 - [x] P7.1 Sumstats upload mode with format detection and harmonisation (M, must)
 - [x] P7.2 Manhattan plot, tier-stratified QQ plot and loci table (M, must)
 - [x] P7.3 LocusZoom-style regional association plot on the locus browser (S, must)
@@ -228,6 +276,21 @@ First push = waves A-C (items marked **now**); wave D (GWAS) is next. Ticked whe
 - [x] Six-lens review (correctness, security/privacy, Python 3.8 + performance, UI/UX, science, tests/docs): 49 findings, 48 confirmed by two skeptics, fixed (commits e246d89 / 59c27b0)
 - [x] Final check: snpscore 100 + portal 57 tests, dev and live suites, 953-URL smoke test on release/dev
 - [x] Cross-package leftovers (chip cap, trait SD check, spill dirs, allele note, MAF bins, demo script, GWAS methods text, export panel list) (commits 5abd2a2 / b5ed092)
+
+### Review 2026-11-04 (cloud session; what is still to do is in step 8)
+- [x] Real release 2026-11-03 through `salmo-snp serve` in the cloud: the four examples and a pasted list scored, then
+      220 pages crawled with their links and every export of each job: no server errors (the 400s are the 50,000-SNP
+      vendor-file cap, whose message pointed to the unlinked Panel tab: fixed)
+- [x] A new user's install (tools/user_install_test.sh) on Python 3.13 and 3.14 (Django 4.2.30, DuckDB 1.5.6): passes
+- [x] Django 5.2.19 + DuckDB 1.5.6 on Python 3.12: one test fails (step 8); Django's system check is clean
+- [x] tools/check.sh runs what CI runs, and CI calls it; pyflakes now covers the Django app too (one unused variable
+      removed); the leftover 'AGENT' build comments are gone
+- [x] Cloud sessions on CI's Python and versions (tools/cloud_setup.sh, uv's Python 3.8); get_data.sh over REST;
+      user_install_test.sh no longer leaves build/ folders in the source tree
+- [x] `salmo-snp serve` says when the release this version expects isn't downloaded
+- [x] Docs: README rewritten as the user guide; stale names and paths fixed in the folder READMEs and AGENTS.md files
+      (snpportal.lib, src/snpdata/build.py, dated release folders, AGENTS.md for CLAUDE.md); status notes on ROADMAP,
+      RESEARCH and SIMPLIFY; DECISIONS #22-#26 brought up to date; this tracker's Next
 
 ### Manual QA (not automatable)
 - [x] Evidence card prints on one A4 page; report on two (49 cards and 5 reports, headless Chrome A4; not Safari/Firefox print)

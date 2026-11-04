@@ -12,7 +12,11 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
   The tier rules (weights.yaml) live here, not in the release.
 - `snpportal/`: the Django web portal; reads a release and calls snpscore. `snpportal/lib/` holds its plain-Python
   parts (locus data, panel design, exports, the track registry; `python -m snpportal.lib.cli panel|export|compare`).
-- `docs/`: TRACKER (next steps), DECISIONS (open questions for G with options), ROADMAP, RESEARCH, SIMPLIFY.
+- `docs/`: TRACKER (what's next, then what's built), DECISIONS (questions for G, with options and a recommendation),
+  ROADMAP (the spec of every roadmap item); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
+  (the simplification plan of 2026-10-07, built).
+- `tools/`: check.sh (what CI runs), user_install_test.sh (a new user's install), get_data.sh (the data for real use),
+  cloud_setup.sh (cloud sessions).
 
 ## Plan (G, 2026-10-28)
 1. One repository, three folders. snpdata builds a release once; it is published as static files on Apache, beside
@@ -50,7 +54,7 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 - Keep it small: few files, little code, readable over clever. Don't add tests for every edge case.
 - Dependencies: duckdb and pyyaml (plus Django for the portal). Ask G before adding any. No pandas.
 - Python 3.8 until the portal's Dockerfile sets the version: no `match`, no `str.removeprefix`, no `X | Y` types; use
-  `from __future__ import annotations`.
+  `from __future__ import annotations`. (3.8 and Django 4.2 are end of life: DECISIONS.md #24 proposes moving on.)
 - DuckDB below 2 (the packages say `duckdb>=1.2,<2`): DuckDB 2.0 drops the `x -> ...` lambdas our SQL uses, and their
   replacement (`lambda x: ...`, DuckDB 1.3+) doesn't exist in 1.2.2, the last DuckDB for Python 3.8. Move both together.
 - Assembly Ssal_v3.1, chromosomes named "1"-"29" (as AQUA-FAANG and Ensembl). Layers use BED coordinates; SNPs use
@@ -107,7 +111,8 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   - Locus browser default tracks (tracks.yaml defaults): ATAC, replicate R1, at most 8 rows; preset `all` = first condition
     per tissue incl. Gill and one embryo stage.
   - Palette: tier 2 #2171B5 (AA contrast), ChromHMM colours in one dict (palette.STATES) until G picks AQUA-FAANG itemRgb.
-  - Portal limits: 3M SNPs, 300 MB upload, 10,000 pasted lines, 24 h retention; privacy statement and citation text need G.
+  - Portal limits: 3M SNPs, 300 MB upload, 10,000 pasted lines, 24 h retention on a server (a local install keeps
+    results until deleted, G 2026-11-03); privacy statement and citation text need G.
 - Portal roadmap v2, stages 2-3 (all in weights.yaml blocks, labelled PROVISIONAL in the UI):
   - Assay QC `assay`: 35 bp flanks, GC 0.30-0.70, repeat share <= 0.5, homopolymer <= 6, no public variant in the flanks (warn);
     LORe/blacklist/A/T-C/G warn; fail on ref mismatch, non-SNP or N. Only ~15% of public SNPs pass (salmon is ~60% repeat): revisit.
@@ -137,37 +142,48 @@ Open (ask G; all collected with options and recommendations in docs/DECISIONS.md
   while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
 - Assay QC: flank repeat shares are mostly 0 or 1, so ~55% of public SNPs warn on 'repeat' whatever the cut-off; should fully
   soft-masked flanks warn at all? (without it ~46% pass instead of ~20%)
+- Not biology, still G's: the Python, Django and DuckDB versions, the PyPI names and the systems the install is
+  checked on (DECISIONS.md #24-#26).
 
 ## Development
 Tests use the small fixture in `snpdata/tests/fixture`, so they need no downloads.
 
 ```bash
 conda env create -f environment.yml && conda activate salmo-snp   # conda-forge only; installs the three folders editable
-(cd snpscore && python -m pytest -q)
+bash tools/check.sh                                    # what CI runs: pyflakes, then the four suites (~4 min)
+(cd snpscore && python -m pytest -q)                   # or one suite at a time
 (cd snpdata && python -m pytest -q)
 (cd snpportal && python -m pytest -q tests && SNPPORTAL_WORKERS=0 python manage.py test snpportal)
-salmo-snp serve --release snpdata/release/dev          # the portal on http://127.0.0.1:8000/snp/
+salmo-snp serve                                        # the portal on http://127.0.0.1:8000/snp/, with the data below
+salmo-snp serve --release snpdata/release/dev          # or a release you built
 ```
-Without conda: a Python 3.8 venv and `pip install -e "snpscore[test]" -e snpdata -e snpportal "duckdb==1.2.2"`.
-`bash tools/user_install_test.sh [python]` checks a new user's install (wheels, newest allowed dependencies,
-publish -> download -> annotate -> serve); run it after changing packaging, dependencies or serve.py.
+Without conda: a Python 3.8 venv and `pip install -e "snpscore[test]" -e snpdata -e snpportal "django>=4.2,<5"
+"duckdb==1.2.2"` (CI's versions). `bash tools/user_install_test.sh [python]` checks a new user's install (wheels, the
+newest dependencies allowed, publish -> download -> annotate -> serve); run it after changing packaging,
+dependencies or serve.py.
 
 The data for real use (not needed for the tests): `bash tools/get_data.sh`, the GitHub data release named after
-serve.py RELEASE (temporary hosting until salmobase), checked and copied into the salmo-snp data folder; then
-`salmo-snp serve`. A new release goes up from G's Mac: `snpdata build`, then `bash prep/github_release.sh <release>`.
+serve.py RELEASE (temporary hosting until salmobase), checked and copied into the salmo-snp data folder (`salmo-snp
+info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `snpdata build`, then
+`bash prep/github_release.sh <release>`.
 
 ## Cloud sessions (Claude Code on the web)
 - Setup: `.claude/settings.json` runs `tools/cloud_setup.sh` at session start (only when CLAUDE_CODE_REMOTE=true): it
-  makes `.venv` (Python 3.12 through uv) with the three folders editable and puts it on PATH. The commands above then
-  work as written; the tests need no network and no data. Local auto-memory doesn't reach the cloud: these AGENTS.md
-  files are the memory, so record decisions and how-tos here.
+  makes `.venv` with CI's Python and versions (3.8, Django 4.2, DuckDB 1.2.2; uv downloads that Python) and the three
+  folders editable, and puts it on PATH. The commands above then work as written, and `bash tools/check.sh` tests
+  what CI tests; the tests need no network and no data. For the newest versions, as users get them: `bash
+  tools/user_install_test.sh python3.13` (also /usr/bin/python3.12). Local auto-memory doesn't reach the cloud: these
+  AGENTS.md files are the memory, so record decisions and how-tos here.
+- The container is reclaimed when the session ends: push before stopping. `tools/get_data.sh` (about 20 s) puts the
+  release and the genome in ~/.local/share/salmo-snp; rerun it in each new session that needs them.
 - Network: the default (Trusted) allows GitHub, its release downloads and PyPI, so the tests and
   `tools/get_data.sh` work. The locus browser's AQUA-FAANG tracks and the genome URL need `salmobase.org`; rebuilding
   the data (`snpdata fetch`) needs salmobase.org, ftp.ensembl.org, jun2026.archive.ensembl.org, ftp.ebi.ac.uk,
   ftp.sra.ebi.ac.uk, ftp.ncbi.nlm.nih.gov, jaspar.elixir.no, www.bgee.org and www.biorxiv.org: add them under the
   environment's Network access, Custom, keeping the default list.
 - GitHub: the cloud proxy refuses GitHub's GraphQL API, so `gh` works only through `gh api` (REST): no
-  `gh release download` or `gh pr create`. Pull requests go through the GitHub MCP tools.
+  `gh release download` or `gh pr create`. Pull requests, their checks and comments go through the GitHub MCP tools.
+- The NREC demo: https://158-39-75-9.sslip.io/snp/ (the proxy refuses the bare https://158.39.75.9/snp/).
 - Checking pages: run `salmo-snp serve` (or manage.py runserver) in the background and fetch pages with curl, or use
   headless Chrome (/usr/bin/google-chrome); `bash tools/user_install_test.sh` checks the whole user path.
 - Changes: work on a branch and open a pull request; CI runs the tests and the user-install check; G merges (as admin)

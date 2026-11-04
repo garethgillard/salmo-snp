@@ -3,6 +3,11 @@
 Generated on 2026-10-06 from a multi-perspective design review (breeding R&D, quantitative genetics, functional genomics, scientific UX, platform engineering), then critiqued for gaps and risks.
 Checkboxes live in [TRACKER.md](TRACKER.md); this file holds the full spec and acceptance test of every item.
 
+Status (2026-11-04): waves A-D and push 2 are built; the open items are TRACKER's open boxes. Where a spec and the
+code differ, the code and the folder READMEs are current: for example the portal counts all 21 conditions with no
+trait picker (G, 2026-10-11), the portal-only code moved from snpscore to snpportal/lib (2026-10-28), and a local
+install keeps results until deleted (G, 2026-11-03).
+
 Legend: **now** = built in the first push (waves A-C); effort S/M/L; priority must/should/could.
 
 ## Vision
@@ -1835,6 +1840,11 @@ Real public demo inputs, labelled as published or public and not synthetic:
 Later steps replace item 6 with users' own GWAS (never kept beyond 24 h) and item 7 with G's nf-rasqual tables (a data swap with the same columns), and add the 504-fish VCF for AF and LD.
 
 ## Open questions for G
+
+As asked on 2026-10-06. The current list, with options and recommendations, is [DECISIONS.md](DECISIONS.md); the
+answers are in ../AGENTS.md "Decided". Answered or overtaken since: the nf-rasqual tables were found (R4), the genetic
+map is Brekke 2023 (R5), unnamed genes get ortholog labels (P5.10), both colour schemes exist (R8; the default is
+DECISIONS #18), and local installs keep results until deleted (G, 2026-11-03).
 
 - Active states: are Active_TSS and Active_enhancer the right 'active' set? How should primed, poised, bivalent, flanking and accessible chromatin count? Should states outside robust ATAC peaks (genome-wide ChromHMM segmentation) count towards tiers at all?
 - Trait presets: which conditions should each trait use (maturation, growth/fillet, disease resistance, development)? Should the embryo stages feed any trait? Which new traits are needed first (e.g. sea lice, AGD, smoltification)?
