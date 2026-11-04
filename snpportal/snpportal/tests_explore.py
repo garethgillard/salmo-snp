@@ -290,7 +290,7 @@ class ExploreTest(SimpleTestCase):
         finally:
             palette.choose(None)  # the test client runs requests in this thread
 
-    async def test_viewer_palette_cookie_asgi(self):  # the same cookie under ASGI (request_started carries the scope)
+    async def test_viewer_palette_cookie_asgi(self):  # the same cookie under ASGI (Django 5 sends request_started in another context)
         self.async_client.cookies[palette.COOKIE] = "aquafaang"
         try:
             self.assertContains(await self.async_client.get(reverse("snpportal:help")), ".st-Active_TSS{background:#BF2026")

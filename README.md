@@ -13,7 +13,7 @@ Public demo: https://158.39.75.9/snp/ (public data only: don't upload confidenti
 The portal runs on your own computer, so confidential SNP lists (breeding companies' included) never leave it.
 
 You need:
-- Python 3.8 or newer (3.12 recommended; 3.13 and 3.14 work too). Linux is tested on every change; macOS and
+- Python 3.11 or newer (3.12 recommended; tested on 3.11 and 3.14 too). Linux is tested on every change; macOS and
   Windows aren't tested automatically yet.
 - About 2 GB of disk: the release (~300 MB), the genome (~800 MB) and your results.
 - While the repository is private, a GitHub account with access to it and the GitHub CLI, `gh`, logged in

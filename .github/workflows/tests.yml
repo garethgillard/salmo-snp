@@ -6,12 +6,12 @@ on:
 
 jobs:
   tests:
-    runs-on: ubuntu-22.04  # the last runner image with Python 3.8
+    runs-on: ubuntu-24.04  # as the NREC demo (Ubuntu 24.04, Python 3.12)
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.8"
+          python-version: "3.12"
       - name: No data files outside the test fixture
         # Breeder data (genotypes, GWAS results, array manifests) must never be committed (AGENTS.md).
         run: |
@@ -19,19 +19,22 @@ jobs:
                 | grep -v '^snpdata/tests/fixture/' || true)
           big=$(git ls-files -z | xargs -0 du -k | awk '$1 > 1024 {print $2}')
           if [ -n "$bad$big" ]; then echo "Not allowed outside snpdata/tests/fixture, or over 1 MB:"; echo "$bad $big"; exit 1; fi
-      - run: pip install -e "snpscore[test]" -e snpdata -e snpportal "django>=4.2,<5" "duckdb==1.2.2"  # as tools/cloud_setup.sh
+      - run: pip install -e "snpscore[test]" -e snpdata -e snpportal  # the newest versions the packages allow, as deploys get
       - name: pyflakes and the four test suites
         run: bash tools/check.sh  # the same command developers and cloud sessions run before pushing
 
   user-install:
-    # A new user's install: the built wheels on the newest Python with the newest dependencies they allow, then
-    # download, annotate and serve (tools/user_install_test.sh). The tests job above pins the server's versions.
+    # A new user's install: the built wheels with the newest dependencies they allow, on the oldest and the newest
+    # Python the packages support, then download, annotate and serve (tools/user_install_test.sh).
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.14"]  # requires-python's floor (pyproject.toml), and the newest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"  # the newest Django 4.2 supports
+          python-version: ${{ matrix.python }}
       - run: bash tools/user_install_test.sh python
 
   deploy:

@@ -53,10 +53,11 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
   `data/`, `release/` and results folders are never committed. Never edit files in snpdata/data/raw by hand.
 - Keep it small: few files, little code, readable over clever. Don't add tests for every edge case.
 - Dependencies: duckdb and pyyaml (plus Django for the portal). Ask G before adding any. No pandas.
-- Python 3.8 until the portal's Dockerfile sets the version: no `match`, no `str.removeprefix`, no `X | Y` types; use
-  `from __future__ import annotations`. (3.8 and Django 4.2 are end of life: DECISIONS.md #24 proposes moving on.)
-- DuckDB below 2 (the packages say `duckdb>=1.2,<2`): DuckDB 2.0 drops the `x -> ...` lambdas our SQL uses, and their
-  replacement (`lambda x: ...`, DuckDB 1.3+) doesn't exist in 1.2.2, the last DuckDB for Python 3.8. Move both together.
+- Versions (G, 2026-11-04: the newest that suit): Python 3.11 or newer (`requires-python`; 3.10 reached its end of
+  life on 2026-10-01; CI, the NREC demo and cloud sessions run 3.12), Django 5.2 LTS (fixes to 2028-04-30; 6.x needs
+  Python 3.12), DuckDB 1.5 (`duckdb>=1.5,<2`). The pyproject.toml files are the one place they are set: CI, deploys
+  and cloud sessions install the newest versions those allow. Write SQL list lambdas as `lambda x: ...` (DuckDB 2
+  drops `x -> ...`). DuckDB 2 needs more first (docs/TRACKER.md step 8).
 - Assembly Ssal_v3.1, chromosomes named "1"-"29" (as AQUA-FAANG and Ensembl). Layers use BED coordinates; SNPs use
   1-based `pos`; a SNP is inside an interval when start < pos <= end.
 - Changes go through pull requests; G reviews anything touching the biology (CODEOWNERS).
@@ -142,8 +143,7 @@ Open (ask G; all collected with options and recommendations in docs/DECISIONS.md
   while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
 - Assay QC: flank repeat shares are mostly 0 or 1, so ~55% of public SNPs warn on 'repeat' whatever the cut-off; should fully
   soft-masked flanks warn at all? (without it ~46% pass instead of ~20%)
-- Not biology, still G's: the Python, Django and DuckDB versions, the PyPI names and the systems the install is
-  checked on (DECISIONS.md #24-#26).
+- Not biology, still G's: the PyPI names and the systems the install is checked on (DECISIONS.md #25-#26).
 
 ## Development
 Tests use the small fixture in `snpdata/tests/fixture`, so they need no downloads.
@@ -157,8 +157,7 @@ bash tools/check.sh                                    # what CI runs: pyflakes,
 salmo-snp serve                                        # the portal on http://127.0.0.1:8000/snp/, with the data below
 salmo-snp serve --release snpdata/release/dev          # or a release you built
 ```
-Without conda: a Python 3.8 venv and `pip install -e "snpscore[test]" -e snpdata -e snpportal "django>=4.2,<5"
-"duckdb==1.2.2"` (CI's versions). `bash tools/user_install_test.sh [python]` checks a new user's install (wheels, the
+Without conda: a Python 3.12 venv and `pip install -e "snpscore[test]" -e snpdata -e snpportal`, as CI. `bash tools/user_install_test.sh [python]` checks a new user's install (wheels, the
 newest dependencies allowed, publish -> download -> annotate -> serve); run it after changing packaging,
 dependencies or serve.py.
 
@@ -169,10 +168,10 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
 
 ## Cloud sessions (Claude Code on the web)
 - Setup: `.claude/settings.json` runs `tools/cloud_setup.sh` at session start (only when CLAUDE_CODE_REMOTE=true): it
-  makes `.venv` with CI's Python and versions (3.8, Django 4.2, DuckDB 1.2.2; uv downloads that Python) and the three
-  folders editable, and puts it on PATH. The commands above then work as written, and `bash tools/check.sh` tests
-  what CI tests; the tests need no network and no data. For the newest versions, as users get them: `bash
-  tools/user_install_test.sh python3.13` (also /usr/bin/python3.12). Local auto-memory doesn't reach the cloud: these
+  makes `.venv` with CI's Python (3.12) and the three folders editable, with the newest versions they allow, and puts
+  it on PATH. The commands above then work as written, and `bash tools/check.sh` tests what CI tests; the tests need
+  no network and no data. A new user's install on other Pythons: `bash tools/user_install_test.sh python3.13` (uv
+  fetches others: `uv python install 3.11`, then `$(uv python find 3.11)`). Local auto-memory doesn't reach the cloud: these
   AGENTS.md files are the memory, so record decisions and how-tos here.
 - The container is reclaimed when the session ends: push before stopping. `tools/get_data.sh` (about 20 s) puts the
   release and the genome in ~/.local/share/salmo-snp; rerun it in each new session that needs them.

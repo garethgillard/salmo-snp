@@ -98,7 +98,7 @@ def walk_sql(left, right):
     """SQL: the distance i of the first flank pair (n-i, n+i) with one A/T and one C/G base (Illumina's TOP/BOT walk for
     A/T and C/G SNPs; IUPAC codes, N and lower case are skipped), NULL when the flanks run out (Illumina code 103)."""
     five, three = f"substr({left}, length({left}) + 1 - i, 1)", f"substr({right}, i, 1)"
-    return (f"list_filter(range(1, least(length({left}), length({right})) + 1), i -> ({five} IN ('A', 'T') AND {three} "
+    return (f"list_filter(range(1, least(length({left}), length({right})) + 1), lambda i: ({five} IN ('A', 'T') AND {three} "
             f"IN ('C', 'G')) OR ({five} IN ('C', 'G') AND {three} IN ('A', 'T')))[1]")
 
 
@@ -125,10 +125,10 @@ def assay_sql(snps, windows, rules_, columns, disabled=None):
 
     def longest(x, bases="ACGT"):  # longest single-base run
         runs = "|".join(b + "+" for b in bases)
-        return f"coalesce(list_max(list_transform(regexp_extract_all(upper({x}), '{runs}'), r -> length(r))), 0)"
+        return f"coalesce(list_max(list_transform(regexp_extract_all(upper({x}), '{runs}'), lambda r: length(r))), 0)"
 
     def texts(cases):
-        return f"list_filter([{', '.join(cases)}], x -> x IS NOT NULL)"
+        return f"list_filter([{', '.join(cases)}], lambda x: x IS NOT NULL)"
 
     fails = [f"CASE WHEN ref_check = {lit(c)} THEN {lit(REF_CHECK.get(c, c))} END" for c in rules_["fail_ref_check"]]
     fails.append("CASE WHEN assay_n > 0 THEN 'N in flank' END")

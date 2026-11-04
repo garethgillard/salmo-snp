@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Deploy the public demo to an NREC VM (GOLD Ubuntu 22.04/24.04, dualStack network, ports 22/80/443 open):
+# Deploy the public demo to an NREC VM (GOLD Ubuntu 24.04, dualStack network, ports 22/80/443 open):
 #   bash deploy/nrec.sh <ssh host> <web name> [<web name> ...]
 #   e.g.  bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io   (the address: https://158.39.75.9/snp/)
 # Each name gets its own Caddy site and HTTPS certificate; an IPv4 address gets Let's Encrypt's short-lived IP
 # certificate (Caddy 2.10 or newer). The first name is the one checked at the end.
 # From this Mac it copies the release and the genome to /srv/snpportal; on the VM the code is a clone of the GitHub
 # repository (/srv/snpportal/salmo-snp, read with a read-only deploy key that this script registers with gh). It installs
-# Python packages, Caddy (HTTPS from Let's Encrypt), a 2 GB swap file if there is none, and three systemd units:
-# gunicorn, and an hourly snpportal_cleanup. DuckDB gets half the RAM and every CPU. Code updates after that come
+# the Python packages (the newest versions they allow; they need Python >= 3.11, so Ubuntu 24.04), Caddy (HTTPS from
+# Let's Encrypt), a 2 GB swap file if there is none, and three systemd units: gunicorn, and an hourly snpportal_cleanup. DuckDB gets half the RAM and every CPU. Code updates after that come
 # from GitHub Actions (update.sh, README "Automatic deploys"); rerun this for a new release or new web names. Safe to
 # rerun: results and the secret key are kept.
 set -euo pipefail
@@ -49,7 +49,7 @@ git -C salmo-snp fetch -q origin main && git -C salmo-snp checkout -q --force --
 rm -rf salmo-snpscore salmo-snpportal  # the copies older versions of this script made
 [ -d venv ] || python3 -m venv venv
 venv/bin/pip install -q --upgrade pip
-venv/bin/pip install -q "django>=4.2,<5" "duckdb==1.2.2" gunicorn -e salmo-snp/snpscore
+venv/bin/pip install -q --upgrade --upgrade-strategy eager gunicorn -e salmo-snp/snpscore -e salmo-snp/snpportal
 [ -f secret_key ] || (umask 077 && python3 -c "import secrets; print(secrets.token_urlsafe(50))" > secret_key)
 mkdir -p results && chmod 700 results
 cat > env <<EOF

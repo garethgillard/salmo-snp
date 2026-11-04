@@ -16,8 +16,7 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 ## Next
 1. **G's feature requests** (G, 2026-11-04: coming next). Each becomes a box in step 9 below, in G's order, with a
    spec in ROADMAP.md when it needs more than a line.
-2. **Off end-of-life versions** (step 8; needs G's yes, DECISIONS.md #24): Python 3.8 and Django 4.2 get no more
-   security fixes, and the public demo runs on them.
+2. ~~Off end-of-life versions~~: done 2026-11-04 (step 8; DuckDB 2 is left).
 3. **A public background pool for every install** (step 8): no release in use has one, so the Overview's
    comparisons with public sites are never drawn.
 4. **Before the local install is shared beyond collaborators** (step 8, and step 7's open boxes): Bootstrap and htmx
@@ -106,18 +105,17 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - [ ] Before the repository goes public: synthetic stand-ins for the fixture cuts of licence-pending data
 
 ## Step 8: platform, pool and sharing (review of 2026-11-04)
-- [ ] Off end-of-life versions (G to agree: DECISIONS.md #24). Python 3.8 has had no fixes since 2024-10-07, Django
-      4.2 none since 2026-04-07 (4.2.30, its last), and DuckDB is held at 1.2.2 (2025-04) for Python 3.8; the public
-      demo runs on them, and Django 4.2 supports Python 3.8-3.12 only (users on 3.13 or 3.14 get it anyway: it works,
-      unsupported). The reason for 3.8, salmobase's container, went when the portal got its own (2026-10-28).
-      Proposal: Python >= 3.10 (3.12 on NREC and in the container), Django 5.2 LTS (fixes to 2028-04-30, Python
-      3.10-3.14), DuckDB 1.5.
-      Measured 2026-11-04: on Python 3.12, Django 5.2.19 and DuckDB 1.5.6 every suite passes but one test,
-      `test_viewer_palette_cookie_asgi`: under ASGI, Django 5 sends `request_started` in another context, so the
-      colour choice (a ContextVar set in apps.py) never reaches the view; a middleware fixes it. WSGI (gunicorn,
-      runserver) is unaffected. Then: requires-python and pins in the pyproject files, CI, environment.yml,
-      tools/cloud_setup.sh, deploy/nrec.sh and the AGENTS.md rules
-- [ ] DuckDB 2 (Python >= 3.11): the `x -> ...` lambdas become `lambda x: ...` (AGENTS.md "Rules")
+- [x] Off end-of-life versions (G, 2026-11-04: the newest that suit). Python 3.8 had had no fixes since 2024-10-07
+      and Django 4.2 none since 2026-04-07, and the public demo ran on them. Now: Python >= 3.11 (3.10's end of life
+      was 2026-10-01; CI, NREC and cloud sessions on 3.12), Django 5.2 LTS (fixes to 2028-04-30), DuckDB 1.5, PyYAML 6,
+      setuptools >= 77 (SPDX licence in every package), pyflakes 4.1, htmx 2.0.11, actions/checkout and setup-python
+      v7. The ranges are set only in the pyproject.toml files: CI, deploys (update.sh now upgrades the packages) and
+      cloud sessions install the newest they allow. The palette cookie moved from `request_started` to a middleware
+      (under ASGI, Django 5 sends the signal in another context); the SQL lambdas are written `lambda x: ...`
+- [ ] DuckDB 2 (2.0.0 of 2026-10-21; Python >= 3.11). The lambdas are done. Left: a connection refuses new queries
+      while an `execute()` result is unfinished, and `fetchone()` leaves it so (4 snpscore tests fail on 2.0.0:
+      known_loci, molqtl, genetic_map, rsid); relations have no `fetchone()`. Every `execute(...).fetchone()` that is
+      followed by more work on its connection needs `fetchall()` or its own cursor; then lift the `<2` cap
 - [ ] Public background pool for every install. `salmo-snp download` leaves `pool/` out (a cache of the current
       weights), `snpscore pool` needs the 12-fish VCF in data/raw (a release builder's), and the demo's release has
       none either. So the Overview's thin bars and ticks for public sites, and the '×' fold of 'Active chromatin per

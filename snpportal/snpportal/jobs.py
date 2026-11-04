@@ -640,7 +640,7 @@ def _trait_parts(con, tiers, names, columns):
             out["terms"][p] = {}
             for term, tier, k in con.execute(
                     f"SELECT term, tier, sum(k)::BIGINT FROM (SELECT unnest(terms) AS term, tier, k FROM ("
-                    f"SELECT list_transform({ident('tier_terms__' + p)}, x -> x.term) AS terms, {t} AS tier, count(*) AS k "
+                    f"SELECT list_transform({ident('tier_terms__' + p)}, lambda x: x.term) AS terms, {t} AS tier, count(*) AS k "
                     f"FROM read_parquet('{tiers}') GROUP BY ALL)) GROUP BY ALL ORDER BY ALL").fetchall():
                 out["terms"][p].setdefault(term, {})[str(tier)] = k
     return out

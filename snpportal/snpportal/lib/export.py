@@ -91,7 +91,7 @@ def provenance(manifest, weights, meta=None):
     preset = meta.get("preset", "all")
     conditions = ", ".join((weights.get("presets") or {}).get(preset) or []) or "all conditions"
     filters = ", ".join(f"{k}={v}" for k, v in (meta.get("filters") or {}).items()) or "none"
-    now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [
         f"{meta.get('tool', 'snpscore')} export, {now}",
         f"release {manifest.get('version')} ({manifest.get('assembly')}, built {manifest.get('created')}); "

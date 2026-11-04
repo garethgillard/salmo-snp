@@ -22,7 +22,7 @@ Score, Help, Design panel and Run locally pages say the results stay on this com
 and `salmo-snp serve` are enough; to build the release yourself (it needs ~1.5 GB of public inputs):
 
 ```bash
-conda env create -f ../environment.yml && conda activate salmo-snp   # Python 3.8 and the three folders, editable
+conda env create -f ../environment.yml && conda activate salmo-snp   # Python 3.12 and the three folders, editable
 cd ../snpdata
 snpdata fetch                                         # the public inputs, into data/raw
 bash prep/make_demo.sh                                # the examples (layers.yaml 'demo'): 50K public sites, the
@@ -64,8 +64,8 @@ VM lost its network port and got a new address.
 `bash deploy/nrec.sh <ssh host> <web name> [<web name> ...]` sets up an NREC VM (GOLD Ubuntu 24.04 on the `dualStack`
 network, so it has a public IPv4 address; ports 22, 80 and 443 open). The code on the VM is a clone of this repository
 (`/srv/snpportal/salmo-snp`, read with a read-only deploy key the script makes and registers with `gh`); from this Mac
-it copies `snpdata/release/dev` and the genome to `/srv/snpportal`. On the VM it installs Django 4.2, DuckDB 1.2.2 and
-gunicorn in a venv, Caddy for HTTPS (a site per name: an IPv4 address gets Let's Encrypt's short-lived IP certificate,
+it copies `snpdata/release/dev` and the genome to `/srv/snpportal`. On the VM it installs the packages (the newest Django,
+DuckDB and gunicorn they allow; every deploy upgrades them) in a venv, Caddy for HTTPS (a site per name: an IPv4 address gets Let's Encrypt's short-lived IP certificate,
 renewed by Caddy; a `<ip-with-dashes>.sslip.io` name works too) and systemd units for the app (`snpportal`) and an
 hourly `snpportal_cleanup`. Rerun it for a new release or new web names: results and the secret key are kept. The
 snpsite project serves the demo with `DJANGO_DEBUG=0` and the settings in `/srv/snpportal/env`; `SNPSCORE_GENOME`
@@ -235,8 +235,8 @@ Public data on the pages (R1, R3-R8 of docs/ROADMAP.md 'Push 2'):
   block (wording PROVISIONAL). Gene pages, cards and the Known loci page link to SalmoBase gene pages.
 - State colours: `palette.STATE_PALETTES` has the portal palette and AQUA-FAANG's itemRgb colours;
   `SNPPORTAL_STATE_PALETTE = 'aquafaang'` makes AQUA-FAANG's the default for every page and figure (G to choose), and
-  the locus browser's Display options switch it per viewer (a cookie read on `request_started`, kept in a
-  `ContextVar` for that request; apps.py). Methods shows the colours in its chromatin-state table.
+  the locus browser's Display options switch it per viewer (a cookie read by `palette.middleware`, kept in a
+  `ContextVar` for that request). Methods shows the colours in its chromatin-state table.
 
 Modules: `views.py` (score page, job status, results shell, downloads, delete), `results.py` (overview, table and
 filters, figures), `locus.py` (locus browser, evidence card, variant page; `locus_svg.py` draws them), `explore.py`

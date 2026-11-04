@@ -2,8 +2,9 @@
 name = "snpdata"
 version = "0.1.0"
 description = "Collect the public Atlantic salmon sources and build the annotation release that snpscore and the portal read"
-requires-python = ">=3.8"
-dependencies = ["snpscore", "duckdb>=1.2,<2", "pyyaml"]  # snpscore: the motif scoring and file readers (install ../snpscore first)
+requires-python = ">=3.11"
+license = "PolyForm-Noncommercial-1.0.0"  # LICENSE in the salmo-snp repository
+dependencies = ["snpscore", "duckdb>=1.5,<2", "pyyaml>=6"]  # snpscore: the motif scoring and file readers (install ../snpscore first)
 
 [project.optional-dependencies]
 test = ["pytest"]
@@ -12,7 +13,7 @@ test = ["pytest"]
 snpdata = "snpdata.cli:main"
 
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]

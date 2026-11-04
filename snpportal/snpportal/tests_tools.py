@@ -295,7 +295,7 @@ class ToolsTest(SimpleTestCase):
         self.assertIn("selection_reason", panel_tsv.splitlines()[0])
         parquet = Path(self.tmp.name) / "export.parquet"
         parquet.write_bytes(body(self.client.get(download, {"scope": f"panel-{h}", "format": "parquet"})))
-        meta = duckdb.sql(f"SELECT value FROM parquet_kv_metadata('{parquet}') WHERE key = 'provenance'").fetchone()[0]
+        meta = duckdb.execute(f"SELECT value FROM parquet_kv_metadata('{parquet}') WHERE key = 'provenance'").fetchone()[0]
         self.assertIn(b"panel " + h.encode(), meta)
         z = zipfile.ZipFile(io.BytesIO(body(self.client.get(download, {"scope": f"panel-{h}", "format": "bundle"}))))
         names = set(z.namelist())

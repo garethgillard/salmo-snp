@@ -20,7 +20,8 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 ## Look like salmobase
 - Pages extend `snpportal/base_portal.html` (which extends `salmobase/base.html` and fills its blocks `head`, `content`, `scripts`). Bootstrap 5.1.3 and jQuery are already loaded there.
 - Interactivity with htmx (one script tag, with SRI); no frontend build step, no chart libraries: figures are server-rendered SVG from `figures.py`.
-- Must keep working on Python 3.8, Django 4.2 and DuckDB 1.2.2 until the portal's Dockerfile sets the versions (G, 2026-10-28: own container, not merged into salmobase).
+- Python 3.11 or newer, Django 5.2 LTS and DuckDB 1.5 (../AGENTS.md "Rules"); the portal gets its own container on
+  salmobase, not merged into its Django (G, 2026-10-28).
 
 ## Keep it small
 - Few files, little code, readable. Don't add tests for every edge case.

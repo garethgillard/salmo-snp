@@ -5,7 +5,7 @@
 #   bash tools/check.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
-PYTHONPATH=tools/pyflakes-3.4.0-py2.py3-none-any.whl python -m pyflakes snpscore/src snpdata/src snpdata/prep \
+PYTHONPATH=tools/pyflakes-4.1.0-py2.py3-none-any.whl python -m pyflakes snpscore/src snpdata/src snpdata/prep \
   snpportal/snpsite $(ls -d snpportal/snpportal/*.py snpportal/snpportal/*/ | grep -v -e /tests -e /static/ -e /templates/ -e /__pycache__/)
 (cd snpscore && python -m pytest -q)
 (cd snpdata && python -m pytest -q)
