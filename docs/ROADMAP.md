@@ -6,7 +6,8 @@ Checkboxes live in [TRACKER.md](TRACKER.md); this file holds the full spec and a
 Status (2026-11-04): waves A-D and push 2 are built; the open items are TRACKER's open boxes. Where a spec and the
 code differ, the code and the folder READMEs are current: for example the portal counts all 21 conditions with no
 trait picker (G, 2026-10-11), the portal-only code moved from snpscore to snpportal/lib (2026-10-28), and a local
-install keeps results until deleted (G, 2026-11-03).
+install keeps results until deleted (G, 2026-11-03). Push 3 (I1-I20, at the end) is the plan for industry users
+(G, 2026-11-04).
 
 Legend: **now** = built in the first push (waves A-C); effort S/M/L; priority must/should/could.
 
@@ -1877,3 +1878,251 @@ From the research sweep in [RESEARCH.md](RESEARCH.md) (section numbers there). I
 - **R7** Alias table: accept .2 GenBank versions (chr 9, 11, 18, 26); warn on HG993277.1 (effort S, should)
 - **R8** AQUA-FAANG itemRgb palette option, citation block, ENA/FAANG metadata on the Data page; SalmoBase gene deep links; NCBI LOC search (effort S, should)
 - **R9** P4.5 note: vgll3 Met54Thr is T46M on ENSSSAT00000230965 (offset 8 to the published numbering) (effort S, could)
+
+## Push 3: industry users (G, 2026-11-04)
+
+From two industry users' requests (data security and storage, user accounts, several or custom genomes, genome
+comparison, DeepFARM and a CADD-like score; chip design as in commercial software) and the review of 2026-11-04
+(TRACKER.md step 8). G agreed the plan and its order on 2026-11-04: phase 1, then the chip items I7-I12, the scores
+(I15-I16) when G's data is ready, the genomes later. One box per item in TRACKER.md step 9.
+
+Assumptions (G, 2026-11-04):
+- One user per install, who shares results as files (exports, the bundle, I7's project export). No accounts and no
+  shared company server (on hold).
+- The chip user is aquaculture genotyping in Norway, so Thermo Fisher Axiom (Affymetrix) comes first; Illumina and
+  KASP second. To confirm with a partner (DECISIONS #27).
+- Genome comparison is on hold until G has asked the users what they need (DECISIONS #28).
+
+### Phase 1: ready to hand to companies
+
+#### I1 Self-contained pages: Bootstrap and htmx shipped with the package
+
+phase 1 · effort S · must
+
+**Spec.** Copy Bootstrap 5.1.3 (CSS and bundle JS; MIT) and htmx 2.0.11 (0BSD) into
+`snpportal/static/snpportal/vendor/` with their licence texts. The stand-in `snpsite/templates/salmobase/base.html`,
+`base_portal.html` and `base_embed.html` load them with `{% static %}`; salmobase's own base template keeps its
+Bootstrap. Then the README's and Help's 'what leaves your computer' are complete as written.
+
+**Acceptance.** No template names cdn.jsdelivr.net. With the network off, `manage.py screenshots` reports htmx and
+Bootstrap loaded on the Score page, and a job's progress panel refreshes until its results show.
+
+#### I2 Data-handling sheet
+
+phase 1 · effort S · must
+
+**Spec.** One section in the README and in Help's privacy part (local wording), written for a company's IT review:
+- what is stored (the job folder's files, the Design panel, the projects of I7);
+- where (the data folder `salmo-snp info` names) and for how long (until deleted);
+- every network request and why (signal tiles for viewed regions; the genome only with `--no-genome`);
+- how to delete everything;
+- that the files are protected by the user's account and disk encryption (FileVault, BitLocker, LUKS), as any
+  working file;
+- that sharing means sending exported files.
+The wording is G's to approve (DECISIONS #20).
+
+**Acceptance.** Every network call in the code (urlopen, the remote readers) is listed; a reviewer can answer "can our
+SNPs leave this computer?" from the sheet alone.
+
+#### I3 The public background pool in every install
+
+phase 1 · effort S · must
+
+**Spec.** `snpscore pool` takes its sites from the release itself (`public_af`: the 12 AQUA-FAANG fish's sites, as the
+12-fish VCF gives today, or the 504-fish panel: DECISIONS #15), so it needs nothing from data/raw.
+`salmo-snp download` builds it after checking the files (and `serve` when it is missing), and so does nrec.sh. A
+weight change rebuilds it, as now.
+
+**Acceptance.** After a fresh `salmo-snp download`, the Overview draws its thin public bars, ticks and the × fold, with
+the same shares as a pool built from the 12-fish VCF.
+
+#### I4 Versions users can name
+
+phase 1 · effort S · must
+
+**Spec.** G tags v0.1.0 (release.yml builds the wheels); the README and Run locally install `@v0.1.0`. Each tag's
+GitHub Release carries `constraints.txt`, the exact versions its CI passed with, for installs that must reproduce a
+result (`pip install -c constraints.txt ...`). `salmo-snp info` and every export name the installed salmo-snp and
+snpscore versions. The three names are registered on PyPI (DECISIONS #25).
+
+**Acceptance.** An install from the README with the constraints file has CI's versions; `salmo-snp info` prints them.
+
+#### I5 The install on macOS and Windows
+
+phase 1 · effort S-M · must
+
+**Spec.** tools/user_install_test.sh finds a Windows venv's `Scripts\`; CI runs it on macOS and Windows on a schedule
+and on tags (a private repository's macOS minutes count 10x: DECISIONS #26), Linux on every pull request. Then fix
+what breaks (paths inside SQL literals, file modes, signals).
+
+**Acceptance.** The three systems pass on a tag.
+
+#### I6 The tier rules confirmed
+
+phase 1 · G · must
+
+**Spec.** G answers DECISIONS #1-#5 (active and weak states, presets, weights and cut-offs, synonymous SNPs) with the
+eQTL benchmark (#4a-#4c); the answers go into weights.yaml and AGENTS.md "Decided", and the PROVISIONAL labels go from
+what is decided. Then the genome-wide release v0.1 (TRACKER step 4).
+
+**Acceptance.** Methods, the report and the downloads call provisional only what is still open.
+
+### Phase 2: chip design (Axiom first)
+
+#### I7 Saved design projects
+
+phase 2 · effort M · must (P6.7, without its server retention)
+
+**Spec.** A project is a named folder in the data folder (`projects/<name>/`): its candidate lists (job keys), chips,
+populations (I9), notes and panel versions. A version holds the SNPs, the parameters, each SNP's reason and a hash, and
+never changes. A diff page shows two versions' added and removed markers with their reasons. The project is the unit
+to share: export as a zip, import on another computer. Today's one-per-browser Design panel becomes the project's
+working panel. No database: JSON and Parquet files, as job folders.
+
+**Acceptance.** After closing the browser and restarting serve, the project and every version are back; the diff of
+two versions lists every change with its reason; export then import elsewhere gives the same panel hash.
+
+#### I8 Panel presets and target sizes
+
+phase 2 · effort M · must
+
+**Spec.** Presets that set the designer's parameters for a purpose: genomic selection (even spacing in cM, a MAF
+floor, mostly backbone), parentage and traceability (a few hundred unlinked, high-MAF SNPs), a trait panel (known loci
+and tier 1-2 SNPs near them), and mixtures (a share per purpose). Target sizes follow the vendor's formats (Axiom
+custom array sizes and plate formats, KASP plates; to confirm with the vendor). Every number in a preset is
+PROVISIONAL, in weights.yaml `design.presets`, for G to set.
+
+**Acceptance.** Each preset designs a fixture panel that meets its own constraints; the panel and its report name
+the preset and its parameters.
+
+#### I9 The user's own population
+
+phase 2 · effort M · must
+
+**Spec.** Upload allele frequencies (chrom, pos, ref, alt, af, n) or genotypes (VCF, PLINK) for one or more of the
+user's populations. Genotypes are read as they stream and only per-SNP counts are kept (as snpdata's `count_gt`):
+MAF, call rate and HWE p per SNP and population, in the project. The designer's MAF filter and informativeness use
+the population picked, and the Table and card show it next to the public panel's. Local installs only: a server never
+offers it.
+
+**Acceptance.** On a synthetic genotype file, MAF, call rate and HWE match a direct count; no genotype reaches the
+disk (tested); the designer's MAF filter uses the picked population.
+
+#### I10 Probe uniqueness
+
+phase 2 · effort M-L · must (P6.8, and TRACKER step 3's assay part 2b)
+
+**Spec.** For each candidate's flanks (35 bp for Axiom; 50-60 bp for KASP and Illumina): its best match in the Ss4R
+duplicate region (the paired block +/-50 kb, from synteny.parquet; P6.8's scan) and, if a seed index of the genome fits
+in a release (to measure first), how many places in the genome it matches with up to 2 mismatches. Pure Python and
+DuckDB; an external aligner only with G's OK. Adds a 'paralog' warn reason (its threshold is G's).
+
+**Acceptance.** Probes in LORe regions show higher identity to their duplicate than non-LORe controls; the vgll3 test
+vector (RESEARCH section 5) is checked by hand.
+
+#### I11 Compare and upgrade chips
+
+phase 2 · effort M · must (extends P6.6)
+
+**Spec.** Several chips at once (Axiom annotation CSVs and Illumina manifests, read as today): a matrix of overlap
+(exact and within the window), density per Mb and per cM, gaps, functional content (tier 1-2, coding, known loci) and
+MAF (public, or the project's population). 'Upgrade a chip' starts from one chip and makes a new project version: it
+keeps the markers that work, drops failing ones (call rate and HWE from I9's genotypes, or a QC table the user gives),
+then fills gaps and adds functional markers up to a target size.
+
+**Acceptance.** On synthetic chips, the matrix matches direct joins; an upgrade keeps every passing marker it was told
+to keep and meets its target size.
+
+#### I12 A design report per panel
+
+phase 2 · effort S-M · should
+
+**Spec.** One printable report per panel version, like the results report: its purpose (preset and parameters),
+markers per chromosome, spacing in bp and cM, MAF (public and own population), the assay check, functional content,
+uniqueness warnings, the chip it upgrades and what changed, and provenance (release, weights, versions).
+
+**Acceptance.** Two A4 pages for a 384-marker panel; every number matches the project's files.
+
+#### I13 Vendor round trip, Axiom first
+
+phase 2 · effort M · should
+
+**Spec.** With a real Axiom submission template and a design-results file from a partner or the CIGENE lab (Thermo's
+columns are not public: RESEARCH section 5): export to that template exactly, import the results into the project (per
+SNP: designable or not, the vendor's score and probe choice), re-rank, drop what can't be made, and export the order.
+Then Illumina DesignStudio scores and KASP.
+
+**Acceptance.** A partner's real files round-trip: every SNP of the results file matches, and the export opens in the
+vendor's tool unedited (the partner checks).
+
+#### I14 Later chip items
+
+phase 2, later · effort L · could
+
+- LD-aware thinning and tagging, from the project's genotypes (I9) or a public LD reference (P7.6, DECISIONS #19).
+- Amplicon and GT-seq panels: flanks for primer design (Primer3 input) and multiplex constraints.
+- Agena MassARRAY (not researched yet).
+
+### Phase 3: variant scores
+
+#### I15 One format for per-variant scores
+
+phase 3 · effort S-M · must
+
+**Spec.** A `point` layer of precomputed scores (chrom, pos, ref, alt, `score`, `percentile` over the scored set),
+with `model`, `version` and `scored_set` in layers.yaml and the manifest. annotate adds `<layer>_score`,
+`<layer>_percentile` and `<layer>_scored`: false means outside the scored set, shown as 'not scored', never 0. Shown as
+a Table column, in the card and as a locus-browser lane, with a benchmark row and a weights.yaml term (weight 0 until
+G sets it). The fixture gets a SYNTHETIC score file.
+
+**Acceptance.** The synthetic layer reaches every place above; tiers are unchanged at weight 0.
+
+#### I16 DeepFARM and a CADD-like score
+
+phase 3 · G's data · must when ready
+
+**Spec.** G retrains DeepFARM with the extra data and makes a CADD-like score; each comes as an I15 file with a method
+note, licence and citation. snpdata builds them into the next release; G sets their weights from the benchmark.
+
+**Acceptance.** Both in a release and benchmarked against the known loci and the eQTL leads.
+
+### Phase 4: genomes (later)
+
+#### I17 Several releases side by side
+
+phase 4 · effort M · should
+
+**Spec.** One install holds several releases, possibly on different assemblies (the manifest's `assembly`). The
+portal shows which one is in use and lets the user switch it; a job keeps reading its own release (it records it
+already); upload pages say which assembly they expect; nothing mixes releases.
+
+**Acceptance.** With two releases installed, jobs from each show their own release's data.
+
+#### I18 Placement by probe sequence
+
+phase 4 · effort M · should
+
+**Spec.** A manifest's probe or flank sequences place its SNPs on Ssal_v3.1 whatever assembly the positions came from:
+matched against the flanks of known variant sites (the 504-fish panel, EVA) kept in the release as a lookup, or exactly
+against the genome near the given position. This fixes ICSASG_v2 chips beyond the rs-ID bridge.
+
+**Acceptance.** An ICSASG_v2 Axiom manifest places at least as many SNPs as the rs bridge, and none where the flank
+differs from the genome.
+
+#### I19 Coordinate conversion between assemblies
+
+phase 4 · effort M-L · could (P2.5)
+
+**Spec.** ICSASG_v2 to Ssal_v3.1 for any position (a chain from an alignment made outside the tool, or I18's flank
+method), then the new assembly and Ssal_v3.1 both ways once it is in use.
+
+**Acceptance.** Positions with an EVA rs ID convert to the rs ID's other position.
+
+#### I20 A release on the new Atlantic salmon assembly
+
+phase 4 · G's data · could
+
+**Spec.** After G has re-run AQUA-FAANG and the other analyses on the new assembly: a layers.yaml per assembly, the
+alias table and chromosome names, `snpdata build`, then I17. Mostly outside the tool.
+
+**Acceptance.** Both releases install side by side (I17) and score the same public SNPs at their own positions.

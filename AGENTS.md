@@ -95,6 +95,11 @@ Decided:
   the paper gives no alleles, so the hub SNP's effect allele (A) is the Synchrosmolt parents' minor allele (caveat says so).
 - Synchrosmolt (2026-10-19): the 108 parents' frequencies only (the offspring were imputed from them). The CGD Axiom
   VCF (PRJEB107807) waits: its positions are not Ssal_v3.1 (snpdata/README.md "Not added").
+- Industry users (2026-11-04): the plan is ROADMAP.md "Push 3" (I1-I20; boxes in TRACKER step 9), in G's order: ready
+  to hand over (I1-I6), chip design (I7-I14), variant scores (I15-I16, G's DeepFARM and CADD-like data), genomes later
+  (I17-I20). One user per install, who shares results as files: no accounts, no shared server (on hold). Chip tools
+  serve Thermo Fisher Axiom first (G's guess for Norwegian aquaculture; to confirm), then Illumina and KASP. Genome
+  comparison is on hold until G has asked the users.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.
@@ -144,7 +149,8 @@ Open (ask G; all collected with options and recommendations in docs/DECISIONS.md
   while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
 - Assay QC: flank repeat shares are mostly 0 or 1, so ~55% of public SNPs warn on 'repeat' whatever the cut-off; should fully
   soft-masked flanks warn at all? (without it ~46% pass instead of ~20%)
-- Not biology, still G's: the PyPI names and the systems the install is checked on (DECISIONS.md #25-#26).
+- Not biology, still G's: the PyPI names, the systems the install is checked on, the Axiom assumption and what
+  'genome comparison' means (DECISIONS.md #25-#28).
 
 ## Development
 Tests use the small fixture in `snpdata/tests/fixture`, so they need no downloads.

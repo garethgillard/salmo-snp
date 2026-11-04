@@ -14,16 +14,17 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
 
 ## Next
-1. **G's feature requests** (G, 2026-11-04: coming next). Each becomes a box in step 9 below, in G's order, with a
-   spec in ROADMAP.md when it needs more than a line.
-2. ~~Off end-of-life versions~~: done 2026-11-04 (step 8).
-3. **A public background pool for every install** (step 8): no release in use has one, so the Overview's
-   comparisons with public sites are never drawn.
-4. **Before the local install is shared beyond collaborators** (step 8, and step 7's open boxes): Bootstrap and htmx
-   shipped with the package (the pages need cdn.jsdelivr.net today), a v0.1.0 tag, the package names on PyPI, the data
-   on salmobase, the citation and privacy text, macOS and Windows checks.
-5. **Backlog**: the other open boxes below, in the order G picks, and the questions in DECISIONS.md (the tier rules,
-   #1-#5, come before the genome-wide release v0.1 of step 4).
+Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9), in this order:
+1. **Phase 1, ready to hand to companies** (I1-I6): pages that work offline, a data-handling sheet, the public pool in
+   every install, versions users can name (v0.1.0, constraints, PyPI names), macOS and Windows, and G's tier rules.
+2. **Phase 2, chip design, Axiom first** (I7-I12, then I13-I14): saved design projects, panel presets and target sizes,
+   the user's own population, probe uniqueness, comparing and upgrading chips, a design report; then the vendor round
+   trip and the later chip items.
+3. **Phase 3, variant scores** (I15, then I16 when G's DeepFARM and CADD-like data is ready).
+4. **Phase 4, genomes, later** (I17-I20).
+5. **On hold** (G, 2026-11-04): genome comparison (G is asking the users what they need; DECISIONS #28) and a shared
+   company server with accounts (one user per install, who shares results as files).
+6. **Backlog**: the other open boxes below, and the questions in DECISIONS.md.
 
 ## Step 0: decisions and contract
 - [x] Assembly Ssal_v3.1, chromosomes named 1-29 (same as AQUA-FAANG and Ensembl)
@@ -52,11 +53,11 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - [ ] Ohnolog pairs and element duplication class (shared / alignable-only / exclusive)
 - [x] molQTL from the public nf-RASQUAL lead-SNP tables (Push 2 R4, weight 0)
 - [ ] ImmunoMap response regions (source needed from G)
-- [ ] TF motif disruption
-- [ ] DeepFARM scores (agree redistribution first)
+- [x] TF motif disruption (JASPAR 2024, G's rule of 2026-10-19: 'More public data' below)
+- [ ] DeepFARM scores (agree redistribution first): now I16 (G retrains it)
 - [x] Assay axis, part 1: variants within 35 bp (public 12-fish VCF), A/T-C/G flag
 - [x] Assay axis, part 2a: GC, repeat share, homopolymers, N, TOP/BOT from the genome (P6.2, R2)
-- [ ] Assay axis, part 2b: probe-flank uniqueness / paralog cross-hybridisation (P6.8; needs an aligner or k-mer index)
+- [ ] Assay axis, part 2b: probe-flank uniqueness / paralog cross-hybridisation (P6.8; needs an aligner or k-mer index): now I10
 
 ## Step 4: tiers and release v0.1
 - [ ] G decides: which states count as active; trait presets (trait -> conditions). Brief with options: DECISIONS.md
@@ -100,7 +101,7 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - [x] Cloud sessions: tools/cloud_setup.sh (SessionStart hook in .claude/settings.json), AGENTS.md "Cloud sessions"
 - [ ] Host the published folder (`snpdata publish --raw`: releases/, latest.json, raw/) on salmobase's Apache and set
       serve.py DATA_URL; the nf-RASQUAL and 504-fish layers only once their owners agree to redistribution
-- [ ] v0.1.0 tag (G decides when): .github/workflows/release.yml builds the three wheels into a GitHub Release
+- v0.1.0 tag (G decides when; release.yml builds the three wheels): now step 9's I4
 - [ ] Dockerfile for salmobase (installs a tagged version; release folder mounted); salmobase links to it with a button
 - [ ] Before the repository goes public: synthetic stand-ins for the fixture cuts of licence-pending data
 
@@ -115,26 +116,37 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
       2.0.0 gives the same annotate output (golden hash) and the 220-page crawl of the real release finds no errors
 - [x] DuckDB 2 (2.0.0 of 2026-10-21): the lambdas, and two tests that left a half-read result on DuckDB's shared
       connection (`fetchall()` instead of `fetchone()`); the product code was already fine
-- [ ] Public background pool for every install. `salmo-snp download` leaves `pool/` out (a cache of the current
-      weights), `snpscore pool` needs the 12-fish VCF in data/raw (a release builder's), and the demo's release has
-      none either. So the Overview's thin bars and ticks for public sites, and the '×' fold of 'Active chromatin per
-      condition', are never drawn, though their (i) texts describe them, and gene-page candidates are annotated on the
-      fly. Proposal: `snpscore pool` takes its sites from the release's public_af (the 12 AQUA-FAANG fish's sites, as
-      now, or the 504-fish panel: DECISIONS.md #15); `salmo-snp download` and nrec.sh build it (~40 s for 1.6M sites)
-- [ ] Bootstrap 5.1.3 and htmx 2.0.4 shipped with the package (static files, MIT and BSD licences; G to OK) instead of
-      cdn.jsdelivr.net, which every page loads them from: offline, or where a company network blocks the CDN, a local
-      install's pages lose their layout and the job progress panel never refreshes (its `<noscript>` fallback needs
-      JavaScript off). salmobase's own base template brings Bootstrap there. Then the README's and Help's 'fetches
-      public data only' are complete
-- [ ] Install by tag once v0.1.0 exists (README: `...salmo-snp@v0.1.0#subdirectory=...`), so a reinstall needs no
-      `--force-reinstall` and users can say which version they ran
-- [ ] The package names on PyPI (DECISIONS.md #25): snpscore, snpdata and salmo-snp are unregistered, and salmo-snp
-      depends on `snpscore` by name
-- [ ] The user-install check on macOS and Windows (DECISIONS.md #26); Windows also needs tools/user_install_test.sh
-      to find `Scripts\` instead of `bin/`
+- Moved to step 9 (Push 3): the public pool in every install (I3), Bootstrap and htmx in the package (I1), install
+  by tag and the PyPI names (I4), the install on macOS and Windows (I5)
 
-## Step 9: G's feature requests (2026-11-04)
-G sends these next; one box each, in G's order.
+## Step 9: Push 3, industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3")
+Phase 1, ready to hand to companies:
+- [ ] I1 Bootstrap 5.1.3 and htmx 2.0.11 shipped with the package: the pages work offline and behind a CDN block
+- [ ] I2 Data-handling sheet (README and Help): what is stored where and for how long, every network request, deleting
+- [ ] I3 The public background pool in every install, built from the release (DECISIONS #15 picks the sites)
+- [ ] I4 Versions users can name: v0.1.0 tag, install by tag, constraints.txt per release, PyPI names (DECISIONS #25)
+- [ ] I5 The install checked on macOS and Windows (DECISIONS #26)
+- [ ] I6 G's tier rules (DECISIONS #1-#5), then the genome-wide release v0.1 (step 4)
+
+Phase 2, chip design (Axiom first: DECISIONS #27):
+- [ ] I7 Saved design projects: versions, diff, export and import (P6.7)
+- [ ] I8 Panel presets (genomic selection, parentage, trait, mixed) and target sizes by vendor format
+- [ ] I9 The user's own population: frequencies or genotypes (counts kept, genotypes never stored)
+- [ ] I10 Probe uniqueness: Ss4R duplicate and genome-wide flank matches (P6.8, assay part 2b)
+- [ ] I11 Compare several chips; upgrade a chip (keep, drop failing, fill gaps, add functional)
+- [ ] I12 A design report per panel version
+- [ ] I13 Vendor round trip with real Axiom files from a partner, then Illumina and KASP
+- [ ] I14 Later: LD-aware thinning, amplicon and GT-seq panels, Agena
+
+Phase 3, variant scores:
+- [ ] I15 One layer format for per-variant scores (score, percentile, 'not scored'), shown everywhere, weight 0
+- [ ] I16 DeepFARM (retrained by G) and a CADD-like score, as I15 layers in a release (G's data)
+
+Phase 4, genomes (later):
+- [ ] I17 Several releases side by side, possibly on different assemblies
+- [ ] I18 Placement by probe sequence, whatever assembly the positions came from
+- [ ] I19 Coordinate conversion between assemblies (P2.5)
+- [ ] I20 A release on the new Atlantic salmon assembly (G's re-run analyses)
 
 ## Portal roadmap v2 (full specs in [ROADMAP.md](ROADMAP.md))
 
@@ -155,7 +167,7 @@ First push = waves A-C (items marked **now**), then wave D (GWAS, M7). Ticked wh
 - [x] P2.2 Upload page redesign with examples, paste box and safe limits (S, must, **now**)
 - [x] P2.3 Privacy and data-lifecycle hardening (S, must, **now**)
 - [ ] P2.4 Optional in-browser genotype stripping before upload (S, should)
-- [ ] P2.5 ICSASG_v2 -> Ssal_v3.1 offline position table (L, should)
+- [ ] P2.5 ICSASG_v2 -> Ssal_v3.1 offline position table (L, should): now I19
 - [x] P2.6 Chip manifests, PLINK files and header aliases (S, should, **now**)
 
 ### M3 Results overview and table
@@ -192,7 +204,7 @@ First push = waves A-C (items marked **now**), then wave D (GWAS, M7). Ticked wh
 - [ ] P5.6 Candidate target genes beyond the nearest gene (M, should)
 - [ ] P5.7 Gene expression per tissue x condition with tau (M, should)
 - [ ] P5.8 Ss4R ohnolog context (S, should) (ss4r layer from the AQUA-FAANG salmon-trout table, Known loci column and gene page links done; mirrored expression bars to do)
-- [ ] P5.9 TF motif disruption (ref vs alt) (M, should)
+- [x] P5.9 TF motif disruption (ref vs alt) (M, should) (built 2026-10-19: 'More public data' below)
 - [x] P5.10 Ortholog names for unnamed salmon genes (S, should, **now**)
 - [x] P5.11 Guided 'vgll3 and maturation' tour (S, should, **now**)
 - [x] P5.12 rsID support (S, could) (EVA rs bridge: R6)
@@ -204,10 +216,10 @@ First push = waves A-C (items marked **now**), then wave D (GWAS, M7). Ticked wh
 - [x] P6.4 Vendor submission exports (Illumina-style, Axiom-style, KASP) and the zip bundle (M, must, **now**)
 - [x] P6.5 Genomic-prediction priors bundle (BayesRC, GFBLUP/MultiBLUP, LDAK, annot) (S, must) (`--format priors`; portal: default categories under 'More formats', no category checkboxes yet)
 - [x] P6.6 Compare with an existing chip (overlap, gaps, new functional coverage) (S, should, **now**)
-- [ ] P6.7 Saved, versioned panels with diff (opt-in retention) (M, could)
-- [ ] P6.8 Ohnolog cross-hybridisation risk for probes (L, could)
+- [ ] P6.7 Saved, versioned panels with diff (opt-in retention) (M, could): now I7, kept locally
+- [ ] P6.8 Ohnolog cross-hybridisation risk for probes (L, could): now I10
 - [x] P6.9 Genetic map (cM) layer and cM-based spacing (M, should) (Brekke 2023: R5)
-- [ ] P6.10 Multi-population allele frequencies (M, could)
+- [ ] P6.10 Multi-population allele frequencies (M, could): the user's own populations are I9
 
 ### M7 GWAS summary statistics and functional fine-mapping (Wave D)
 - [x] P7.1 Sumstats upload mode with format detection and harmonisation (M, must)
@@ -215,7 +227,7 @@ First push = waves A-C (items marked **now**), then wave D (GWAS, M7). Ticked wh
 - [x] P7.3 LocusZoom-style regional association plot on the locus browser (S, must)
 - [x] P7.4 Wakefield ABF fine-mapping with uniform vs functional priors (M, must) (synthetic GWAS; planted vgll3 Met54Thr rises under the functional prior)
 - [ ] P7.5 Enrichment vs matched background and 21-condition relevance heatmap (M, should)
-- [ ] P7.6 Public LD reference from the 504-fish phased panel (L, should)
+- [ ] P7.6 Public LD reference from the 504-fish phased panel (L, should): also for I14's LD-aware thinning
 - [ ] P7.7 Functional proxy finder for array lead SNPs (M, should)
 - [ ] P7.8 Colocalisation with caQTL/eQTL and between two traits (L, should)
 - [ ] P7.9 Heritability enrichment helper (S, could)
@@ -265,7 +277,7 @@ First push = waves A-C (items marked **now**), then wave D (GWAS, M7). Ticked wh
 - [x] Public demo at https://158.39.75.9/snp/ (deploy/nrec.sh with the IP and the sslip.io name)
 - [ ] CGD Axiom array positions (ENA PRJEB107807): need Ssal_v3.1 positions from the submitters (README "Not added")
 - [ ] Synchrosmolt gill eQTL table (45,543 SNP-gene pairs): ask the Sandve lab; would join the molQTL lane
-- [ ] DeepFARM salmon scores: ask D. T. Nguyen for the model weights or precomputed scores for the 504-panel SNPs
+- [ ] DeepFARM salmon scores: ask D. T. Nguyen for the model weights or precomputed scores for the 504-panel SNPs (now I16)
 - [ ] LD reference (Synchrosmolt parents or the 504-fish panel, r2 pairs only): G to choose the population
 - [ ] Motif hits in repeats (low-complexity motifs such as EWSR1-FLI1 and ZSCAN4 fire most): G to decide whether to skip soft-masked windows
 
