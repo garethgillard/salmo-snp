@@ -2,21 +2,24 @@
 # The new user's path, as the README gives it, on the test fixture: install the built wheels (not the source folders)
 # into a fresh venv with the newest dependencies they allow, publish the fixture release as the data folder, then
 # salmo-snp download (release and genome), snpscore annotate, salmo-snp serve and salmo-snp info.
-#   bash tools/user_install_test.sh [python]      (default python3; CI runs it on the newest Python)
+#   bash tools/user_install_test.sh [python]      (default python3; CI: Linux on every pull request, macOS and Windows
+#                                                  in .github/workflows/platforms.yml; on Windows it runs in Git Bash)
 # It caught DuckDB 2.0 and a hand-edited manifest; it needs no network beyond PyPI.
 set -euo pipefail
 PY=${1:-python3}
-REPO=$(cd "$(dirname "$0")/.." && pwd)
-T=$(mktemp -d)
-trap 'kill $(jobs -p) 2>/dev/null || true; rm -rf "$T"' EXIT
+win() { cygpath -m "$1" 2>/dev/null || echo "$1"; }  # Git Bash on Windows: C:/... paths, which Python reads as well
+REPO=$(win "$(cd "$(dirname "$0")/.." && pwd)")
+T=$(win "$(mktemp -d)")
+trap 'kill $(jobs -p) 2>/dev/null || true; rm -rf "$T" 2>/dev/null || true' EXIT
 "$PY" -m venv "$T/env"
 E="$T/env/bin"
-"$E/pip" install -q --upgrade pip build
+[ -d "$E" ] || E="$T/env/Scripts"  # a Windows venv keeps its programs in Scripts\
+"$E/python" -m pip install -q --upgrade pip build
 for d in snpscore snpdata snpportal; do  # setuptools leaves build/ in the source folder: removed (it confuses grep)
   "$E/python" -m build -q --wheel --outdir "$T/dist" "$REPO/$d" > "$T/build.log" 2>&1 || { cat "$T/build.log"; exit 1; }
   rm -rf "$REPO/$d/build"
 done
-"$E/pip" install -q "$T"/dist/*.whl
+"$E/python" -m pip install -q "$T"/dist/*.whl
 "$E/python" -c "import sys, duckdb, django; print('python', sys.version.split()[0], '| duckdb', duckdb.__version__, '| django', django.get_version())"
 
 cd "$T"  # the published data folder, made from the fixture as snpdata publish makes the real one
