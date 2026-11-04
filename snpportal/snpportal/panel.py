@@ -190,9 +190,14 @@ def _open(d):
             if (d / "populations" / f"{p['slug']}.parquet").exists()]
     if pops and "ref" in columns and "alt" in columns:  # I9: the user's populations' frequencies, call rate and HWE p
         from .lib import population
-        con.execute(f"CREATE VIEW pa1 AS {population.join_sql('pa0', pops)}")
+        con.execute(f"CREATE VIEW pa1p AS {population.join_sql('pa0', pops)}")
     else:
-        con.execute("CREATE VIEW pa1 AS SELECT * FROM pa0")
+        con.execute("CREATE VIEW pa1p AS SELECT * FROM pa0")
+    if (d / "uniqueness.parquet").exists() and "paralog_identity" not in columns:  # I10: the probe uniqueness check
+        con.execute(f"CREATE VIEW pa1 AS SELECT x.*, q.* EXCLUDE (snp_key) FROM pa1p x "
+                    f"LEFT JOIN read_parquet({lit(d / 'uniqueness.parquet')}) q USING (snp_key)")
+    else:
+        con.execute("CREATE VIEW pa1 AS SELECT * FROM pa1p")
     con.execute("CREATE VIEW p0 AS SELECT * FROM pa1 WHERE NOT dropped")
     chip = d / "chip.parquet"
     if chip.exists():
@@ -253,6 +258,7 @@ def page(request):
     s = jobs.read_json(d / "panel.json")
     con, rel = _open(d)
     ctx["populations"] = populations(d)
+    ctx["genome"] = genome() is not None
     chip = jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}
     synthetic = any(x.get("synthetic") for x in s["sources"]) or bool(chip.get("synthetic"))
     ctx.update(sources=[{**x, "url": f"{reverse('snpportal:projects')}#{x['project']}" if x.get("project") else
@@ -297,7 +303,8 @@ def page(request):
                           LISTED if every else SHOWN, order, new_only),
                more=None if every or n + dropped <= SHOWN else "?" + urlencode({k: v for k, v in (("show", "all"), ("order", order),
                                                                                          ("chip", "new" if new_only else "")) if v and v != "problems"}),
-               order=order, new_only=new_only, dropped=dropped,
+               order=order, new_only=new_only, dropped=dropped, uniqueness=uniqueness_summary(con, d, types),
+               uniqueness_max=UNIQUENESS_MAX, ss4r="ss4r_ohnolog" in types,
                downloads=_downloads(con, chip, n))
     return render(request, "snpportal/panel.html", ctx)
 
@@ -313,7 +320,9 @@ def _rows(con, types, sources, limit, order="problems", new_only=False):
     extra = (own, own[:-3] + "call_rate", own[:-3] + "hwe_p", own[:-3] + "n") if own else ()
     cols = [c for c in ("chrom", "pos", "id", "ref", "alt", "gene_name", "gene_id", "gene_ortholog_human", "region_class", "coding_consequence",
                         "coding_hgvsp", "tier", "assay_status", "public_af_maf", "lore", "on_chip", "near_chip", "dist_to_chip", "sources",
-                        "snp_key", "dropped") + extra if c in types]
+                        "snp_key", "dropped", "paralog_identity", "paralog_left", "paralog_right", "paralog_at", "paralog_gene") + extra
+            if c in types]
+    limit_id = ((jobs.weights() or {}).get("assay") or {}).get("max_paralog_identity")  # I10: G's threshold, if set
     maf = own or ("public_af_maf" if "public_af_maf" in types else "NULL")
     lore = "coalesce(lore, false)" if "lore" in types else "false"
     sql = f"""WITH k AS (SELECT snp_key, chrom, pos, coalesce(nullif(id, '.'), chrom || ':' || pos) AS name FROM p),
@@ -342,8 +351,21 @@ def _rows(con, types, sources, limit, order="problems", new_only=False):
                     "tier": g("tier"), "assay": (results.ASSAY.get(status, ("?", "not_checked")) + (status.replace("_", " "),)),
                     "maf": _maf_cell(g, own, low),
                     "lore": bool(g("lore")), "close": f"{tools._bp(g('close_bp'))} from {g('close_to')}" if near else "",
-                    "chip": chip, "sources": " ".join(names.get(x, "?") for x in g("sources") or [])})
+                    "chip": chip, "sources": " ".join(names.get(x, "?") for x in g("sources") or []),
+                    "paralog": _paralog_cell(g, limit_id) if "paralog_gene" in r else None})
     return out
+
+
+def _paralog_cell(g, limit):
+    """(text, over G's threshold, tooltip) of the probe uniqueness check (I10), or None when the SNP was not checked or
+    has no Ss4R duplicate gene."""
+    if g("paralog_gene") is None and g("paralog_left") is None and g("paralog_right") is None:
+        return ("no duplicate", False, "No Ss4R duplicate gene, or no close copy found in it") if g("snp_key") else None
+    pct = lambda x: "< 89%" if x is None else f"{x:.0%}"  # noqa: E731
+    ident = g("paralog_identity")
+    tip = f"Best match in the Ss4R duplicate: left flank {pct(g('paralog_left'))}, right flank {pct(g('paralog_right'))}" \
+        + (f", at {g('paralog_at')} ({g('paralog_gene')})" if g("paralog_at") else "")
+    return (pct(ident), limit is not None and ident is not None and ident > float(limit), tip)
 
 
 def _maf_cell(g, own, low):
@@ -427,7 +449,86 @@ def _change(request):
         return redirect(reverse("snpportal:design_panel") + "#chip-h")
     if request.FILES.get("population") or request.POST.get("population_remove"):
         return _population(request, d)
+    if request.POST.get("uniqueness"):
+        return _uniqueness(d)
     return _chip(request, d)
+
+
+UNIQUENESS_MAX = 5000  # SNPs checked at most (about 0.02 s each, from a local genome)
+
+
+def genome():
+    """The release's genome as a local file (the probe uniqueness check reads ~100 kb around every ohnolog), or None."""
+    from snpscore.annotate import genome_location
+    where = genome_location(jobs.manifest())
+    return where if where and not str(where).startswith(("http://", "https://")) and Path(where).exists() else None
+
+
+def _uniqueness(d):
+    """POST uniqueness=1: lib.uniqueness.scan of the panel's SNPs (up to UNIQUENESS_MAX) against their Ss4R duplicate,
+    written to uniqueness.parquet (snp_key and the paralog_* columns) and uniqueness.json."""
+    from snpscore.fasta import Fasta
+    from .lib import uniqueness
+    back = reverse("snpportal:design_panel")
+    where = genome()
+    if where is None:
+        return redirect(f"{back}?{urlencode({'error': 'The probe uniqueness check needs the genome on this computer (salmo-snp download).'})}")
+    con, rel = _open(d)
+    if rel is None:
+        return redirect(back)
+    types = {c for c, in con.execute("SELECT column_name FROM (DESCRIBE p)").fetchall()}
+    if "ss4r_ohnolog" not in types:
+        con.close()
+        return redirect(f"{back}?{urlencode({'error': 'These results have no Ss4R duplicate genes (the ss4r layer).'})}")
+    flank = "assay_flank" if "assay_flank" in types else "NULL"
+    dist = "gene_distance" if "gene_distance" in types else "0"
+    rows = con.execute(f"SELECT snp_key, chrom, pos, {dist}, ss4r_ohnolog, {flank} FROM p ORDER BY file_row_number "
+                       f"LIMIT {UNIQUENESS_MAX}").fetchall()
+    wanted = sorted({g for r in rows if r[4] for g in r[4].split(",")})
+    genes = {}
+    if wanted:
+        genes = {g: (c, a, b) for g, c, a, b in con.execute(
+            f"SELECT id, chrom, start, \"end\" FROM read_parquet({lit(jobs.release() / 'gene.parquet')}) WHERE list_contains(?, id)",
+            [wanted]).fetchall()}
+    snps = [{"key": k, "chrom": c, "pos": pos, "gene_distance": gd, "ohnologs": (o or "").split(",") if o else [], "assay_flank": f}
+            for k, c, pos, gd, o, f in rows]
+    found = uniqueness.scan(snps, genes, Fasta(where), flank=int(snp_assay_flank()))
+    tmp = d / f".uniqueness-{uuid.uuid4().hex}.tsv"
+    cols = ("paralog_identity", "paralog_left", "paralog_right", "paralog_at", "paralog_gene")
+    with open(tmp, "w") as f:
+        f.write("\t".join(("snp_key",) + cols) + "\n")
+        for k, v in found.items():
+            f.write("\t".join([k] + ["" if v[c] is None else str(v[c]) for c in cols]) + "\n")
+    types = "{'snp_key': 'VARCHAR', 'paralog_identity': 'DOUBLE', 'paralog_left': 'DOUBLE', 'paralog_right': 'DOUBLE', " \
+            "'paralog_at': 'VARCHAR', 'paralog_gene': 'VARCHAR'}"
+    out = d / "uniqueness.parquet"
+    try:
+        con.execute(f"COPY (SELECT * FROM read_csv({lit(tmp)}, delim='\t', header=true, columns={types}, nullstr='')) "
+                    f"TO {lit(d / '.uniqueness.parquet')} (FORMAT parquet)")
+    finally:
+        con.close()
+        tmp.unlink(missing_ok=True)
+    os.chmod(d / ".uniqueness.parquet", 0o600)
+    os.replace(d / ".uniqueness.parquet", out)
+    jobs._write_json(d / "uniqueness.json", {"checked": len(rows), "with_ohnolog": len(found), "capped": len(rows) == UNIQUENESS_MAX,
+                                             "checked_utc": jobs.utc()})
+    return redirect(f"{back}#uniq-h")
+
+
+def snp_assay_flank():
+    """The assay check's flank length (weights.yaml assay.flank: Axiom's 35 nt)."""
+    return ((jobs.weights() or {}).get("assay") or {}).get("flank", 35)
+
+
+def uniqueness_summary(con, d, types):
+    """The probe uniqueness check's counts for the page and the report (None before it ran)."""
+    if not (d / "uniqueness.json").exists() or "paralog_identity" not in types:
+        return None
+    info = jobs.read_json(d / "uniqueness.json")
+    limit = ((jobs.weights() or {}).get("assay") or {}).get("max_paralog_identity")
+    close, high, over = con.execute("SELECT count(paralog_identity), count(*) FILTER (WHERE paralog_identity >= 0.97), "
+                                    "count(*) FILTER (WHERE paralog_identity > ?) FROM p", [2.0 if limit is None else float(limit)]).fetchall()[0]
+    return {**info, "close": close, "high": high, "limit": limit, "over": over if limit is not None else None}
 
 
 def populations(d):

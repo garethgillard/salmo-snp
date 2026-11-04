@@ -60,6 +60,8 @@ assay:
                             # one clean 35-nt side (flank_variants_per_side: false counts both sides together)
   warn_flags: [lore, blacklist, strand_ambiguous]  # warn when these annotate columns are true
   fail_ref_check: [mismatch, not_snp]              # fail on these ref_check values
+  max_paralog_identity: null  # Probe uniqueness (I10, the Design panel's check): flag SNPs whose cleaner flank matches
+                              # their Ss4R duplicate region above this identity (e.g. 0.97). G's to set; null: shown, never flagged
 
 # Panel designer defaults (the portal's Design panel; python -m snpportal.lib.cli panel) and chip comparison. PROVISIONAL: chosen by Claude
 # so the prototype works; G to confirm.

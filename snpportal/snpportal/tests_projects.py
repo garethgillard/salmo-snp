@@ -46,6 +46,12 @@ class ProjectsTest(SimpleTestCase):
         left = [p.name for p in (tmp / "results").glob("panel-*/**/*") if p.is_file() and p.suffix not in (".parquet", ".json")]
         self.assertEqual(left, ["created"])  # the genotype file is gone: only the counts (Parquet) are kept
         self.assertEqual([p.name for p in (tmp / "results").glob(".upload-*")], [])  # nor the upload handler's file
+        # I10: the probe uniqueness check (the fixture genome), shown on the panel and kept with a saved version
+        self.client.post(reverse("snpportal:panel_change"), {"uniqueness": "1"})
+        shown = self.client.get(reverse("snpportal:design_panel")).content.decode()
+        self.assertIn("<b>3</b><span>SNPs checked</span>", shown)
+        self.assertIn(">Duplicate</th>", shown)
+        self.assertIn("No SNP is flagged", shown)  # no threshold set yet
         save = reverse("snpportal:panel_save")
         self.assertEqual(self.client.post(save, {"name": "Smolt chip 2027", "note": "first draft"}).status_code, 302)
         self.client.post(reverse("snpportal:panel_change"), {"drop": "25:28998410:C:G"})
@@ -62,6 +68,8 @@ class ProjectsTest(SimpleTestCase):
         self.assertIn("Since version 1: 0 SNPs added,\n      1 removed.", report)
         self.assertIn("Broodstock 2025: mean call rate 0.75", report)
         self.assertIn("Markers per chromosome", report)
+        self.assertIn("SNPs checked against their Ss4R duplicate region", report)
+        self.assertTrue((tmp / "projects" / "Smolt-chip-2027" / "v2" / "uniqueness.parquet").exists())
         self.assertIn("Release ", report)
         working = self.client.get(reverse("snpportal:panel_report"))
         self.assertContains(working, "Panel SNPs along the genome")

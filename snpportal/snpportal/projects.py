@@ -26,7 +26,8 @@ from . import jobs, panel
 from .lib import export as snp_export
 from .views import private
 
-DERIVED = ("file_row_number", "snp_key", "dropped", "sources", "on_chip", "dist_to_chip", "near_chip", "novel_functional")
+DERIVED = ("file_row_number", "snp_key", "dropped", "sources", "on_chip", "dist_to_chip", "near_chip", "novel_functional",
+           "paralog_identity", "paralog_left", "paralog_right", "paralog_at", "paralog_gene")  # the last: uniqueness.parquet (I10)
 LIST = ("tier", "id", "chrom", "pos", "ref", "alt", "gene_name", "region_class", "assay_status", "panel_source")
 
 
@@ -105,14 +106,17 @@ def save(panel_dir, name, note=""):
 
 
 def copy_extras(src, dst):
-    """The user's populations (I9: per-SNP counts only) and the other chips compared (I11) from one panel or version
-    folder to another."""
+    """The user's populations (I9: per-SNP counts only), the other chips compared (I11) and the probe uniqueness check
+    (I10) from one panel or version folder to another."""
     for name in ("populations", "chips"):
         if (src / f"{name}.json").exists():
             shutil.copyfile(src / f"{name}.json", dst / f"{name}.json")
             (dst / name).mkdir(mode=0o700, exist_ok=True)
             for f in (src / name).glob("*.parquet"):
                 shutil.copyfile(f, dst / name / f.name)
+    for f in ("uniqueness.parquet", "uniqueness.json"):  # the probe uniqueness check (I10)
+        if (src / f).exists():
+            shutil.copyfile(src / f, dst / f)
 
 
 def open_in_panel(d, n):
@@ -254,7 +258,7 @@ def import_zip(request):
     if not upload:
         return redirect(f"{reverse('snpportal:projects')}?error=Choose a project zip to import.")
     allowed = re.compile(r"^[^/]+/(project\.json|v\d+/(meta\.json|panel\.parquet|chip\.parquet|chip\.json|populations\.json"
-                         r"|populations/[a-z0-9_]+\.parquet|chips\.json|chips/[a-z0-9_]+\.parquet))$")
+                         r"|populations/[a-z0-9_]+\.parquet|chips\.json|chips/[a-z0-9_]+\.parquet|uniqueness\.(parquet|json)))$")
     try:
         with zipfile.ZipFile(upload) as z:
             names = [i for i in z.infolist() if allowed.match(i.filename)]

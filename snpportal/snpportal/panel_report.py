@@ -68,6 +68,7 @@ def build(d, title, note=None, previous=None, synthetic=False):
                                              [out["settings"]["upgrade_min_hwe_p"]]).fetchall()[0]
             b.update(call_rate=None if call_rate is None else round(call_rate, 3), hwe_low=hwe_low)
             out["mafs"].append((x["label"], b))
+    out["uniqueness"] = panel.uniqueness_summary(con, d, types)
     readiness = tools.assay_readiness(con, types, synthetic, lambda **_: None)
     out["readiness"] = {"svg": mark_safe(readiness["svg"]), "line": readiness["line"]} if readiness else None
     chip = jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}

@@ -53,6 +53,12 @@
     <h2 id="assay-h">Assay check</h2>
     <div class="sp-figure">{{ r.readiness.svg }}</div><p class="sp-small sp-muted mb-0">{{ r.readiness.line }}</p>
   </section>{% endif %}
+  {% if r.uniqueness %}<section class="sp-card" aria-labelledby="uniq-h">
+    <h2 id="uniq-h">Probe uniqueness</h2>
+    <p class="sp-small mb-0">{{ r.uniqueness.checked|thousands }} SNPs checked against their Ss4R duplicate region; {{ r.uniqueness.with_ohnolog|thousands }}
+      have a duplicate gene, {{ r.uniqueness.close|thousands }} a close copy (≥ 89%) on both flanks and {{ r.uniqueness.high|thousands }} ≥ 97%.
+      {% if r.uniqueness.limit is None %}No threshold is set yet, so none is flagged.{% else %}{{ r.uniqueness.over|thousands }} above {{ r.uniqueness.limit }}.{% endif %}</p>
+  </section>{% endif %}
   {% if r.regions %}<section class="sp-card" aria-labelledby="fn-h">
     <h2 id="fn-h">Functional content</h2>
     <p class="sp-small mb-1">{% for tier, k in r.tiers %}<span class="sp-badge sp-tier-{{ tier }}">Tier {{ tier }}: {{ k|thousands }}</span> {% endfor %}</p>

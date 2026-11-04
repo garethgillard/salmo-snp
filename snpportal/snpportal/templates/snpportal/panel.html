@@ -113,6 +113,22 @@
       kept, on this computer; the genotypes are never stored.</p>
   </section>
   {% endif %}
+  {% if ss4r %}
+  <section class="sp-card" aria-labelledby="uniq-h">
+    <h2 id="uniq-h">Probe uniqueness</h2>
+    {% if uniqueness %}<div class="sp-kpis"><div class="sp-kpi"><b>{{ uniqueness.checked|thousands }}</b><span>SNPs checked{% if uniqueness.capped %} (the first {{ uniqueness_max|thousands }}){% endif %}</span></div>
+      <div class="sp-kpi"><b>{{ uniqueness.with_ohnolog|thousands }}</b><span>with an Ss4R duplicate gene</span></div>
+      <div class="sp-kpi"><b>{{ uniqueness.close|thousands }}</b><span>with a close copy (≥ 89%) on both flanks</span></div>
+      <div class="sp-kpi"><b>{{ uniqueness.high|thousands }}</b><span>≥ 97% on both flanks</span></div></div>
+      <p class="sp-small sp-muted mt-2 mb-0">Checked {{ uniqueness.checked_utc }}. The Duplicate column is the cleaner flank's best match.
+        {% if uniqueness.limit is None %}No SNP is flagged: the identity that is too high is still to be set (provisional).{% else %}{{ uniqueness.over|thousands }} above {{ uniqueness.limit }}, flagged.{% endif %}</p>
+    {% else %}<p class="sp-small mb-2">How closely each SNP's 35-nt flanks match the paired Ss4R duplicate region (its gene's ohnolog,
+      ±50 kb), where an Axiom or KASP probe could also bind. Up to {{ uniqueness_max|thousands }} SNPs, about a second per 50.</p>{% endif %}
+    {% if genome %}<form method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}
+      <button class="btn btn-sm btn-outline-primary" type="submit" name="uniqueness" value="1">{% if uniqueness %}Check again{% else %}Check probe uniqueness{% endif %}</button></form>
+    {% else %}<p class="sp-small sp-muted mb-0">Needs the genome on this computer: <code>salmo-snp download</code>.</p>{% endif %}
+  </section>
+  {% endif %}
   {% endif %}
     </div>
     {% if n %}<div class="col-lg-6 d-flex flex-column gap-3">
@@ -153,7 +169,7 @@
     <div class="table-responsive"><table class="table table-sm sp-table sp-small sp-results mb-1">
       <thead><tr><th scope="col" class="sp-pickcol" title="+ in the panel, − dropped: click to switch">+/&minus;</th><th scope="col">SNP</th><th scope="col">Gene</th><th scope="col">Consequence</th>
         <th scope="col" class="sp-ctr">Tier</th><th scope="col">Assay</th><th scope="col" class="sp-num">{% if populations %}MAF ({{ populations.0.label }}){% else %}MAF{% endif %}</th>
-        <th scope="col" title="Another panel SNP closer than the panel designer's minimum spacing">Too close</th>{% if chip %}<th scope="col">Chip</th>{% endif %}<th scope="col">Sources</th></tr></thead>
+        <th scope="col" title="Another panel SNP closer than the panel designer's minimum spacing">Too close</th>{% if uniqueness %}<th scope="col" class="sp-num" title="Probe uniqueness: the cleaner flank's best match in the Ss4R duplicate">Duplicate</th>{% endif %}{% if chip %}<th scope="col">Chip</th>{% endif %}<th scope="col">Sources</th></tr></thead>
       <tbody>{% for r in rows %}<tr{% if r.dropped %} class="sp-out"{% endif %}>
         <td class="sp-pickcol"><form method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}
           {% if order == 'genome' %}<input type="hidden" name="order" value="genome">{% endif %}{% if new_only %}<input type="hidden" name="chip" value="new">{% endif %}
@@ -165,6 +181,7 @@
         <td><span class="sp-as sp-as-{{ r.assay.1 }}"><span aria-hidden="true">{{ r.assay.0 }}</span> {{ r.assay.2 }}</span>{% if r.lore %} <span class="sp-as sp-as-warn">LORe</span>{% endif %}</td>
         <td class="sp-num">{% if r.maf %}{% if r.maf.1 %}<span class="sp-as sp-as-warn" title="Below the panel designer's minimum MAF · {{ r.maf.2 }}">{{ r.maf.0 }}</span>{% else %}<span title="{{ r.maf.2 }}">{{ r.maf.0 }}</span>{% endif %}{% endif %}</td>
         <td>{% if r.close %}<span class="sp-as sp-as-warn">{{ r.close }}</span>{% endif %}</td>
+        {% if uniqueness %}<td class="sp-num">{% if r.paralog %}<span{% if r.paralog.1 %} class="sp-as sp-as-warn"{% endif %} title="{{ r.paralog.2 }}">{{ r.paralog.0 }}</span>{% endif %}</td>{% endif %}
         {% if chip %}<td>{{ r.chip }}</td>{% endif %}<td>{{ r.sources }}</td></tr>{% endfor %}</tbody>
     </table></div>
     {% if not rows %}<p class="sp-small sp-muted">{% if new_only %}Every panel SNP is on the chip.{% else %}No SNPs to list.{% endif %}</p>{% endif %}
