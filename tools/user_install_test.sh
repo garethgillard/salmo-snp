@@ -12,7 +12,10 @@ trap 'kill $(jobs -p) 2>/dev/null || true; rm -rf "$T"' EXIT
 "$PY" -m venv "$T/env"
 E="$T/env/bin"
 "$E/pip" install -q --upgrade pip build
-for d in snpscore snpdata snpportal; do "$E/python" -m build -q --wheel --outdir "$T/dist" "$REPO/$d" >/dev/null; done
+for d in snpscore snpdata snpportal; do  # setuptools leaves build/ in the source folder: removed (it confuses grep)
+  "$E/python" -m build -q --wheel --outdir "$T/dist" "$REPO/$d" > "$T/build.log" 2>&1 || { cat "$T/build.log"; exit 1; }
+  rm -rf "$REPO/$d/build"
+done
 "$E/pip" install -q "$T"/dist/*.whl
 "$E/python" -c "import sys, duckdb, django; print('python', sys.version.split()[0], '| duckdb', duckdb.__version__, '| django', django.get_version())"
 

@@ -495,7 +495,6 @@ def assay_group(s, assay, open_):
     title, what = ASSAYS[assay]
     cfg = locus.registry() or {}
     tracks = [t for t in cfg.get("tracks", []) if t.get("assay") == assay and t.get("kind") == "bigWig" and t.get("tissue") not in SKIP_TISSUES]
-    ax = locus_svg.Axis(s["start"], s["end"], 0, W)
     if not tracks:
         return group(assay, title, what, [row("", plain(14, locus_svg._t(4, 11, "no tracks for this assay in tracks.yaml", 9.5, G[700])))])
     if s["end"] - s["start"] > sl.MAX_SIGNAL:

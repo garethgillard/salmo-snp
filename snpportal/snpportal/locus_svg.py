@@ -132,7 +132,7 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
         if sub and 5.5 * len(sub) < gutter - 14:  # subtitles that don't fit a narrow gutter are left out
             body.append(_t(gutter - 10, yy + 11, sub, small, G[700], "end"))
 
-    if gwas:  # P7.3: -log10 p of a GWAS job's SNPs, on top (AGENT gwas)
+    if gwas:  # P7.3: -log10 p of a GWAS job's SNPs, on top
         y = gwas_lane(body, ax, gwas, y, legend)
 
     # the user's SNPs: tier-coloured lollipops, stem height = tier_score
@@ -770,7 +770,7 @@ def expression_bars(values, synthetic=False):
     return figures.svg(360, y + 4, "Expression per tissue (mean CPM)", desc, "".join(parts), synthetic)
 
 
-# ---- GWAS: the regional association lane (P7.3, AGENT gwas) ----
+# ---- GWAS: the regional association lane (P7.3) ----
 
 def _shape(kind, x, y, r, fill, ring, tip):
     """A point of the association lane: 'lead' diamond, 'coding' triangle, else a circle; ring = credible-set outline."""
