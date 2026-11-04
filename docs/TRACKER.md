@@ -16,7 +16,7 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 ## Next
 1. **G's feature requests** (G, 2026-11-04: coming next). Each becomes a box in step 9 below, in G's order, with a
    spec in ROADMAP.md when it needs more than a line.
-2. ~~Off end-of-life versions~~: done 2026-11-04 (step 8; DuckDB 2 is left).
+2. ~~Off end-of-life versions~~: done 2026-11-04 (step 8).
 3. **A public background pool for every install** (step 8): no release in use has one, so the Overview's
    comparisons with public sites are never drawn.
 4. **Before the local install is shared beyond collaborators** (step 8, and step 7's open boxes): Bootstrap and htmx
@@ -107,15 +107,14 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 ## Step 8: platform, pool and sharing (review of 2026-11-04)
 - [x] Off end-of-life versions (G, 2026-11-04: the newest that suit). Python 3.8 had had no fixes since 2024-10-07
       and Django 4.2 none since 2026-04-07, and the public demo ran on them. Now: Python >= 3.11 (3.10's end of life
-      was 2026-10-01; CI, NREC and cloud sessions on 3.12), Django 5.2 LTS (fixes to 2028-04-30), DuckDB 1.5, PyYAML 6,
+      was 2026-10-01; CI, NREC and cloud sessions on 3.12), Django 5.2 LTS (fixes to 2028-04-30), DuckDB 2, PyYAML 6,
       setuptools >= 77 (SPDX licence in every package), pyflakes 4.1, htmx 2.0.11, actions/checkout and setup-python
       v7. The ranges are set only in the pyproject.toml files: CI, deploys (update.sh now upgrades the packages) and
       cloud sessions install the newest they allow. The palette cookie moved from `request_started` to a middleware
-      (under ASGI, Django 5 sends the signal in another context); the SQL lambdas are written `lambda x: ...`
-- [ ] DuckDB 2 (2.0.0 of 2026-10-21; Python >= 3.11). The lambdas are done. Left: a connection refuses new queries
-      while an `execute()` result is unfinished, and `fetchone()` leaves it so (4 snpscore tests fail on 2.0.0:
-      known_loci, molqtl, genetic_map, rsid); relations have no `fetchone()`. Every `execute(...).fetchone()` that is
-      followed by more work on its connection needs `fetchall()` or its own cursor; then lift the `<2` cap
+      (under ASGI, Django 5 sends the signal in another context); the SQL lambdas are written `lambda x: ...`. DuckDB
+      2.0.0 gives the same annotate output (golden hash) and the 220-page crawl of the real release finds no errors
+- [x] DuckDB 2 (2.0.0 of 2026-10-21): the lambdas, and two tests that left a half-read result on DuckDB's shared
+      connection (`fetchall()` instead of `fetchone()`); the product code was already fine
 - [ ] Public background pool for every install. `salmo-snp download` leaves `pool/` out (a cache of the current
       weights), `snpscore pool` needs the 12-fish VCF in data/raw (a release builder's), and the demo's release has
       none either. So the Overview's thin bars and ticks for public sites, and the '×' fold of 'Active chromatin per

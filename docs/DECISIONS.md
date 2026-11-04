@@ -60,6 +60,6 @@ caQTL leads (n = 1,057) give 3-4x, but they are called on the same ATAC data, so
 |---|---|---|---|
 | 22 | Where the repository lives | Decided (G, 2026-10-28): one private GitHub repository, salmo-snp | - |
 | 23 | A copy for colleagues to try | Done: the public NREC demo (G, 2026-10-12) and the local install (2026-11-03) | - |
-| 24 | Python, Django and DuckDB versions | Decided (G, 2026-11-04: the newest that suit): Python >= 3.11, Django 5.2 LTS, DuckDB 1.5 (2.0 needs code changes first: TRACKER step 8); ../AGENTS.md "Rules" | - |
+| 24 | Python, Django and DuckDB versions | Decided (G, 2026-11-04: the newest that suit): Python >= 3.11, Django 5.2 LTS, DuckDB 2; ../AGENTS.md "Rules" | - |
 | 25 | The package names on PyPI. salmo-snp depends on `snpscore` by name, and none of snpscore, snpdata or salmo-snp is registered there, so a stranger's package of that name could be installed by a user who installs salmo-snp alone or upgrades snpscore by name | names unregistered; the README installs both packages in one command from GitHub | Register the three names now (empty placeholders are allowed), and publish there when the repository goes public |
 | 26 | Which systems the user-install check runs on | Linux only (CI, Python 3.12); Python 3.13 and 3.14 checked by hand on 2026-11-04 | Add macOS (a private repository's macOS minutes count 10x: run it weekly and on tags, not on every pull request); Windows once the test script handles `Scripts\`, as breeders often use Windows |

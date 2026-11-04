@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Functional SNP portal for Atlantic salmon: score SNP lists against AQUA-FAANG and public data, on your own computer"
 requires-python = ">=3.11"
 license = "PolyForm-Noncommercial-1.0.0"  # LICENSE in the salmo-snp repository
-dependencies = ["snpscore", "django>=5.2,<6", "duckdb>=1.5,<2"]  # snpscore: ../snpscore (pip install it first)
+dependencies = ["snpscore", "django>=5.2,<6", "duckdb>=2.0,<3"]  # snpscore: ../snpscore (pip install it first)
 
 [project.scripts]
 salmo-snp = "snpportal.serve:main"

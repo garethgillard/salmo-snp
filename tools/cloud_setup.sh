@@ -11,8 +11,8 @@ PYTHON=3.12  # .github/workflows/tests.yml's python-version: change both togethe
 PACKAGES=(-e "snpscore[test]" -e snpdata -e snpportal)
 works() { .venv/bin/python -c "import snpscore, snpdata, snpportal, django, pytest" 2>/dev/null; }
 wanted() { [ "$(.venv/bin/python -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)" = "$PYTHON" ]; }
-if command -v uv >/dev/null && ! { works && wanted; }; then
-  uv venv -q --clear --python "$PYTHON" .venv || uv venv -q --clear --python python3 .venv
+if command -v uv >/dev/null; then  # always installs: a resumed session gets what pyproject.toml now asks for (~1 s)
+  { works && wanted; } || uv venv -q --clear --python "$PYTHON" .venv || uv venv -q --clear --python python3 .venv
   uv pip install -q --python .venv/bin/python "${PACKAGES[@]}"
 elif ! works; then
   python3 -m venv --clear .venv && .venv/bin/pip install -q --upgrade pip && .venv/bin/pip install -q "${PACKAGES[@]}"

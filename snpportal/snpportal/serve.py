@@ -153,8 +153,10 @@ def serve(release=None, port=8000):
         sys.exit(f"salmo-snp: {release} can't be used:\n  " + "\n  ".join(problems))
     genome = local_genome(release)
     os.environ.update({
-        "DJANGO_SETTINGS_MODULE": "snpsite.settings", "DJANGO_DEBUG": "0", "DJANGO_ALLOWED_HOSTS": "127.0.0.1,localhost",
+        "DJANGO_SETTINGS_MODULE": "snpsite.settings", "DJANGO_DEBUG": "0",
         "SNPSCORE_RELEASE": str(release.resolve()), "SNPPORTAL_RESULTS_DIR": str(HOME / "results"), "SNPPORTAL_LOCAL": "1"})
+    # 127.0.0.1 only either way; a cloud session's preview pane may name the host otherwise (AGENTS.md "Cloud sessions")
+    os.environ.setdefault("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost")
     if genome:
         os.environ["SNPSCORE_GENOME"] = str(genome)
     (HOME / "results").mkdir(parents=True, exist_ok=True)

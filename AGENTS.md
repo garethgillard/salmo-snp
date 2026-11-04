@@ -55,9 +55,10 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 - Dependencies: duckdb and pyyaml (plus Django for the portal). Ask G before adding any. No pandas.
 - Versions (G, 2026-11-04: the newest that suit): Python 3.11 or newer (`requires-python`; 3.10 reached its end of
   life on 2026-10-01; CI, the NREC demo and cloud sessions run 3.12), Django 5.2 LTS (fixes to 2028-04-30; 6.x needs
-  Python 3.12), DuckDB 1.5 (`duckdb>=1.5,<2`). The pyproject.toml files are the one place they are set: CI, deploys
-  and cloud sessions install the newest versions those allow. Write SQL list lambdas as `lambda x: ...` (DuckDB 2
-  drops `x -> ...`). DuckDB 2 needs more first (docs/TRACKER.md step 8).
+  Python 3.12), DuckDB 2 (`duckdb>=2.0,<3`). The pyproject.toml files are the one place they are set: CI, deploys
+  and cloud sessions install the newest versions those allow. DuckDB 2: SQL list lambdas are `lambda x: ...` (not
+  `x -> ...`), and a half-read result blocks its connection: on a shared connection (`duckdb.sql`, `duckdb.execute`)
+  use `fetchall()`, not `fetchone()`.
 - Assembly Ssal_v3.1, chromosomes named "1"-"29" (as AQUA-FAANG and Ensembl). Layers use BED coordinates; SNPs use
   1-based `pos`; a SNP is inside an interval when start < pos <= end.
 - Changes go through pull requests; G reviews anything touching the biology (CODEOWNERS).
@@ -187,7 +188,19 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   `gh release download` or `gh pr create`. Pull requests, their checks and comments go through the GitHub MCP tools.
 - The NREC demo: https://158-39-75-9.sslip.io/snp/ (the bare https://158.39.75.9/snp/ didn't connect through the
   session's proxy on 2026-11-04).
-- Checking pages: run `salmo-snp serve` (or manage.py runserver) in the background and fetch pages with curl, or use
-  headless Chrome (/usr/bin/google-chrome); `bash tools/user_install_test.sh` checks the whole user path.
+- Building and showing a feature (G, 2026-11-04: G sees changes before they are merged):
+  1. Work on the session's branch, one feature at a time, with a test in the right suite (pytest for snpscore,
+     snpdata and snpportal/lib; `snpportal/snpportal/tests*.py` for pages); `bash tools/check.sh` before each push.
+  2. Try it on the real data: `bash tools/get_data.sh` once per session, then
+     `DJANGO_ALLOWED_HOSTS='*' salmo-snp serve &` (still 127.0.0.1 only; the host list lets the Claude app's preview
+     pane reach it) and report port 8000 to the app, so G can open the pages from the chat.
+  3. Show it: `(cd snpportal && python manage.py screenshots /snp/... --out <scratchpad>/shots)` takes full-page PNGs
+     of any pages (and says whether htmx and Bootstrap loaded); send them to the chat, before and after when a page
+     changes. Score an example first when the page needs a job (`/snp/` POST `example=known_loci`, as
+     tour_images does).
+  4. Push and open (or update) the pull request; CI runs; G merges, and the merge deploys to the NREC demo. NREC runs
+     main only: it is public, so branches are not deployed there.
+- Checking pages without a browser: fetch them with curl from a `salmo-snp serve` in the background;
+  `bash tools/user_install_test.sh` checks the whole user path.
 - Changes: work on a branch and open a pull request; CI runs the tests and the user-install check; G merges (as admin)
   and the merge deploys to the NREC demo. `deploy/nrec.sh` and new data releases need G's Mac (SSH key, data/raw).

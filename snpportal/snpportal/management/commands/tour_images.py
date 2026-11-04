@@ -60,6 +60,8 @@ class Chrome:
     def __init__(self, binary):
         to_r, to_w = os.pipe()
         from_r, from_w = os.pipe()
+        os.set_inheritable(to_r, True)  # when a pipe end already is fd 3 or 4, dup2 onto itself keeps it close-on-exec
+        os.set_inheritable(from_w, True)
         self.profile = tempfile.mkdtemp(prefix="tour-chrome-")
 
         def fds():
