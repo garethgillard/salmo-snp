@@ -52,13 +52,54 @@ You need:
   or remove the folder).
 - **What leaves your computer**: nothing you upload or score. The portal fetches public data only: AQUA-FAANG signal
   and chromatin tracks for the region you view in the locus browser (from salmobase). With `--no-genome`, sequence
-  checks also read the genome from salmobase, near your SNPs' positions; the default download avoids that.
+  checks also read the genome from salmobase, near your SNPs' positions; the default download avoids that. The
+  details are under "What is stored, and what goes over the network" below.
 - **Scripts and pipelines**: `snpscore annotate my_snps.vcf --release <release folder> -o out.tsv` scores without the
   portal (`snpscore -h`; the release folder is the one `salmo-snp info` lists). snpscore installs on its own too.
 - **Updating**: rerun the `pip install` with `--force-reinstall` (pip skips a GitHub install whose version number
   hasn't changed). When the new version expects a newer release, `salmo-snp serve` says so and uses the old one until
   you get the new one as in step 2 (the genome is kept if it hasn't changed).
 - **Removing**: `pip uninstall salmo-snp snpscore`, then delete the data folder.
+
+### What is stored, and what goes over the network
+For a company's IT or security review (draft: the wording is to be approved).
+
+**Stored, all as plain files in the data folder** (`salmo-snp info` shows where). There is no database, and nothing
+expires: everything stays until you delete it.
+- `releases/` and `genome/`: the public annotation data and the Ssal_v3.1 genome.
+- `results/<id>/`, one folder per scored list:
+  - your SNPs with their annotations, including the other columns of your file;
+  - the upload check, with the rejected rows and their positions;
+  - for GWAS lists, the summary statistics;
+  - any chip you compared against, the panels you designed, and the file's name as the list's label.
+- `results/panel-<id>/`: your Design panel.
+- `secret_key`: signs the portal's cookies.
+- On macOS and Linux the folders are readable only by your user account (0700, files 0600); on Windows, by your
+  profile's permissions. Disk encryption (FileVault, BitLocker, LUKS) protects them like any other work file.
+- The uploaded file itself is deleted as soon as it has been scored. From a VCF only CHROM, POS, ID, REF and ALT are
+  read, so genotypes are never stored.
+- Temporary files, such as DuckDB's working files and exports being prepared, go in the results folder and are removed
+  when done.
+- The terminal running `salmo-snp serve` logs event names, counts and timings, never SNPs or file names.
+- Your browser keeps cookies for the form protection, the results it opened, your Design panel and your choice of
+  chromatin colours.
+
+**Network requests the portal makes**
+- `salmo-snp download`: the release and the genome, from the address you give.
+- The locus browser: public AQUA-FAANG signal and chromatin tracks for the region on screen, read from salmobase.org.
+  Requests name the public track files and a region of the genome (on a fixed grid of tiles), never your SNPs or
+  your file. So salmobase's server logs could show which regions were viewed: don't open the locus browser on a region
+  that is itself confidential.
+- Only if the genome was not downloaded (`--no-genome`): sequence checks read the genome from salmobase near your
+  SNPs' positions.
+- Nothing else. Pages and their scripts are served by the portal itself, and links to Ensembl, salmobase or papers are
+  only followed when you click them, without telling those sites which page you came from.
+
+**Deleting**: Delete on a result, or Clear on the Design panel, removes that folder. Removing the data folder removes
+everything.
+
+**Sharing**: what you export (tables, vendor files, the zip bundle, the printed report) contains your SNPs. Each file
+says which release and rules made it.
 
 ### If something goes wrong
 - `salmo-snp serve` says there is no release: step 2 hasn't been done for this data folder (`salmo-snp info`).
