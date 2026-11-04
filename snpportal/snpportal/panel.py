@@ -278,6 +278,14 @@ def page(request):
         ctx["compare"] = [(f"{cs['chip_snps']:,}", "chip markers"), (f"{on[0]:,}", "already on the chip"),
                           (f"{on[1]:,}", "not on the chip"), (f"{cs['novel_functional']:,}", f"tier 1–2 with no chip marker within {tools._bp(cs['window_bp'])}"),
                           (f"{cs['gaps']:,}", f"chip gaps over {tools._bp(cs['gap_bp'])}")]
+        ctx["chips"] = chips(d)
+        if ctx["chips"]:
+            ctx["matrix"] = _matrix(con, d, chip)
+        params = _upgrade_params(request.GET, chip)
+        ctx["upgrade_form"] = params
+        if request.GET.get("upgrade"):
+            rows, pop = _upgrade(con, d, params)
+            ctx["upgrade"] = _upgrade_summary(rows, params, pop)
     every = request.GET.get("show") == "all"
     order = "genome" if request.GET.get("order") == "genome" else "problems"
     new_only = bool(chip) and request.GET.get("chip") == "new"
@@ -412,6 +420,11 @@ def _change(request):
         for path in (d / "chip.parquet", d / "chip.json"):
             path.unlink(missing_ok=True)
         return back
+    if request.POST.get("chip_extra_remove"):
+        gone = request.POST["chip_extra_remove"]
+        (d / "chips" / f"{gone}.parquet").unlink(missing_ok=True)
+        jobs._write_json(d / "chips.json", {"chips": [c for c in chips(d) if c["slug"] != gone]})
+        return redirect(reverse("snpportal:design_panel") + "#chip-h")
     if request.FILES.get("population") or request.POST.get("population_remove"):
         return _population(request, d)
     return _chip(request, d)
@@ -451,8 +464,11 @@ def _population(request, d):
 
 
 def _chip(request, d):
-    """The baseline chip: an uploaded SNP list (manifest, PLINK, VCF, table) or the release's demo chip."""
+    """The baseline chip: an uploaded SNP list (manifest, PLINK, VCF, table) or the release's demo chip. With
+    extra=1, another chip to compare with it (I11: chips/<slug>.parquet, listed in chips.json)."""
+    extra = bool(request.POST.get("extra"))
     demo, upload = jobs.release() / "demo" / "chip_demo_SYNTHETIC.tsv", request.FILES.get("chip")
+    back = reverse("snpportal:design_panel") + ("#chip-h" if extra else "")
     if request.POST.get("demo") and demo.is_file():
         src, label, synthetic = demo, "Demo chip", True
     elif upload and upload.size:
@@ -463,6 +479,8 @@ def _chip(request, d):
         os.replace(upload.path, src)
     else:
         return redirect(f"{reverse('snpportal:design_panel')}?chip_error=missing")
+    if extra:
+        label = (request.POST.get("chip_name") or "").strip()[:40] or f"Chip {len(chips(d)) + 2}"
     new = d / ".chip-new.parquet"
     try:
         report = snp_panel.read_chip(src, jobs.release(), new, max_snps=tools.chip_cap())
@@ -475,16 +493,121 @@ def _chip(request, d):
     if not report.get("snps_kept"):
         new.unlink(missing_ok=True)
         return redirect(f"{reverse('snpportal:design_panel')}?chip_error=empty")
+    os.chmod(new, 0o600)
+    if extra:
+        slug = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")[:24] or "chip"
+        (d / "chips").mkdir(mode=0o700, exist_ok=True)
+        os.replace(new, d / "chips" / f"{slug}.parquet")
+        jobs._write_json(d / "chips.json", {"chips": [c for c in chips(d) if c["slug"] != slug] + [
+            {"slug": slug, "label": label, "synthetic": synthetic, "kept": report["snps_kept"], "created_utc": jobs.utc()}]})
+        return redirect(back)
     con = jobs.connect([d], d)
     density = [list(x) for x in con.execute(f"SELECT chrom, (pos - 1) // 1000000, count(*) FROM read_parquet('{new}') "
                                             "GROUP BY ALL ORDER BY ALL").fetchall()]
     con.close()
-    os.chmod(new, 0o600)
     os.replace(new, d / "chip.parquet")
     jobs._write_json(d / "chip.json", {"label": label, "synthetic": synthetic, "kept": report["snps_kept"],
                                        "rejected": {k: v for k, v in (report.get("rejected") or {}).items() if v},
                                        "density": density, "created_utc": jobs.utc()})
-    return redirect(reverse("snpportal:design_panel"))
+    return redirect(back)
+
+
+def chips(d):
+    """[{slug, label, synthetic, kept, created_utc}] of the other chips compared with the panel's chip (I11)."""
+    return jobs.read_json(d / "chips.json").get("chips", []) if (d / "chips.json").exists() else []
+
+
+def _matrix(con, d, chip):
+    """The chips side by side (snp_panel.chip_matrix): the panel's chip, the other chips and the panel itself."""
+    tmp = d / f".matrix-{uuid.uuid4().hex}.parquet"
+    con.execute(f"COPY (SELECT chrom, pos, NULL::VARCHAR AS id FROM p) TO {lit(tmp)} (FORMAT parquet)")
+    pool = jobs.release() / "pool" / "pool.parquet"
+    others = [(c["label"], d / "chips" / f"{c['slug']}.parquet") for c in chips(d)]
+    try:
+        m = snp_panel.chip_matrix([(chip.get("label") or "Your chip", d / "chip.parquet")]
+                                  + [x for x in others if x[1].exists()] + [("This panel", tmp)],
+                                  pool=pool if pool.exists() else None, chrom_sizes=jobs.manifest().get("chrom_sizes"),
+                                  window_bp=snp_panel.settings(jobs.weights())["chip_window"],
+                                  gap_bp=snp_panel.settings(jobs.weights())["chip_gap"])
+    finally:
+        tmp.unlink(missing_ok=True)
+    return {"rows": [{**r, "near": near} for r, (_, near) in zip(m["rows"], m["overlap"])], "labels": [x for x, _ in m["overlap"]],
+            "pool": pool.exists(), "window": tools._bp(snp_panel.settings(jobs.weights())["chip_window"])}
+
+
+def _upgrade_params(get, chip):
+    """The Upgrade form's values (GET n, call_rate, hwe), each checked, with the panel designer's defaults."""
+    p = snp_panel.settings(jobs.weights())
+
+    def num(key, default, cast, lo, hi):
+        try:
+            v = cast(get.get(key, default))
+        except (TypeError, ValueError):
+            return default
+        return min(max(v, lo), hi)
+    return {"n": num("n", chip.get("kept") or 0, int, 1, tools.chip_cap()),
+            "call_rate": num("call_rate", p["upgrade_min_call_rate"], float, 0.0, 1.0),
+            "hwe": num("hwe", p["upgrade_min_hwe_p"], float, 0.0, 1.0)}
+
+
+def _upgrade(con, d, params):
+    """snp_panel.upgrade of the panel's chip: its markers QC'd in your first population (when there is one; else all
+    kept), the panel's SNPs not on the chip as candidates. Returns (rows, the population's label or None)."""
+    pops = [x for x in populations(d) if (d / "populations" / f"{x['slug']}.parquet").exists()]
+    columns = {c for c, in con.execute("SELECT column_name FROM (DESCRIBE p)").fetchall()}
+    ident = "coalesce(id::VARCHAR, snp_key)" if "id" in columns else "snp_key"
+    tmp = d / f".candidates-{uuid.uuid4().hex}.parquet"
+    con.execute(f"""COPY (SELECT chrom, pos, {ident} AS id, {'tier' if 'tier' in columns else 'NULL::INTEGER'} AS tier,
+                    {'tier_score' if 'tier_score' in columns else 'NULL::INTEGER'} AS tier_score FROM p
+                    {'WHERE NOT on_chip' if 'on_chip' in columns else ''}) TO {lit(tmp)} (FORMAT parquet)""")
+    p = snp_panel.settings(jobs.weights())
+    try:
+        rows = snp_panel.upgrade(d / "chip.parquet", tmp, qc=d / "populations" / f"{pops[0]['slug']}.parquet" if pops else None,
+                                 n_target=params["n"], min_call_rate=params["call_rate"], min_hwe_p=params["hwe"],
+                                 min_spacing_bp=p["min_spacing"], gap_bp=p["chip_gap"], chrom_sizes=jobs.manifest().get("chrom_sizes"))
+    finally:
+        tmp.unlink(missing_ok=True)
+    return rows, pops[0]["label"] if pops else None
+
+
+def _upgrade_summary(rows, params, pop):
+    actions = {a: sum(r["action"] == a for r in rows) for a in ("keep", "drop", "add")}
+    return {**actions, "n": actions["keep"] + actions["add"], "params": params, "pop": pop, "full": actions["keep"] >= params["n"],
+            "gap": sum(r["action"] == "add" and r["reason"] == "fills a chip gap" for r in rows),
+            "dropped": [r for r in rows if r["action"] == "drop"][:10], "added": [r for r in rows if r["action"] == "add"][:10],
+            "url": f"{reverse('snpportal:panel_upgrade')}?{urlencode({k: v for k, v in params.items()})}"}
+
+
+@private
+def upgrade(request):
+    """GET ?n=&call_rate=&hwe=: the upgraded chip as a TSV (chrom, pos, id, action, reason, tier), every marker kept or
+    dropped and every SNP added, with the settings in '#' lines."""
+    d = _folder(request)
+    if d is None or not (d / "chip.parquet").exists():
+        raise Http404("No panel chip to upgrade")
+    con, rel = _open(d)
+    if rel is None:
+        raise Http404("The panel is empty")
+    chip = jobs.read_json(d / "chip.json")
+    params = _upgrade_params(request.GET, chip)
+    rows, pop = _upgrade(con, d, params)
+    con.close()
+    s = _upgrade_summary(rows, params, pop)
+    head = [f"# salmobase functional SNP portal: Design panel, upgrade of {chip.get('label') or 'your chip'}",
+            f"# {', '.join(f'{k} {v}' for k, v in snp_export.installed().items())}; release {jobs.manifest().get('version', '?')}",
+            f"# {s['keep']:,} markers kept, {s['drop']:,} dropped, {s['add']:,} added ({s['gap']:,} in chip gaps): {s['n']:,} in all",
+            f"# QC in {pop}: call rate >= {params['call_rate']:g}, HWE p >= {params['hwe']:g}" if pop
+            else "# no population of yours: every marker kept (add one on the Design panel to check call rate and HWE)",
+            "# candidates: the panel's SNPs not on the chip, chip gaps first, then by tier and tier score, "
+            f"{snp_panel.settings(jobs.weights())['min_spacing']:,} bp apart at least",
+            "# PROVISIONAL thresholds (weights.yaml design): to confirm"]
+    if any(x.get("synthetic") for x in jobs.read_json(d / "panel.json")["sources"]) or chip.get("synthetic"):
+        head.append("# SYNTHETIC: made from a synthetic list or chip")
+    body = ["\t".join(("chrom", "pos", "id", "action", "reason", "tier"))] + [
+        "\t".join("" if r[k] is None else str(r[k]) for k in ("chrom", "pos", "id", "action", "reason", "tier")) for r in rows]
+    response = HttpResponse("\n".join(head + body) + "\n", content_type="text/tab-separated-values")
+    response["Content-Disposition"] = 'attachment; filename="chip_upgrade.tsv"'
+    return response
 
 
 # ---- downloads ----

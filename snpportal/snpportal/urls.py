@@ -9,6 +9,7 @@ urlpatterns = [
     path("panel/", panel.page, name="design_panel"),
     path("panel/change/", panel.change, name="panel_change"),
     path("panel/download/", panel.download, name="panel_download"),
+    path("panel/upgrade/", panel.upgrade, name="panel_upgrade"),
     path("panel/count/", panel.count, name="panel_count"),
     path("results/<uuid:key>/add-to-panel/", panel.add, name="panel_add"),
     # saved design projects (local installs only): versions, diff, downloads, export and import

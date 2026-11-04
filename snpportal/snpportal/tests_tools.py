@@ -156,6 +156,40 @@ class ToolsTest(SimpleTestCase):
         self.assertFalse(d.exists())
         self.client.get(self.url, {"tab": "table"})  # the whole list again, for the other tests
 
+    def test_chips_side_by_side_and_upgrade(self):  # I11, with SYNTHETIC chips
+        self.client.get(self.url, {"tab": "table"})  # the whole list as the selection
+        self.client.post(reverse("snpportal:panel_add", args=[self.key]))
+        change = reverse("snpportal:panel_change")
+        a = SimpleUploadedFile("a_SYNTHETIC.tsv", b"chrom\tpos\n9\t23007708\n9\t23008875\n9\t23200000\n1\t110987765\n")
+        self.client.post(change, {"chip": a})
+        b = SimpleUploadedFile("b_SYNTHETIC.tsv", b"chrom\tpos\n9\t23007708\n9\t23500000\n")
+        self.client.post(change, {"chip": b, "extra": "1", "chip_name": "Vendor B"})
+        page = self.client.get(reverse("snpportal:design_panel")).content.decode()
+        self.assertIn("Other chips: <strong>Vendor B</strong> (2 markers)", page)
+        self.assertIn("Near Vendor B", page)
+        self.assertIn('<th scope="row">This panel</th>', page)
+        self.assertIn("Compared with your chip", page)  # the panel's chip is still the first one
+        page = self.client.get(reverse("snpportal:design_panel"), {"upgrade": "1", "n": "10"}).content.decode()
+        self.assertIn("<b>4</b><span>markers kept</span>", page)  # no population of yours: every marker kept
+        self.assertIn("dropped (no QC data)", page)
+        tsv = self.client.get(reverse("snpportal:panel_upgrade"), {"n": "10"}).content.decode()
+        self.assertIn("# no population of yours", tsv)
+        self.assertIn("# SYNTHETIC", tsv)
+        table = [line.split("\t") for line in tsv.splitlines() if not line.startswith("#")]
+        self.assertEqual(table[0], ["chrom", "pos", "id", "action", "reason", "tier"])
+        out = {}
+        for chrom, pos, _, action, _, _ in table[1:]:
+            out.setdefault(chrom, []).append((int(pos), action))
+        self.assertEqual(sum(x == "keep" for ps in out.values() for _, x in ps), 4)
+        self.assertTrue(5 <= sum(len(ps) for ps in out.values()) <= 10)  # added up to 10
+        spacing = panel.snp_panel.settings(jobs.weights())["min_spacing"]
+        for ps in out.values():  # every SNP added is far enough from the others and from the markers kept
+            ps.sort()
+            self.assertTrue(all(q - p >= spacing for (p, x), (q, y) in zip(ps, ps[1:]) if "add" in (x, y)))
+        self.client.post(change, {"chip_extra_remove": "vendor_b"})
+        self.assertNotIn("Other chips", self.client.get(reverse("snpportal:design_panel")).content.decode())
+        self.assertEqual(Client().get(reverse("snpportal:panel_upgrade")).status_code, 404)  # another browser: no panel
+
     def test_panel_parameters(self):
         self.client.get(self.url, {"tab": "table"})  # the Panel designs from the Table selection: the whole list
         con = jobs.connect([self.d])

@@ -41,6 +41,14 @@
         {% if chip %}<form class="ms-auto" method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0" type="submit" name="chip_remove" value="1">Remove chip</button></form>{% endif %}</div>
       {% if chip_error %}<div class="sp-status sp-status-warn sp-small" role="status">&#9888; {{ chip_error }}</div>{% endif %}
       {% if compare %}<div class="sp-kpis">{% for value, label in compare %}<div class="sp-kpi"><b>{{ value }}</b><span>{{ label }}</span></div>{% endfor %}</div>
+      {% if chips %}<p class="sp-small mb-1">Other chips: {% for c in chips %}<strong>{{ c.label }}</strong> ({{ c.kept|thousands }} markers)
+        <form class="d-inline" method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0 align-baseline" type="submit" name="chip_extra_remove" value="{{ c.slug }}">Remove</button></form>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+      <form method="post" action="{% url 'snpportal:panel_change' %}" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center sp-small mt-1">{% csrf_token %}
+        <input type="hidden" name="extra" value="1">
+        <input class="form-control form-control-sm w-auto" type="file" name="chip" aria-label="Another chip's SNP list">
+        <input class="form-control form-control-sm w-auto" name="chip_name" maxlength="40" placeholder="name, e.g. Vendor 70K" aria-label="Chip name">
+        <button class="btn btn-sm btn-outline-primary" type="submit">Compare another chip</button>
+        {% if chip_demo and not chip.synthetic %}<button class="btn btn-sm btn-outline-secondary" type="submit" name="demo" value="1">Demo chip</button>{% endif %}</form>
       {% else %}<p class="sp-small">Most panels add SNPs to a chip already in use. Upload its SNP list (Illumina or Axiom manifest, PLINK
         .bim/.map, VCF or a table with chrom and pos) to see which panel SNPs it already has, which are new and where it has gaps.</p>
       <form method="post" action="{% url 'snpportal:panel_change' %}" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center sp-small">{% csrf_token %}
@@ -49,6 +57,30 @@
         {% if chip_demo %}<button class="btn btn-sm btn-outline-secondary" type="submit" name="demo" value="1">Use the demo chip</button>{% endif %}
       </form>{% endif %}
     </section>
+    {% if chip %}
+    <section class="sp-card" aria-labelledby="upgrade-h">
+      <h2 id="upgrade-h">Upgrade {{ chip.label|lower }}</h2>
+      <p class="sp-small mb-2">A new version of the chip: its markers that pass the QC{% if populations %} in {{ populations.0.label }}{% endif %}, then the
+        panel's SNPs not on it, those in the chip's gaps first, then by tier, until it has the size you give.{% if not populations %} Add your population
+        (genotypes) to drop markers that fail call rate or HWE.{% endif %}</p>
+      <form method="get" action="#upgrade-h" class="d-flex flex-wrap gap-2 align-items-center sp-small">
+        <input type="hidden" name="upgrade" value="1">
+        <label for="up-n" title="The chip keeps every marker that passes; this is the size it may grow to">New chip size</label><input class="form-control form-control-sm sp-num-in" id="up-n" name="n" type="number" min="1" value="{{ upgrade_form.n }}">
+        {% if populations %}<label for="up-cr">Call rate ≥</label><input class="form-control form-control-sm sp-num-in" id="up-cr" name="call_rate" type="number" min="0" max="1" step="0.01" value="{{ upgrade_form.call_rate }}">
+        <label for="up-hwe">HWE p ≥</label><input class="form-control form-control-sm sp-num-in" id="up-hwe" name="hwe" value="{{ upgrade_form.hwe }}">{% endif %}
+        <button class="btn btn-sm btn-primary" type="submit">Plan the upgrade</button></form>
+      {% if upgrade %}<div class="sp-kpis mt-2"><div class="sp-kpi"><b>{{ upgrade.keep|thousands }}</b><span>markers kept</span></div>
+        <div class="sp-kpi"><b>{{ upgrade.drop|thousands }}</b><span>dropped{% if not upgrade.pop %} (no QC data){% endif %}</span></div>
+        <div class="sp-kpi"><b>{{ upgrade.add|thousands }}</b><span>panel SNPs added, {{ upgrade.gap|thousands }} in chip gaps</span></div>
+        <div class="sp-kpi"><b>{{ upgrade.n|thousands }}</b><span>on the new chip</span></div></div>
+        {% if upgrade.full %}<p class="sp-small sp-muted mb-1 mt-2">The chip keeps {{ upgrade.keep|thousands }} markers, already {{ upgrade.params.n|thousands }} or more:
+          give a larger size to add panel SNPs.</p>{% endif %}
+        {% if upgrade.dropped %}<p class="sp-small mb-1 mt-2">Dropped: {% for r in upgrade.dropped %}{{ r.id|default:r.pos }} ({{ r.reason }}){% if not forloop.last %}; {% endif %}{% endfor %}{% if upgrade.drop > 10 %} …{% endif %}</p>{% endif %}
+        {% if upgrade.added %}<p class="sp-small mb-1">Added: {% for r in upgrade.added %}{{ r.chrom }}:{{ r.pos|thousands }} ({{ r.reason }}){% if not forloop.last %}; {% endif %}{% endfor %}{% if upgrade.add > 10 %} …{% endif %}</p>{% endif %}
+        <p class="sp-small mb-0"><a href="{{ upgrade.url }}">Download the upgrade (TSV)</a>: every marker kept or dropped and every SNP added, with the reason.
+          Thresholds are provisional.</p>{% endif %}
+    </section>
+    {% endif %}
   <section class="sp-card" aria-labelledby="dl-h">
     <h2 id="dl-h">Download</h2>
     <form method="get" action="{{ downloads.url }}" class="d-flex flex-wrap gap-2 align-items-center sp-small">
@@ -93,6 +125,21 @@
     </div>{% endif %}
   </div>
 
+  {% if matrix %}
+  <section class="sp-card" aria-labelledby="matrix-h">
+    <h2 id="matrix-h">Chips side by side</h2>
+    <div class="table-responsive"><table class="table table-sm sp-table sp-small mb-1">
+        <caption class="sp-small">Functional columns count the markers that are public sites{% if not matrix.pool %} (needs the public pool){% endif %};
+          the last columns, each one's markers within {{ matrix.window }} of a marker of that chip.</caption>
+        <thead><tr><th scope="col"></th><th scope="col" class="sp-num">Markers</th><th scope="col" class="sp-num">Per Mb</th><th scope="col" class="sp-num">Median spacing</th>
+          <th scope="col" class="sp-num">Gaps</th>{% if matrix.pool %}<th scope="col" class="sp-num">Public</th><th scope="col" class="sp-num">Tier 1–2</th><th scope="col" class="sp-num">CDS</th>
+          <th scope="col" class="sp-num">MAF ≥ 0.05</th>{% endif %}{% for label in matrix.labels %}<th scope="col" class="sp-num">Near {{ label }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for r in matrix.rows %}<tr><th scope="row">{{ r.label }}</th><td class="sp-num">{{ r.markers|thousands }}</td><td class="sp-num">{{ r.per_mb|default_if_none:"" }}</td>
+          <td class="sp-num">{% if r.median_kb is not None %}{{ r.median_kb }} kb{% endif %}</td><td class="sp-num">{{ r.gaps|thousands }}</td>
+          {% if matrix.pool %}<td class="sp-num">{{ r.public|thousands }}</td><td class="sp-num">{{ r.tier12|thousands }}</td><td class="sp-num">{{ r.coding|thousands }}</td><td class="sp-num">{{ r.maf05|thousands }}</td>{% endif %}
+          {% for k in r.near %}<td class="sp-num">{{ k|thousands }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+  </section>
+  {% endif %}
   {% if n %}
   <section class="sp-card" aria-labelledby="list-h">
     <div class="sp-card-head flex-wrap gap-2"><h2 id="list-h">Panel SNPs</h2>

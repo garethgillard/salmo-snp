@@ -1,7 +1,8 @@
 """Saved design projects (ROADMAP I7; local installs only): a project is a named folder of panel versions in the data
 folder (projects/<name>/), so a Design panel can be kept, compared with an earlier version, shared as a zip and opened
 again. A version (v<N>/) holds the panel's SNPs as they were (panel.parquet: every kept SNP with its annotations, tiers
-for all conditions and the source it came from), its chip (chip.parquet, chip.json) and meta.json; it never changes.
+for all conditions and the source it came from), its chip (chip.parquet, chip.json), the populations and other chips
+it was compared with (populations/, chips/) and meta.json; it never changes.
 No database: JSON and Parquet files, as job folders. On a server there are no projects: they would be shared by
 everyone who can open the site."""
 from __future__ import annotations
@@ -94,7 +95,7 @@ def save(panel_dir, name, note=""):
     for f in ("chip.parquet", "chip.json"):
         if chip and (panel_dir / f).exists():
             shutil.copyfile(panel_dir / f, v / f)
-    copy_populations(panel_dir, v)
+    copy_extras(panel_dir, v)
     jobs._write_json(v / "meta.json", {
         "version": n, "created_utc": jobs.utc(), "note": str(note).strip()[:500], "n": len(keys),
         "hash": hashlib.sha256("\n".join(keys).encode()).hexdigest()[:16],
@@ -103,13 +104,15 @@ def save(panel_dir, name, note=""):
     return folder, n
 
 
-def copy_populations(src, dst):
-    """The user's populations (I9: per-SNP counts only) from one panel or version folder to another."""
-    if (src / "populations.json").exists():
-        shutil.copyfile(src / "populations.json", dst / "populations.json")
-        (dst / "populations").mkdir(mode=0o700, exist_ok=True)
-        for f in (src / "populations").glob("*.parquet"):
-            shutil.copyfile(f, dst / "populations" / f.name)
+def copy_extras(src, dst):
+    """The user's populations (I9: per-SNP counts only) and the other chips compared (I11) from one panel or version
+    folder to another."""
+    for name in ("populations", "chips"):
+        if (src / f"{name}.json").exists():
+            shutil.copyfile(src / f"{name}.json", dst / f"{name}.json")
+            (dst / name).mkdir(mode=0o700, exist_ok=True)
+            for f in (src / name).glob("*.parquet"):
+                shutil.copyfile(f, dst / name / f.name)
 
 
 def open_in_panel(d, n):
@@ -124,7 +127,7 @@ def open_in_panel(d, n):
     for f in ("chip.parquet", "chip.json"):
         if (v / f).exists():
             shutil.copyfile(v / f, out / f)
-    copy_populations(v, out)
+    copy_extras(v, out)
     jobs._write_json(out / "panel.json", {"sources": [{"id": 1, "project": d.name, "version": n, "label": f"{name}, version {n}",
                                                        "n": meta["n"], "selection": "", "filters": [meta.get("note") or "saved panel"],
                                                        "synthetic": False, "added_utc": jobs.utc()}],
@@ -242,7 +245,8 @@ def export_zip(request, name):
 @require_POST
 def import_zip(request):
     """POST a project zip (from Export): it becomes a new project (named '<name>-2' when the name is taken). Only the
-    files a project holds are read: project.json and v<N>/{meta.json, panel.parquet, chip.parquet, chip.json}."""
+    files a project holds are read: project.json and v<N>/{meta.json, panel.parquet, chip.parquet, chip.json,
+    populations.json, populations/*.parquet, chips.json, chips/*.parquet}."""
     stop = _need_local(request)
     if stop:
         return stop
@@ -250,7 +254,7 @@ def import_zip(request):
     if not upload:
         return redirect(f"{reverse('snpportal:projects')}?error=Choose a project zip to import.")
     allowed = re.compile(r"^[^/]+/(project\.json|v\d+/(meta\.json|panel\.parquet|chip\.parquet|chip\.json|populations\.json"
-                         r"|populations/[a-z0-9_]+\.parquet))$")
+                         r"|populations/[a-z0-9_]+\.parquet|chips\.json|chips/[a-z0-9_]+\.parquet))$")
     try:
         with zipfile.ZipFile(upload) as z:
             names = [i for i in z.infolist() if allowed.match(i.filename)]

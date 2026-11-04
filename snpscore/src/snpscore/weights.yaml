@@ -75,6 +75,8 @@ design:
   score: {tier: 1.0, assay: 0.3, maf: 0.3}  # design_score: tier_score / max + assay (pass 1, warn 0.5) + MAF / 0.5
   chip_window: 10000        # novel_functional = tier 1-2 with no chip SNP within this many bp
   chip_gap: 1000000         # chip gaps listed when longer than this (bp)
+  upgrade_min_call_rate: 0.95  # Upgrade a chip (I11): a marker is dropped below this call rate in your population
+  upgrade_min_hwe_p: 1.0e-6    # ... or below this HWE p (exact test); both editable on the Design panel
 
 # GWAS loci and fine-mapping (snpscore.gwas, the portal's Association page). PROVISIONAL: chosen by Claude so the
 # prototype works; G to confirm. Users can change them per view; the ROADMAP's 'Open questions for G' lists them.
