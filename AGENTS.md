@@ -166,6 +166,8 @@ serve.py RELEASE (temporary hosting until salmobase), checked and copied into th
   the data (`snpdata fetch`) needs salmobase.org, ftp.ensembl.org, jun2026.archive.ensembl.org, ftp.ebi.ac.uk,
   ftp.sra.ebi.ac.uk, ftp.ncbi.nlm.nih.gov, jaspar.elixir.no, www.bgee.org and www.biorxiv.org: add them under the
   environment's Network access, Custom, keeping the default list.
+- GitHub: the cloud proxy refuses GitHub's GraphQL API, so `gh` works only through `gh api` (REST): no
+  `gh release download` or `gh pr create`. Pull requests go through the GitHub MCP tools.
 - Checking pages: run `salmo-snp serve` (or manage.py runserver) in the background and fetch pages with curl, or use
   headless Chrome (/usr/bin/google-chrome); `bash tools/user_install_test.sh` checks the whole user path.
 - Changes: work on a branch and open a pull request; CI runs the tests and the user-install check; G merges (as admin)
