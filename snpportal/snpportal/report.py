@@ -63,6 +63,7 @@ def panel(request, key, d):
     s = info["summary"]
     q = urlencode({"tab": "panel", "trait": info.get("preset", "all")})
     return {"name": tools.panel_name(info), "line": tools.panel_line(s), "short": tools._short(s),
+            "params": tools.panel_params(info["params"]) if info.get("params") else None,
             "url": f"{reverse('snpportal:results', args=[key])}?{q}"}
 
 

@@ -37,9 +37,25 @@ TEXT = ("chrom", "id", "ref", "alt", "genome_base")  # columns read as text from
 CHIP_MAX = 3_000_000  # read_chip refuses longer chip lists (a small .gz can hold billions of rows)
 
 
-def settings(weights=None, **given):
-    """The design parameters: DEFAULTS, then weights.yaml 'design', then the given values that are not None."""
-    p = {**DEFAULTS, **((weights or {}).get("design") or {})}
+def presets(weights=None):
+    """{name: {label, help, and design parameters}} of weights.yaml design.presets (ROADMAP I8; PROVISIONAL numbers)."""
+    return ((weights or {}).get("design") or {}).get("presets") or {}
+
+
+def target_sizes(weights=None):
+    """Panel sizes offered as quick choices (weights.yaml design.target_sizes; vendor formats to confirm)."""
+    return [int(x) for x in ((weights or {}).get("design") or {}).get("target_sizes") or []]
+
+
+def settings(weights=None, purpose=None, **given):
+    """The design parameters: DEFAULTS, then weights.yaml 'design', then the `purpose` preset's (design.presets), then
+    the given values that are not None. With a purpose, p['purpose'] names it."""
+    p = {k: v for k, v in {**DEFAULTS, **((weights or {}).get("design") or {})}.items() if k not in ("presets", "target_sizes")}
+    if purpose:
+        if purpose not in presets(weights):
+            raise InputError(f"Unknown purpose '{purpose}'. Choose from: {', '.join(presets(weights)) or 'none defined'}")
+        p.update({k: v for k, v in presets(weights)[purpose].items() if k in DEFAULTS})
+        p["purpose"] = purpose
     p.update({k: v for k, v in given.items() if v is not None})
     p["exclude_flags"] = sorted(set(p["exclude_flags"] or []))
     p["must_include"] = sorted(set(p.get("must_include") or []))
@@ -147,19 +163,20 @@ def vendor_checks(snps):
 
 def design(source, preset="all", n_target=None, min_spacing_bp=None, min_maf=None, backbone_fraction=None,
            max_per_gene=None, max_per_element=None, require_assay_pass=None, exclude_flags=None, must_include=None,
-           weights=None, chrom_sizes=None, table="v", out=None, min_spacing_cm=None, cm_map=None, synthetic=()):
+           weights=None, chrom_sizes=None, table="v", out=None, min_spacing_cm=None, cm_map=None, synthetic=(), purpose=None):
     """Choose a panel from annotated SNPs: `source` is a parquet/TSV path or a DuckDB connection with `table`.
     Parameters left None come from weights['design'] (else DEFAULTS). `exclude_flags` are column names: rows where
     they are true (or > 0 for counts, e.g. flank_variants) are dropped; `must_include` ids are always selected first.
     `chrom_sizes` (manifest) sets the backbone bins (default: the largest position per chromosome). With
     `min_spacing_cm`, markers are also kept that many cM apart on the `cm_map` map (female, male or mean of annotate's
     cm_female and cm_male; SNPs beyond the first or last map marker take that marker's cM, and on a chromosome without
-    a map they are left out). A path's tiers are recomputed for `preset` with `weights` when it has no tier__<preset>
+    a map they are left out). `purpose` (a weights.yaml design.presets name, I8) sets the defaults for the parameters
+    left None. A path's tiers are recomputed for `preset` with `weights` when it has no tier__<preset>
     columns (see _open). Writes the selected rows (all columns plus selection_reason, panel_rank, design_score) to
     `out` if given.
     Returns {'params', 'hash', 'summary', 'selected': [{row, chrom, pos, id, selection_reason, panel_rank,
     design_score, tier}]}; selection_reason is must_include, backbone, functional (tier 1-3) or fill (tier 4)."""
-    p = settings(weights, n_target=n_target, min_spacing=min_spacing_bp, min_maf=min_maf,
+    p = settings(weights, purpose, n_target=n_target, min_spacing=min_spacing_bp, min_maf=min_maf,
                  backbone_fraction=backbone_fraction, max_per_gene=max_per_gene, max_per_element=max_per_element,
                  require_assay_pass=require_assay_pass, exclude_flags=exclude_flags, must_include=must_include,
                  min_spacing_cm=min_spacing_cm, cm_map=cm_map)
@@ -281,7 +298,8 @@ def _finish(con, rel, columns, p, chosen, sizes, n_rows, n_ok, skipped, out):
         "pos - lag(pos) OVER (PARTITION BY chrom ORDER BY pos)", "round(_cm - lag(_cm) OVER (PARTITION BY chrom ORDER BY pos), 4)"))
     checks = vendor_checks(rows("SELECT chrom, pos, ref, alt FROM _sel ORDER BY panel_rank"))
     summary = {
-        "preset": p["preset"], "n_target": p["n_target"], "n_selected": len(chosen), "n_rows": n_rows,
+        "preset": p["preset"], **({"purpose": p["purpose"]} if p.get("purpose") else {}),
+        "n_target": p["n_target"], "n_selected": len(chosen), "n_rows": n_rows,
         "n_candidates": n_ok,
         "reasons": dict(rows("SELECT selection_reason, count(*) FROM _sel GROUP BY 1 ORDER BY 1")),
         "tiers": {str(t): c for t, c in rows("SELECT tier, count(*) FROM _sel GROUP BY 1 ORDER BY 1 NULLS LAST")},

@@ -220,6 +220,27 @@ class ToolsTest(SimpleTestCase):
         self.assertContains(self.client.get(url + "?tab=panel"), 'id="selected-h"')
         self.assertEqual(self.client.get(reverse("snpportal:download", args=[url.split("/")[-2]]), {"scope": "all", "format": "kasp"}).status_code, 200)
 
+    def test_panel_purpose(self):  # I8: a purpose sets the designer's defaults; the panel, report and exports name it
+        self.client.get(self.url, {"tab": "table"})
+        page = self.client.get(self.url, {"tab": "panel", "purpose": "parentage"}).content.decode()
+        self.assertIn("<strong title=", page)
+        self.assertIn('name="purpose" value="parentage"', page)  # kept when the form is sent
+        self.assertIn('list="sp-sizes"', page)  # the target sizes as suggestions
+        h = re.search(r'scope=panel-([0-9a-f]{16})', page).group(1)
+        info = jobs.read_json(self.d / "panels" / f"{h}.json")
+        self.assertEqual((info["params"]["purpose"], info["params"]["min_spacing"], info["params"]["min_maf"]), ("parentage", 2_000_000, 0.3))
+        self.assertIn("Parentage and traceability", page[page.index('id="panel-h"'):page.index("</h2>", page.index('id="panel-h"'))])
+        picked = rows(self.d / "panels" / f"{h}.parquet")
+        self.assertTrue(all(r["assay_status"] == "pass" for r in picked))  # the preset asks for assay pass only
+        posted = self.client.post(reverse("snpportal:panel_design", args=[self.key]), {"design": "1", "purpose": "parentage", "n": "3"})
+        self.assertEqual(jobs.read_json(self.d / "panels" / f"{re.search(r'panel=([0-9a-f]{16})', posted.url).group(1)}.json")
+                         ["params"]["min_spacing"], 2_000_000)  # the form's blank fields keep the preset's numbers
+        report = self.client.get(reverse("snpportal:report", args=[self.key]), {"trait": "all", "panel": h}).content.decode()
+        self.assertIn("Designed with: purpose Parentage and traceability", report)
+        tsv = body(self.client.get(reverse("snpportal:download", args=[self.key]), {"scope": f"panel-{h}", "format": "tsv"})).decode()
+        self.assertIn("(purpose Parentage and traceability;", tsv)
+        self.assertNotIn('name="purpose"', self.client.get(self.url, {"tab": "panel", "purpose": "nope"}).content.decode())
+
     def test_export_lists_recent_panels(self):
         """The Export tab lists the newest panel of each parameter set, newest first, at most 3, plus one asked for."""
         url, key = self.job()

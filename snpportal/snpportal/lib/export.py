@@ -112,7 +112,8 @@ def provenance(manifest, weights, meta=None):
         + f"; release built with snpscore {manifest.get('snpscore_version')}, duckdb {manifest.get('duckdb_version')}"
         + (f"; job created {meta['created_utc']}" if meta.get("created_utc") else "")
         + (f"; input sha256 {meta['input_sha256']}" if meta.get("input_sha256") else ""),
-        f"preset {preset} ({conditions}); filters: {filters}" + (f"; panel {meta['panel']}" if meta.get("panel") else ""),
+        f"preset {preset} ({conditions}); filters: {filters}" + (f"; panel {meta['panel']}" if meta.get("panel") else "")
+        + (f" ({meta['panel_params']})" if meta.get("panel_params") else ""),
         "PROVISIONAL rules (prototype values, under review): " + ", ".join((manifest.get("provisional") or []) + (weights.get("provisional") or []) or ["tiers"]),
     ]
     if meta.get("vendor"):

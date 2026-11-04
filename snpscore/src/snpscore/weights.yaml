@@ -77,6 +77,34 @@ design:
   chip_gap: 1000000         # chip gaps listed when longer than this (bp)
   upgrade_min_call_rate: 0.95  # Upgrade a chip (I11): a marker is dropped below this call rate in your population
   upgrade_min_hwe_p: 1.0e-6    # ... or below this HWE p (exact test); both editable on the Design panel
+  # Purposes (ROADMAP I8): each sets the designer's defaults for its parameters (any of the keys above); the Panel tab's
+  # Purpose links and `python -m snpportal.lib.cli panel --purpose`. Every number is PROVISIONAL, for G to set.
+  presets:
+    genomic_selection:
+      label: Genomic selection
+      help: Even coverage of the genome for genomic prediction, mostly backbone, with a MAF floor
+      n_target: 5000
+      backbone_fraction: 0.9
+      min_spacing: 100000
+      min_maf: 0.05
+    parentage:
+      label: Parentage and traceability
+      help: A few hundred unlinked, common SNPs that pass the assay check
+      n_target: 200
+      backbone_fraction: 1.0
+      min_spacing: 2000000
+      min_maf: 0.3
+      max_per_gene: 1
+      require_assay_pass: true
+    trait:
+      label: Trait panel
+      help: The best-scoring SNPs of the Table selection (filter it to the loci first, e.g. Known locus), close together allowed
+      n_target: 96
+      backbone_fraction: 0.0
+      min_spacing: 1000
+      min_maf: 0.01
+      max_per_gene: 4
+  target_sizes: [96, 192, 384, 1536, 5000, 50000]  # quick choices for Markers (KASP plates, Axiom formats: to confirm with the vendor)
 
 # GWAS loci and fine-mapping (snpscore.gwas, the portal's Association page). PROVISIONAL: chosen by Claude so the
 # prototype works; G to confirm. Users can change them per view; the ROADMAP's 'Open questions for G' lists them.

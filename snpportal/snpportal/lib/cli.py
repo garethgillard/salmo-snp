@@ -30,6 +30,8 @@ def main():
     n.add_argument("--require-assay-pass", action="store_true", default=None)
     n.add_argument("--exclude", dest="exclude_flags", help="comma-separated columns, e.g. blacklist,lore,strand_ambiguous")
     n.add_argument("--must-include", help="comma-separated ids")
+    n.add_argument("--purpose", help="a preset of weights.yaml design.presets (genomic_selection, parentage, trait): its "
+                   "parameters are the defaults for the options not given (PROVISIONAL numbers)")
     n.add_argument("-o", "--out", default="panel.parquet", help="selected SNPs; <stem>.summary.json goes next to it")
 
     e = sub.add_parser("export", help="write annotated SNPs or a panel as tsv, parquet, bed, illumina, axiom, kasp, a "
@@ -69,7 +71,7 @@ def tools(args):
         result = panel.design(args.annotated, args.preset, args.n_target, args.min_spacing_bp, args.min_maf,
                               args.backbone_fraction, args.max_per_gene, args.max_per_element, args.require_assay_pass,
                               split(args.exclude_flags), split(args.must_include), weights=load_weights(),
-                              chrom_sizes=manifest.get("chrom_sizes"), out=args.out, synthetic=synthetic)
+                              chrom_sizes=manifest.get("chrom_sizes"), out=args.out, synthetic=synthetic, purpose=args.purpose)
         out = Path(args.out)
         summary = {"hash": result["hash"], "params": result["params"], **result["summary"]}
         out.with_name(out.stem + ".summary.json").write_text(json.dumps(summary, indent=2))
