@@ -1,8 +1,10 @@
 # Decisions for G
 
 Everything the prototype currently does by a provisional rule, in one place, with the options and a recommendation.
-Each answer goes into CLAUDE.md under "Decided" and, where it is a number, into `weights.yaml` (rebuild the release afterwards).
-Evidence sources: RESEARCH.md (section numbers below), the review of 2026-10-07 and the benchmark in `release/dev`.
+Each answer goes into ../AGENTS.md under "Decided" and, where it is a number, into snpscore's `weights.yaml` (then
+rebuild the pool with `snpscore pool`: the release holds no weights; a layer setting in layers.yaml needs a new release).
+Evidence sources: RESEARCH.md (section numbers below), the reviews of 2026-10-07 and 2026-11-04 and the benchmark in
+`release/dev`.
 
 ## Scoring (changes tiers)
 
@@ -43,7 +45,7 @@ caQTL leads (n = 1,057) give 3-4x, but they are called on the same ATAC data, so
 |---|---|---|---|
 | 13 | May we redistribute rows derived from the nf-RASQUAL tables (no licence on the repo)? Which significance rule (paper: eigenMT BF < 0.1)? Which allele does pi refer to? | used locally, BF < 0.1, no direction shown | Ask the authors (Nguyen, Sandve, Lien, Grønvold); also ask for full per-SNP outputs (needed for colocalisation) |
 | 14 | How to describe the 504-fish AF panel; may we host derived frequencies? | "504-fish panel: mostly wild and farmed fish from Bertolotti et al. 2020 plus the 12 AQUA-FAANG fish" | Confirm wording and permission; consider a European / North American split from the Bertolotti metadata |
-| 15 | Public SNP list for the background pool, demos and default panels: the 12-fish VCF has 70 sites on chr10 and stops near 105 Mb on chr1 | 12-fish VCF | Switch to the 504-fish panel sites (7.57M, frequencies only) |
+| 15 | Public SNP list for the background pool, demos and default panels: the 12-fish VCF has 70 sites on chr10 and stops near 105 Mb on chr1 | 12-fish VCF; no install has a pool today (TRACKER step 8), so the answer also sets what `salmo-snp download` builds from the release | Switch to the 504-fish panel sites (7.57M, frequencies only); the pool then takes longer to build than the 1.6M 12-fish sites' ~40 s (not measured) |
 | 16 | Known-loci catalogue: vet the 40 rows and effect alleles | 40 rows (incl. the 3 hubsmolt SNPs), 13 with an effect allele; bco1l A (+ strand) = red flesh | Vet; add QTL intervals for IPN and sea lice |
 | 17 | Fine-mapping defaults | prior SD 0.2, functional lambda 0.5, 95% sets, 5e-8 / 1e-5, 1 Mb clumping | Keep as labelled defaults; add the LD reference (#19) before using credible sets for decisions |
 | 18 | Chromatin colours | portal palette by default, AQUA-FAANG itemRgb as a viewer option | Make itemRgb the default (matches the papers and JBrowse), but note: with deuteranopia its Bivalent (counted) and Repressed_polycomb (not counted) look alike (CIEDE2000 5.4); cells carry 'Biv'/'Pc' text, browser lanes rely on colour and tooltips |
@@ -52,10 +54,15 @@ caQTL leads (n = 1,057) give 3-4x, but they are called on the same ATAC data, so
 | 21 | Gene labels for genes unnamed in Ensembl | '~VGLL3' (human ortholog) | As is, or NCBI RefSeq names as a second source |
 | 21a | Ss4R duplicate of a gene (Known loci column, `ss4r_*` columns) | other salmon gene(s) of its AQUA-FAANG salmon-trout clade on the paired chromosome of the syntenic quartet; none when the clade has one salmon copy (six6a: its chr1 namesake is in another clade) | Keep; ask the table's authors whether 1:1 clades next to a split clade (six6a) should be joined |
 
-## Later (going online)
+## Platform and sharing
 
-| # | Question | Recommendation |
-|---|---|---|
-| 22 | Where the repos live (GitLab elixir-nmbu like salmobase, or GitHub) | GitLab elixir-nmbu |
-| 23 | When to deploy a staging copy for CIGENE colleagues | After #1-#11 are decided and the eQTL benchmark is reviewed |
-| 24 | Moving salmobase's Docker image off Python 3.8 | Plan it; DuckDB is capped at 1.2.2 and Django at 4.2 on 3.8 |
+| # | Question | Now | Recommendation |
+|---|---|---|---|
+| 22 | Where the repository lives | Decided (G, 2026-10-28): one private GitHub repository, salmo-snp | - |
+| 23 | A copy for colleagues to try | Done: the public NREC demo (G, 2026-10-12) and the local install (2026-11-03) | - |
+| 24 | Python, Django and DuckDB versions | Decided (G, 2026-11-04: the newest that suit): Python >= 3.11, Django 5.2 LTS, DuckDB 2; ../AGENTS.md "Rules" | - |
+| 25 | The package names on PyPI. salmo-snp depends on `snpscore` by name, and none of snpscore, snpdata or salmo-snp is registered there, so a stranger's package of that name could be installed by a user who installs salmo-snp alone or upgrades snpscore by name | names unregistered; the README installs both packages in one command from GitHub | Register the three names now (empty placeholders are allowed), and publish there when the repository goes public |
+| 26 | Which systems the user-install check runs on | Linux only (CI, Python 3.12); Python 3.13 and 3.14 checked by hand on 2026-11-04 | Add macOS (a private repository's macOS minutes count 10x: run it weekly and on tags, not on every pull request); Windows once the test script handles `Scripts\`, as breeders often use Windows |
+| 27 | Which genotyping vendor the chip tools serve first (ROADMAP Push 3, I8 and I13) | G, 2026-11-04: probably Thermo Fisher Axiom (Affymetrix), as Norwegian aquaculture genotyping uses; Illumina and KASP second | Confirm with a breeding partner or the CIGENE lab, and get a current Axiom submission template and a design-results file from them (Thermo's columns are not public) |
+| 28 | What 'genome comparison' means for the industry users | On hold: G is asking them | Options: positions between assemblies (I18-I19), a SNP and its Ss4R duplicate (partly there: ss4r layer, card, browser), salmon against rainbow trout (P4.12) |
+| 29 | User accounts or a shared company server | Decided (G, 2026-11-04): one user per install, who shares results as files; a shared server is on hold | If a partner asks: their own login in front (SSO or a reverse proxy) before any accounts in the portal |

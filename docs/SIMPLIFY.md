@@ -1,5 +1,9 @@
 # Simplification plan: salmobase functional SNP portal
 
+Reference (2026-11-04): built as S1-S9 (TRACKER.md, 2026-10-11), and the principles still guide new pages. Changed
+since: the caveat line of principle 4 was removed (2026-10-11; Methods, the report and downloads keep the caveats),
+and the trait picker went when tiers began to count all 21 conditions (G, 2026-10-11).
+
 Content and ease-of-use review of the local prototype (http://localhost:8000/snp/), revised after a critique on 2026-10-07. The goal is less text and fewer features on screen, keeping what users value. Simplifying must not make the evidence look stronger than it is. Each change lands as a small 'simplify: <page>' commit, so any cut can be reverted on its own.
 
 Read-only review: no repo files were changed.

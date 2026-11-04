@@ -2,8 +2,9 @@
 name = "snpscore"
 version = "0.1.0"
 description = "Annotate and score Atlantic salmon SNPs with AQUA-FAANG functional maps"
-requires-python = ">=3.8"
-dependencies = ["duckdb>=1.2,<2", "pyyaml"]
+requires-python = ">=3.11"
+license = "PolyForm-Noncommercial-1.0.0"  # LICENSE in the salmo-snp repository
+dependencies = ["duckdb>=2.0,<3", "pyyaml>=6"]
 
 [project.optional-dependencies]
 test = ["pytest"]
@@ -15,7 +16,7 @@ snpscore = "snpscore.cli:main"
 snpscore = ["weights.yaml"]
 
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]

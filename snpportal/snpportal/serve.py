@@ -144,7 +144,7 @@ def local_genome(release):
 
 
 def serve(release=None, port=8000):
-    release = pick_release(release)
+    given, release = release, pick_release(release)
     if not release or not (release / "manifest.json").exists():
         sys.exit("salmo-snp: no release: run `salmo-snp download` first, or give --release <folder>")
     from snpscore.release import check
@@ -153,8 +153,10 @@ def serve(release=None, port=8000):
         sys.exit(f"salmo-snp: {release} can't be used:\n  " + "\n  ".join(problems))
     genome = local_genome(release)
     os.environ.update({
-        "DJANGO_SETTINGS_MODULE": "snpsite.settings", "DJANGO_DEBUG": "0", "DJANGO_ALLOWED_HOSTS": "127.0.0.1,localhost",
+        "DJANGO_SETTINGS_MODULE": "snpsite.settings", "DJANGO_DEBUG": "0",
         "SNPSCORE_RELEASE": str(release.resolve()), "SNPPORTAL_RESULTS_DIR": str(HOME / "results"), "SNPPORTAL_LOCAL": "1"})
+    # 127.0.0.1 only either way; a cloud session's preview pane may name the host otherwise (AGENTS.md "Cloud sessions")
+    os.environ.setdefault("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost")
     if genome:
         os.environ["SNPSCORE_GENOME"] = str(genome)
     (HOME / "results").mkdir(parents=True, exist_ok=True)
@@ -163,6 +165,9 @@ def serve(release=None, port=8000):
     from django.core.management import call_command
     django.setup()
     print(f"salmo-snp: release {release.name}, results in {HOME / 'results'}")
+    if not given and release.name != RELEASE:
+        print(f"salmo-snp: this version expects release {RELEASE}, which isn't downloaded: using {release.name} until "
+              f"you download {RELEASE}")
     if not genome:
         print("salmo-snp: no local genome, so sequence checks read it from salmobase (that sends genome positions near your "
               "SNPs there): `salmo-snp download` fetches it")

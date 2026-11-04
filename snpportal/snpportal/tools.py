@@ -853,8 +853,8 @@ def export(request, key, job, fmt):
     cap = int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000))
     if fmt in VENDORS and n > cap:
         return render(request, "snpportal/stub.html", {"nav": "score", "title": "Too many SNPs for a vendor file", "message":
-                      f"Vendor files are for panels: this export has {n:,} SNPs, more than {cap:,}. Design a panel on the "
-                      "Panel tab, or filter the table first."}, status=400)
+                      f"Vendor files are for panels: this export has {n:,} SNPs, more than {cap:,}. Filter the Table "
+                      "first, or add a selection to your Design panel, which makes vendor files for it."}, status=400)
     formats = ["tsv", "bed"] + (list(VENDORS) if n <= cap else [])
     notes = {"vendor_files": f"left out above {cap:,} SNPs"} if fmt == "bundle" and n > cap else {}
     meta = _meta(job, trait, synthetic, {**filters, **notes}, panel_hash, _command(job, trait, tag, fmt))

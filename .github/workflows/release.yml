@@ -8,14 +8,14 @@ jobs:
     # A vX.Y.Z tag on main: build the snpscore, snpdata and salmo-snp wheels and attach them to a GitHub Release
     # (salmobase's container and licensed users install from there; AGENTS.md plan 6). Set the version in the three
     # pyproject.toml files first.
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.8"
+          python-version: "3.12"
       - run: pip install build
       - run: for d in snpscore snpdata snpportal; do python -m build --wheel --outdir dist "$d"; done
       - run: gh release create "$GITHUB_REF_NAME" dist/*.whl --title "$GITHUB_REF_NAME" --generate-notes

@@ -15,7 +15,7 @@ def main():
     a = sub.add_parser("annotate", help="annotate a SNP list (VCF, TSV/CSV with chrom,pos, PLINK .bim/.map, chip manifest)")
     a.add_argument("snps")
     a.add_argument("--release", required=True)
-    a.add_argument("--trait", default="all", help="trait preset from the release's weights.yaml (default: all)")
+    a.add_argument("--trait", default="all", help="trait preset from weights.yaml (default: all, the 21 conditions, as the portal)")
     a.add_argument("-o", "--out", default="annotated.tsv",
                    help="TSV, .csv or .parquet; <stem>.validation.json and <stem>.rejects.tsv go next to it")
     a.add_argument("--threads", type=int, default=4)

@@ -64,7 +64,7 @@ ASSAY_FILTERS = {  # the Assay select of the Table and the Panel -> (label, SQL)
     "ok": ("Pass + warn", CHECKED), "ok_nolore": ("Pass + warn, no LORe", f"{CHECKED} AND NOT coalesce(lore, false)"),
     "pass": ("Pass only", "assay_status = 'pass'")}
 REASON_SQL = ("list_transform(string_split(coalesce(assay_reasons, ''), '; '), "  # as jobs.summarise counts them
-              "x -> trim(regexp_replace(regexp_replace(x, '^[0-9]+ ', ''), '( +[0-9.+-]+)+$', '')))")
+              "lambda x: trim(regexp_replace(regexp_replace(x, '^[0-9]+ ', ''), '( +[0-9.+-]+)+$', '')))")
 MAFS = ("0.01", "0.05", "0.1", "0.2")
 MAF_TIP = "Minor allele frequency in 504 public fish, pooled; your strain can differ"
 UNNAMED = "Unnamed in Ensembl; named by its human ortholog"
@@ -327,7 +327,7 @@ def filters(request, types, weights):
     terms = [t for t in picks(request, "term") if t in (weights or {}).get("weights", {})]
     if terms and "tier_terms" in types:  # several: any of them (links carry them comma-joined)
         out.append(({"term": ",".join(terms)}, "Evidence: " + ", ".join(TERMS.get(t, t) for t in terms),
-                    f"list_has_any(list_transform(tier_terms, x -> x.term), [{', '.join(lit(t) for t in terms)}])"))
+                    f"list_has_any(list_transform(tier_terms, lambda x: x.term), [{', '.join(lit(t) for t in terms)}])"))
     for name, (label, column, condition) in HIDE.items():
         if (get(name) or name == "hide_lore" and nolore) and column in types:
             out.append(({name: "1"}, f"Hide {label}", condition))

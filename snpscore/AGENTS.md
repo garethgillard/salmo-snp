@@ -13,6 +13,9 @@ the annotate output, tiers, the pool, GWAS fine-mapping and the benchmark.
 - Nothing here imports snpdata or snpportal; only the tests build their fixture release with snpdata.
 - When the annotate output changes on purpose, update the golden hash in tests/test_snpscore.py (its comment says how).
 
+Without a release/dev (it needs snpdata/data/raw, as on G's Mac), use the downloaded release: `bash
+../tools/get_data.sh`, then `--release ~/.local/share/salmo-snp/releases/<version>` (`salmo-snp info` says where).
+
 ```bash
 python -m pytest -q
 snpscore annotate ../snpdata/tests/fixture/snps.vcf --release ../snpdata/release/dev -o /tmp/out.tsv

@@ -83,7 +83,7 @@ class ResultsTest(SimpleTestCase):
         self.client.get(self.url + "?tab=table")  # back to the whole list, for the other tests
         if "tier_terms" not in self.columns:  # several evidence terms: SNPs with any of them
             terms = jobs.connect([self.d]).execute(
-                f"SELECT count(*) FROM '{self.d / 'tiers.parquet'}' WHERE list_has_any(list_transform(tier_terms__all, x -> x.term), "
+                f"SELECT count(*) FROM '{self.d / 'tiers.parquet'}' WHERE list_has_any(list_transform(tier_terms__all, lambda x: x.term), "
                 "['coding', 'utr'])").fetchone()[0]
             page = self.client.get(self.url + "?tab=table&term=coding&term=utr").content.decode()
             self.assertIn("Evidence: CDS (protein change or unknown), UTR", page)

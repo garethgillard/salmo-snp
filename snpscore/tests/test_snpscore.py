@@ -300,9 +300,10 @@ def test_synteny_and_bgee_extras(release):
         ("21", 1714550, 57740012, 1172788), ("25", 1172788, 53480658, 1714550)]
     rows = {(r["gene_id"], r["tissue"]): r for r in read(release / "bgee.parquet")}
     testis = rows["ENSSSAG00000053708", "testis"]  # vgll3; checked against the fixture's own rows
-    raw = duckdb.sql(f"""SELECT count(*), count(*) FILTER (WHERE "Detection flag" = 'present'), median(TPM::DOUBLE)
+    # fetchall, not fetchone: DuckDB 2 keeps a half-read result open on the shared default connection
+    raw = duckdb.execute(f"""SELECT count(*), count(*) FILTER (WHERE "Detection flag" = 'present'), median(TPM::DOUBLE)
         FROM read_csv('{FIXTURE / "bgee16" / "*.tsv.gz"}', delim='\t', header=true, all_varchar=true, quote='')
-        WHERE "Gene ID" = 'ENSSSAG00000053708' AND "Anatomical entity name" = '"testis"'""").fetchone()
+        WHERE "Gene ID" = 'ENSSSAG00000053708' AND "Anatomical entity name" = '"testis"'""").fetchall()[0]
     assert (testis["libraries"], testis["present"], testis["median_tpm"]) == raw and testis["libraries"] > 0
     manifest = json.loads((release / "manifest.json").read_text())
     assert manifest["bgee"]["rows"] == len(rows) and manifest["synteny"]["file"] == "synteny.parquet"

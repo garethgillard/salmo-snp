@@ -48,10 +48,10 @@ def scored(table, weights, columns, trait, synthetic=()):
     def having(conditions, states):  # SQL list of the conditions whose state is one of `states`
         quoted = ", ".join(lit(s) for s in states)
         items = ", ".join(f"CASE WHEN {q('chromatin_' + c)} IN ({quoted}) THEN {lit(c)} END" for c in conditions)
-        return f"list_filter([{items}], x -> x IS NOT NULL)" if conditions else "[]::VARCHAR[]"
+        return f"list_filter([{items}], lambda x: x IS NOT NULL)" if conditions else "[]::VARCHAR[]"
 
     def tissues(lst):  # Brain_Mature_Male, Brain_Immature_Female -> "Brain"
-        return f"array_to_string(list_sort(list_distinct(list_transform({lst}, x -> split_part(x, '_', 1)))), ',')"
+        return f"array_to_string(list_sort(list_distinct(list_transform({lst}, lambda x: split_part(x, '_', 1)))), ',')"
 
     # (layer, term, condition, evidence text) per kind of evidence; the weight of a term is weights[term].
     terms = [
@@ -96,7 +96,7 @@ def scored(table, weights, columns, trait, synthetic=()):
     evidence = ", ".join(f"CASE WHEN {cond} THEN {text} END" for _, _, cond, text in terms) or "NULL"
     fired = ", ".join(f"CASE WHEN {cond} THEN {{'term': {lit(term)}, 'weight': {weight(term)}}} END"
                       for _, term, cond, _ in terms)
-    tier_terms = (f"list_filter([{fired}], x -> x IS NOT NULL)" if terms
+    tier_terms = (f"list_filter([{fired}], lambda x: x IS NOT NULL)" if terms
                   else "[]::STRUCT(term VARCHAR, weight INTEGER)[]")
     t1, t2, t3 = weights["tiers"]
     added = [c for c in ADDED if c in columns]

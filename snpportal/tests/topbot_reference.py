@@ -2,7 +2,7 @@
 checked against every example in Illumina tech note 370-2006-018
 (https://www.illumina.com/documents/products/technotes/technote_topbot.pdf).
 Written independently of snpscore during the research sweep (docs/RESEARCH.md section 5) and kept unchanged as the
-oracle for tests/test_vendor.py. Python 3.8 compatible."""
+oracle for tests/test_vendor.py."""
 from __future__ import annotations
 
 import re

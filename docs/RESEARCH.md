@@ -1,5 +1,9 @@
 # Research sweep: data sources, gaps and corrections (2026-10-06)
 
+Reference (2026-11-04): what this found was built as push 2 (R1-R9, TRACKER.md), and the questions it raised are in
+DECISIONS.md. Section 9's items 1-5 and 8 are done; the rest are in the TRACKER backlog. Names here predate the merge
+into one repository (salmo-snpscore = snpscore/ and snpdata/, salmo-snpportal = snpportal/; CLAUDE.md = AGENTS.md).
+
 Six research lenses (genetic map, known loci, liftover and allele frequencies, vendor formats, AQUA-FAANG, comparable portals),
 each spot-verified by a second agent, then synthesised. Paths like `verify/...` refer to the session's scratch folder; the files
 that matter are being folded into this repo by Push 2 (see ROADMAP.md 'Push 2' and TRACKER.md).

@@ -60,7 +60,8 @@ def build_pool(release_dir, background, assay=False, threads=4, memory_limit="4G
             tmp.unlink(missing_ok=True)
         summary = background_summary(con, f"read_parquet({lit(out / 'pool.parquet')})", weights)
         con.close()
-    summary.update(release=manifest["version"], created=datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    created = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    summary.update(release=manifest["version"], created=created,
                    source=Path(background).name, rows_read=validation["rows_read"], rejected=validation["rejected"],
                    assay_checked=bool(assay), seconds=round(time.time() - t0, 1))
     (out / "background.json").write_text(json.dumps(summary, indent=2))

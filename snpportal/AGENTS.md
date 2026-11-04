@@ -7,17 +7,21 @@ later, linked from salmobase by a button (G, 2026-11-03). Read
 `snpportal/lib/` is plain Python with no Django (locus data, panel design, exports, the track registry); its pytest
 tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 
-## Current phase: public demo
-A public demo (no password) runs on an NREC VM at https://158.39.75.9/snp/ (G, 2026-10-12). Code deploys itself: a
-push or merged pull request on main runs the tests, then GitHub Actions runs `deploy/update.sh` on the VM (README
-"Automatic deploys"). A new data release goes up with `bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io`,
-which needs G's Mac (the VM's SSH key and the release folder); always pass the IP address, as the script rewrites the
-Caddy sites and allowed hosts from the names it is given.
+## Where it runs
+- On users' own computers, the main product (G, 2026-11-03): `salmo-snp serve` (serve.py) sets `SNPPORTAL_LOCAL`, so
+  results stay until deleted and the Score, Help, Design panel and Run locally pages say they are on this computer.
+- The public demo (no password) on an NREC VM, https://158.39.75.9/snp/ (G, 2026-10-12): gunicorn behind Caddy, 24 h
+  retention. Code deploys itself: a push or merged pull request on main runs the tests, then GitHub Actions runs
+  `deploy/update.sh` on the VM (README "Automatic deploys"). A new data release goes up with `bash deploy/nrec.sh nrec
+  158.39.75.9 158-39-75-9.sslip.io`, which needs G's Mac (the VM's SSH key and the release folder); always pass the IP
+  address, as the script rewrites the Caddy sites and allowed hosts from the names it is given.
+- salmobase later: a container installing a tagged version (../AGENTS.md plan 4).
 
 ## Look like salmobase
 - Pages extend `snpportal/base_portal.html` (which extends `salmobase/base.html` and fills its blocks `head`, `content`, `scripts`). Bootstrap 5.1.3 and jQuery are already loaded there.
 - Interactivity with htmx (one script tag, with SRI); no frontend build step, no chart libraries: figures are server-rendered SVG from `figures.py`.
-- Must keep working on Python 3.8, Django 4.2 and DuckDB 1.2.2 until the portal's Dockerfile sets the versions (G, 2026-10-28: own container, not merged into salmobase).
+- Python 3.11 or newer, Django 5.2 LTS and DuckDB 2 (../AGENTS.md "Rules"); the portal gets its own container on
+  salmobase, not merged into its Django (G, 2026-10-28).
 
 ## Keep it small
 - Few files, little code, readable. Don't add tests for every edge case.
@@ -47,15 +51,18 @@ the regional plot window (lead +- credible set + 20 kb, 50-250 kb), the GWAS loc
 strongest loci are listed and fine-mapped) and the settings form's suggestive-p ceiling (0.01).
 
 ## Data safety
-- Uploaded files are deleted right after scoring; results are deleted after `SNPPORTAL_KEEP_HOURS` (24 h) or on 'Delete now'.
+- Uploaded files are deleted right after scoring; results are deleted on 'Delete now', and on a server after
+  `SNPPORTAL_KEEP_HOURS` (24 h). Locally (`SNPPORTAL_LOCAL`) nothing expires.
 - Job folders 0700, files 0600. Never log SNP contents or file names (log `job_ref`, counts, timings).
 - Never put breeder data in tests or fixtures. Synthetic files have SYNTHETIC in the name and are labelled in the UI.
 
 ## Commands
 ```bash
-salmo-snp serve --release ../snpdata/release/dev   # as users run it (snpportal/serve.py); the environment: ../AGENTS.md
+salmo-snp serve                   # as users run it (snpportal/serve.py), with the data of ../tools/get_data.sh
+salmo-snp serve --release ../snpdata/release/dev   # or a release you built; the environment: ../AGENTS.md
 python manage.py runserver        # with autoreload: needs a release (SNPSCORE_RELEASE or ../snpdata/release/dev)
 python -m pytest -q tests         # snpportal.lib
 SNPPORTAL_WORKERS=0 python manage.py test snpportal   # the pages, jobs run inline
 python manage.py snpportal_cleanup
+python manage.py screenshots /snp/ /snp/known-loci/ --out shots   # full-page PNGs of a running portal's pages
 ```

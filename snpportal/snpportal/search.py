@@ -137,7 +137,7 @@ def genes(query, limit=10):
                         WHEN list_contains({symbols}, $lq) THEN 2
                         WHEN starts_with(lower(g.name), $lq) OR starts_with(lower(a.alias), $lq) THEN 3
                         WHEN length($q) >= 9 AND starts_with(upper(g.id), upper($q)) THEN 4
-                        WHEN len(list_filter({symbols}, s -> s <> '' AND starts_with(s, $lq))) > 0 THEN 5
+                        WHEN len(list_filter({symbols}, lambda s: s <> '' AND starts_with(s, $lq))) > 0 THEN 5
                         WHEN length($q) >= 4 AND contains(lower(g.description), $lq) THEN 6 END AS rank
             FROM read_parquet({lit(release / 'gene.parquet')}) g {join}
             LEFT JOIN (SELECT gene_id, string_agg(alias, ', ') AS alias FROM {aliases} GROUP BY 1) a ON a.gene_id = g.id)

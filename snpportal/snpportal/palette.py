@@ -36,7 +36,7 @@ STATE_PALETTES = {
 STATE_PALETTE_NAMES = {"portal": "portal palette", "aquafaang": "AQUA-FAANG itemRgb"}
 COOKIE = "snpportal_palette"  # a viewer's choice of state palette
 _server = ["portal"]
-_viewer = ContextVar("snpportal_state_palette", default=None)  # set per request from the cookie (apps.py)
+_viewer = ContextVar("snpportal_state_palette", default=None)  # set per request from the cookie (middleware below)
 
 
 class _States(Mapping):
@@ -68,6 +68,16 @@ def choose(name):
 
 def states_name():
     return _viewer.get() or _server[0]
+
+
+def middleware(get_response):
+    """settings.MIDDLEWARE 'snpportal.palette.middleware': each request's state palette from the viewer's cookie (the
+    locus browser's 'Chromatin colours' links). A middleware rather than the request_started signal, which Django 5
+    sends in another context under ASGI, so the choice never reached the view."""
+    def with_palette(request):
+        choose(request.COOKIES.get(COOKIE))
+        return get_response(request)
+    return with_palette
 
 
 def edge(fill):

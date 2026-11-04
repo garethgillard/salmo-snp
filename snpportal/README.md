@@ -18,10 +18,11 @@ As users run it (the root README's guide; `snpportal/serve.py`): `pip install` s
 manifest, into the platform data folder) and `salmo-snp serve` (http://127.0.0.1:8000/snp/, this computer only). serve
 sets `SNPPORTAL_LOCAL`: results are never expired (`jobs.keep_seconds()` is None, cleanup deletes nothing) and the
 Score, Help, Design panel and Run locally pages say the results stay on this computer. `salmo-snp serve --release
-<folder>` uses a release built with snpdata. For development:
+<folder>` uses a release built with snpdata. For development with the published data, `bash ../tools/get_data.sh`
+and `salmo-snp serve` are enough; to build the release yourself (it needs ~1.5 GB of public inputs):
 
 ```bash
-conda env create -f ../environment.yml && conda activate salmo-snp   # Python 3.8 and the three folders, editable
+conda env create -f ../environment.yml && conda activate salmo-snp   # Python 3.12 and the three folders, editable
 cd ../snpdata
 snpdata fetch                                         # the public inputs, into data/raw
 bash prep/make_demo.sh                                # the examples (layers.yaml 'demo'): 50K public sites, the
@@ -63,8 +64,8 @@ VM lost its network port and got a new address.
 `bash deploy/nrec.sh <ssh host> <web name> [<web name> ...]` sets up an NREC VM (GOLD Ubuntu 24.04 on the `dualStack`
 network, so it has a public IPv4 address; ports 22, 80 and 443 open). The code on the VM is a clone of this repository
 (`/srv/snpportal/salmo-snp`, read with a read-only deploy key the script makes and registers with `gh`); from this Mac
-it copies `snpdata/release/dev` and the genome to `/srv/snpportal`. On the VM it installs Django 4.2, DuckDB 1.2.2 and
-gunicorn in a venv, Caddy for HTTPS (a site per name: an IPv4 address gets Let's Encrypt's short-lived IP certificate,
+it copies `snpdata/release/dev` and the genome to `/srv/snpportal`. On the VM it installs the packages (the newest Django,
+DuckDB and gunicorn they allow; every deploy upgrades them) in a venv, Caddy for HTTPS (a site per name: an IPv4 address gets Let's Encrypt's short-lived IP certificate,
 renewed by Caddy; a `<ip-with-dashes>.sslip.io` name works too) and systemd units for the app (`snpportal`) and an
 hourly `snpportal_cleanup`. Rerun it for a new release or new web names: results and the secret key are kept. The
 snpsite project serves the demo with `DJANGO_DEBUG=0` and the settings in `/srv/snpportal/env`; `SNPSCORE_GENOME`
@@ -97,7 +98,7 @@ The folder holds:
 | `summary.json` | everything the overview draws (tiers, bins, conditions, regions, terms, MAF, assay status and reasons, known-locus and molQTL counts, gaps per preset): see `jobs.summarise` |
 | `validation.json`, `rejects.tsv` | snpscore's upload QC and dropped rows (shown on the results page; rejects downloadable) |
 | `weights.yaml`, `manifest.json` | snapshot of the release: editing the release never changes an existing job, and a banner says when it changed |
-| `panels/<hash>.parquet`, `.json` | each panel designed on the (unlinked) Panel tab (folder 0700): the result columns plus `source_row`, `selection_reason`, `panel_rank`, `design_score` (and the chip columns); the .json holds hash, preset, params, summary, chip label. hash = `snpscore.panel.params_hash` of the preset, parameters, weights sha256 and chip sha256, so the same URL gives the same file |
+| `panels/<hash>.parquet`, `.json` | each panel designed on the (unlinked) Panel tab (folder 0700): the result columns plus `source_row`, `selection_reason`, `panel_rank`, `design_score` (and the chip columns); the .json holds hash, preset, params, summary, chip label. hash = `snpportal.lib.panel.params_hash` of the preset, parameters, weights sha256 and chip sha256, so the same URL gives the same file |
 | `chip.parquet`, `chip.json` | the reference chip of the (unlinked) Panel tab (chrom, pos, id), and its label, SYNTHETIC flag, kept/rejected rows, sha256, density per Mb and the comparison per preset |
 | `chip_rows_<sha>.parquet` | `file_row_number`, `on_chip`, `dist_to_chip`, `near_chip` of every SNP for that chip (`results.chip_view`, made once from chrom and pos); pages that use the chip columns join it by row number (`novel_functional` = tier 1-2 and not near the chip) |
 | `sumstats.parquet`, `gwas.parquet`, `gwas.json` | GWAS jobs (`input_kind` gwas): the summary statistics as read, harmonised to Ssal_v3.1, and the upload QC report (see snpscore README "GWAS") |
@@ -110,12 +111,12 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 
 | URL | What |
 | --- | --- |
-| `results/<key>/?tab=overview\|table\|export` | the results tabs (`tab=panel`, the automatic designer, still works but is no longer linked: the Design panel page is the curated panel). Tiers always count all 21 conditions (no Active in, no condition picker; an older link's `trait` is ignored): the Table only filters after scoring. Table filters (`tier`, `region`, `chrom/start/end`, `gene`, `min_maf`, `assay`, `known`, `min_score` (the Score column's slider), `hide_*`; Chromatin: `tissue` (several), `maturity`, `sex` and `act=active`, SNPs in a robust ATAC peak (or an active state) in at least one of those conditions, a filter only; `tier`, `region`, `assay` and `term` take several values, comma-joined or repeated: any of them; `region` is the Consequence column's filter: missense (protein-changing), synonymous, cds, splice, utr5, utr3, exon, intron, intergenic, and the Overview's groups coding and UTR) are the Table's selection, kept per job (`selection.json`): the Table tab link returns to it, the Panel designs from it and compares it with a chip, the Export tab offers it ('Table selection'); the Overview always shows the whole list with tiers for all conditions, and its links start a new selection. Each filter sits on its column (a funnel in the header, `_dd.html`); a hidden column has no filter (Columns shows it) and a filtered column always shows; Flags is a default column. The selector column (+/−) takes single SNPs out of the selection by hand (`exclude=<row>`, `include=<row>`, `include_all=1`; kept in `unselected.json`): the Table shows only the + rows unless asked (`picked=out`: only −; `picked=all`: both, the − dimmed), and the Panel, Export, downloads and Add to panel leave them out. `&snp=<row>` opens the SNP's card in the Table's drawer: a bar with its +/− switch (key x) and the previous and next rows of the table (keys k and j, across pages), then one top row (+/−, tier, SNP, gene, copy, previous/next), the score (a block per evidence term, as wide as its points, largest first, labelled like a chip, with dashed lines at the tier cut-offs and = score on the right), the key facts under it (not what a block or the heading says; a GWAS job's p, beta and PIP), caveats and foldable sections: the functional evidence at the locus (a mini locus browser of the SNP +- 10 kb: your SNPs (faded when not selected), genes, public variants, GERP and robust ATAC peaks, with the SNP's peak per condition in a wedge under it), TF motifs (when the SNP changes a JASPAR 2024 motif: up to three logos on the + strand where they sit, the reference sequence with the SNP's column outlined and its alt allele under it, both alleles' scores against the match cut-off; `locus.motif_hits` recomputes them from the release's motif.meme and the genome), as a marker (its header: the assay check, GC, MAF, LORe, A/T or C/G; the flank in a box (a copy icon beside it) with long runs underlined and public variants' offset, alleles and MAF on hover; one duplicate-copy line; the Design panel and its chip), and context; a SNP taken out stays in the table while its card is open; 'Open locus browser' widens the drawer over the page to the browser at that SNP (20 kb), and 'Back to the card', Esc or the browser's Back return to the card and table as they were (a lollipop of another SNP opens its card; other pages open in a new tab); GWAS jobs have Association, Overview, Table and Export, and every link of theirs keeps the fine-mapping settings (`sig`, `sugg`, `window`, `prior_sd`, `lam`, `trait_sd`) |
+| `results/<key>/?tab=overview\|table\|export` | the results tabs: see "Results tabs" below |
 | `results/<key>/?tab=panel&design=1&n=&spacing_kb=&spacing_cm=&cm_map=&backbone=&maf=&per_gene=&per_element=&assay=&exclude=&gap_mb=` | panel designer as a link (blank or invalid values fall back to weights.yaml `design`; `spacing_cm` and `cm_map` (mean, female, male) only with the `cm` columns) |
 | `results/<key>/panel/` (POST) | the designer's form, the same fields plus `must` (must-include ids, which never go in a URL): designs the panel and redirects to `?tab=panel&panel=<hash>`, which shows a saved panel with its parameters (for another trait: the same parameters) |
 | `results/<key>/chip/` (POST) | `chip` file, `demo=1` or `remove=1` |
-| `results/<key>/download/?format=tsv\|parquet\|bed\|illumina\|axiom\|kasp\|bundle\|priors&scope=all\|filtered\|panel-<hash>` | exports with provenance (`&plain=1` drops it, `&include_failed=1` keeps assay failures in vendor files); vendor files hold no comment lines, so `format=<vendor>.provenance` and `.lookup` give snpscore's sidecars; `format=rejects` gives the dropped rows |
-| `panel/`, `panel/change/` (POST), `panel/download/?format=tsv\|kasp\|illumina\|axiom[&scope=new]`, `results/<key>/add-to-panel/` (POST) | Design panel: a curated panel of whole Table selections from any results ('Add to panel', the cart), compared with an existing chip, its assay readiness and vendor files (all, or the SNPs not on the chip). One browser's only (an HttpOnly cookie names its folder `results/panel-<uuid>`, never a URL), deleted 24 hours after it was started (its `created` marker); its TSV, scored again, brings it back. Two equal columns (sources, chip and downloads; at a glance and the genome figure), then the SNP list: 50 rows (`show=all`: up to 2,000), problems first (assay fail/warn, MAF below the designer's minimum, LORe, a kept neighbour within the minimum spacing) or by genome (`order=genome`); with a chip, its status per SNP (on the chip, near and how far, new) and `chip=new` for the new ones only; +/- drops a SNP by hand or puts it back (POST `drop`/`keep`, kept in panel.json 'dropped'): dropped SNPs stay in the list, dimmed, and leave the counts, figure and downloads |
+| `results/<key>/download/?format=tsv\|parquet\|bed\|illumina\|axiom\|kasp\|bundle\|priors&scope=all\|filtered\|panel-<hash>` | exports with provenance (`&plain=1` drops it, `&include_failed=1` keeps assay failures in vendor files); vendor files hold no comment lines, so `format=<vendor>.provenance` and `.lookup` give their sidecars; `format=rejects` gives the dropped rows |
+| `panel/`, `panel/change/` (POST), `panel/download/?format=tsv\|kasp\|illumina\|axiom[&scope=new]`, `results/<key>/add-to-panel/` (POST) | the Design panel: see "Design panel" below |
 | `current/` | the results this browser last opened (a cookie), else the Score page |
 | `` (the home page) | the Score page: 'Your results' (a green box, only when there are any), the examples and one tab per input, each with the same hint line and Score button; beside them the tour (a screenshot of a SNP's card); it sends `no-store` when it lists results. Delete and Clear panel ask in a small dialog (`data-confirm` on the form, portal.js). 'Your results': the results this browser opened (an HttpOnly cookie, newest first; named by the uploaded file, or 'Pasted' and the time), each with its SNPs, time, a link and Delete (`results/<key>/delete/` with `next=score` comes back here) |
 | `results/<key>/report/?[filters][&panel=<hash>]` | one-page printable report (two A4 pages): the Overview's numbers and the top 20 SNPs of the Table's selection, tiers for all 21 conditions |
@@ -125,6 +126,60 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 | `tour/?slide=N` | the guided tour: 8 slides (overview, Score, Table, card, locus browser, Design panel, GWAS, browse and help), each a card with a screenshot and numbered callouts, between two large arrows; a click on the slide's right half goes on, on its left half back, and the arrow keys and dots work too (the last arrow is 'Start scoring', and 'Back to Score' sits by the dots) |
 | `gwas/` (POST), `candidates/`, `known-loci/`, `search/`, `about/data/`, `about/methods/`, `help/`, `run-locally/` | the other pages (Run locally gives the `--trait all` command, as the portal's tiers) |
 | `colours/?name=portal\|aquafaang` | the locus browser's chromatin-colour toggle (Display options): sets the `snpportal_palette` cookie, back to the (same-site) referring page |
+
+### Results tabs
+
+- Overview, Table and Export; GWAS jobs have Association, Overview, Table and Export, and every link of theirs keeps
+  the fine-mapping settings (`sig`, `sugg`, `window`, `prior_sd`, `lam`, `trait_sd`). `tab=panel`, the automatic
+  designer, still works but is no longer linked: the Design panel page is the curated panel.
+- Tiers always count all 21 conditions (no Active in, no condition picker; an older link's `trait` is ignored): the
+  Table only filters after scoring.
+- Table filters: `tier`, `region`, `chrom/start/end`, `gene`, `min_maf`, `assay`, `known`, `min_score` (the Score
+  column's slider), `hide_*`; Chromatin: `tissue` (several), `maturity`, `sex` and `act=active`, SNPs in a robust ATAC
+  peak (or an active state) in at least one of those conditions, a filter only. `tier`, `region`, `assay` and `term`
+  take several values, comma-joined or repeated: any of them. `region` is the Consequence column's filter: missense
+  (protein-changing), synonymous, cds, splice, utr5, utr3, exon, intron, intergenic, and the Overview's groups coding
+  and UTR.
+- The filters are the Table's selection, kept per job (`selection.json`): the Table tab link returns to it, the Panel
+  designs from it and compares it with a chip, the Export tab offers it ('Table selection'). The Overview always shows
+  the whole list with tiers for all conditions, and its links start a new selection.
+- Each filter sits on its column (a funnel in the header, `_dd.html`); a hidden column has no filter (Columns shows it)
+  and a filtered column always shows; Flags is a default column.
+- The selector column (+/−) takes single SNPs out of the selection by hand (`exclude=<row>`, `include=<row>`,
+  `include_all=1`; kept in `unselected.json`): the Table shows only the + rows unless asked (`picked=out`: only −;
+  `picked=all`: both, the − dimmed), and the Panel, Export, downloads and Add to panel leave them out.
+- `&snp=<row>` opens the SNP's evidence card in the Table's drawer:
+  - a bar with its +/− switch (key x) and the previous and next rows of the table (keys k and j, across pages), then
+    one top row (+/−, tier, SNP, gene, copy, previous/next);
+  - the score: a block per evidence term, as wide as its points, largest first, labelled like a chip, with dashed lines
+    at the tier cut-offs and = score on the right; under it the key facts (not what a block or the heading says; a
+    GWAS job's p, beta and PIP) and caveats;
+  - foldable sections: the functional evidence at the locus (a mini locus browser of the SNP +- 10 kb: your SNPs
+    (faded when not selected), genes, public variants, GERP and robust ATAC peaks, with the SNP's peak per condition
+    in a wedge under it); TF motifs (when the SNP changes a JASPAR 2024 motif: up to three logos on the + strand where
+    they sit, the reference sequence with the SNP's column outlined and its alt allele under it, both alleles' scores
+    against the match cut-off; `locus.motif_hits` recomputes them from the release's motif.meme and the genome); as a
+    marker (its header: the assay check, GC, MAF, LORe, A/T or C/G; the flank in a box (a copy icon beside it) with
+    long runs underlined and public variants' offset, alleles and MAF on hover; one duplicate-copy line; the Design
+    panel and its chip); and context;
+  - a SNP taken out stays in the table while its card is open. 'Open locus browser' widens the drawer over the page to
+    the browser at that SNP (20 kb), and 'Back to the card', Esc or the browser's Back return to the card and table as
+    they were (a lollipop of another SNP opens its card; other pages open in a new tab).
+
+### Design panel
+
+- A curated panel of whole Table selections from any results ('Add to panel', the cart), compared with an existing
+  chip, its assay readiness and vendor files (all, or the SNPs not on the chip).
+- One browser's only: an HttpOnly cookie names its folder `results/panel-<uuid>`, never a URL. On a server it is
+  deleted 24 hours after it was started (its `created` marker); locally (`SNPPORTAL_LOCAL`) it is kept until cleared.
+  Its TSV, scored again, brings it back.
+- Two equal columns (sources, chip and downloads; at a glance and the genome figure), then the SNP list: 50 rows
+  (`show=all`: up to 2,000), problems first (assay fail/warn, MAF below the designer's minimum, LORe, a kept neighbour
+  within the minimum spacing) or by genome (`order=genome`); with a chip, its status per SNP (on the chip, near and
+  how far, new) and `chip=new` for the new ones only.
+- +/- drops a SNP by hand or puts it back (POST `drop`/`keep`, kept in panel.json 'dropped'): dropped SNPs stay in the
+  list, dimmed, and leave the counts, figure and downloads.
+
 
 Search (`search.py`): positions and regions, rs IDs (the catalogue's, else `snpscore.rsid` on the release's EVA release 9
 table, with the ICSASG_v2 position in the hit), ICSASG_v2 positions (`ICSASG_v2 25:28656101`, `v2 ssa25:...` or a v2
@@ -151,9 +206,9 @@ Public data on the pages (R1, R3-R8 of docs/ROADMAP.md 'Push 2'):
   direction, citation and licence note), a Table column with its 'molQTL lead SNPs' filter (`molqtl=1`) and a
   locus-browser lane (read from `molqtl.parquet`). Weight 0: never counted in tiers.
 - Genetic map: the card shows female and male cM, the Table a 'cM (F/M)' column, and the (unlinked) Panel tab's designer a 'Min spacing
-  (cM)' field with the map to use (`snpscore.panel.design(min_spacing_cm=, cm_map=)`; a median cM spacing KPI), when the
+  (cM)' field with the map to use (`snpportal.lib.panel.design(min_spacing_cm=, cm_map=)`; a median cM spacing KPI), when the
   `cm` columns exist.
-- Vendor checks (`tools.vendor_checks` = `snpscore.panel.vendor_checks`): each Export-tab vendor row shows its own
+- Vendor checks (`tools.vendor_checks`, through `snpportal.lib.panel.vendor_checks`): each Export-tab vendor row shows its own
   include count and checks (Illumina Infinium bins, markers within 60 bp, alleles unknown), and the zip adds
   `vendor_checks.txt`; alleles are the list's, else the assay flank's (public) ones, as in the vendor files. Help
   (`#exports`) explains the `Ssa<chrom>p<pos>` locus names, the bins' error 111 / warning 604 minimums and the
@@ -165,7 +220,7 @@ Public data on the pages (R1, R3-R8 of docs/ROADMAP.md 'Push 2'):
   block labels it (`missense +3`; `results.tier_parts` gives the long form, `Missense p.Thr46Met (ENSSSAT00000230965;
   published as Met54Thr) +3`, the published label when the catalogue's residue or direction differs, one- or
   three-letter, on hover) and the card's closed Details add the transcript and codons; the variant
-  page gets the same through `snpscore.locus.annotate_position` (a position only: the 504-fish panel's alleles).
+  page gets the same through `snpportal.lib.locus.annotate_position` (a position only: the 504-fish panel's alleles).
 - Genomic-prediction priors: the Export tab's closed 'More formats' offers `format=priors` (snpscore's zip of BayesRC
   classes, GFBLUP/MultiBLUP sets, LDAK partitions and an annotation matrix), always for all SNPs (`scope=all`, whatever
   the selected scope: genomic prediction needs a class for every genotyped SNP).
@@ -180,14 +235,14 @@ Public data on the pages (R1, R3-R8 of docs/ROADMAP.md 'Push 2'):
   block (wording PROVISIONAL). Gene pages, cards and the Known loci page link to SalmoBase gene pages.
 - State colours: `palette.STATE_PALETTES` has the portal palette and AQUA-FAANG's itemRgb colours;
   `SNPPORTAL_STATE_PALETTE = 'aquafaang'` makes AQUA-FAANG's the default for every page and figure (G to choose), and
-  the locus browser's Display options switch it per viewer (a cookie read on `request_started`, kept in a
-  `ContextVar` for that request; apps.py). Methods shows the colours in its chromatin-state table.
+  the locus browser's Display options switch it per viewer (a cookie read by `palette.middleware`, kept in a
+  `ContextVar` for that request). Methods shows the colours in its chromatin-state table.
 
 Modules: `views.py` (score page, job status, results shell, downloads, delete), `results.py` (overview, table and
 filters, figures), `locus.py` (locus browser, evidence card, variant page; `locus_svg.py` draws them), `explore.py`
 (gene pages, known loci, candidate jobs, tour), `search.py` (resolver), `about.py` (data, methods, help, run
 locally), `panel.py` (the Design panel: Add to panel, sources, chip, SNP list, downloads), `tools.py` (the unlinked Panel
-tab's designer and chip comparison; Export tab and every export format, via `snpscore.panel` and `snpscore.export`), `report.py` (printable report), `association.py` (GWAS upload, Association
+tab's designer and chip comparison; Export tab and every export format, via `snpportal.lib.panel` and `snpportal.lib.export`), `report.py` (printable report), `association.py` (GWAS upload, Association
 page, regional plot), `figures.py` (pure functions data -> SVG), `palette.py` (every colour). Templates extend `base_portal.html` and use the partials `_page_header`,
 `_figure`, `_badges` and `_footer`; styles are in `static/snpportal/portal.css`, small enhancements in `portal.js`.
 

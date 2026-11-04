@@ -167,7 +167,7 @@ def molqtl_filter(kind, tissue, layer):
         cond.append(f"molqtl_best_bf < {float(layer['max_bf'])!r}")
     test = [f"split_part(x, ' ', {i}) = {lit(v)}" for i, v in ((2, kind), (1, tissue)) if v]
     if test:  # one of its features is of that kind and tissue: '<Tissue> <kind> <feature> (BF ..., pi ...)'
-        cond.append(f"len(list_filter(string_split(molqtl_features, '; '), x -> {' AND '.join(test)})) > 0")
+        cond.append(f"len(list_filter(string_split(molqtl_features, '; '), lambda x: {' AND '.join(test)})) > 0")
     return " AND ".join(cond)
 
 
@@ -198,7 +198,7 @@ def compare(con, weights, trait, synthetic, molqtl=False):
     both = [c for c in pos if c in ctrl]
     features = [(c, q(c)) for c in both if pos[c] == ctrl[c] == "BOOLEAN" and not (molqtl and c == "molqtl")]
     if "tier_terms" in both and weights:
-        features += [(f"evidence = {term}", f"list_contains(list_transform(tier_terms, x -> x.term), {lit(term)})")
+        features += [(f"evidence = {term}", f"list_contains(list_transform(tier_terms, lambda x: x.term), {lit(term)})")
                      for term in weights["weights"] if not (molqtl and term == "molqtl")]
     categories = [c for c in both if c == "region_class" or is_consequence(c)]
     for c in categories:
