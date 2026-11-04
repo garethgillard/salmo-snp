@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/tools/cloud_setup.sh\"", "timeout": 600}
+        ]
+      }
+    ]
+  }
+}
