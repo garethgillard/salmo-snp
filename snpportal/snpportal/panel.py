@@ -236,13 +236,17 @@ def page(request):
     downloads; an empty panel says how to fill it."""
     d = _folder(request)
     ctx = {"nav": "panel", "title": "Design panel", "error": request.GET.get("error"), "local": jobs.local()}
+    if jobs.local():  # saved projects (I7): the save form offers their names
+        from . import projects
+        ctx["projects"] = projects.everything()
     if d is None:
         return render(request, "snpportal/panel.html", ctx)
     s = jobs.read_json(d / "panel.json")
     con, rel = _open(d)
     chip = jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}
     synthetic = any(x.get("synthetic") for x in s["sources"]) or bool(chip.get("synthetic"))
-    ctx.update(sources=[{**x, "url": f"{reverse('snpportal:results', args=[x['job']])}?{x['selection'] + '&' if x['selection'] else ''}tab=table"}
+    ctx.update(sources=[{**x, "url": f"{reverse('snpportal:projects')}#{x['project']}" if x.get("project") else
+                         f"{reverse('snpportal:results', args=[x['job']])}?{x['selection'] + '&' if x['selection'] else ''}tab=table"}
                         for x in s["sources"]],
                meta=("Kept until you clear it" if jobs.keep_seconds() is None
                      else f"Deleted after {jobs.utc((d / 'created').stat().st_mtime + jobs.keep_seconds())}") + " · only this browser can open it",

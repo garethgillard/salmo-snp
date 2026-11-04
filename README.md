@@ -76,6 +76,7 @@ expires: everything stays until you delete it.
   - for GWAS lists, the summary statistics;
   - any chip you compared against, the panels you designed, and the file's name as the list's label.
 - `results/panel-<id>/`: your Design panel.
+- `projects/<name>/`: the design projects you saved, one folder per version (the panel's SNPs, its chip and a note).
 - `secret_key`: signs the portal's cookies.
 - On macOS and Linux the folders are readable only by your user account (0700, files 0600); on Windows, by your
   profile's permissions. Disk encryption (FileVault, BitLocker, LUKS) protects them like any other work file.

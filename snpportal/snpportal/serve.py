@@ -219,6 +219,8 @@ def info():
     jobs = [p for p in (HOME / "results").glob("*") if (p / "job.json").exists()] if (HOME / "results").exists() else []
     print(f"results       {len(jobs)} scored lists ({gb(size(HOME / 'results'))}), kept until you delete them "
           "(Delete in the portal, or remove the folder)")
+    saved = [p for p in (HOME / "projects").glob("*/project.json")] if (HOME / "projects").exists() else []
+    print(f"projects      {len(saved)} saved design projects ({gb(size(HOME / 'projects'))})")
 
 
 def main(argv=None):

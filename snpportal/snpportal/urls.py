@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import about, association, browser, explore, locus, panel, report, search, tools, views
+from . import about, association, browser, explore, locus, panel, projects, report, search, tools, views
 
 app_name = "snpportal"
 urlpatterns = [
@@ -11,6 +11,13 @@ urlpatterns = [
     path("panel/download/", panel.download, name="panel_download"),
     path("panel/count/", panel.count, name="panel_count"),
     path("results/<uuid:key>/add-to-panel/", panel.add, name="panel_add"),
+    # saved design projects (local installs only): versions, diff, downloads, export and import
+    path("panel/save/", projects.save_view, name="panel_save"),
+    path("projects/", projects.page, name="projects"),
+    path("projects/import/", projects.import_zip, name="project_import"),
+    path("projects/<str:name>/export/", projects.export_zip, name="project_export"),
+    path("projects/<str:name>/<int:n>/open/", projects.open_view, name="project_open"),
+    path("projects/<str:name>/<int:n>/download/", projects.download, name="project_download"),
     path("search/", search.search, name="search"),
     path("search/suggest/", search.suggest, name="suggest"),
     path("tour/", explore.tour, name="tour"),

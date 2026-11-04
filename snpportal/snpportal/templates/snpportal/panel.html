@@ -58,6 +58,13 @@
     </form>
     <p class="sp-small mt-2 mb-0"><a href="{{ downloads.tsv }}">Download the panel (TSV)</a>{% if not local %} &middot; score that file again to keep the
       panel beyond 24 hours{% endif %}. Vendor files leave out SNPs that fail the assay check.</p>
+    {% if local %}<form class="d-flex flex-wrap gap-2 align-items-center sp-small mt-2" method="post" action="{% url 'snpportal:panel_save' %}">{% csrf_token %}
+      <label for="save-name">Save as version of</label>
+      <input class="form-control form-control-sm w-auto" id="save-name" name="name" required maxlength="60" placeholder="project name" list="save-projects">
+      <datalist id="save-projects">{% for p in projects %}<option value="{{ p.slug }}">{% endfor %}</datalist>
+      <input class="form-control form-control-sm w-auto" name="note" maxlength="500" placeholder="note (optional)" aria-label="Note">
+      <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+      <a class="ms-auto" href="{% url 'snpportal:projects' %}">Saved projects</a></form>{% endif %}
   </section>
   {% endif %}
     </div>
