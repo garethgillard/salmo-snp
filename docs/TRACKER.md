@@ -3,7 +3,14 @@
 Covers the whole salmo-snp repository (snpdata/, snpscore/ and snpportal/). Work top to bottom; the first unticked box is the next step.
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
-**Current phase: one repository, then the container (step 7, G 2026-10-28; the plan is in ../AGENTS.md).**
+**Current phase: feature work on the local install (AGENTS.md plan, G 2026-11-03); the live site moves to salmobase later.**
+
+Where things stand (2026-11-04, for a new session, e.g. in the cloud):
+- main is green on GitHub (tests, user-install, deploy); the NREC demo https://158.39.75.9/snp/ runs the latest main
+  with release 2026-11-03.
+- The data for real use: the private GitHub Release data-2026-11-03 (`bash tools/get_data.sh`); not on salmobase yet.
+- Next: G's feature requests; the open boxes below (step 7, the roadmap, "More public data"). Questions only G can
+  answer are in AGENTS.md "Open" and DECISIONS.md: ask, don't decide.
 
 ## Step 0: decisions and contract
 - [x] Assembly Ssal_v3.1, chromosomes named 1-29 (same as AQUA-FAANG and Ensembl)
@@ -64,14 +71,12 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
       (the bigWig reader stays in snpscore: the genome reader is built on it; GWAS fine-mapping stays too, with `snpscore gwas`)
 - [x] One AGENTS.md per folder (CLAUDE.md imports it) instead of the duplicated notes; CI runs both test suites and
       rejects data files outside tests/fixture
-- [x] Automatic deploys to NREC from main (update.sh, GitHub Actions deploy job); [ ] G approves the two keys
-      (nrec.sh read-only deploy key, github_deploy.sh Actions key)
+- [x] Automatic deploys to NREC from main (update.sh, GitHub Actions deploy job; both keys set up 2026-10-29)
 - [x] Gene models: a representative Ensembl isoform, expandable to every Ensembl and NCBI RefSeq isoform
-      (transcripts_ncbi layer; release/dev got it added in place, the next full build includes it)
+      (transcripts_ncbi layer, in release 2026-11-03)
 - [x] environment.yml (conda-forge, python 3.8) for development
 - [x] The salmo-snp package (snpportal/pyproject.toml): `salmo-snp download` (SHA256SUMS, written by snpdata build) and
-      `salmo-snp serve` (127.0.0.1, results kept 30 days). The public site keeps gunicorn behind Caddy (no `--public` mode
-      needed yet); the release URL comes with the Apache folder
+      `salmo-snp serve` (127.0.0.1). The public site keeps gunicorn behind Caddy (no `--public` mode needed yet)
 - [x] Local install hardened after a newcomer test (2026-11-03): duckdb<2; snpscore.release.check (serve, annotate,
       download and publish refuse a damaged release); genome downloaded with the release (no positions sent for
       sequence checks); platform data folder, results kept until deleted (SNPPORTAL_LOCAL); salmo-snp info; download
