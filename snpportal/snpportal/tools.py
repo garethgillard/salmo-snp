@@ -404,6 +404,9 @@ def _params(data, weights, types, ids=()):
     }
     if purpose:  # only then in the parameters, so other panels keep their hash
         p["purpose"] = purpose
+        mixed = snp_panel.presets(weights)[purpose].get("mix")
+        if mixed:  # each part designs with its own purpose's numbers: only Markers and must-include apply
+            p["mix"] = [[k, float(v)] for k, v in mixed.items()]
     if {"cm_female", "cm_male"} <= set(types):  # R5: also keep markers this many cM apart (blank or 0: bp only)
         cm = _number(get("spacing_cm"), float, 0, 1000, None if sent else default.get("min_spacing_cm"))
         if cm:  # only then in the parameters, so bp-only panels keep their hash
@@ -442,6 +445,8 @@ def _fields(p, types, gap_mb):
     ]
     fields = [dict(zip(("name", "label", "value", "min", "max", "step", "help"), f)) for f in fields if f]
     fields[0]["list"] = "sp-sizes"  # the target sizes (I8) as suggestions
+    if p.get("mix"):  # a mix: each part has its purpose's settings, so only Markers (and the gap highlight) apply
+        return fields[:1], [f for f in fields if f["name"] == "gap_mb"]
     return fields[:2], fields[2:]
 
 
@@ -527,6 +532,10 @@ def panel_name(info, time=False):
 def panel_params(p):
     """A designed panel's parameters in one line (its purpose first, I8), for the report and the export provenance."""
     parts = [f"purpose {purpose_label(p['purpose']) or p['purpose']}"] if p.get("purpose") else []
+    if p.get("mix"):
+        total = sum(v for _, v in p["mix"]) or 1
+        return "; ".join(parts + [f"{int(p['n_target']):,} markers: " + ", ".join(
+            f"{v / total:.0%} {purpose_label(k) or k}" for k, v in p["mix"]) + ", each with its purpose's settings"])
     parts += [f"{int(p['n_target']):,} markers", f"at least {_bp(p['min_spacing'])} apart"
               + (f" and {p['min_spacing_cm']:g} cM" if p.get("min_spacing_cm") else ""), f"MAF ≥ {p['min_maf']:g}",
               f"backbone {p['backbone_fraction']:g}", f"≤ {p['max_per_gene']} per gene", f"≤ {p['max_per_element']} per element",
@@ -534,6 +543,12 @@ def panel_params(p):
     if p.get("exclude_flags"):
         parts.append("excluding " + ", ".join(p["exclude_flags"]))
     return "; ".join(parts)
+
+
+def tools_mix_line(p):
+    """'90% Genomic selection, 10% Trait panel' for the designer's Purpose line."""
+    total = sum(v for _, v in p["mix"]) or 1
+    return ", ".join(f"{v / total:.0%} {purpose_label(k) or k}" for k, v in p["mix"])
 
 
 def purpose_label(name, weights=None):
@@ -653,8 +668,10 @@ def panel(request, key, job):
         "reset": "?" + urlencode({"tab": "panel", "trait": trait, **({"purpose": p["purpose"]} if p.get("purpose") else {})}),
         "purposes": [("", "General", "The release's design defaults", not p.get("purpose"))] + [
             (k, x.get("label") or k, x.get("help") or "", k == p.get("purpose")) for k, x in snp_panel.presets(weights).items()],
-        "purpose": p.get("purpose"), "sizes": snp_panel.target_sizes(weights),
+        "purpose": p.get("purpose"), "sizes": snp_panel.target_sizes(weights), "mix": tools_mix_line(p) if p.get("mix") else None,
     }
+    if p.get("mix"):  # each part has its purpose's settings: no controls that wouldn't apply
+        designer.update(assay=[], cm_maps=[], checks=[])
     return {"designer": designer, "readiness": assay_readiness(con, types, _synthetic(job), link),
             "chip": _chip_context(request, key, job, d, trait, con, weights, chip, link)}
 

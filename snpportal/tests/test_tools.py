@@ -276,6 +276,24 @@ def test_purposes_meet_their_own_constraints(release, annotated, tmp_path):  # I
         panel.design(annotated["snps.vcf"], "all", weights=weights, purpose="nope")
 
 
+def test_mixed_purposes(release, annotated, tmp_path):  # I8: each purpose designs its share on top of the others'
+    weights = yaml.safe_load(WEIGHTS.read_text())
+    weights["design"]["presets"]["test_mix"] = {"label": "Test mix", "mix": {"parentage": 0.25, "trait": 0.75}}
+    sizes = json.loads((release / "manifest.json").read_text())["chrom_sizes"]
+    r = panel.design(annotated["snps.vcf"], "all", n_target=40, weights=weights, chrom_sizes=sizes, out=tmp_path / "mix.parquet",
+                     purpose="test_mix")
+    picked = rows(tmp_path / "mix.parquet")
+    assert r["params"]["purpose"] == r["summary"]["purpose"] == "test_mix" and r["params"]["mix"] == [["parentage", 0.25], ["trait", 0.75]]
+    by = {m["purpose"]: m["n"] for m in r["summary"]["mix"]}
+    assert by["parentage"] <= 10 and by["parentage"] + by["trait"] == len(picked) == r["summary"]["n_selected"]
+    assert {x["selection_purpose"] for x in picked} == {"parentage", "trait"}
+    first = sorted((x["chrom"], x["pos"]) for x in picked if x["selection_purpose"] == "parentage")
+    assert all(b[1] - a[1] >= 2_000_000 for a, b in zip(first, first[1:]) if a[0] == b[0])  # the parentage part's own spacing
+    assert all(x["assay_status"] == "pass" for x in picked if x["selection_purpose"] == "parentage")
+    with pytest.raises(panel.InputError):
+        panel.mix(annotated["snps.vcf"], {"nope": 1}, weights=weights)
+
+
 def test_cli_reads_annotate_tsv_and_recomputes_tiers(release, annotated, tmp_path, monkeypatch, capsys):
     """panel, export and compare read annotate's TSV as its parquet (chromosomes as text), and a file's tiers follow
     --preset: annotate output only holds the tiers of the --trait it was annotated with."""

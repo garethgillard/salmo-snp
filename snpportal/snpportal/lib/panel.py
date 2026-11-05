@@ -163,7 +163,8 @@ def vendor_checks(snps):
 
 def design(source, preset="all", n_target=None, min_spacing_bp=None, min_maf=None, backbone_fraction=None,
            max_per_gene=None, max_per_element=None, require_assay_pass=None, exclude_flags=None, must_include=None,
-           weights=None, chrom_sizes=None, table="v", out=None, min_spacing_cm=None, cm_map=None, synthetic=(), purpose=None):
+           weights=None, chrom_sizes=None, table="v", out=None, min_spacing_cm=None, cm_map=None, synthetic=(), purpose=None,
+           include=None):
     """Choose a panel from annotated SNPs: `source` is a parquet/TSV path or a DuckDB connection with `table`.
     Parameters left None come from weights['design'] (else DEFAULTS). `exclude_flags` are column names: rows where
     they are true (or > 0 for counts, e.g. flank_variants) are dropped; `must_include` ids are always selected first.
@@ -171,11 +172,16 @@ def design(source, preset="all", n_target=None, min_spacing_bp=None, min_maf=Non
     `min_spacing_cm`, markers are also kept that many cM apart on the `cm_map` map (female, male or mean of annotate's
     cm_female and cm_male; SNPs beyond the first or last map marker take that marker's cM, and on a chromosome without
     a map they are left out). `purpose` (a weights.yaml design.presets name, I8) sets the defaults for the parameters
-    left None. A path's tiers are recomputed for `preset` with `weights` when it has no tier__<preset>
+    left None; a purpose with a `mix` designs with mix(). `include` {row: reason}: rows taken first, kept whatever the
+    filters (mix() passes the markers its earlier purposes chose). A path's tiers are recomputed for `preset` with `weights` when it has no tier__<preset>
     columns (see _open). Writes the selected rows (all columns plus selection_reason, panel_rank, design_score) to
     `out` if given.
     Returns {'params', 'hash', 'summary', 'selected': [{row, chrom, pos, id, selection_reason, panel_rank,
     design_score, tier}]}; selection_reason is must_include, backbone, functional (tier 1-3) or fill (tier 4)."""
+    if purpose and (presets(weights).get(purpose) or {}).get("mix"):
+        return mix(source, presets(weights)[purpose]["mix"], preset, n_target or presets(weights)[purpose].get("n_target"),
+                   weights=weights, chrom_sizes=chrom_sizes, table=table, out=out, synthetic=synthetic, purpose=purpose,
+                   must_include=must_include)
     p = settings(weights, purpose, n_target=n_target, min_spacing=min_spacing_bp, min_maf=min_maf,
                  backbone_fraction=backbone_fraction, max_per_gene=max_per_gene, max_per_element=max_per_element,
                  require_assay_pass=require_assay_pass, exclude_flags=exclude_flags, must_include=must_include,
@@ -241,6 +247,12 @@ def design(source, preset="all", n_target=None, min_spacing_bp=None, min_maf=Non
         chosen[row] = reason
         return True
 
+    if include:  # the markers already chosen (mix): first, in the order given
+        found = {r[0]: r for r in con.execute(f"SELECT _row, chrom, pos, _cm, gene, element FROM _cand WHERE _row IN "
+                                              f"({', '.join(str(int(x)) for x in include)})").fetchall()}
+        for row, reason in include.items():
+            if row in found:
+                take(*found[row], reason, force=True)
     for r in con.execute("SELECT _row, chrom, pos, _cm, gene, element FROM _cand WHERE _must ORDER BY _row").fetchall():
         take(*r, "must_include", force=True)
     # Backbone: bins per chromosome proportional to its length (largest remainder, so they add up to n_backbone)
@@ -273,6 +285,49 @@ def design(source, preset="all", n_target=None, min_spacing_bp=None, min_maf=Non
         if len(page) < PAGE:
             break
     return _finish(con, rel, columns, p, chosen, sizes, n_rows, n_ok, skipped, out)
+
+
+def mix(source, parts, preset="all", n_target=None, weights=None, chrom_sizes=None, table="v", out=None, synthetic=(),
+        purpose=None, must_include=None):
+    """A panel of several purposes (ROADMAP I8): parts {purpose: share} (shares of n_target; the last takes what is left),
+    designed in turn, each with its own preset's parameters, on top of the markers the earlier ones chose (they count
+    for spacing and the caps). Returns design()'s result for the whole panel, with params mix and purpose,
+    summary['mix'] = [{purpose, share, n}] and selected[i]['purpose']; `out` gains a selection_purpose column."""
+    items = [(k, float(v)) for k, v in dict(parts).items()]
+    unknown = [k for k, _ in items if k not in presets(weights) or presets(weights)[k].get("mix")]
+    if unknown or not items:
+        raise InputError(f"A mix names purposes that aren't simple presets: {', '.join(unknown) or 'none given'}")
+    n = int(n_target or settings(weights)["n_target"])
+    total = sum(v for _, v in items) or 1
+    counts = [round(n * v / total) for _, v in items[:-1]]
+    counts.append(n - sum(counts))
+    reasons, owner, goal, result = {}, {}, 0, None  # row -> selection_reason, row -> the purpose that chose it
+    for i, ((name, _), k) in enumerate(zip(items, counts)):
+        goal += k
+        last = i == len(items) - 1
+        result = design(source, preset, n_target=goal, weights=weights, chrom_sizes=chrom_sizes, table=table,
+                        out=out if last else None, synthetic=synthetic, purpose=name, include=dict(reasons),
+                        must_include=must_include if i == 0 else None)
+        for x in result["selected"]:
+            if x["row"] not in reasons:
+                reasons[x["row"]], owner[x["row"]] = x["selection_reason"], name
+    for x in result["selected"]:
+        x["purpose"] = owner.get(x["row"])
+    result["params"] = {**result["params"], "purpose": purpose or "mix", "mix": [[k, v] for k, v in items]}
+    result["summary"] = {**result["summary"], "purpose": purpose or "mix", "n_target": n,
+                         "mix": [{"purpose": k, "share": v, "n": sum(o == k for o in owner.values())} for k, v in items]}
+    result["hash"] = params_hash({"params": result["params"], "selected": [(x["row"], x["selection_reason"]) for x in result["selected"]]})
+    if out and owner:
+        target = Path(out).resolve()
+        con = connect([target.parent], target.parent)
+        tmp = target.with_name(f".{target.name}.mix")
+        values = ", ".join(f"({int(r)}, {lit(o)})" for r, o in owner.items())
+        con.execute(f"""COPY (SELECT o.*, m.purpose AS selection_purpose FROM read_parquet({lit(target)}) o
+                              LEFT JOIN (VALUES {values}) m(row, purpose) ON o.source_row = m.row ORDER BY o.panel_rank)
+                        TO {lit(tmp)} (FORMAT parquet)""")
+        con.close()
+        tmp.replace(target)
+    return result
 
 
 def _finish(con, rel, columns, p, chosen, sizes, n_rows, n_ok, skipped, out):

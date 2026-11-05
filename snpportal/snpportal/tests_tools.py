@@ -257,6 +257,12 @@ class ToolsTest(SimpleTestCase):
         tsv = body(self.client.get(reverse("snpportal:download", args=[self.key]), {"scope": f"panel-{h}", "format": "tsv"})).decode()
         self.assertIn("(purpose Parentage and traceability;", tsv)
         self.assertNotIn('name="purpose"', self.client.get(self.url, {"tab": "panel", "purpose": "nope"}).content.decode())
+        mixed = self.client.get(self.url, {"tab": "panel", "purpose": "selection_and_traits"}).content.decode()
+        self.assertIn("(90% Genomic selection, 10% Trait panel, each part with its purpose's settings)", mixed)
+        self.assertNotIn('name="spacing_kb"', mixed)  # only Markers applies to a mix
+        h = re.search(r'scope=panel-([0-9a-f]{16})', mixed).group(1)
+        self.assertEqual(jobs.read_json(self.d / "panels" / f"{h}.json")["params"]["mix"], [["genomic_selection", 0.9], ["trait", 0.1]])
+        self.assertIn("Genomic selection + trait loci", mixed[mixed.index('id="panel-h"'):mixed.index("</h2>", mixed.index('id="panel-h"'))])
 
     def test_export_lists_recent_panels(self):
         """The Export tab lists the newest panel of each parameter set, newest first, at most 3, plus one asked for."""
