@@ -39,12 +39,21 @@ TEMPLATES = {  # vendor -> template version -> column headers
     },
     "axiom": {"houston-2014": ["SNP_ID", "Chromosome", "Position", "Strand", "Sequence"]},  # 71-mer; Thermo's columns unverified
     "kasp": {"lgc-v10.0": ["SNP ID", "Sequence", "Position"]},  # LGC SNP submission template v10.0, 'SNPs' sheet
+    "agena": {"ads-unverified": ["SNP_ID", "Sequence"]},  # I14: Assay Design Suite sequence input; not checked against Agena
+    "primer3": {"boulder-io": ["SEQUENCE_ID", "SEQUENCE_TEMPLATE", "SEQUENCE_TARGET"]},  # I14: amplicon and GT-seq panels
 }
 VENDORS = {  # flank: default bases either side of the SNP and the allowed range; template: default TEMPLATES version
     "illumina": {"flank": 60, "range": (60, 200), "template": "designstudio-2026", "ext": "csv"},  # > 50 bp a side
     "axiom": {"flank": 35, "range": (35, 35), "template": "houston-2014", "ext": "csv"},  # 35 + [A/B] + 35
     "kasp": {"flank": 50, "range": (50, 100), "template": "lgc-v10.0", "ext": "csv"},  # >= 50; up to 100 helps design
+    "agena": {"flank": 100, "range": (50, 250), "template": "ads-unverified", "ext": "csv"},  # PROVISIONAL, to confirm
+    "primer3": {"flank": 150, "range": (50, 500), "template": "boulder-io", "ext": "txt"},  # room for both primers
 }
+# Primer3's settings for amplicon panels (GT-seq: short products, one multiplex PCR). PROVISIONAL: the lab's to set;
+# written into the file's first record, so the file runs as `primer3_core < file`.
+PRIMER3 = {"PRIMER_TASK": "generic", "PRIMER_PICK_LEFT_PRIMER": 1, "PRIMER_PICK_RIGHT_PRIMER": 1,
+           "PRIMER_PICK_INTERNAL_OLIGO": 0, "PRIMER_PRODUCT_SIZE_RANGE": "70-120", "PRIMER_NUM_RETURN": 1,
+           "PRIMER_MAX_NS_ACCEPTED": 0}
 ACCESSIONS = {"Ssal_v3.1": "GenBank GCA_905237065.2, RefSeq GCF_905237065.1"}
 LOOKUP = ["locus_name", "id", "chrom", "pos", "ref", "alt", "topbot", "allele_a", "allele_b", "two_probes",
           "assay_status", "assay_reasons", "export_notes"]
@@ -322,6 +331,26 @@ def records(con, rel, columns, fmt, release, manifest, include_failed=False, fla
     return out, skipped
 
 
+def primer3_input(recs, out):
+    """Primer3 Boulder-IO input (I14: amplicon and GT-seq panels) for vendor records: one record per SNP, the
+    template its flanks with the reference base (public variants and anything not A, C, G or T as N, so primers avoid
+    them), the SNP as the target (0-based start, 1 bp), PRIMER3's settings in the first record. SNPs whose largest
+    product could reach another SNP's are noted in export_notes (the lookup), for the multiplex. Returns the records."""
+    largest = int(str(PRIMER3["PRIMER_PRODUCT_SIZE_RANGE"]).split("-")[-1])
+    ordered = sorted(recs, key=lambda r: (r["chrom"], r["pos"]))
+    for a, b in zip(ordered, ordered[1:]):
+        if a["chrom"] == b["chrom"] and b["pos"] - a["pos"] < largest:
+            for x, y in ((a, b), (b, a)):
+                x["export_notes"] = "; ".join(filter(None, [x["export_notes"], f"amplicon may overlap {y['locus_name']}"]))
+    clean = lambda seq: "".join(c if c in "ACGT" else "N" for c in seq)  # noqa: E731
+    with open(out, "w", newline="\n") as f:
+        for i, r in enumerate(recs):
+            tags = {**(PRIMER3 if i == 0 else {}), "SEQUENCE_ID": r["locus_name"],
+                    "SEQUENCE_TEMPLATE": clean(r["left"]) + r["ref"] + clean(r["right"]), "SEQUENCE_TARGET": f"{len(r['left'])},1"}
+            f.write("".join(f"{k}={v}\n" for k, v in tags.items()) + "=\n")
+    return recs
+
+
 def vendor_notes(fmt, template, flank, manifest, written, skipped, warnings, name):
     """The vendor-specific lines of a vendor file's provenance sidecar (without '# ')."""
     template = template or VENDORS[fmt]["template"]
@@ -344,6 +373,15 @@ def vendor_notes(fmt, template, flank, manifest, written, skipped, warnings, nam
                      "Force_Infinium_I FALSE, Sequence_Orientation Forward, Plus_Minus Plus")
     if fmt == "kasp":
         lines.append("Paste the rows into the 'SNPs' sheet of LGC's SNP submission template (an Excel workbook)")
+    if fmt == "agena":
+        lines.append("Agena MassARRAY: SNP_ID and Sequence for Agena's Assay Design Suite. The layout is not yet checked "
+                     "against Agena's own template (PROVISIONAL): confirm it with Agena or the lab before ordering")
+    if fmt == "primer3":
+        lines.append("Primer3 input (Boulder-IO): run `primer3_core < file`; the first record sets "
+                     + ", ".join(f"{k}={v}" for k, v in PRIMER3.items())
+                     + " (PROVISIONAL: the lab's to set). The SNP is the target, so both primers flank it; neighbouring "
+                     "public variants are N, which primers avoid (PRIMER_MAX_NS_ACCEPTED=0). The lookup notes SNPs "
+                     "whose amplicons may overlap in one multiplex")
     lines += [f"left out: {n} ({why})" for why, n in sorted(skipped.items())]
     lines += [f"warning: {w}" for w in warnings]
     return lines
@@ -411,11 +449,14 @@ def export(source, fmt, out, release_dir, preset="all", meta=None, include_faile
         for path in (body, out.with_name("tmp_" + out.name), body.with_name("tmp_" + body.name)):
             path.unlink(missing_ok=True)
     recs, skipped = records(con, rel, columns, fmt, release, m, include_failed, flank)
-    head, rows = vendor_rows(fmt, recs, m, template)
-    with open(out, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(head)
-        writer.writerows(rows)
+    if fmt == "primer3":
+        rows = primer3_input(recs, out)
+    else:
+        head, rows = vendor_rows(fmt, recs, m, template)
+        with open(out, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(head)
+            writer.writerows(rows)
     warnings = vendor_checks([(r["chrom"], r["pos"], r["ref"], r["alt"]) for r in recs])["warnings"]
     files = [out.name]
     if sidecars:

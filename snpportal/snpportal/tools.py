@@ -35,8 +35,8 @@ from snpscore.formats import lit
 
 from . import figures, jobs, palette, results
 
-EXPORTS = ("tsv", "parquet", "bed", "illumina", "axiom", "kasp", "bundle", "priors")  # ?format= of the download URL
-VENDORS = ("illumina", "axiom", "kasp")
+EXPORTS = ("tsv", "parquet", "bed", "illumina", "axiom", "kasp", "agena", "primer3", "bundle", "priors")  # ?format=
+VENDORS = ("illumina", "axiom", "kasp", "agena", "primer3")
 MAX_TARGET = 20_000  # largest panel the form designs
 MAX_MUST = 200  # must-include ids per panel
 SHOWN = 25  # selected SNPs listed on the page, then 'Show all' (up to LISTED; the exports have all)
@@ -54,14 +54,16 @@ BINDING = {"min_spacing": "the minimum spacing", "min_spacing_cm": "the minimum 
 CM_MAPS = {"mean": "sex-averaged", "female": "female", "male": "male"}  # lib.panel.CM_MAPS
 FORMATS = [  # (format, label, contents) of the Export tab's rows; vendor rows add their counts and checks
     ("tsv", "Table (TSV)", "Every annotation column, one row per SNP."),
-    ("kasp", "KASP", ""), ("illumina", "Illumina", ""), ("axiom", "Axiom", ""),  # no Agena layout: not checked (docs/RESEARCH.md 10)
+    ("kasp", "KASP", ""), ("illumina", "Illumina", ""), ("axiom", "Axiom", ""),
+    ("agena", "Agena MassARRAY", ""), ("primer3", "Primer3 (amplicon, GT-seq)", ""),  # I14: layouts PROVISIONAL
     ("bundle", "Everything (zip)", "The table, BED and vendor files, with methods, provenance and figures."),
 ]
 MORE_FORMATS = [("parquet", "Parquet", "the same columns; provenance in the file's metadata"),
                 ("bed", "BED", "chrom, pos − 1, pos and the SNP name, for genome browsers"),
                 ("priors", "Genomic-prediction priors (zip)", "SNP categories for BayesRC, GFBLUP/MultiBLUP and LDAK")]  # P6.5
 MIME = {"tsv": "text/tab-separated-values; charset=utf-8", "bed": "text/plain; charset=utf-8", "parquet": "application/vnd.apache.parquet",
-        "bundle": "application/zip", "priors": "application/zip", **{v: "text/csv; charset=utf-8" for v in VENDORS}}
+        "bundle": "application/zip", "priors": "application/zip", **{v: "text/csv; charset=utf-8" for v in VENDORS},
+        "primer3": "text/plain; charset=utf-8"}
 CHIP_ERRORS = {  # ?chip_error= -> message (codes only: no file content or names in URLs)
     "missing": "Choose a chip file, or use the demo chip.",
     "type": "This file type isn't accepted for a chip. Upload a manifest or table (.csv, .tsv, .txt, optionally gzipped), "
@@ -1003,7 +1005,9 @@ def _vendor_notes(con, rel, n):
     within = f"{close:,} SNPs within 60 bp of another" if close else ""
     bins = f"Infinium bins: A/T {b['A']:,}, C/G {b['B']:,}, other {b['C']:,}" + (" (below Illumina's minimums)" if any(
         "Infinium" in w for w in c["warnings"]) else "")
-    return {"kasp": [included], "illumina": [included, bins, within], "axiom": [included, within]}
+    return {"kasp": [included], "illumina": [included, bins, within], "axiom": [included, within],
+            "agena": [included, "layout not yet checked against Agena's template"],
+            "primer3": [included, "for primer design: the SNP as target, PCR settings to set with the lab"]}
 
 
 def exports(request, key, job):

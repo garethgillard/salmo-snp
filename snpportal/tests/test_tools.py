@@ -343,7 +343,7 @@ def test_export_of_a_view_keeps_row_order(release, annotated, tmp_path, monkeypa
 
 def test_exports(release, annotated, tmp_path):
     files = {}
-    for fmt in ("tsv", "bed", "illumina", "axiom", "kasp"):
+    for fmt in ("tsv", "bed", "illumina", "axiom", "kasp", "agena", "primer3"):
         out = tmp_path / export.filename(fmt, "test", "maturation")
         export.export(annotated["snps.tsv"], fmt, out, release, "maturation")
         files[fmt] = out.read_text()
@@ -367,6 +367,20 @@ def test_exports(release, annotated, tmp_path):
     axiom = [line for line in files["axiom"].splitlines() if line.startswith("Ssa25p28996360")][0]
     assert "[C/T]" in axiom and len(axiom.split(",")[4]) == 35 + 5 + 35
     assert len(files["bed"].splitlines()) == 9 + sum(line.startswith("#") for line in files["bed"].splitlines())
+    # I14: Agena (SNP_ID, Sequence with 100 bp flanks) and Primer3 Boulder-IO (the SNP as target, settings in record 1)
+    agena = {r["SNP_ID"]: r["Sequence"] for r in csv.DictReader(io.StringIO(files["agena"]))}
+    assert agena["Ssa25p28996360"] == genome.fetch("25", 28996259, 28996359).upper() + "[C/T]" + genome.fetch("25", 28996360, 28996460).upper()
+    records = [dict(line.split("=", 1) for line in block.strip().splitlines()) for block in files["primer3"].split("\n=\n") if block.strip()]
+    assert records[0]["PRIMER_PRODUCT_SIZE_RANGE"] == export.PRIMER3["PRIMER_PRODUCT_SIZE_RANGE"]
+    vg = next(r for r in records if r["SEQUENCE_ID"] == "Ssa25p28996360")
+    assert vg["SEQUENCE_TARGET"] == "150,1" and vg["SEQUENCE_TEMPLATE"][150] == "C" and len(vg["SEQUENCE_TEMPLATE"]) == 301
+    assert set(vg["SEQUENCE_TEMPLATE"]) <= set("ACGTN")
+    p3 = (tmp_path / (export.filename("primer3", "test", "maturation") + ".provenance.txt")).read_text()
+    assert "primer3_core" in p3 and "PROVISIONAL" in p3
+    two = [dict(locus_name=n, chrom="1", pos=pos, left="ACGT" * 10, right="TTGCA" * 8, ref="A", export_notes=None)
+           for n, pos in (("a", 1000), ("b", 1050))]  # SYNTHETIC: 50 bp apart, within one amplicon
+    export.primer3_input(two, tmp_path / "two.txt")
+    assert two[0]["export_notes"] == "amplicon may overlap b" and (tmp_path / "two.txt").read_text().count("PRIMER_TASK") == 1
     plain = tmp_path / "plain.tsv"
     export.export(annotated["snps.tsv"], "tsv", plain, release, plain=True)
     assert plain.read_text().startswith("chrom\tpos")

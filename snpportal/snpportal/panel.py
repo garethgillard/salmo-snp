@@ -393,7 +393,8 @@ def _downloads(con, chip, n):
     url = reverse("snpportal:panel_download")
     new = con.execute("SELECT count(*) FILTER (WHERE NOT on_chip) FROM p").fetchone()[0] if chip else None
     scopes = [("all", f"All panel SNPs ({n:,})")] + ([("new", f"Not on the chip ({new:,})")] if chip else [])
-    return {"scopes": scopes, "formats": [("kasp", "KASP"), ("illumina", "Illumina"), ("axiom", "Axiom")],
+    return {"scopes": scopes, "formats": [("kasp", "KASP"), ("illumina", "Illumina"), ("axiom", "Axiom"), ("agena", "Agena"),
+                                          ("primer3", "Primer3")],
             "tsv": f"{url}?format=tsv", "url": url}
 
 
