@@ -541,6 +541,9 @@ def build(layers_yaml, data_dir, out_dir):
                             "urls": [s.get("url") for s in rsid["files"]], "citation": rsid.get("citation"),
                             "source_sha256": hashes(paths)[1], "sha256": hashes([out / "rsid.parquet"])[1]}
         print(f"rsid: {manifest['rsid']['rows']} rows", flush=True)
+    for name, spec in (cfg.get("liftover") or {}).items():
+        manifest.setdefault("liftover", {})[name] = build_liftover(con, name, spec, out, data)
+        print(f"liftover_{name}: {manifest['liftover'][name]['blocks']} blocks", flush=True)
     keys = cfg.get("flank_keys")
     if keys and genome and (data / genome["file"]).exists():
         manifest["flank_keys"] = build_flank_keys(con, keys, out, data / genome["file"])
@@ -624,6 +627,27 @@ def chrom_sizes(fai, ends):
             name, length = line.split("\t")[:2]
             sizes[name] = max(int(length), sizes.get(name, 0))
     return {c: sizes[c] for c in sorted(sizes, key=lambda c: int(c) if c.isdigit() else 0) if c.isdigit()}
+
+
+def build_liftover(con, name, spec, out, data):
+    """liftover_<name>.parquet (snpscore.liftover): collinear blocks from EVA's pairs in rsid.parquet (spec from: rsid)
+    or from a chain file in data (spec chain: <file>)."""
+    from snpscore.liftover import blocks_from_rsid_sql, read_chain
+    target = out / f"liftover_{name}.parquet"
+    if spec.get("chain"):
+        with tempfile.TemporaryDirectory() as tmp:
+            tsv = Path(tmp) / "blocks.tsv"
+            tsv.write_text("".join("\t".join(map(str, b)) + "\n" for b in read_chain(data / spec["chain"])))
+            sql = f"""SELECT * FROM read_csv({lit(tsv)}, delim='\t', header=false, columns={{'chrom': 'VARCHAR', 'start': 'BIGINT',
+                      'end': 'BIGINT', 'to_chrom': 'VARCHAR', 'shift': 'BIGINT', 'strand': 'VARCHAR'}}) ORDER BY chrom, start"""
+            con.execute(f"COPY ({sql}) TO {lit(target)} (FORMAT parquet, COMPRESSION zstd)")
+    else:
+        if not (out / "rsid.parquet").exists():
+            return {"file": None, "blocks": 0}
+        con.execute(f"COPY ({blocks_from_rsid_sql(out / 'rsid.parquet')}) TO {lit(target)} (FORMAT parquet, COMPRESSION zstd)")
+    blocks, bp = con.execute(f'SELECT count(*), sum("end" - start) FROM read_parquet({lit(target)})').fetchall()[0]
+    return {"file": target.name, "blocks": blocks, "bp": int(bp or 0), "source": f"chain {spec['chain']}" if spec.get("chain")
+            else "EVA rs IDs on both assemblies (rsid.parquet)", "sha256": hashes([target])[1]}
 
 
 def build_flank_keys(con, cfg, out, genome):

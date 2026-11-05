@@ -534,3 +534,31 @@ def test_place_by_flank(release, tmp_path):  # I18: SYNTHETIC manifest rows on '
     with pytest.raises(InputError):  # no flank column
         (tmp_path / "plain.tsv").write_text("chrom\tpos\n1\t5\n")
         read_snps(con, tmp_path / "plain.tsv", m["chrom_sizes"], None, None, None, release / "flank_keys.parquet")
+
+
+def test_lift_from_icsasg_v2(release, tmp_path):  # I19: positions with an EVA rs ID convert to its other position
+    from snpscore.liftover import read_chain
+    blocks = release / "liftover_icsasg_v2.parquet"
+    pairs = duckdb.sql(f"""SELECT v2_chrom, v2_pos, chrom, pos FROM read_parquet('{release / 'rsid.parquet'}') WHERE v2_pos IS NOT NULL
+                           QUALIFY count(*) OVER (PARTITION BY v2_chrom, v2_pos) = 1 ORDER BY v2_chrom, v2_pos LIMIT 5""").fetchall()
+    inside = duckdb.sql(f"""SELECT chrom, start + 2, to_chrom, CASE WHEN strand = '+' THEN start + 2 + shift ELSE shift - start - 2 END
+                            FROM read_parquet('{blocks}') WHERE "end" - start > 10 LIMIT 1""").fetchall()[0]
+    names = {"25": "CM003303.1", "21": "NC_027320.1"}  # GenBank and RefSeq names of ICSASG_v2 chromosomes 25 and 21
+    lines = ["chrom\tpos\tid"] + [f"{names.get(c, 'ssa' + c)}\t{p}\tr{i}" for i, (c, p, _, _) in enumerate(pairs)]
+    lines += [f"{inside[0]}\t{inside[1]}\tinside", "1\t1\tnowhere"]
+    path = tmp_path / "v2_SYNTHETIC.tsv"
+    path.write_text("\n".join(lines) + "\n")
+    m = json.loads((release / "manifest.json").read_text())
+    con = connect([tmp_path, release])
+    report = read_snps(con, path, m["chrom_sizes"], None, None, None, None, blocks)
+    got = {i: (c, p, s) for i, c, p, s in con.execute("SELECT id, chrom, pos, position_source FROM snps").fetchall()}
+    for i, (v2c, v2p, chrom, pos) in enumerate(pairs):
+        assert got[f"r{i}"][:2] == (chrom, pos) and got[f"r{i}"][2].startswith("ICSASG_v2 ")
+    assert got["inside"][:2] == (inside[2], inside[3])
+    assert report["rejected"] == {"liftover_unmapped": 1} and report["liftover"]["converted"] == len(pairs) + 1
+    chain = tmp_path / "t.chain"  # a SYNTHETIC chain: target A 0-100 on query B (size 1000) reverse strand from 200
+    chain.write_text("chain 100 A 500 + 0 100 B 1000 - 200 300 1\n60 10 10\n30\n\n")
+    b = list(read_chain(chain))
+    assert b[0] == ("A", 0, 60, "B", 1000 - 200 + 0 + 1, "-") and b[1][:3] == ("A", 70, 100)
+    # A:1 (the first base) is the query's reverse-strand base 200, forward 1-based 1000 - 200 = 800
+    assert b[0][4] - 1 == 800

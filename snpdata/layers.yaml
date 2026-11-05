@@ -50,6 +50,13 @@ rsid:
       url: https://ftp.ebi.ac.uk/pub/databases/eva/rs_releases/release_9/by_species/salmo_salar/GCA_000233375.4/8030_GCA_000233375.4_current_ids.vcf.gz
   citation: European Variation Archive (EVA) release 9, Salmo salar rs IDs on Ssal_v3.1 (GCA_905237065.2) and ICSASG_v2 (GCA_000233375.4) (ebi.ac.uk/eva)
 
+# Position conversion between assemblies (ROADMAP I19; snpscore annotate --from-assembly ICSASG_v2): build writes
+# liftover_<name>.parquet, collinear blocks either from EVA's rs IDs placed on both assemblies (from: rsid) or from a
+# chain file of a whole-genome alignment in data/raw (chain: <file>, chromosome names as the input files use them).
+liftover:
+  icsasg_v2:
+    from: rsid
+
 # Flank keys for placing chip SNPs by their probe sequence (ROADMAP I18; snpscore annotate --place-by-flank, the
 # Design panel's chip upload): the 16 bases either side of every site of the layers named, read from the genome;
 # build writes flank_keys.parquet (about 12 bytes per site), keys found at more than one site left out.

@@ -232,10 +232,28 @@ class ToolsTest(SimpleTestCase):
         self.client.post(reverse("snpportal:panel_change"), {"chip": chip, "by_flank": "1"})
         page = self.client.get(reverse("snpportal:design_panel")).content.decode()
         self.assertIn("Placed by flank sequence: 3 markers; 1 not found among the known variant sites", page)
-        self.assertIn('name="by_flank"', page)
+        self.assertIn('<option value="flank">positions on another assembly (placed by flank sequence)</option>', page)
         plain = SimpleUploadedFile("plain_SYNTHETIC.tsv", b"chrom\tpos\n9\t23007708\n")
         response = self.client.post(reverse("snpportal:panel_change"), {"chip": plain, "by_flank": "1"})
         self.assertIn("chip_error=flank", response.url)  # no flank column
+
+    def test_positions_from_icsasg_v2(self):  # I19: a SYNTHETIC list on ICSASG_v2, converted on the Score form and as a chip
+        pairs = duckdb.sql(f"""SELECT v2_chrom, v2_pos, chrom, pos FROM read_parquet('{self.release / 'rsid.parquet'}')
+                               WHERE v2_pos IS NOT NULL QUALIFY count(*) OVER (PARTITION BY v2_chrom, v2_pos) = 1
+                               ORDER BY v2_chrom, v2_pos LIMIT 3""").fetchall()
+        text = "chrom\tpos\n" + "".join(f"ssa{c}\t{p}\n" for c, p, _, _ in pairs)
+        self.assertIn('<option value="icsasg_v2">ICSASG_v2 (converted to Ssal_v3.1)</option>', self.client.get(reverse("snpportal:upload")).content.decode())
+        url = self.client.post(reverse("snpportal:upload"), {"snps": SimpleUploadedFile("v2_SYNTHETIC.tsv", text.encode()),
+                                                              "positions": "icsasg_v2"}).url.split("?")[0]
+        d = jobs.folder(url.rstrip("/").split("/")[-1])
+        self.assertEqual(jobs.read_json(d / "job.json")["positions"], "icsasg_v2")
+        self.assertEqual(sorted(rows(d / "result.parquet"), key=lambda r: r["pos"])[0]["pos"], sorted(p for *_, p in pairs)[0])
+        self.assertEqual(jobs.read_json(d / "validation.json")["liftover"]["converted"], 3)
+        self.client.get(self.url, {"tab": "table"})
+        self.client.post(reverse("snpportal:panel_add", args=[self.key]))
+        self.client.post(reverse("snpportal:panel_change"), {"chip": SimpleUploadedFile("v2_chip_SYNTHETIC.tsv", text.encode()),
+                                                             "positions": "icsasg_v2"})
+        self.assertIn("Converted from ICSASG_v2: 3 markers", self.client.get(reverse("snpportal:design_panel")).content.decode())
 
     def test_panel_purpose(self):  # I8: a purpose sets the designer's defaults; the panel, report and exports name it
         self.client.get(self.url, {"tab": "table"})

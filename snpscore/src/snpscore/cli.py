@@ -21,6 +21,8 @@ def main():
     a.add_argument("--threads", type=int, default=4)
     a.add_argument("--memory", default="4GB", help="DuckDB memory limit")
     a.add_argument("--max-snps", type=int, help="refuse files with more SNPs than this")
+    a.add_argument("--from-assembly", choices=["ICSASG_v2"], help="the positions are on ICSASG_v2: convert them to "
+                   "Ssal_v3.1 (the release's liftover table, built from EVA's rs IDs on both assemblies)")
     a.add_argument("--place-by-flank", action="store_true", help="the positions are on another assembly (e.g. an ICSASG_v2 "
                    "chip manifest): place the SNPs by their flank sequences (Flank, SourceSeq or TopGenomicSeq column)")
 
@@ -67,7 +69,8 @@ def main():
             sys.exit(f"snpscore: {args.release} can't be used:\n  " + "\n  ".join(check(args.release)))
         try:
             annotate(args.snps, args.release, args.out, args.trait, threads=args.threads, memory_limit=args.memory,
-                     max_snps=args.max_snps, place_by_flank=args.place_by_flank)
+                     max_snps=args.max_snps, place_by_flank=args.place_by_flank,
+                     lift_from=args.from_assembly.lower() if args.from_assembly else None)
         except InputError as e:
             sys.exit(f"snpscore: {e}")
         out = Path(args.out)
@@ -78,6 +81,10 @@ def main():
             r = report["rsid"]
             print(f"rs IDs: {r['placed']} placed, {r['moved_from_icsasg_v2']} moved from ICSASG_v2 "
                   f"({r['alleles_complemented']} with complemented alleles), {r['unknown']} unknown")
+        if report.get("liftover"):
+            f = report["liftover"]
+            print(f"from ICSASG_v2: {f['converted']} converted ({f['complemented']} on the other strand), {f['unmapped']} "
+                  "outside the conversion table")
         if report.get("flank"):
             f = report["flank"]
             print(f"by flank sequence: {f['placed']} placed ({f['complemented']} with complemented alleles), "

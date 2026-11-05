@@ -41,6 +41,8 @@
         {% if chip %}<form class="ms-auto" method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0" type="submit" name="chip_remove" value="1">Remove chip</button></form>{% endif %}</div>
       {% if chip_error %}<div class="sp-status sp-status-warn sp-small" role="status">&#9888; {{ chip_error }}</div>{% endif %}
       {% if compare %}<div class="sp-kpis">{% for value, label in compare %}<div class="sp-kpi"><b>{{ value }}</b><span>{{ label }}</span></div>{% endfor %}</div>
+      {% if chip.liftover %}<p class="sp-small sp-muted mt-2 mb-0">Converted from ICSASG_v2: {{ chip.liftover.converted|thousands }} markers;
+        {{ chip.liftover.unmapped|thousands }} outside the conversion table, left out.</p>{% endif %}
       {% if chip.flank %}<p class="sp-small sp-muted mt-2 mb-0">Placed by flank sequence: {{ chip.flank.placed|thousands }} markers{% if chip.flank.complemented %}
         ({{ chip.flank.complemented|thousands }} given on the other strand){% endif %}; {{ chip.flank.not_found|thousands }} not found among the known variant sites, left out.</p>{% endif %}
       {% if chips %}<p class="sp-small mb-1">Other chips: {% for c in chips %}<strong>{{ c.label }}</strong> ({{ c.kept|thousands }} markers)
@@ -49,14 +51,14 @@
         <input type="hidden" name="extra" value="1">
         <input class="form-control form-control-sm w-auto" type="file" name="chip" aria-label="Another chip's SNP list">
         <input class="form-control form-control-sm w-auto" name="chip_name" maxlength="40" placeholder="name, e.g. Vendor 70K" aria-label="Chip name">
-        {% if flank_keys %}<label class="text-nowrap" title="Place this chip's markers by their flank sequences (a manifest on ICSASG_v2 or another assembly)"><input class="form-check-input" type="checkbox" name="by_flank" value="1"> another assembly</label>{% endif %}
+        {% if positions|length > 1 %}<select class="form-select form-select-sm w-auto" name="positions" aria-label="Positions on" title="The assembly the chip's positions are on">{% for value, label in positions %}<option value="{{ value }}">positions on {{ label }}</option>{% endfor %}</select>{% endif %}
         <button class="btn btn-sm btn-outline-primary" type="submit">Compare another chip</button>
         {% if chip_demo and not chip.synthetic %}<button class="btn btn-sm btn-outline-secondary" type="submit" name="demo" value="1">Demo chip</button>{% endif %}</form>
       {% else %}<p class="sp-small">Most panels add SNPs to a chip already in use. Upload its SNP list (Illumina or Axiom manifest, PLINK
         .bim/.map, VCF or a table with chrom and pos) to see which panel SNPs it already has, which are new and where it has gaps.</p>
       <form method="post" action="{% url 'snpportal:panel_change' %}" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center sp-small">{% csrf_token %}
         <input class="form-control form-control-sm w-auto" type="file" name="chip" aria-label="Chip SNP list">
-        {% if flank_keys %}<label class="text-nowrap" title="For a manifest on ICSASG_v2 or another assembly: each marker is placed on Ssal_v3.1 where its flank sequence matches a known variant site exactly"><input class="form-check-input" type="checkbox" name="by_flank" value="1"> positions on another assembly</label>{% endif %}
+        {% if positions|length > 1 %}<select class="form-select form-select-sm w-auto" name="positions" aria-label="Positions on" title="The assembly the chip's positions are on">{% for value, label in positions %}<option value="{{ value }}">positions on {{ label }}</option>{% endfor %}</select>{% endif %}
         <button class="btn btn-sm btn-primary" type="submit">Compare</button>
         {% if chip_demo %}<button class="btn btn-sm btn-outline-secondary" type="submit" name="demo" value="1">Use the demo chip</button>{% endif %}
       </form>{% endif %}

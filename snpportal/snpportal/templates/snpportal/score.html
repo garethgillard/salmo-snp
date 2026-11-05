@@ -46,6 +46,9 @@
           <input class="form-control" id="snps-file" type="file" name="snps" required accept=".vcf,.gz,.tsv,.csv,.txt,.bim,.map" aria-describedby="formats"></div>
       </div>
       <p class="sp-hint" id="formats">VCF, SNP table, PLINK, chip manifest or rs IDs; up to {{ max_mb }} MB &middot; <a href="{% url 'snpportal:help' %}#formats">Format help</a></p>
+      {% if positions|length > 1 %}<p class="sp-hint d-flex flex-wrap gap-2 align-items-center"><label for="positions">Positions on</label>
+        <select class="form-select form-select-sm w-auto" id="positions" name="positions">{% for value, label in positions %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+        <span class="sp-muted">rows that can't be converted are listed in the upload report</span></p>{% endif %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
     <form class="tab-pane{% if tab == 'paste' %} active{% endif %}" id="pane-paste" role="tabpanel" aria-labelledby="tab-paste" method="post" action="{% url 'snpportal:upload' %}">

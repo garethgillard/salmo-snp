@@ -12,6 +12,7 @@ from __future__ import annotations
 import bisect
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from snpscore import assay
@@ -460,10 +461,11 @@ def compare(source, chip, preset="all", window_bp=None, gap_bp=None, pool=None, 
     return {"summary": summary, "gaps": gaps}
 
 
-def read_chip(chip_path, release_dir, out_path, max_snps=CHIP_MAX, place_by_flank=False):
+def read_chip(chip_path, release_dir, out_path, max_snps=CHIP_MAX, place_by_flank=False, lift_from=None):
     """Read a chip's SNP list (any snpscore input layout: manifest, PLINK, VCF, table) through the release's chromosome
     aliases and write chrom, pos, id to out_path (parquet). With `place_by_flank` (I18), the positions are on another
-    assembly and the markers are placed by their flank sequences (the release's flank_keys.parquet). Returns the
+    assembly and the markers are placed by their flank sequences (the release's flank_keys.parquet); with `lift_from`
+    ('icsasg_v2', I19), converted through the release's liftover_<lift_from>.parquet. Returns the
     validation counts. A list with more than `max_snps` rows raises TooMany, an InputError (reading stops there)."""
     path, release, out = Path(chip_path).resolve(), Path(release_dir).resolve(), Path(out_path).resolve()
     manifest = json.loads((release / "manifest.json").read_text())
@@ -473,8 +475,11 @@ def read_chip(chip_path, release_dir, out_path, max_snps=CHIP_MAX, place_by_flan
         keys = release / "flank_keys.parquet"
         if place_by_flank and not keys.exists():
             raise InputError("This release has no flank keys, so chip markers can't be placed by their flank sequence.")
+        lift = release / f"liftover_{lift_from}.parquet" if lift_from else None
+        if lift is not None and (not re.fullmatch(r"[a-z0-9_]+", lift_from) or not lift.exists()):
+            raise InputError(f"This release can't convert positions from {lift_from}.")
         report = read_snps(con, path, manifest.get("chrom_sizes") or [], alias if alias.exists() else None, max_snps,
-                           flank_keys=keys if place_by_flank else None)
+                           flank_keys=keys if place_by_flank else None, lift=lift)
         ident = "id" if "id" in [r[0] for r in con.execute("DESCRIBE snps").fetchall()] else "NULL::VARCHAR AS id"
         con.execute(f"COPY (SELECT chrom, pos, {ident} FROM snps ORDER BY idx) TO {lit(out)} (FORMAT parquet)")
     finally:
