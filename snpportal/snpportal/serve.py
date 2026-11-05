@@ -19,7 +19,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-RELEASE = "2026-11-03"  # the data release this version of the code expects
+RELEASE = "2026-11-05"  # the data release this version of the code expects
 DATA_URL = os.environ.get("SALMO_SNP_DATA_URL")  # where the data is published (set once it is hosted, e.g. on salmobase)
 
 
