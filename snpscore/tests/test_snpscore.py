@@ -525,12 +525,13 @@ def test_place_by_flank(release, tmp_path):  # I18: a SYNTHETIC Axiom manifest o
         flank = f"{rc(right)}[{a}/{b}]{rc(left)}" if reverse else f"{left}[{a}/{b}]{right}"
         return f"{name}\t{rs_id}\t1\t{1000 + len(lines)}\t{a}\t{b}\t{flank}"
     lines = ["Probe Set ID\tdbSNP RS ID\tChromosome\tPhysical Position\tAllele A\tAllele B\tFlank"]
-    (c0, p0, rs0), (c1, p1, _), (c2, p2, rs2), (_, _, rs5) = rs[0], rs[1], rs[2], rs[5]
+    (c0, p0, rs0), (c1, p1, _), (c2, p2, rs2), (_, _, rs3), (_, _, rs5) = rs[0], rs[1], rs[2], rs[3], rs[5]
     lines.append(row("same", rs0, c0, p0))  # its rs ID is at the same site
     lines.append(row("different", rs5, c1, p1))  # its rs ID is at another site
     lines.append(row("reverse", "---", *other[0], reverse=True))  # given on the other strand, alleles too
     lines.append(row("iupac", "---", *other[1], left="R" + fa.fetch(*other[1][:1], other[1][1] - 35, other[1][1] - 1).upper()))
-    lines.append(row("paralog", "---", *other[2], left=changed(fa.fetch(other[2][0], other[2][1] - 36, other[2][1] - 1).upper())))
+    # the paralog's rs ID (another site's) doesn't place it either: the genome contradicts its flank
+    lines.append(row("paralog", rs3, *other[2], left=changed(fa.fetch(other[2][0], other[2][1] - 36, other[2][1] - 1).upper())))
     lines += [f"rs_only\t{rs2}\t1\t1999\tA\tG\t---", "none\t---\t1\t2000\tA\tG\t---", "short\t---\t1\t2001\tA\tG\t" + "ACGT" * 9 + "[A/G]ACGTNACGTACGTACGTACG",
               "nowhere\t---\t1\t2002\tA\tG\t" + "ACGTTGCA" * 5 + "[A/G]" + "TTGGCCAA" * 5]
     path = tmp_path / "v2_axiom_SYNTHETIC.tsv"

@@ -63,7 +63,8 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
     (column position_source; alleles complemented where the two assemblies' strands differ). With `flank_keys`
     (flank_keys.parquet, I18), the input's positions are taken to be on another assembly: each row is placed by its
     flank sequence (placement.place, checked against `genome`, a snpscore.fasta location), else by its rs ID (from id,
-    or a 'dbSNP RS ID' column beside an Axiom probe set id), else rejected with the flank's reason (placement.MISSES).
+    or a 'dbSNP RS ID' column beside an Axiom probe set id), else rejected with the flank's reason (placement.MISSES);
+    a row whose flank the genome contradicts is rejected, whatever its rs ID.
     Where both place a row and disagree, the flank's position is kept and position_source names the rs ID's; the
     report's `flank` block counts the agreement. Returns the counts."""
     layout = detect(path)
@@ -97,7 +98,8 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
          "NULL::BIGINT AS v2_pos, NULL::VARCHAR AS v2_ref")
     if use_rs:
         join += f" LEFT JOIN read_parquet({lit(rsid)}) x ON {is_rs} AND x.rs = try_cast(substr(trim(r.{q(rs_col)}), 3) AS BIGINT)"
-    kept = "_flank = 'flank'" if by_flank else "false"  # placed by flank sequence: the rs ID never moves it
+    # placed by flank sequence: the rs ID never moves it; contradicted by the genome: the rs ID doesn't place it either
+    kept = "_flank IN ('flank', 'flank_genome_mismatch')" if by_flank else "false"
     alleles = "ref" in cols and "alt" in cols
     flip = ", ".join(f"CASE WHEN flip THEN translate(upper({c}), 'ACGT', 'TGCA') ELSE {c} END AS {c}"
                      for c in ("ref", "alt") if c in cols)
@@ -136,7 +138,7 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
                 SELECT count(*) FILTER (WHERE _flank = 'flank' AND rs_chrom = chrom AND rs_pos = pos),
                        count(*) FILTER (WHERE _flank = 'flank' AND (rs_chrom <> chrom OR rs_pos <> pos)),
                        count(*) FILTER (WHERE _flank = 'flank' AND rs_chrom IS NULL),
-                       count(*) FILTER (WHERE _flank <> 'flank' AND rs_chrom IS NOT NULL) FROM checked""").fetchall()[0]))
+                       count(*) FILTER (WHERE _flank <> 'flank' AND position_source IS NOT NULL) FROM checked""").fetchall()[0]))
     placed = con.execute("SELECT count(*) FROM checked WHERE position_source IS NOT NULL AND reason IS NULL").fetchone()[0]
     helper = "input_chrom, input_pos, reason, alias_warning, is_rs, flip, rs_chrom, rs_pos" + ("" if placed else ", position_source") \
         + (", _flank" if by_flank else "")

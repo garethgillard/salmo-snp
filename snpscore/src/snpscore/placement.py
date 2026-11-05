@@ -101,8 +101,9 @@ def place(con, flank_keys, table="raw", genome=None, k=K):
         got = key(*pair, k) if pair else None
         rows.append((flank, *(got or (None, None)), None if got else "flank_too_short" if pair else "no_flank"))
     con.execute("CREATE OR REPLACE TEMP TABLE _fk (flank VARCHAR, key UBIGINT, canonical BOOLEAN, miss VARCHAR)")
-    if rows:
-        con.executemany("INSERT INTO _fk VALUES (?, ?, ?, ?)", rows)
+    if rows:  # as lists, not executemany (one statement per row: ~30 s for a 50,000-marker chip)
+        con.execute("INSERT INTO _fk SELECT unnest(?::VARCHAR[]), unnest(?::UBIGINT[]), unnest(?::BOOLEAN[]), "
+                    "unnest(?::VARCHAR[])", [list(c) for c in zip(*rows)])
     con.execute(f"""CREATE OR REPLACE TEMP TABLE _fp AS SELECT f.flank, s.chrom, s.pos, f.canonical <> s.canonical AS flip
                     FROM _fk f JOIN read_parquet({lit(flank_keys)}) s USING (key)""")
     checked = check_genome(con, genome)
@@ -133,12 +134,11 @@ def check_genome(con, genome):
         return f"the genome is read remotely, which is too slow for over {REMOTE_MAX:,} markers: `salmo-snp download` fetches it"
     try:
         fasta = Fasta(genome)
-        bad = [(f,) for f, chrom, pos, flip in rows if not agrees(fasta, f, chrom, pos, flip)]
+        bad = [f for f, chrom, pos, flip in rows if not agrees(fasta, f, chrom, pos, flip)]
     except OSError:
         return "the genome could not be read"
     if bad:
-        con.execute("CREATE OR REPLACE TEMP TABLE _bad (flank VARCHAR)")
-        con.executemany("INSERT INTO _bad VALUES (?)", bad)
+        con.execute("CREATE OR REPLACE TEMP TABLE _bad AS SELECT unnest(?::VARCHAR[]) AS flank", [bad])
         con.execute("UPDATE _fk SET miss = 'flank_genome_mismatch' WHERE flank IN (SELECT flank FROM _bad)")
         con.execute("DELETE FROM _fp WHERE flank IN (SELECT flank FROM _bad)")
         con.execute("DROP TABLE _bad")
