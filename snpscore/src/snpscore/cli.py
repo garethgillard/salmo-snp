@@ -46,6 +46,11 @@ def main():
     sub.add_parser("gwas", help="GWAS summary statistics: harmonise, annotate, clump loci and fine-map (snpscore gwas -h)",
                    add_help=False)
 
+    v = sub.add_parser("verify", help="check a release: its manifest, and every file against SHA256SUMS")
+    v.add_argument("release")
+    d = sub.add_parser("diff", help="what changed between two releases (layers, rows, columns, tables), for a changelog")
+    d.add_argument("old")
+    d.add_argument("new")
     o = sub.add_parser("pool", help="annotate the public sites into <release>/pool (pool.parquet, background.json)")
     o.add_argument("--release", required=True)
     o.add_argument("--background", help="public sites as a VCF (default: the release's own public_af sites, --sites)")
@@ -63,6 +68,15 @@ def main():
         from .gwas import main as gwas_main
         return gwas_main(rest)
     args = p.parse_args()
+    if args.cmd == "verify":
+        from .release import verify
+        problems = verify(args.release)
+        print("\n".join(problems) if problems else f"{args.release}: every file matches SHA256SUMS")
+        sys.exit(1 if problems else 0)
+    if args.cmd == "diff":
+        from .release import diff
+        print("\n".join(diff(args.old, args.new)))
+        return
     if args.cmd == "annotate":
         from .release import check
         if check(args.release):

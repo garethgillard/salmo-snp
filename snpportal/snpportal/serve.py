@@ -98,6 +98,7 @@ def download(version=None, source=None, genome=True):
         if folder.resolve() not in target.parents:
             sys.exit(f"salmo-snp: unexpected file name in SHA256SUMS: {name}")
         get(base, name, target, digest)
+    (folder / "SHA256SUMS").write_text(sums)  # kept: `snpscore verify` and the portal's system check re-hash against it
     from snpscore.release import check
     problems = check(folder)
     if problems:

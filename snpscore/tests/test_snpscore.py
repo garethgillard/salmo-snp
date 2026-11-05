@@ -562,3 +562,24 @@ def test_lift_from_icsasg_v2(release, tmp_path):  # I19: positions with an EVA r
     assert b[0] == ("A", 0, 60, "B", 1000 - 200 + 0 + 1, "-") and b[1][:3] == ("A", 70, 100)
     # A:1 (the first base) is the query's reverse-strand base 200, forward 1-based 1000 - 200 = 800
     assert b[0][4] - 1 == 800
+
+
+def test_verify_and_diff(release, tmp_path):  # P8.5: a damaged file is named; two releases compared for a changelog
+    from snpscore.release import diff, verify
+    assert verify(release) == []
+    copy = tmp_path / "copy"
+    shutil.copytree(release, copy)
+    with open(copy / "gene.parquet", "r+b") as f:  # one byte changed, same size
+        f.seek(100)
+        b = f.read(1)
+        f.seek(100)
+        f.write(bytes([b[0] ^ 0xFF]))
+    assert [p for p in verify(copy) if p.startswith("gene.parquet differs")]
+    assert diff(release, release)[1:] == ["no other changes"]
+    m = json.loads((copy / "manifest.json").read_text())
+    m["version"], m["layers"] = "test-2", [x for x in m["layers"] if x["name"] != "gerp"]
+    m["layers"][0]["rows"] += 1
+    (copy / "manifest.json").write_text(json.dumps(m))
+    lines = diff(release, copy)
+    assert lines[0] == "release test -> test-2" and "layer removed: gerp" in lines
+    assert any(x.startswith(f"layer {m['layers'][0]['name']}: rows ") for x in lines)

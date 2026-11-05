@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import about, association, browser, explore, locus, panel, panel_report, projects, report, search, tools, views
+from . import about, association, browser, explore, health, locus, panel, panel_report, projects, report, search, tools, views
 
 app_name = "snpportal"
 urlpatterns = [
@@ -34,6 +34,7 @@ urlpatterns = [
     path("help/", about.help_page, name="help"),
     path("run-locally/", about.run_locally, name="run_locally"),
     path("releases/", about.releases, name="releases"),
+    path("health/", health.health, name="health"),
     path("colours/", about.state_palette, name="state_palette"),
     path("results/<uuid:key>/", views.results, name="results"),
     path("results/<uuid:key>/status/", views.status, name="status"),
