@@ -74,13 +74,13 @@ on a side), `flank_unknown_site` (no known site has those 32 bases, or several d
 Every upload checks itself, so a user's own manifest is its own acceptance check:
 - against the genome (the one annotate reads, `genome_location`): each placement's whole manifest flank (all the bases
   given, e.g. Axiom's 35 a side), turned to the genome's strand, must equal the genome there base for base; IUPAC
-  codes and N in the flank, and N in the genome, are skipped, and no mismatch is allowed (G's to decide, DECISIONS
-  #34). A flank whose 32 bases match a known site but whose outer bases differ (a duplicated region, e.g. the Ss4R
+  codes and N in the flank, and N in the genome, are skipped, and no mismatch is allowed (G, 2026-11-05, for now:
+  DECISIONS #34). A flank whose 32 bases match a known site but whose outer bases differ (a duplicated region, e.g. the Ss4R
   duplicate) is not placed (`flank_genome_mismatch`), not by its rs ID either. With a remote genome, lists of over
   2,000 placed markers are not checked (`genome` says why).
 - against the rs IDs, when the input has them: the two placements are counted side by side. Where they disagree the
-  row stays at the flank's position, and `position_source` says `flank; rs ID at <chrom>:<pos>` (which should win is
-  DECISIONS #35).
+  row stays at the flank's position, and `position_source` says `flank; rs ID at <chrom>:<pos>` (the flank's wins for
+  now, being checked against the genome: DECISIONS #35).
 
 The validation report's `flank` block: `placed`, `complemented`, `missed` ({reason: rows} for the rows the flank did
 not place; their rs IDs may still place them), `genome` (`checked`, or why not) and, with rs IDs, `rsid` (`same`,

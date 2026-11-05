@@ -6,7 +6,7 @@ each (K = 16: one 64-bit number), on the strand that sorts first, so a flank giv
 Keys found at more than one site are left out of the release, so a placement is unique among the known sites. Each
 placement is then checked against the genome: every A, C, G or T of the manifest's whole flank (Axiom gives 35 bases a
 side) must be the genome's base there, so a key shared with a duplicated region (e.g. the Ss4R duplicate) whose outer
-flank differs places nothing. No mismatch is tolerated (DECISIONS #34: G's to decide)."""
+flank differs places nothing. No mismatch is tolerated (G, 2026-11-05, for now: DECISIONS #34)."""
 from __future__ import annotations
 
 import csv

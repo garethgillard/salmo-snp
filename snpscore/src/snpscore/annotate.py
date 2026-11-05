@@ -133,7 +133,7 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
                        THEN 'flank' ELSE 'flank; rs ID at ' || rs_chrom || ':' || rs_pos END WHERE _flank = 'flank'""")
         con.execute("UPDATE checked SET reason = _flank WHERE _flank <> 'flank' AND position_source IS NULL "
                     "AND reason IN ('missing_chrom', 'bad_pos', 'unknown_rsid')")
-        if use_rs:  # both methods, side by side (which wins where they disagree is G's to decide: DECISIONS #34)
+        if use_rs:  # both methods, side by side (where they disagree the flank's wins, for now: DECISIONS #35)
             by_flank["rsid"] = dict(zip(("same", "different", "flank_only", "rsid_only"), con.execute("""
                 SELECT count(*) FILTER (WHERE _flank = 'flank' AND rs_chrom = chrom AND rs_pos = pos),
                        count(*) FILTER (WHERE _flank = 'flank' AND (rs_chrom <> chrom OR rs_pos <> pos)),

@@ -19,10 +19,10 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 ## Next
 Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Built on the branch of
 pull request #2, waiting for G's review: I1-I5, I7-I12, I15, I17 and I18 (step 9). What remains:
-1. **G's answers** (DECISIONS.md #25-#34 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
-   is PROVISIONAL until then.
+1. **G's answers** (DECISIONS.md #25-#35 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
+   is PROVISIONAL until then. #34-#35 (chip placement by flank) are answered for now (G, 2026-11-05), to revisit.
 2. ~~A new release~~: done, release 2026-11-05 with flank_keys.parquet (I18). The I18 check against a real ICSASG_v2
-   Axiom manifest still waits for one (DECISIONS #34).
+   Axiom manifest still waits for one; its counts settle DECISIONS #34-#35 (answered for now).
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13), then I14.
 4. **Phase 3**: G's DeepFARM and CADD-like data as variant-score layers (I16).
 5. **Phase 4 rest**: coordinate conversion (I19), a release on the new assembly (I20).
