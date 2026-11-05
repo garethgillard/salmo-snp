@@ -1,39 +1,39 @@
 /* Written by `python manage.py tour_images` with the images: each slide's numbered callout boxes, in % of its image. */
 #tour-overview img { aspect-ratio: 1200 / 632; }
-#tour-overview-1 { left: 24.83%; top: 17.51%; width: 13.05%; height: 8.26%; }
+#tour-overview-1 { left: 24.83%; top: 17.51%; width: 12.96%; height: 8.42%; }
 #tour-overview-2 { left: 2.10%; top: 31.47%; width: 46.14%; height: 5.15%; }
 #tour-overview-3 { left: 50.34%; top: 10.28%; width: 48.99%; height: 88.45%; }
 #tour-overview-4 { left: 0.67%; top: 1.27%; width: 98.66%; height: 7.73%; }
-#tour-score img { aspect-ratio: 1200 / 524; }
-#tour-score-1 { left: 0.67%; top: 19.11%; width: 56.99%; height: 16.91%; }
-#tour-score-2 { left: 0.67%; top: 37.56%; width: 56.99%; height: 7.56%; }
-#tour-score-3 { left: 0.67%; top: 46.66%; width: 56.99%; height: 9.31%; }
-#tour-score-4 { left: 0.67%; top: 60.26%; width: 56.99%; height: 38.20%; }
-#tour-table img { aspect-ratio: 1200 / 619; }
-#tour-table-1 { left: 78.51%; top: 21.87%; width: 21.49%; height: 76.83%; }
-#tour-table-2 { left: 0.75%; top: 16.94%; width: 3.22%; height: 36.59%; }
-#tour-table-3 { left: 15.24%; top: 22.96%; width: 11.16%; height: 4.22%; }
-#tour-table-4 { left: 79.25%; top: 10.46%; width: 11.64%; height: 6.32%; }
+#tour-score img { aspect-ratio: 1200 / 523; }
+#tour-score-1 { left: 0.67%; top: 19.15%; width: 56.99%; height: 16.73%; }
+#tour-score-2 { left: 0.67%; top: 37.42%; width: 56.99%; height: 7.58%; }
+#tour-score-3 { left: 0.67%; top: 46.54%; width: 56.99%; height: 9.33%; }
+#tour-score-4 { left: 0.67%; top: 60.18%; width: 56.99%; height: 38.28%; }
+#tour-table img { aspect-ratio: 1200 / 637; }
+#tour-table-1 { left: 79.60%; top: 21.25%; width: 20.40%; height: 77.49%; }
+#tour-table-2 { left: 0.75%; top: 16.46%; width: 3.30%; height: 35.55%; }
+#tour-table-3 { left: 15.71%; top: 22.31%; width: 11.39%; height: 4.10%; }
+#tour-table-4 { left: 78.89%; top: 10.16%; width: 11.87%; height: 6.14%; }
 #tour-card img { aspect-ratio: 1200 / 667; }
-#tour-card-1 { left: 48.48%; top: 8.50%; width: 45.63%; height: 9.76%; }
-#tour-card-2 { left: 80.82%; top: 24.47%; width: 15.38%; height: 5.06%; }
+#tour-card-1 { left: 48.43%; top: 8.50%; width: 45.63%; height: 9.76%; }
+#tour-card-2 { left: 80.56%; top: 24.47%; width: 15.57%; height: 5.06%; }
 #tour-card-3 { left: 54.07%; top: 63.94%; width: 27.55%; height: 25.90%; }
 #tour-card-4 { left: 42.68%; top: 91.32%; width: 56.01%; height: 7.23%; }
-#tour-locus img { aspect-ratio: 1200 / 651; }
-#tour-locus-1 { left: 26.14%; top: 1.74%; width: 4.74%; height: 5.65%; }
-#tour-locus-2 { left: 0.63%; top: 20.76%; width: 98.74%; height: 20.29%; }
-#tour-locus-3 { left: 86.47%; top: 73.69%; width: 8.65%; height: 4.35%; }
-#tour-locus-4 { left: 0.63%; top: 93.62%; width: 94.97%; height: 5.22%; }
+#tour-locus img { aspect-ratio: 1200 / 657; }
+#tour-locus-1 { left: 26.17%; top: 1.72%; width: 4.84%; height: 5.60%; }
+#tour-locus-2 { left: 0.63%; top: 20.55%; width: 98.74%; height: 21.09%; }
+#tour-locus-3 { left: 86.49%; top: 73.96%; width: 8.63%; height: 4.30%; }
+#tour-locus-4 { left: 0.63%; top: 93.69%; width: 94.97%; height: 5.17%; }
 #tour-panel img { aspect-ratio: 1200 / 816; }
 #tour-panel-1 { left: 2.42%; top: 13.09%; width: 45.83%; height: 8.52%; }
-#tour-panel-2 { left: 2.42%; top: 35.52%; width: 45.83%; height: 24.15%; }
-#tour-panel-3 { left: 2.42%; top: 66.68%; width: 45.83%; height: 9.56%; }
+#tour-panel-2 { left: 2.42%; top: 35.38%; width: 45.83%; height: 24.15%; }
+#tour-panel-3 { left: 2.42%; top: 95.55%; width: 45.83%; height: 4.45%; }
 #tour-panel-4 { left: 50.33%; top: 6.47%; width: 48.67%; height: 22.08%; }
 #tour-gwas img { aspect-ratio: 1200 / 731; }
 #tour-gwas-1 { left: 71.23%; top: 36.28%; width: 2.04%; height: 3.35%; }
-#tour-gwas-2 { left: 2.04%; top: 82.59%; width: 24.25%; height: 16.37%; }
-#tour-gwas-3 { left: 41.59%; top: 82.59%; width: 32.03%; height: 16.37%; }
+#tour-gwas-2 { left: 2.04%; top: 82.59%; width: 24.28%; height: 16.37%; }
+#tour-gwas-3 { left: 41.79%; top: 82.59%; width: 31.72%; height: 16.37%; }
 #tour-more img { aspect-ratio: 1200 / 649; }
-#tour-more-1 { left: 34.12%; top: 0.00%; width: 9.31%; height: 7.45%; }
-#tour-more-2 { left: 42.69%; top: 0.00%; width: 11.22%; height: 7.45%; }
-#tour-more-3 { left: 43.95%; top: 6.10%; width: 15.33%; height: 41.03%; }
+#tour-more-1 { left: 34.57%; top: 0.00%; width: 9.43%; height: 7.45%; }
+#tour-more-2 { left: 43.27%; top: 0.00%; width: 11.56%; height: 7.45%; }
+#tour-more-3 { left: 44.94%; top: 6.10%; width: 15.33%; height: 41.03%; }
