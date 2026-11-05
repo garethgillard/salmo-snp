@@ -17,7 +17,7 @@ the portal's (../snpportal/README.md).
 
 ```bash
 pip install -e ".[test]"                         # the test extra adds pytest; the tests also need ../snpdata
-R=~/.local/share/salmo-snp/releases/2026-11-03  # a downloaded release (`salmo-snp info`), or one built with snpdata
+R=~/.local/share/salmo-snp/releases/2026-11-05  # a downloaded release (`salmo-snp info`), or one built with snpdata
 snpscore annotate my_snps.vcf.gz --release $R --trait maturation -o my_snps_annotated.parquet  # or .tsv
 snpscore rsid rs863754587 --release $R           # Ssal_v3.1 and ICSASG_v2 position of an rs ID
 snpscore pool --release $R --if-stale           # public background pool, a cache of the current weights: $R/pool/

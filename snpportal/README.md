@@ -64,7 +64,8 @@ VM lost its network port and got a new address.
 `bash deploy/nrec.sh <ssh host> <web name> [<web name> ...]` sets up an NREC VM (GOLD Ubuntu 24.04 on the `dualStack`
 network, so it has a public IPv4 address; ports 22, 80 and 443 open). The code on the VM is a clone of this repository
 (`/srv/snpportal/salmo-snp`, read with a read-only deploy key the script makes and registers with `gh`); from this Mac
-it copies `snpdata/release/dev` and the genome to `/srv/snpportal`. On the VM it installs the packages (the newest Django,
+it copies the release serve.py `RELEASE` names (`snpdata/release/<RELEASE>`) with its public pool, which it builds
+here with `snpscore pool` (on DuckDB 2 the VM's 2 GB RAM can't), and the genome to `/srv/snpportal`. On the VM it installs the packages (the newest Django,
 DuckDB and gunicorn they allow; every deploy upgrades them) in a venv, Caddy for HTTPS (a site per name: an IPv4 address gets Let's Encrypt's short-lived IP certificate,
 renewed by Caddy; a `<ip-with-dashes>.sslip.io` name works too) and systemd units for the app (`snpportal`) and an
 hourly `snpportal_cleanup`. Rerun it for a new release or new web names: results and the secret key are kept. The
@@ -80,7 +81,8 @@ checks it out, reinstalls snpscore, collects static files and restarts the porta
 the VM (a forced command in `authorized_keys`). One-time setup, after `nrec.sh`:
 `bash deploy/github_deploy.sh nrec 158.39.75.9` (makes that key, stores it as the repository secret `NREC_DEPLOY_KEY`
 with the host key, and sets the variable `NREC_HOST`; rerun it to replace the key). Releases are not in git: a new
-release still goes up with `nrec.sh`.
+release still goes up with `nrec.sh`, and so does the public pool after a change to weights.yaml (update.sh tries,
+but the VM can't build it; the Overview then leaves out its comparison).
 
 ## How it works
 
