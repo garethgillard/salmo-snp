@@ -82,6 +82,40 @@ the VM (a forced command in `authorized_keys`). One-time setup, after `nrec.sh`:
 with the host key, and sets the variable `NREC_HOST`; rerun it to replace the key). Releases are not in git: a new
 release still goes up with `nrec.sh`.
 
+## salmobase container
+
+The live installation (later) is a container of a tagged version behind salmobase's Apache at `/snp/`, linked from
+salmobase with a button, not merged into its Django (`deploy/Dockerfile`, `deploy/container.sh`). gunicorn serves
+everything under `/snp/`, static files included (`DJANGO_STATIC_URL=/snp/static/`, `SNPPORTAL_SERVE_STATIC=1`), so
+Apache needs one proxy rule; results are kept 24 h (`SNPPORTAL_KEEP_HOURS`), as on the demo.
+
+```bash
+git checkout v0.1.0 && docker build -f snpportal/deploy/Dockerfile -t salmo-snp:v0.1.0 .
+docker run -d --name salmo-snp --restart unless-stopped -p 127.0.0.1:8090:8000 \
+  -v /srv/salmo-snp/release:/release -v /srv/salmo-snp/genome:/genome:ro -v /srv/salmo-snp/data:/data \
+  -e DJANGO_ALLOWED_HOSTS=salmobase.org salmo-snp:v0.1.0
+```
+
+- `/release`: a release folder (`salmo-snp download --from <site>` on the host, or the published snapshot). Writable,
+  so the container builds the public pool into `pool/` when it is missing or stale; read-only works without it.
+- `/genome`: the release's genome (`*.fa.gz`, `.fai`, `.gzi`) for the sequence checks; without it they read salmobase.
+- `/data`: results and the secret key (made at the first start unless `DJANGO_SECRET_KEY` is set). The container runs
+  as uid 1000: that user must own the host folders it writes.
+- Docker's health check asks `/snp/health/` (P8.4); a damaged release stops the start (`manage.py check`).
+
+Apache (salmobase's virtual host):
+
+```apache
+ProxyPass        /snp/ http://127.0.0.1:8090/snp/
+ProxyPassReverse /snp/ http://127.0.0.1:8090/snp/
+ProxyPreserveHost On
+RequestHeader set X-Forwarded-Proto "https"
+LimitRequestBody 314572800
+```
+
+Built and run in a cloud session on 2026-11-05 against release 2026-11-03: pages, `/snp/static/`, the health check
+and a scoring job worked behind a Host of salmobase.org.
+
 ## How it works
 
 Every upload, pasted list, example or candidate list is a **job**: a folder `results/<uuid>/` (mode 0700, files 0600)

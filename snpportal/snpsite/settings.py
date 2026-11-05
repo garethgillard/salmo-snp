@@ -22,7 +22,9 @@ TEMPLATES = [{
     "APP_DIRS": True,
 }]
 DATABASES = {}
-STATIC_URL = "/static/"  # served by runserver (and snpsite/urls.py) while DEBUG is on
+STATIC_URL = os.environ.get("DJANGO_STATIC_URL", "/static/")  # served by runserver (and snpsite/urls.py) while DEBUG is on;
+# the salmobase container: /snp/static/, served by the portal itself (SNPPORTAL_SERVE_STATIC=1), as /static/ is salmobase's
+SNPPORTAL_SERVE_STATIC = os.environ.get("SNPPORTAL_SERVE_STATIC") == "1"
 
 # Release folder built by snpdata (`snpdata build --out release/dev`)
 SNPSCORE_RELEASE = os.environ.get("SNPSCORE_RELEASE", str(BASE_DIR.parent / "snpdata" / "release" / "dev"))
