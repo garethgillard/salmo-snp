@@ -90,9 +90,19 @@
   </section>
 
   <section class="sp-card" id="privacy"><h2>Privacy</h2>
-    {% if local %}<p class="sp-small mt-2 mb-0">This copy of the portal runs on your computer: your files and results never
-      leave it, and stay in the results folder until you delete them. It fetches public data only, such as AQUA-FAANG
-      signal for the region you view.</p>{% else %}
+    {% if local %}<p class="sp-small mt-2 mb-1">This copy of the portal runs on your computer: your files and results never
+      leave it.</p>
+    <ul class="sp-small mb-0">
+      <li><strong>Stored</strong>: plain files in the data folder (<code>salmo-snp info</code> shows it), readable only by
+        your user account, until you delete them: your scored lists with their annotations and extra columns, rejected
+        rows, chips, panels and your Design panel. The uploaded file is deleted once scored; from a VCF only CHROM, POS,
+        ID, REF and ALT are read, so genotypes are never stored.</li>
+      <li><strong>Sent</strong>: only requests for public data. The locus browser reads AQUA-FAANG signal for the region
+        on screen from salmobase.org, naming the region but never your SNPs; without a downloaded genome, sequence checks
+        read it from salmobase near your SNPs' positions.</li>
+      <li><strong>Deleted</strong>: with Delete on a result or Clear on the Design panel; removing the data folder
+        removes everything. Exported files contain your SNPs, so share them as you would the list.</li>
+    </ul>{% else %}
     <p class="sp-small mt-2 mb-0">Uploaded files are deleted as soon as they have been scored. From a VCF only CHROM, POS, ID, REF
       and ALT are read, so genotypes are never stored. Other columns of a SNP table, and GWAS summary statistics, are kept with
       the results for {{ keep_hours }} hours; anyone with the results link can see them. <em>Delete now</em> removes them sooner.

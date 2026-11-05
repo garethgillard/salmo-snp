@@ -25,6 +25,11 @@ weights:  # whole numbers (tier_score is an integer)
   motif: 1             # G (2026-10-19): inside a robust ATAC peak, one allele matches a JASPAR 2024 motif at p < 1e-5 and
                        # the other doesn't, with at least 4 bits between them (layers.yaml `motif`; about 15% of in-peak SNPs)
 
+# Per-variant score layers (layers.yaml format variant_scores, ROADMAP I15: DeepFARM, a CADD-like score): a SNP counts
+# when its percentile among the scored variants is at least the value here, with the weight of the same name under
+# `weights:`. Both are G's to set; until then a score layer is shown but never counted. e.g. deepfarm: 0.9
+variant_scores: {}
+
 # Minimum tier_score for tiers 1, 2 and 3; anything lower is tier 4.
 # e.g. tier 1 = active + constrained, or CDS + constrained; tier 2 = active, or CDS; tier 3 = any weaker evidence.
 tiers: [5, 3, 1]
@@ -55,6 +60,8 @@ assay:
                             # one clean 35-nt side (flank_variants_per_side: false counts both sides together)
   warn_flags: [lore, blacklist, strand_ambiguous]  # warn when these annotate columns are true
   fail_ref_check: [mismatch, not_snp]              # fail on these ref_check values
+  max_paralog_identity: null  # Probe uniqueness (I10, the Design panel's check): flag SNPs whose cleaner flank matches
+                              # their Ss4R duplicate region above this identity (e.g. 0.97). G's to set; null: shown, never flagged
 
 # Panel designer defaults (the portal's Design panel; python -m snpportal.lib.cli panel) and chip comparison. PROVISIONAL: chosen by Claude
 # so the prototype works; G to confirm.
@@ -70,6 +77,36 @@ design:
   score: {tier: 1.0, assay: 0.3, maf: 0.3}  # design_score: tier_score / max + assay (pass 1, warn 0.5) + MAF / 0.5
   chip_window: 10000        # novel_functional = tier 1-2 with no chip SNP within this many bp
   chip_gap: 1000000         # chip gaps listed when longer than this (bp)
+  upgrade_min_call_rate: 0.95  # Upgrade a chip (I11): a marker is dropped below this call rate in your population
+  upgrade_min_hwe_p: 1.0e-6    # ... or below this HWE p (exact test); both editable on the Design panel
+  # Purposes (ROADMAP I8): each sets the designer's defaults for its parameters (any of the keys above); the Panel tab's
+  # Purpose links and `python -m snpportal.lib.cli panel --purpose`. Every number is PROVISIONAL, for G to set.
+  presets:
+    genomic_selection:
+      label: Genomic selection
+      help: Even coverage of the genome for genomic prediction, mostly backbone, with a MAF floor
+      n_target: 5000
+      backbone_fraction: 0.9
+      min_spacing: 100000
+      min_maf: 0.05
+    parentage:
+      label: Parentage and traceability
+      help: A few hundred unlinked, common SNPs that pass the assay check
+      n_target: 200
+      backbone_fraction: 1.0
+      min_spacing: 2000000
+      min_maf: 0.3
+      max_per_gene: 1
+      require_assay_pass: true
+    trait:
+      label: Trait panel
+      help: The best-scoring SNPs of the Table selection (filter it to the loci first, e.g. Known locus), close together allowed
+      n_target: 96
+      backbone_fraction: 0.0
+      min_spacing: 1000
+      min_maf: 0.01
+      max_per_gene: 4
+  target_sizes: [96, 192, 384, 1536, 5000, 50000]  # quick choices for Markers (KASP plates, Axiom formats: to confirm with the vendor)
 
 # GWAS loci and fine-mapping (snpscore.gwas, the portal's Association page). PROVISIONAL: chosen by Claude so the
 # prototype works; G to confirm. Users can change them per view; the ROADMAP's 'Open questions for G' lists them.

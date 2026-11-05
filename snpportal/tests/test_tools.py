@@ -249,6 +249,33 @@ def test_panel_constraints_and_determinism(release, annotated, tmp_path):
     assert big["summary"]["n_selected"] < 5000 and "filters" in big["summary"]["binding"]
 
 
+def test_purposes_meet_their_own_constraints(release, annotated, tmp_path):  # I8: weights.yaml design.presets
+    weights = yaml.safe_load(WEIGHTS.read_text())
+    sizes = json.loads((release / "manifest.json").read_text())["chrom_sizes"]
+    assert set(panel.presets(weights)) >= {"genomic_selection", "parentage", "trait"} and 384 in panel.target_sizes(weights)
+    for name, preset in panel.presets(weights).items():
+        r = panel.design(annotated["snps.vcf"], "all", weights=weights, chrom_sizes=sizes, out=tmp_path / f"{name}.parquet",
+                         purpose=name)
+        p, s, picked = r["params"], r["summary"], rows(tmp_path / f"{name}.parquet")
+        assert s["purpose"] == p["purpose"] == name
+        assert all(p[k] == v for k, v in preset.items() if k in panel.DEFAULTS)  # the preset's numbers, as weights.yaml has them
+        assert len(picked) == p["n_target"] or s["binding"]
+        by_chrom, genes = {}, {}
+        for x in picked:
+            by_chrom.setdefault(x["chrom"], []).append(x["pos"])
+            if x["gene_id"]:
+                genes[x["gene_id"]] = genes.get(x["gene_id"], 0) + 1
+        assert all(b - a >= p["min_spacing"] for ps in by_chrom.values() for a, b in zip(sorted(ps), sorted(ps)[1:])), name
+        assert max(genes.values(), default=0) <= p["max_per_gene"], name
+        assert all(x["public_af_maf"] is None or x["public_af_maf"] >= p["min_maf"] for x in picked), name
+        if p["require_assay_pass"]:
+            assert all(x["assay_status"] == "pass" for x in picked), name
+    parentage = rows(tmp_path / "parentage.parquet")
+    assert 0 < len(parentage) < len(rows(tmp_path / "trait.parquet"))  # 2 Mb apart on a fixture of a few loci: few markers
+    with pytest.raises(panel.InputError):
+        panel.design(annotated["snps.vcf"], "all", weights=weights, purpose="nope")
+
+
 def test_cli_reads_annotate_tsv_and_recomputes_tiers(release, annotated, tmp_path, monkeypatch, capsys):
     """panel, export and compare read annotate's TSV as its parquet (chromosomes as text), and a file's tiers follow
     --preset: annotate output only holds the tiers of the --trait it was annotated with."""
@@ -306,6 +333,7 @@ def test_exports(release, annotated, tmp_path):
         text = files[fmt] if fmt in ("tsv", "bed") else (tmp_path / (out.name + ".provenance.txt")).read_text()
         header = [line for line in text.splitlines() if line.startswith("#")]
         assert "sha256" in header[1] and any("PROVISIONAL" in line for line in header)
+        assert "installed salmo-snp " in header[2] and " snpscore " in header[2]  # I4: the versions in use
         assert (fmt in ("tsv", "bed")) == files[fmt].startswith("#")
     assert "maturation" in export.filename("illumina", "test", "maturation")
     illumina = list(csv.DictReader(io.StringIO(files["illumina"])))

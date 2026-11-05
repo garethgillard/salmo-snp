@@ -18,8 +18,8 @@ python -m pytest -q                              # tests run on the small region
 ```
 
 Then score the public sites once per release and weights change: `snpscore pool --release release/2026-11-03
---assay --memory 8GB` (../snpscore/README.md); `salmo-snp download` leaves the pool out (it is a cache of the
-current weights), so a downloaded release has none (../docs/TRACKER.md step 8).
+--assay --memory 8GB` (../snpscore/README.md). A published release leaves the pool out (a cache of the current
+weights): `salmo-snp download` and `serve` build it from the release's own sites.
 
 `fetch` needs a current CA bundle on old Python/OpenSSL builds: `SSL_CERT_FILE=/path/to/cert.pem snpdata fetch`.
 It streams the 975 MB 504-fish VCF and writes only its sites and frequencies (`sites_only` in layers.yaml: CHROM to
@@ -65,6 +65,10 @@ release/2026-11-03/
   rsid.parquet           rs (BIGINT, the number), chrom, pos, ref, alt (Ssal_v3.1), v2_chrom, v2_pos, v2_ref, v2_alt
                          (ICSASG_v2; NULL unless on exactly one ICSASG_v2 line) from EVA release 9, sorted by rs, zstd;
                          rs IDs on several Ssal_v3.1 lines are left out. `snpscore.rsid(release, rs)` looks one up
+  flank_keys.parquet     key (UBIGINT: the 16 bases either side of a site, packed 2 bits each, on the strand that sorts
+                         first), chrom, pos, canonical (the genome's forward strand is the one keyed): every site of the
+                         layers layers.yaml `flank_keys.sites` names, read from the genome; keys at more than one site
+                         left out. snpscore.placement places manifests by their flank sequences with it (I18); optional
   synteny.parquet        Ss4R homeologous blocks (salmobase synteny 2021-11), each block once from each side: chrom,
                          start, end (BED), partner, partner_start, partner_end, pairs, aore, lore; not annotated
   bgee.parquet           Bgee 16.0 RNA-seq per gene_id and tissue (anatomical entity): libraries, present (libraries
@@ -176,5 +180,24 @@ the published ICSASG_v2 position, or EVA release 9's for natively Ssal_v3.1 rows
    New columns change the golden hash of the fixture annotate output: `pytest -k golden` in ../snpscore prints the new
    value for `GOLDEN` in `../snpscore/tests/test_snpscore.py`; update it on purpose and say why in the commit.
 4. If it should count towards tiers, add a weight in snpscore's `weights.yaml` (G decides it) and a term in `../snpscore/src/snpscore/score.py`.
+
+**A per-variant score** (ROADMAP I15: DeepFARM, a CADD-like score) needs no code: a tab-separated file (gzip optional)
+with the header `chrom pos ref alt score` (pos 1-based, Ssal_v3.1, chromosomes 1-29) and one layers.yaml entry:
+
+```yaml
+  - name: deepfarm
+    type: point
+    format: variant_scores
+    file: deepfarm_scores.tsv.gz
+    label: DeepFARM                 # how the portal names it
+    description: DeepFARM regulatory-effect score of the alt allele (what the model scored, e.g. public sites in peaks)
+    citation: ...
+    licence: ...
+```
+
+`build` adds `percentile` (the share of the scored set with a lower score). annotate gives `deepfarm` (true when the
+variant was scored), `deepfarm_score` and `deepfarm_percentile`; the portal shows them in the Table's Scores column, the
+card and a locus-browser row, and the benchmark compares the top 10% and 1% with matched controls. It counts in tiers only
+once G sets `variant_scores: {deepfarm: <percentile>}` and a `deepfarm` weight in snpscore's weights.yaml.
 
 Progress and next steps: [docs/TRACKER.md](../docs/TRACKER.md).

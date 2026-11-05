@@ -9,10 +9,12 @@ other conditions compare."""
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 import time
 import uuid
+from pathlib import Path
 from urllib.parse import urlencode
 
 import duckdb
@@ -60,7 +62,8 @@ def _new():
     d = jobs.results_dir() / f"panel-{uuid.uuid4()}"
     d.mkdir(mode=0o700)
     (d / "created").touch(mode=0o600)  # never changes: cleanup counts the 24 hours from it
-    jobs._write_json(d / "panel.json", {"sources": [], "next": 1, "created_utc": jobs.utc()})
+    jobs._write_json(d / "panel.json", {"sources": [], "next": 1, "created_utc": jobs.utc(),
+                                        "release": jobs.manifest().get("version")})  # its sources' release (I17)
     return d
 
 
@@ -127,7 +130,10 @@ def add(request, key):
     rows = jd / f".panel-rows-{uuid.uuid4().hex}.parquet"
     con.execute(f"COPY (SELECT file_row_number FROM v {where}) TO '{rows}' (FORMAT parquet)")
     con.close()
-    d = _folder(request) or _new()
+    d = _folder(request)
+    if d is not None and jobs.read_json(d / "panel.json").get("release") not in (None, job.get("release")):
+        return redirect(f"{back}&panel_error=release")  # I17: a panel holds SNPs of one release
+    d = d or _new()
     s = jobs.read_json(d / "panel.json")
     i = s["next"]
     try:
@@ -172,25 +178,37 @@ def _open(d):
     novel_functional (snp_panel.compare_sql). View pa also holds the SNPs dropped by hand (dropped: true), for the
     list to show them; downloads, the chip comparison and every count read p."""
     con = jobs.connect([d, jobs.release()], d)
-    files = sorted(d.glob("source_*.parquet"))
+    files = sorted(d.glob("source_*.parquet")) or [f for f in [d / "panel.parquet"] if f.exists()]  # or a saved version (I7)
     if not files:
         return con, None
     con.execute("CREATE VIEW u AS SELECT * FROM read_parquet([" + ", ".join(f"'{f}'" for f in files) + "], union_by_name=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE u)").fetchall()]
     same = ", ".join(["chrom", "pos"] + [f"coalesce({c}, '')" for c in ("ref", "alt") if c in columns])
     key = "concat_ws(':', " + ", ".join(["chrom", "pos"] + [f"coalesce({c}, '')" for c in ("ref", "alt") if c in columns]) + ")"
-    dropped = [lit(k) for k in jobs.read_json(d / "panel.json").get("dropped", [])]
+    dropped = [lit(k) for k in (jobs.read_json(d / "panel.json").get("dropped", []) if (d / "panel.json").exists() else [])]
     con.execute(f"""CREATE VIEW pa0 AS SELECT * EXCLUDE (_n), row_number() OVER (ORDER BY TRY_CAST(chrom AS INTEGER), chrom, pos) - 1
                     AS file_row_number, {key} AS snp_key, list_contains({'[' + ', '.join(dropped) + ']' if dropped else '[]::VARCHAR[]'}, {key})
                     AS dropped FROM (SELECT *, row_number() OVER (PARTITION BY {same} ORDER BY panel_source, source_row) AS _n,
                     list(DISTINCT panel_source) OVER (PARTITION BY {same}) AS sources FROM u) WHERE _n = 1""")
-    con.execute("CREATE VIEW p0 AS SELECT * FROM pa0 WHERE NOT dropped")
+    pops = [(p["slug"], d / "populations" / f"{p['slug']}.parquet") for p in populations(d)
+            if (d / "populations" / f"{p['slug']}.parquet").exists()]
+    if pops and "ref" in columns and "alt" in columns:  # I9: the user's populations' frequencies, call rate and HWE p
+        from .lib import population
+        con.execute(f"CREATE VIEW pa1p AS {population.join_sql('pa0', pops)}")
+    else:
+        con.execute("CREATE VIEW pa1p AS SELECT * FROM pa0")
+    if (d / "uniqueness.parquet").exists() and "paralog_identity" not in columns:  # I10: the probe uniqueness check
+        con.execute(f"CREATE VIEW pa1 AS SELECT x.*, q.* EXCLUDE (snp_key) FROM pa1p x "
+                    f"LEFT JOIN read_parquet({lit(d / 'uniqueness.parquet')}) q USING (snp_key)")
+    else:
+        con.execute("CREATE VIEW pa1 AS SELECT * FROM pa1p")
+    con.execute("CREATE VIEW p0 AS SELECT * FROM pa1 WHERE NOT dropped")
     chip = d / "chip.parquet"
     if chip.exists():
         window = snp_panel.settings(jobs.weights())["chip_window"]
-        con.execute(f"CREATE VIEW pa AS {snp_panel.compare_sql('pa0', f'read_parquet({chr(39)}{chip}{chr(39)})', window)}")
+        con.execute(f"CREATE VIEW pa AS {snp_panel.compare_sql('pa1', f'read_parquet({chr(39)}{chip}{chr(39)})', window)}")
     else:
-        con.execute("CREATE VIEW pa AS SELECT * FROM pa0")
+        con.execute("CREATE VIEW pa AS SELECT * FROM pa1")
     con.execute("CREATE VIEW p AS SELECT * FROM pa WHERE NOT dropped")
     con.execute("CREATE VIEW v AS SELECT * FROM p")  # tools.assay_readiness reads v
     return con, "p"
@@ -236,13 +254,20 @@ def page(request):
     downloads; an empty panel says how to fill it."""
     d = _folder(request)
     ctx = {"nav": "panel", "title": "Design panel", "error": request.GET.get("error"), "local": jobs.local()}
+    if jobs.local():  # saved projects (I7): the save form offers their names
+        from . import projects
+        ctx["projects"] = projects.everything()
     if d is None:
         return render(request, "snpportal/panel.html", ctx)
     s = jobs.read_json(d / "panel.json")
     con, rel = _open(d)
+    ctx["populations"] = populations(d)
+    ctx["genome"] = genome() is not None
+    ctx["flank_keys"] = (jobs.release() / "flank_keys.parquet").exists()  # I18: chips on another assembly
     chip = jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}
     synthetic = any(x.get("synthetic") for x in s["sources"]) or bool(chip.get("synthetic"))
-    ctx.update(sources=[{**x, "url": f"{reverse('snpportal:results', args=[x['job']])}?{x['selection'] + '&' if x['selection'] else ''}tab=table"}
+    ctx.update(sources=[{**x, "url": f"{reverse('snpportal:projects')}#{x['project']}" if x.get("project") else
+                         f"{reverse('snpportal:results', args=[x['job']])}?{x['selection'] + '&' if x['selection'] else ''}tab=table"}
                         for x in s["sources"]],
                meta=("Kept until you clear it" if jobs.keep_seconds() is None
                      else f"Deleted after {jobs.utc((d / 'created').stat().st_mtime + jobs.keep_seconds())}") + " · only this browser can open it",
@@ -264,6 +289,14 @@ def page(request):
         ctx["compare"] = [(f"{cs['chip_snps']:,}", "chip markers"), (f"{on[0]:,}", "already on the chip"),
                           (f"{on[1]:,}", "not on the chip"), (f"{cs['novel_functional']:,}", f"tier 1–2 with no chip marker within {tools._bp(cs['window_bp'])}"),
                           (f"{cs['gaps']:,}", f"chip gaps over {tools._bp(cs['gap_bp'])}")]
+        ctx["chips"] = chips(d)
+        if ctx["chips"]:
+            ctx["matrix"] = _matrix(con, d, chip)
+        params = _upgrade_params(request.GET, chip)
+        ctx["upgrade_form"] = params
+        if request.GET.get("upgrade"):
+            rows, pop = _upgrade(con, d, params)
+            ctx["upgrade"] = _upgrade_summary(rows, params, pop)
     every = request.GET.get("show") == "all"
     order = "genome" if request.GET.get("order") == "genome" else "problems"
     new_only = bool(chip) and request.GET.get("chip") == "new"
@@ -275,7 +308,8 @@ def page(request):
                           LISTED if every else SHOWN, order, new_only),
                more=None if every or n + dropped <= SHOWN else "?" + urlencode({k: v for k, v in (("show", "all"), ("order", order),
                                                                                          ("chip", "new" if new_only else "")) if v and v != "problems"}),
-               order=order, new_only=new_only, dropped=dropped,
+               order=order, new_only=new_only, dropped=dropped, uniqueness=uniqueness_summary(con, d, types),
+               uniqueness_max=UNIQUENESS_MAX, ss4r="ss4r_ohnolog" in types,
                downloads=_downloads(con, chip, n))
     return render(request, "snpportal/panel.html", ctx)
 
@@ -287,10 +321,14 @@ def _rows(con, types, sources, limit, order="problems", new_only=False):
     names = {x["id"]: f"S{i + 1}" for i, x in enumerate(sources)}
     cfg = snp_panel.settings(jobs.weights())
     spacing, low = int(cfg["min_spacing"]), float(cfg["min_maf"])
+    own = next((c for c in types if c.startswith("pop_") and c.endswith("_maf")), None)  # I9: the first own population
+    extra = (own, own[:-3] + "call_rate", own[:-3] + "hwe_p", own[:-3] + "n") if own else ()
     cols = [c for c in ("chrom", "pos", "id", "ref", "alt", "gene_name", "gene_id", "gene_ortholog_human", "region_class", "coding_consequence",
                         "coding_hgvsp", "tier", "assay_status", "public_af_maf", "lore", "on_chip", "near_chip", "dist_to_chip", "sources",
-                        "snp_key", "dropped") if c in types]
-    maf = "public_af_maf" if "public_af_maf" in types else "NULL"
+                        "snp_key", "dropped", "paralog_identity", "paralog_left", "paralog_right", "paralog_at", "paralog_gene") + extra
+            if c in types]
+    limit_id = ((jobs.weights() or {}).get("assay") or {}).get("max_paralog_identity")  # I10: G's threshold, if set
+    maf = own or ("public_af_maf" if "public_af_maf" in types else "NULL")
     lore = "coalesce(lore, false)" if "lore" in types else "false"
     sql = f"""WITH k AS (SELECT snp_key, chrom, pos, coalesce(nullif(id, '.'), chrom || ':' || pos) AS name FROM p),
               n AS (SELECT snp_key, pos - lag(pos) OVER w AS dp, lag(name) OVER w AS np, lead(pos) OVER w - pos AS dn,
@@ -316,10 +354,39 @@ def _rows(con, types, sources, limit, order="problems", new_only=False):
                     "position": f"{g('chrom')}:{g('pos'):,}", "alleles": results._alleles(g),
                     "gene": results.gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")), "region": results.region_text(g),
                     "tier": g("tier"), "assay": (results.ASSAY.get(status, ("?", "not_checked")) + (status.replace("_", " "),)),
-                    "maf": None if g("public_af_maf") is None else (f"{g('public_af_maf'):.2f}", g("public_af_maf") < low),
+                    "maf": _maf_cell(g, own, low),
                     "lore": bool(g("lore")), "close": f"{tools._bp(g('close_bp'))} from {g('close_to')}" if near else "",
-                    "chip": chip, "sources": " ".join(names.get(x, "?") for x in g("sources") or [])})
+                    "chip": chip, "sources": " ".join(names.get(x, "?") for x in g("sources") or []),
+                    "paralog": _paralog_cell(g, limit_id) if "paralog_gene" in r else None})
     return out
+
+
+def _paralog_cell(g, limit):
+    """(text, over G's threshold, tooltip) of the probe uniqueness check (I10), or None when the SNP was not checked or
+    has no Ss4R duplicate gene."""
+    if g("paralog_gene") is None and g("paralog_left") is None and g("paralog_right") is None:
+        return ("no duplicate", False, "No Ss4R duplicate gene, or no close copy found in it") if g("snp_key") else None
+    pct = lambda x: "< 89%" if x is None else f"{x:.0%}"  # noqa: E731
+    ident = g("paralog_identity")
+    tip = f"Best match in the Ss4R duplicate: left flank {pct(g('paralog_left'))}, right flank {pct(g('paralog_right'))}" \
+        + (f", at {g('paralog_at')} ({g('paralog_gene')})" if g("paralog_at") else "")
+    return (pct(ident), limit is not None and ident is not None and ident > float(limit), tip)
+
+
+def _maf_cell(g, own, low):
+    """(MAF text, below the designer's minimum, tooltip) from the user's population when there is one, else the public
+    panel's; None when unknown."""
+    if own:
+        m = g(own)
+        if m is None:
+            return ("–", False, "Not in your population's file")
+        base = own[:-3]
+        tip = f"Your population: {g(base + 'n') or 0} fish" + (f", call rate {g(base + 'call_rate'):.2f}" if g(base + "call_rate") is not None else "") \
+            + (f", HWE p {g(base + 'hwe_p'):.2g}" if g(base + "hwe_p") is not None else "") \
+            + (f"; public panel {g('public_af_maf'):.2f}" if g("public_af_maf") is not None else "")
+        return (f"{m:.2f}", m < low, tip)
+    m = g("public_af_maf")
+    return None if m is None else (f"{m:.2f}", m < low, "504 public fish, pooled")
 
 
 def _downloads(con, chip, n):
@@ -380,12 +447,134 @@ def _change(request):
         for path in (d / "chip.parquet", d / "chip.json"):
             path.unlink(missing_ok=True)
         return back
+    if request.POST.get("chip_extra_remove"):
+        gone = request.POST["chip_extra_remove"]
+        (d / "chips" / f"{gone}.parquet").unlink(missing_ok=True)
+        jobs._write_json(d / "chips.json", {"chips": [c for c in chips(d) if c["slug"] != gone]})
+        return redirect(reverse("snpportal:design_panel") + "#chip-h")
+    if request.FILES.get("population") or request.POST.get("population_remove"):
+        return _population(request, d)
+    if request.POST.get("uniqueness"):
+        return _uniqueness(d)
     return _chip(request, d)
 
 
+UNIQUENESS_MAX = 5000  # SNPs checked at most (about 0.02 s each, from a local genome)
+
+
+def genome():
+    """The release's genome as a local file (the probe uniqueness check reads ~100 kb around every ohnolog), or None."""
+    from snpscore.annotate import genome_location
+    where = genome_location(jobs.manifest())
+    return where if where and not str(where).startswith(("http://", "https://")) and Path(where).exists() else None
+
+
+def _uniqueness(d):
+    """POST uniqueness=1: lib.uniqueness.scan of the panel's SNPs (up to UNIQUENESS_MAX) against their Ss4R duplicate,
+    written to uniqueness.parquet (snp_key and the paralog_* columns) and uniqueness.json."""
+    from snpscore.fasta import Fasta
+    from .lib import uniqueness
+    back = reverse("snpportal:design_panel")
+    where = genome()
+    if where is None:
+        return redirect(f"{back}?{urlencode({'error': 'The probe uniqueness check needs the genome on this computer (salmo-snp download).'})}")
+    con, rel = _open(d)
+    if rel is None:
+        return redirect(back)
+    types = {c for c, in con.execute("SELECT column_name FROM (DESCRIBE p)").fetchall()}
+    if "ss4r_ohnolog" not in types:
+        con.close()
+        return redirect(f"{back}?{urlencode({'error': 'These results have no Ss4R duplicate genes (the ss4r layer).'})}")
+    flank = "assay_flank" if "assay_flank" in types else "NULL"
+    dist = "gene_distance" if "gene_distance" in types else "0"
+    rows = con.execute(f"SELECT snp_key, chrom, pos, {dist}, ss4r_ohnolog, {flank} FROM p ORDER BY file_row_number "
+                       f"LIMIT {UNIQUENESS_MAX}").fetchall()
+    wanted = sorted({g for r in rows if r[4] for g in r[4].split(",")})
+    genes = {}
+    if wanted:
+        genes = {g: (c, a, b) for g, c, a, b in con.execute(
+            f"SELECT id, chrom, start, \"end\" FROM read_parquet({lit(jobs.release() / 'gene.parquet')}) WHERE list_contains(?, id)",
+            [wanted]).fetchall()}
+    snps = [{"key": k, "chrom": c, "pos": pos, "gene_distance": gd, "ohnologs": (o or "").split(",") if o else [], "assay_flank": f}
+            for k, c, pos, gd, o, f in rows]
+    found = uniqueness.scan(snps, genes, Fasta(where), flank=int(snp_assay_flank()))
+    tmp = d / f".uniqueness-{uuid.uuid4().hex}.tsv"
+    cols = ("paralog_identity", "paralog_left", "paralog_right", "paralog_at", "paralog_gene")
+    with open(tmp, "w") as f:
+        f.write("\t".join(("snp_key",) + cols) + "\n")
+        for k, v in found.items():
+            f.write("\t".join([k] + ["" if v[c] is None else str(v[c]) for c in cols]) + "\n")
+    types = "{'snp_key': 'VARCHAR', 'paralog_identity': 'DOUBLE', 'paralog_left': 'DOUBLE', 'paralog_right': 'DOUBLE', " \
+            "'paralog_at': 'VARCHAR', 'paralog_gene': 'VARCHAR'}"
+    out = d / "uniqueness.parquet"
+    try:
+        con.execute(f"COPY (SELECT * FROM read_csv({lit(tmp)}, delim='\t', header=true, columns={types}, nullstr='')) "
+                    f"TO {lit(d / '.uniqueness.parquet')} (FORMAT parquet)")
+    finally:
+        con.close()
+        tmp.unlink(missing_ok=True)
+    os.chmod(d / ".uniqueness.parquet", 0o600)
+    os.replace(d / ".uniqueness.parquet", out)
+    jobs._write_json(d / "uniqueness.json", {"checked": len(rows), "with_ohnolog": len(found), "capped": len(rows) == UNIQUENESS_MAX,
+                                             "checked_utc": jobs.utc()})
+    return redirect(f"{back}#uniq-h")
+
+
+def snp_assay_flank():
+    """The assay check's flank length (weights.yaml assay.flank: Axiom's 35 nt)."""
+    return ((jobs.weights() or {}).get("assay") or {}).get("flank", 35)
+
+
+def uniqueness_summary(con, d, types):
+    """The probe uniqueness check's counts for the page and the report (None before it ran)."""
+    if not (d / "uniqueness.json").exists() or "paralog_identity" not in types:
+        return None
+    info = jobs.read_json(d / "uniqueness.json")
+    limit = ((jobs.weights() or {}).get("assay") or {}).get("max_paralog_identity")
+    close, high, over = con.execute("SELECT count(paralog_identity), count(*) FILTER (WHERE paralog_identity >= 0.97), "
+                                    "count(*) FILTER (WHERE paralog_identity > ?) FROM p", [2.0 if limit is None else float(limit)]).fetchall()[0]
+    return {**info, "close": close, "high": high, "limit": limit, "over": over if limit is not None else None}
+
+
+def populations(d):
+    """[{slug, label, format, sites, fish, added_utc}] of the panel folder's own populations (I9; local installs)."""
+    return jobs.read_json(d / "populations.json").get("populations", []) if (d / "populations.json").exists() else []
+
+
+def _population(request, d):
+    """POST population=<file> (VCF genotypes or a frequency table) with population_name, or population_remove=<slug>:
+    per-SNP counts only (lib.population) in populations/<slug>.parquet; the upload is deleted once counted."""
+    back = reverse("snpportal:design_panel")
+    pops = populations(d)
+    if request.POST.get("population_remove"):
+        gone = request.POST["population_remove"]
+        (d / "populations" / f"{gone}.parquet").unlink(missing_ok=True)
+        jobs._write_json(d / "populations.json", {"populations": [p for p in pops if p["slug"] != gone]})
+        return redirect(back)
+    if not jobs.local():  # a server never takes genotypes, even as counts
+        return redirect(f"{back}?error=Your own population is only for a copy of the portal on your computer.")
+    from .lib import population
+    upload = request.FILES["population"]
+    label = (request.POST.get("population_name") or "My population").strip()[:40]
+    slug = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")[:24] or "pop"
+    (d / "populations").mkdir(mode=0o700, exist_ok=True)
+    try:
+        info = population.count(Path(upload.path), jobs.release(), d / "populations" / f"{slug}.parquet")
+    except snpscore.InputError as e:
+        return redirect(f"{back}?{urlencode({'error': str(e)})}")
+    finally:
+        Path(upload.path).unlink(missing_ok=True)
+    pops = [p for p in pops if p["slug"] != slug] + [{"slug": slug, "label": label, **info, "added_utc": jobs.utc()}]
+    jobs._write_json(d / "populations.json", {"populations": pops})
+    return redirect(f"{back}#list-h")
+
+
 def _chip(request, d):
-    """The baseline chip: an uploaded SNP list (manifest, PLINK, VCF, table) or the release's demo chip."""
+    """The baseline chip: an uploaded SNP list (manifest, PLINK, VCF, table) or the release's demo chip. With
+    extra=1, another chip to compare with it (I11: chips/<slug>.parquet, listed in chips.json)."""
+    extra = bool(request.POST.get("extra"))
     demo, upload = jobs.release() / "demo" / "chip_demo_SYNTHETIC.tsv", request.FILES.get("chip")
+    back = reverse("snpportal:design_panel") + ("#chip-h" if extra else "")
     if request.POST.get("demo") and demo.is_file():
         src, label, synthetic = demo, "Demo chip", True
     elif upload and upload.size:
@@ -396,28 +585,138 @@ def _chip(request, d):
         os.replace(upload.path, src)
     else:
         return redirect(f"{reverse('snpportal:design_panel')}?chip_error=missing")
+    if extra:
+        label = (request.POST.get("chip_name") or "").strip()[:40] or f"Chip {len(chips(d)) + 2}"
     new = d / ".chip-new.parquet"
     try:
-        report = snp_panel.read_chip(src, jobs.release(), new, max_snps=tools.chip_cap())
+        report = snp_panel.read_chip(src, jobs.release(), new, max_snps=tools.chip_cap(),
+                                     place_by_flank=bool(request.POST.get("by_flank")) and src != demo)
     except (snpscore.InputError, duckdb.Error):
         new.unlink(missing_ok=True)
-        return redirect(f"{reverse('snpportal:design_panel')}?chip_error=format")
+        return redirect(f"{reverse('snpportal:design_panel')}?chip_error={'flank' if request.POST.get('by_flank') else 'format'}")
     finally:
         if src != demo:
             src.unlink(missing_ok=True)
     if not report.get("snps_kept"):
         new.unlink(missing_ok=True)
         return redirect(f"{reverse('snpportal:design_panel')}?chip_error=empty")
+    os.chmod(new, 0o600)
+    if extra:
+        slug = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")[:24] or "chip"
+        (d / "chips").mkdir(mode=0o700, exist_ok=True)
+        os.replace(new, d / "chips" / f"{slug}.parquet")
+        jobs._write_json(d / "chips.json", {"chips": [c for c in chips(d) if c["slug"] != slug] + [
+            {"slug": slug, "label": label, "synthetic": synthetic, "kept": report["snps_kept"], "created_utc": jobs.utc(),
+             **({"flank": report["flank"]} if report.get("flank") else {})}]})
+        return redirect(back)
     con = jobs.connect([d], d)
     density = [list(x) for x in con.execute(f"SELECT chrom, (pos - 1) // 1000000, count(*) FROM read_parquet('{new}') "
                                             "GROUP BY ALL ORDER BY ALL").fetchall()]
     con.close()
-    os.chmod(new, 0o600)
     os.replace(new, d / "chip.parquet")
     jobs._write_json(d / "chip.json", {"label": label, "synthetic": synthetic, "kept": report["snps_kept"],
                                        "rejected": {k: v for k, v in (report.get("rejected") or {}).items() if v},
-                                       "density": density, "created_utc": jobs.utc()})
-    return redirect(reverse("snpportal:design_panel"))
+                                       "density": density, "created_utc": jobs.utc(),
+                                       **({"flank": report["flank"]} if report.get("flank") else {})})
+    return redirect(back)
+
+
+def chips(d):
+    """[{slug, label, synthetic, kept, created_utc}] of the other chips compared with the panel's chip (I11)."""
+    return jobs.read_json(d / "chips.json").get("chips", []) if (d / "chips.json").exists() else []
+
+
+def _matrix(con, d, chip):
+    """The chips side by side (snp_panel.chip_matrix): the panel's chip, the other chips and the panel itself."""
+    tmp = d / f".matrix-{uuid.uuid4().hex}.parquet"
+    con.execute(f"COPY (SELECT chrom, pos, NULL::VARCHAR AS id FROM p) TO {lit(tmp)} (FORMAT parquet)")
+    pool = jobs.release() / "pool" / "pool.parquet"
+    others = [(c["label"], d / "chips" / f"{c['slug']}.parquet") for c in chips(d)]
+    try:
+        m = snp_panel.chip_matrix([(chip.get("label") or "Your chip", d / "chip.parquet")]
+                                  + [x for x in others if x[1].exists()] + [("This panel", tmp)],
+                                  pool=pool if pool.exists() else None, chrom_sizes=jobs.manifest().get("chrom_sizes"),
+                                  window_bp=snp_panel.settings(jobs.weights())["chip_window"],
+                                  gap_bp=snp_panel.settings(jobs.weights())["chip_gap"])
+    finally:
+        tmp.unlink(missing_ok=True)
+    return {"rows": [{**r, "near": near} for r, (_, near) in zip(m["rows"], m["overlap"])], "labels": [x for x, _ in m["overlap"]],
+            "pool": pool.exists(), "window": tools._bp(snp_panel.settings(jobs.weights())["chip_window"])}
+
+
+def _upgrade_params(get, chip):
+    """The Upgrade form's values (GET n, call_rate, hwe), each checked, with the panel designer's defaults."""
+    p = snp_panel.settings(jobs.weights())
+
+    def num(key, default, cast, lo, hi):
+        try:
+            v = cast(get.get(key, default))
+        except (TypeError, ValueError):
+            return default
+        return min(max(v, lo), hi)
+    return {"n": num("n", chip.get("kept") or 0, int, 1, tools.chip_cap()),
+            "call_rate": num("call_rate", p["upgrade_min_call_rate"], float, 0.0, 1.0),
+            "hwe": num("hwe", p["upgrade_min_hwe_p"], float, 0.0, 1.0)}
+
+
+def _upgrade(con, d, params):
+    """snp_panel.upgrade of the panel's chip: its markers QC'd in your first population (when there is one; else all
+    kept), the panel's SNPs not on the chip as candidates. Returns (rows, the population's label or None)."""
+    pops = [x for x in populations(d) if (d / "populations" / f"{x['slug']}.parquet").exists()]
+    columns = {c for c, in con.execute("SELECT column_name FROM (DESCRIBE p)").fetchall()}
+    ident = "coalesce(id::VARCHAR, snp_key)" if "id" in columns else "snp_key"
+    tmp = d / f".candidates-{uuid.uuid4().hex}.parquet"
+    con.execute(f"""COPY (SELECT chrom, pos, {ident} AS id, {'tier' if 'tier' in columns else 'NULL::INTEGER'} AS tier,
+                    {'tier_score' if 'tier_score' in columns else 'NULL::INTEGER'} AS tier_score FROM p
+                    {'WHERE NOT on_chip' if 'on_chip' in columns else ''}) TO {lit(tmp)} (FORMAT parquet)""")
+    p = snp_panel.settings(jobs.weights())
+    try:
+        rows = snp_panel.upgrade(d / "chip.parquet", tmp, qc=d / "populations" / f"{pops[0]['slug']}.parquet" if pops else None,
+                                 n_target=params["n"], min_call_rate=params["call_rate"], min_hwe_p=params["hwe"],
+                                 min_spacing_bp=p["min_spacing"], gap_bp=p["chip_gap"], chrom_sizes=jobs.manifest().get("chrom_sizes"))
+    finally:
+        tmp.unlink(missing_ok=True)
+    return rows, pops[0]["label"] if pops else None
+
+
+def _upgrade_summary(rows, params, pop):
+    actions = {a: sum(r["action"] == a for r in rows) for a in ("keep", "drop", "add")}
+    return {**actions, "n": actions["keep"] + actions["add"], "params": params, "pop": pop, "full": actions["keep"] >= params["n"],
+            "gap": sum(r["action"] == "add" and r["reason"] == "fills a chip gap" for r in rows),
+            "dropped": [r for r in rows if r["action"] == "drop"][:10], "added": [r for r in rows if r["action"] == "add"][:10],
+            "url": f"{reverse('snpportal:panel_upgrade')}?{urlencode({k: v for k, v in params.items()})}"}
+
+
+@private
+def upgrade(request):
+    """GET ?n=&call_rate=&hwe=: the upgraded chip as a TSV (chrom, pos, id, action, reason, tier), every marker kept or
+    dropped and every SNP added, with the settings in '#' lines."""
+    d = _folder(request)
+    if d is None or not (d / "chip.parquet").exists():
+        raise Http404("No panel chip to upgrade")
+    con, rel = _open(d)
+    if rel is None:
+        raise Http404("The panel is empty")
+    chip = jobs.read_json(d / "chip.json")
+    params = _upgrade_params(request.GET, chip)
+    rows, pop = _upgrade(con, d, params)
+    con.close()
+    s = _upgrade_summary(rows, params, pop)
+    head = [f"# salmobase functional SNP portal: Design panel, upgrade of {chip.get('label') or 'your chip'}",
+            f"# {', '.join(f'{k} {v}' for k, v in snp_export.installed().items())}; release {jobs.manifest().get('version', '?')}",
+            f"# {s['keep']:,} markers kept, {s['drop']:,} dropped, {s['add']:,} added ({s['gap']:,} in chip gaps): {s['n']:,} in all",
+            f"# QC in {pop}: call rate >= {params['call_rate']:g}, HWE p >= {params['hwe']:g}" if pop
+            else "# no population of yours: every marker kept (add one on the Design panel to check call rate and HWE)",
+            "# candidates: the panel's SNPs not on the chip, chip gaps first, then by tier and tier score, "
+            f"{snp_panel.settings(jobs.weights())['min_spacing']:,} bp apart at least",
+            "# PROVISIONAL thresholds (weights.yaml design): to confirm"]
+    if any(x.get("synthetic") for x in jobs.read_json(d / "panel.json")["sources"]) or chip.get("synthetic"):
+        head.append("# SYNTHETIC: made from a synthetic list or chip")
+    body = ["\t".join(("chrom", "pos", "id", "action", "reason", "tier"))] + [
+        "\t".join("" if r[k] is None else str(r[k]) for k in ("chrom", "pos", "id", "action", "reason", "tier")) for r in rows]
+    response = HttpResponse("\n".join(head + body) + "\n", content_type="text/tab-separated-values")
+    response["Content-Disposition"] = 'attachment; filename="chip_upgrade.tsv"'
+    return response
 
 
 # ---- downloads ----

@@ -1,9 +1,14 @@
-"""Public background pool (P3.1): every public 12-fish site annotated against a release, with the tier for every trait
-preset, in <release>/pool/pool.parquet, and the background shares the dashboard compares uploads with in
-<release>/pool/background.json. annotate never reads the pool (it only reads files the manifest names)."""
+"""Public background pool (P3.1): public sites annotated against a release, with the tier for every trait preset, in
+<release>/pool/pool.parquet, and the background shares the dashboard compares uploads with in
+<release>/pool/background.json. annotate never reads the pool (it only reads files the manifest names).
+
+The sites come from the release itself (public_af.parquet; SITES picks which), so any install can build it (ROADMAP
+I3), or from a VCF. The pool is a cache of the current weights: background.json records the weights' sha256 and the
+snpscore version, and stale() says when it needs building again."""
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 import tempfile
 import time
@@ -13,10 +18,48 @@ from pathlib import Path
 from .annotate import annotate, connect
 from .assay import breakdown
 from .formats import lit, q
-from .score import load_weights, scored
+from .score import WEIGHTS, load_weights, scored
 
 FLAGS = ("chromatin", "regbuild", "gerp", "blacklist", "lore", "public_af", "strand_ambiguous")  # boolean columns
 MAF_EDGES = tuple(i / 20 for i in range(1, 10))  # MAF histogram: [0, 0.05), [0.05, 0.1), ..., [0.45, 0.5]
+# The release's public sites in the pool (DECISIONS #15): 'aquafaang12', the 12 AQUA-FAANG fish's sites (as their VCF
+# gives them; 1.6M), or 'panel', every site of the 504-fish panel (7.6M)
+SITES = "aquafaang12"
+
+
+def stamp():
+    """What a pool depends on besides the release: the weights' sha256 and the snpscore version."""
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        v = version("snpscore")
+    except PackageNotFoundError:
+        v = "unknown"
+    return {"weights_sha256": hashlib.sha256(WEIGHTS.read_bytes()).hexdigest(), "snpscore_version": v}
+
+
+def stale(release_dir):
+    """True when the release has no pool, or one built for another release version, with other weights or another
+    snpscore version."""
+    release = Path(release_dir)
+    try:
+        made = json.loads((release / "pool" / "background.json").read_text())
+        version = json.loads((release / "manifest.json").read_text())["version"]
+    except (OSError, ValueError, KeyError):
+        return True
+    return (not (release / "pool" / "pool.parquet").exists() or made.get("release") != version
+            or any(made.get(k) != v for k, v in stamp().items()))
+
+
+def release_sites(release, work, sites=SITES):
+    """The release's public sites (public_af.parquet) as a chrom, pos, ref, alt table in genome order, for annotate."""
+    con = connect([release], work)
+    target = work / "sites.tsv"
+    keep = "aquafaang12_af IS NOT NULL" if sites == "aquafaang12" else "true"
+    con.execute(f"""COPY (SELECT chrom, "end" AS pos, ref, alt FROM read_parquet({lit(release / 'public_af.parquet')})
+                    WHERE {keep} ORDER BY TRY_CAST(chrom AS INTEGER), chrom, pos, ref, alt)
+                    TO {lit(target)} (HEADER, DELIMITER '\t')""")
+    con.close()
+    return target
 
 
 def maf_bin_sql(maf):
@@ -26,10 +69,11 @@ def maf_bin_sql(maf):
     return "(" + " + ".join(f"({maf} >= {e:g})::INTEGER" for e in MAF_EDGES) + ")"
 
 
-def build_pool(release_dir, background, assay=False, threads=4, memory_limit="4GB", progress=None):
-    """Annotate the public sites in `background` (a VCF) against the release, without sequence checks unless `assay`,
-    and write pool/pool.parquet (annotate columns, tier columns for the 'all' preset, then tier__<preset> and
-    tier_score__<preset> for every preset) and pool/background.json. Returns the pool folder."""
+def build_pool(release_dir, background=None, assay=False, threads=4, memory_limit="4GB", progress=None, sites=SITES):
+    """Annotate the public sites in `background` (a VCF; None: the release's own public_af sites, `sites`) against
+    the release, without sequence checks unless `assay`, and write pool/pool.parquet (annotate columns, tier columns
+    for the 'all' preset, then tier__<preset> and tier_score__<preset> for every preset) and pool/background.json.
+    Returns the pool folder."""
     release = Path(release_dir).resolve()
     out = release / "pool"
     out.mkdir(exist_ok=True)
@@ -37,6 +81,8 @@ def build_pool(release_dir, background, assay=False, threads=4, memory_limit="4G
     # The full annotate output is temporary: it goes to a folder outside the release, removed when done
     with tempfile.TemporaryDirectory(prefix="snpscore-pool-") as work:
         work = Path(work).resolve()
+        source = Path(background).name if background else f"public_af.parquet ({sites})"
+        background = background or release_sites(release, work, sites)
         annotate(background, release, work / "annotated.parquet", "all", sequence=assay, progress=step, threads=threads,
                  memory_limit=memory_limit)
         step("pool")
@@ -61,8 +107,8 @@ def build_pool(release_dir, background, assay=False, threads=4, memory_limit="4G
         summary = background_summary(con, f"read_parquet({lit(out / 'pool.parquet')})", weights)
         con.close()
     created = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    summary.update(release=manifest["version"], created=created,
-                   source=Path(background).name, rows_read=validation["rows_read"], rejected=validation["rejected"],
+    summary.update(release=manifest["version"], created=created, **stamp(),
+                   source=source, rows_read=validation["rows_read"], rejected=validation["rejected"],
                    assay_checked=bool(assay), seconds=round(time.time() - t0, 1))
     (out / "background.json").write_text(json.dumps(summary, indent=2))
     return out

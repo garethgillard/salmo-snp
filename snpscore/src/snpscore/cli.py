@@ -21,6 +21,8 @@ def main():
     a.add_argument("--threads", type=int, default=4)
     a.add_argument("--memory", default="4GB", help="DuckDB memory limit")
     a.add_argument("--max-snps", type=int, help="refuse files with more SNPs than this")
+    a.add_argument("--place-by-flank", action="store_true", help="the positions are on another assembly (e.g. an ICSASG_v2 "
+                   "chip manifest): place the SNPs by their flank sequences (Flank, SourceSeq or TopGenomicSeq column)")
 
     m = sub.add_parser("benchmark", help="positives vs controls matched on gene distance and public MAF, per layer, "
                                          "evidence term, region class, consequence and tier, with 95%% intervals")
@@ -44,7 +46,11 @@ def main():
 
     o = sub.add_parser("pool", help="annotate the public sites into <release>/pool (pool.parquet, background.json)")
     o.add_argument("--release", required=True)
-    o.add_argument("--background", default="data/raw/12_samples_genotype_filtered_on_504.vcf.gz", help="public sites (VCF)")
+    o.add_argument("--background", help="public sites as a VCF (default: the release's own public_af sites, --sites)")
+    o.add_argument("--sites", choices=("aquafaang12", "panel"), default=None,
+                   help="which of the release's public sites: the 12 AQUA-FAANG fish's (default) or the whole 504-fish panel")
+    o.add_argument("--if-stale", action="store_true",
+                   help="only if the release has no pool, or one made with other weights or another snpscore version")
     o.add_argument("--assay", action="store_true",
                    help="also run the sequence and assay checks (1.6M sites: about 80 s with --memory 8GB; 4GB is too little)")
     o.add_argument("--threads", type=int, default=4)
@@ -61,7 +67,7 @@ def main():
             sys.exit(f"snpscore: {args.release} can't be used:\n  " + "\n  ".join(check(args.release)))
         try:
             annotate(args.snps, args.release, args.out, args.trait, threads=args.threads, memory_limit=args.memory,
-                     max_snps=args.max_snps)
+                     max_snps=args.max_snps, place_by_flank=args.place_by_flank)
         except InputError as e:
             sys.exit(f"snpscore: {e}")
         out = Path(args.out)
@@ -72,6 +78,10 @@ def main():
             r = report["rsid"]
             print(f"rs IDs: {r['placed']} placed, {r['moved_from_icsasg_v2']} moved from ICSASG_v2 "
                   f"({r['alleles_complemented']} with complemented alleles), {r['unknown']} unknown")
+        if report.get("flank"):
+            f = report["flank"]
+            print(f"by flank sequence: {f['placed']} placed ({f['complemented']} with complemented alleles), "
+                  f"{f['not_found']} not found among the known sites")
         for w in report.get("alias_warnings", []):
             print(f"warning ({w['rows']} rows): {w['message']}")
         if report.get("assembly", {}).get("message"):
@@ -123,9 +133,12 @@ def pool(args):
     """Annotate the public sites into <release>/pool: a cache of the current weights' tiers, rebuilt after a change."""
     import time
 
-    from .pool import build_pool
+    from .pool import SITES, build_pool, stale
 
+    if args.if_stale and not stale(args.release):
+        print(f"{Path(args.release) / 'pool'}: up to date")
+        return
     t0 = time.time()
-    out = build_pool(Path(args.release), args.background, args.assay, args.threads, args.memory)
+    out = build_pool(Path(args.release), args.background, args.assay, args.threads, args.memory, sites=args.sites or SITES)
     print(f"{out / 'pool.parquet'}: {json.loads((out / 'background.json').read_text())['n_sites']} sites "
           f"in {time.time() - t0:.0f} s")

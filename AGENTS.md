@@ -61,7 +61,8 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
   use `fetchall()`, not `fetchone()`.
 - Assembly Ssal_v3.1, chromosomes named "1"-"29" (as AQUA-FAANG and Ensembl). Layers use BED coordinates; SNPs use
   1-based `pos`; a SNP is inside an interval when start < pos <= end.
-- Changes go through pull requests; G reviews anything touching the biology (CODEOWNERS).
+- Changes go through pull requests. Anything touching the biology files (CODEOWNERS lists them) needs G's OK in the
+  chat before it is merged.
 
 ## Biology decisions belong to G
 Don't invent thresholds, weights, "active" state definitions or trait-to-tissue mappings. Ask, then record the answer below (and in docs/DECISIONS.md).
@@ -129,6 +130,10 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     5e-8 / 1e-5, 1 Mb clumping; one causal variant per locus and no LD reference (stated on the page).
   - Locus browser: up to 8 signal rows (R1), ATAC/H3K27ac/H3K4me3, signal and ChromHMM up to 500 kb, lanes up to 2 Mb, 4 s deadline.
   - Vendor layouts (Illumina 60 bp TOP/BOT, Axiom 35 bp, KASP 50 bp) are 'to confirm against the vendor template' (see docs/RESEARCH.md 5).
+- Push 3 (2026-11-04, DECISIONS #30-#34): panel purposes and target sizes (weights.yaml design.presets,
+  target_sizes); the chip upgrade's QC (call rate 0.95, HWE p 1e-6); probe uniqueness shown, never flagged
+  (assay.max_paralog_identity: null); variant scores shown, never counted (variant_scores: {}); flank keys from the
+  504-fish panel's sites (layers.yaml flank_keys); the data-handling sheet's wording.
 - Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
   counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
   priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).
@@ -149,8 +154,8 @@ Open (ask G; all collected with options and recommendations in docs/DECISIONS.md
   while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
 - Assay QC: flank repeat shares are mostly 0 or 1, so ~55% of public SNPs warn on 'repeat' whatever the cut-off; should fully
   soft-masked flanks warn at all? (without it ~46% pass instead of ~20%)
-- Not biology, still G's: the PyPI names, the systems the install is checked on, the Axiom assumption and what
-  'genome comparison' means (DECISIONS.md #25-#28).
+- Not biology, still G's: the PyPI names, the systems the install is promised on, the Axiom assumption, what
+  'genome comparison' means and the data-handling sheet's wording (DECISIONS.md #25-#30).
 
 ## Development
 Tests use the small fixture in `snpdata/tests/fixture`, so they need no downloads.
@@ -204,9 +209,13 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
      of any pages (and says whether htmx and Bootstrap loaded); send them to the chat, before and after when a page
      changes. Score an example first when the page needs a job (`/snp/` POST `example=known_loci`, as
      tour_images does).
-  4. Push and open (or update) the pull request; CI runs; G merges, and the merge deploys to the NREC demo. NREC runs
-     main only: it is public, so branches are not deployed there.
+  4. Push and open (or update) the pull request; CI runs. NREC runs main only: it is public, so branches are not
+     deployed there.
 - Checking pages without a browser: fetch them with curl from a `salmo-snp serve` in the background;
   `bash tools/user_install_test.sh` checks the whole user path.
-- Changes: work on a branch and open a pull request; CI runs the tests and the user-install check; G merges (as admin)
-  and the merge deploys to the NREC demo. `deploy/nrec.sh` and new data releases need G's Mac (SSH key, data/raw).
+- Merging (G, 2026-11-04): features collect on the session's branch and its pull request, and go live only when G
+  says so in the chat, usually several at a time (no auto-merge). Claude then merges the PR with the GitHub tools,
+  once CI is green, and the merge deploys to the NREC demo. Before merging, say whether the PR touches the CODEOWNERS
+  files (the biology) and wait for G's OK. main's protection asks for a PR and the `tests` check, not approvals (the
+  PRs are under G's account, and GitHub doesn't let an author approve). After a merge, the branch restarts from main
+  for the next PR. `deploy/nrec.sh` and new data releases need G's Mac (SSH key, data/raw).

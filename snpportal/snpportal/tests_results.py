@@ -347,3 +347,42 @@ class DevTimingTest(SimpleTestCase):
                 self.assertEqual(self.client.get(url + query).status_code, 200)
                 timings[name] = round(time.time() - t, 3)
             print(f"\npublic_50k: scored in {scored:.1f} s; warm pages (s): {timings}")
+
+
+@skipUnless(FIXTURE.exists(), "needs snpscore/ next to snpportal/")
+class VariantScoreTest(SimpleTestCase):  # I15: a SYNTHETIC per-variant score layer in the Table, the card and the browser
+    def test_scores_everywhere(self):
+        import importlib
+        from unittest import mock
+        b = importlib.import_module("snpdata.build")
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            lines = [x.split("\t")[:5] for x in (FIXTURE / "snps.vcf").read_text().splitlines() if not x.startswith("#")]
+            scored, unscored = lines[:2], lines[2]
+            scores = tmp / "variant_scores_SYNTHETIC.tsv"
+            scores.write_text("chrom\tpos\tref\talt\tscore\n" + "".join(f"{c}\t{p}\t{r}\t{a}\t{s}\n" for (c, p, _, r, a), s
+                                                                        in zip(scored, (0.25, 0.75))))
+            layer = {"name": "synscore", "type": "point", "format": "variant_scores", "file": str(scores),
+                     "label": "SynScore", "description": "SYNTHETIC test scores"}
+            load = b.load_yaml
+            with mock.patch.object(b, "load_yaml", lambda p: (lambda c: {**c, "layers": c["layers"] + [layer]}
+                                                              if "layers" in c else c)(load(p))):
+                snpdata.build(DATA / "layers.yaml", FIXTURE, tmp / "release")
+            with override_settings(SNPSCORE_RELEASE=str(tmp / "release"), SNPPORTAL_RESULTS_DIR=str(tmp / "results"),
+                                   SNPPORTAL_WORKERS=0):
+                logging.disable(logging.WARNING)
+                try:
+                    paste = "\n".join(f"{c} {p} {r} {a}" for c, p, _, r, a in scored + [unscored])
+                    url = self.client.post(reverse("snpportal:upload"), {"paste": paste}).url.split("?")[0]
+                    table = self.client.get(url, {"tab": "table", "cols": "1", "col": ["tier", "scores"]}).content.decode()
+                    self.assertIn("Scores", table)
+                    self.assertIn("SynScore 0.75 · top 1%", table)  # the higher of the two: percentile 1
+                    self.assertIn("SynScore not scored", table)  # outside the scored set
+                    key = url.rstrip("/").split("/")[-1]
+                    card = self.client.get(reverse("snpportal:card", args=[key, 0]), follow=True).content.decode()
+                    self.assertIn("SynScore 0.25", card)  # the card in the Table's drawer: one key fact per score
+                    c, p = scored[0][0], int(scored[0][1])
+                    browser = self.client.get(reverse("snpportal:locus"), {"r": f"{c}:{p - 5000}-{p + 5000}"}).content.decode()
+                    self.assertIn("SynScore 0.25", browser)  # the lane's tick title
+                finally:
+                    logging.disable(logging.NOTSET)

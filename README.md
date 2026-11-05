@@ -27,13 +27,17 @@ You need:
                "git+https://github.com/garethgillard/salmo-snp#subdirectory=snpportal"
    ```
    Use conda-forge, not Anaconda's default channel, which needs a paid licence at larger organisations.
+   Once versions are tagged, install one by its tag (add `@v0.1.0` after `salmo-snp` in both lines) and, to get
+   exactly the versions it was checked with, its `constraints.txt` from the GitHub Release: `pip install -c
+   constraints.txt ...`. `salmo-snp info` and every exported file name the versions in use.
 2. Get the data, once: the release and the genome, every file checked against its sha256. Until the data is hosted on
    salmobase it is a GitHub Release of this repository, named after the release this version of salmo-snp expects
    (`salmo-snp info` names it):
    ```bash
    gh release download data-2026-11-03 -R garethgillard/salmo-snp      # two files, ~1.1 GB
    tar -xf salmo-snp-data-2026-11-03.tar && tar -xf salmo-snp-genome-Ssal_v3.1.tar
-   salmo-snp download --from site      # checks every file and copies it into the data folder; then delete site/
+   salmo-snp download --from site      # checks every file, copies it into the data folder and scores the public
+                                       # sites for comparison (about a minute); then delete site/
    ```
    In a clone of the repository, `bash tools/get_data.sh` does the same. Once the data is hosted online,
    `salmo-snp download` alone will do (or `--from <address>`; a copy of the published folder on a disk or a share
@@ -50,15 +54,56 @@ You need:
   another. It holds `releases/`, `genome/` and `results/`. Results stay until you delete them (Delete in the portal,
   or remove the folder).
 - **What leaves your computer**: nothing you upload or score. The portal fetches public data only: AQUA-FAANG signal
-  and chromatin tracks for the region you view in the locus browser (from salmobase). Your browser loads the pages'
-  styles and scripts (Bootstrap and htmx) from cdn.jsdelivr.net. With `--no-genome`, sequence checks also read the
-  genome from salmobase, near your SNPs' positions; the default download avoids that.
+  and chromatin tracks for the region you view in the locus browser (from salmobase). With `--no-genome`, sequence
+  checks also read the genome from salmobase, near your SNPs' positions; the default download avoids that. The
+  details are under "What is stored, and what goes over the network" below.
 - **Scripts and pipelines**: `snpscore annotate my_snps.vcf --release <release folder> -o out.tsv` scores without the
   portal (`snpscore -h`; the release folder is the one `salmo-snp info` lists). snpscore installs on its own too.
 - **Updating**: rerun the `pip install` with `--force-reinstall` (pip skips a GitHub install whose version number
   hasn't changed). When the new version expects a newer release, `salmo-snp serve` says so and uses the old one until
   you get the new one as in step 2 (the genome is kept if it hasn't changed).
 - **Removing**: `pip uninstall salmo-snp snpscore`, then delete the data folder.
+
+### What is stored, and what goes over the network
+For a company's IT or security review (draft: the wording is to be approved).
+
+**Stored, all as plain files in the data folder** (`salmo-snp info` shows where). There is no database, and nothing
+expires: everything stays until you delete it.
+- `releases/` and `genome/`: the public annotation data and the Ssal_v3.1 genome.
+- `results/<id>/`, one folder per scored list:
+  - your SNPs with their annotations, including the other columns of your file;
+  - the upload check, with the rejected rows and their positions;
+  - for GWAS lists, the summary statistics;
+  - any chip you compared against, the panels you designed, and the file's name as the list's label.
+- `results/panel-<id>/`: your Design panel.
+- `projects/<name>/`: the design projects you saved, one folder per version (the panel's SNPs, its chip and a note).
+- `secret_key`: signs the portal's cookies.
+- On macOS and Linux the folders are readable only by your user account (0700, files 0600); on Windows, by your
+  profile's permissions. Disk encryption (FileVault, BitLocker, LUKS) protects them like any other work file.
+- The uploaded file itself is deleted as soon as it has been scored. From a VCF only CHROM, POS, ID, REF and ALT are
+  read, so genotypes are never stored.
+- Temporary files, such as DuckDB's working files and exports being prepared, go in the results folder and are removed
+  when done.
+- The terminal running `salmo-snp serve` logs event names, counts and timings, never SNPs or file names.
+- Your browser keeps cookies for the form protection, the results it opened, your Design panel and your choice of
+  chromatin colours.
+
+**Network requests the portal makes**
+- `salmo-snp download`: the release and the genome, from the address you give.
+- The locus browser: public AQUA-FAANG signal and chromatin tracks for the region on screen, read from salmobase.org.
+  Requests name the public track files and a region of the genome (on a fixed grid of tiles), never your SNPs or
+  your file. So salmobase's server logs could show which regions were viewed: don't open the locus browser on a region
+  that is itself confidential.
+- Only if the genome was not downloaded (`--no-genome`): sequence checks read the genome from salmobase near your
+  SNPs' positions.
+- Nothing else. Pages and their scripts are served by the portal itself, and links to Ensembl, salmobase or papers are
+  only followed when you click them, without telling those sites which page you came from.
+
+**Deleting**: Delete on a result, or Clear on the Design panel, removes that folder. Removing the data folder removes
+everything.
+
+**Sharing**: what you export (tables, vendor files, the zip bundle, the printed report) contains your SNPs. Each file
+says which release and rules made it.
 
 ### If something goes wrong
 - `salmo-snp serve` says there is no release: step 2 hasn't been done for this data folder (`salmo-snp info`).
@@ -67,9 +112,8 @@ You need:
 - The port is taken: `salmo-snp serve --port 8001`.
 - Certificate errors (old Python builds, or a network that inspects HTTPS): point Python at your CA bundle, e.g.
   `SSL_CERT_FILE=/path/to/ca.pem salmo-snp serve` (downloads and the locus browser's public tracks both read it).
-- Without internet the pages lose their layout and don't update by themselves (Bootstrap and htmx come from
-  cdn.jsdelivr.net until they ship with the package), and the locus browser's signal rows show as unavailable.
-  Scoring still works: reload the results page to see a finished job.
+- Without internet everything works except the locus browser's signal rows, which come from salmobase and show as
+  unavailable.
 
 ## The repository
 

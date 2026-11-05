@@ -41,14 +41,50 @@
         {% if chip %}<form class="ms-auto" method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0" type="submit" name="chip_remove" value="1">Remove chip</button></form>{% endif %}</div>
       {% if chip_error %}<div class="sp-status sp-status-warn sp-small" role="status">&#9888; {{ chip_error }}</div>{% endif %}
       {% if compare %}<div class="sp-kpis">{% for value, label in compare %}<div class="sp-kpi"><b>{{ value }}</b><span>{{ label }}</span></div>{% endfor %}</div>
+      {% if chip.flank %}<p class="sp-small sp-muted mt-2 mb-0">Placed by flank sequence: {{ chip.flank.placed|thousands }} markers{% if chip.flank.complemented %}
+        ({{ chip.flank.complemented|thousands }} given on the other strand){% endif %}; {{ chip.flank.not_found|thousands }} not found among the known variant sites, left out.</p>{% endif %}
+      {% if chips %}<p class="sp-small mb-1">Other chips: {% for c in chips %}<strong>{{ c.label }}</strong> ({{ c.kept|thousands }} markers)
+        <form class="d-inline" method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0 align-baseline" type="submit" name="chip_extra_remove" value="{{ c.slug }}">Remove</button></form>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+      <form method="post" action="{% url 'snpportal:panel_change' %}" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center sp-small mt-1">{% csrf_token %}
+        <input type="hidden" name="extra" value="1">
+        <input class="form-control form-control-sm w-auto" type="file" name="chip" aria-label="Another chip's SNP list">
+        <input class="form-control form-control-sm w-auto" name="chip_name" maxlength="40" placeholder="name, e.g. Vendor 70K" aria-label="Chip name">
+        {% if flank_keys %}<label class="text-nowrap" title="Place this chip's markers by their flank sequences (a manifest on ICSASG_v2 or another assembly)"><input class="form-check-input" type="checkbox" name="by_flank" value="1"> another assembly</label>{% endif %}
+        <button class="btn btn-sm btn-outline-primary" type="submit">Compare another chip</button>
+        {% if chip_demo and not chip.synthetic %}<button class="btn btn-sm btn-outline-secondary" type="submit" name="demo" value="1">Demo chip</button>{% endif %}</form>
       {% else %}<p class="sp-small">Most panels add SNPs to a chip already in use. Upload its SNP list (Illumina or Axiom manifest, PLINK
         .bim/.map, VCF or a table with chrom and pos) to see which panel SNPs it already has, which are new and where it has gaps.</p>
       <form method="post" action="{% url 'snpportal:panel_change' %}" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center sp-small">{% csrf_token %}
         <input class="form-control form-control-sm w-auto" type="file" name="chip" aria-label="Chip SNP list">
+        {% if flank_keys %}<label class="text-nowrap" title="For a manifest on ICSASG_v2 or another assembly: each marker is placed on Ssal_v3.1 where its flank sequence matches a known variant site exactly"><input class="form-check-input" type="checkbox" name="by_flank" value="1"> positions on another assembly</label>{% endif %}
         <button class="btn btn-sm btn-primary" type="submit">Compare</button>
         {% if chip_demo %}<button class="btn btn-sm btn-outline-secondary" type="submit" name="demo" value="1">Use the demo chip</button>{% endif %}
       </form>{% endif %}
     </section>
+    {% if chip %}
+    <section class="sp-card" aria-labelledby="upgrade-h">
+      <h2 id="upgrade-h">Upgrade {{ chip.label|lower }}</h2>
+      <p class="sp-small mb-2">A new version of the chip: its markers that pass the QC{% if populations %} in {{ populations.0.label }}{% endif %}, then the
+        panel's SNPs not on it, those in the chip's gaps first, then by tier, until it has the size you give.{% if not populations %} Add your population
+        (genotypes) to drop markers that fail call rate or HWE.{% endif %}</p>
+      <form method="get" action="#upgrade-h" class="d-flex flex-wrap gap-2 align-items-center sp-small">
+        <input type="hidden" name="upgrade" value="1">
+        <label for="up-n" title="The chip keeps every marker that passes; this is the size it may grow to">New chip size</label><input class="form-control form-control-sm sp-num-in" id="up-n" name="n" type="number" min="1" value="{{ upgrade_form.n }}">
+        {% if populations %}<label for="up-cr">Call rate ≥</label><input class="form-control form-control-sm sp-num-in" id="up-cr" name="call_rate" type="number" min="0" max="1" step="0.01" value="{{ upgrade_form.call_rate }}">
+        <label for="up-hwe">HWE p ≥</label><input class="form-control form-control-sm sp-num-in" id="up-hwe" name="hwe" value="{{ upgrade_form.hwe }}">{% endif %}
+        <button class="btn btn-sm btn-primary" type="submit">Plan the upgrade</button></form>
+      {% if upgrade %}<div class="sp-kpis mt-2"><div class="sp-kpi"><b>{{ upgrade.keep|thousands }}</b><span>markers kept</span></div>
+        <div class="sp-kpi"><b>{{ upgrade.drop|thousands }}</b><span>dropped{% if not upgrade.pop %} (no QC data){% endif %}</span></div>
+        <div class="sp-kpi"><b>{{ upgrade.add|thousands }}</b><span>panel SNPs added, {{ upgrade.gap|thousands }} in chip gaps</span></div>
+        <div class="sp-kpi"><b>{{ upgrade.n|thousands }}</b><span>on the new chip</span></div></div>
+        {% if upgrade.full %}<p class="sp-small sp-muted mb-1 mt-2">The chip keeps {{ upgrade.keep|thousands }} markers, already {{ upgrade.params.n|thousands }} or more:
+          give a larger size to add panel SNPs.</p>{% endif %}
+        {% if upgrade.dropped %}<p class="sp-small mb-1 mt-2">Dropped: {% for r in upgrade.dropped %}{{ r.id|default:r.pos }} ({{ r.reason }}){% if not forloop.last %}; {% endif %}{% endfor %}{% if upgrade.drop > 10 %} …{% endif %}</p>{% endif %}
+        {% if upgrade.added %}<p class="sp-small mb-1">Added: {% for r in upgrade.added %}{{ r.chrom }}:{{ r.pos|thousands }} ({{ r.reason }}){% if not forloop.last %}; {% endif %}{% endfor %}{% if upgrade.add > 10 %} …{% endif %}</p>{% endif %}
+        <p class="sp-small mb-0"><a href="{{ upgrade.url }}">Download the upgrade (TSV)</a>: every marker kept or dropped and every SNP added, with the reason.
+          Thresholds are provisional.</p>{% endif %}
+    </section>
+    {% endif %}
   <section class="sp-card" aria-labelledby="dl-h">
     <h2 id="dl-h">Download</h2>
     <form method="get" action="{{ downloads.url }}" class="d-flex flex-wrap gap-2 align-items-center sp-small">
@@ -56,9 +92,47 @@
       <span class="ms-2">Vendor file:</span>
       {% for value, label in downloads.formats %}<button class="btn btn-sm btn-outline-primary" type="submit" name="format" value="{{ value }}">{{ label }}</button>{% endfor %}
     </form>
-    <p class="sp-small mt-2 mb-0"><a href="{{ downloads.tsv }}">Download the panel (TSV)</a>{% if not local %} &middot; score that file again to keep the
+    <p class="sp-small mt-2 mb-0"><a href="{% url 'snpportal:panel_report' %}">Design report</a> (printable) &middot; <a href="{{ downloads.tsv }}">Download the panel (TSV)</a>{% if not local %} &middot; score that file again to keep the
       panel beyond 24 hours{% endif %}. Vendor files leave out SNPs that fail the assay check.</p>
+    {% if local %}<form class="d-flex flex-wrap gap-2 align-items-center sp-small mt-2" method="post" action="{% url 'snpportal:panel_save' %}">{% csrf_token %}
+      <label for="save-name">Save as version of</label>
+      <input class="form-control form-control-sm w-auto" id="save-name" name="name" required maxlength="60" placeholder="project name" list="save-projects">
+      <datalist id="save-projects">{% for p in projects %}<option value="{{ p.slug }}">{% endfor %}</datalist>
+      <input class="form-control form-control-sm w-auto" name="note" maxlength="500" placeholder="note (optional)" aria-label="Note">
+      <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+      <a class="ms-auto" href="{% url 'snpportal:projects' %}">Saved projects</a></form>{% endif %}
   </section>
+  {% if local %}
+  <section class="sp-card" aria-labelledby="pop-h">
+    <h2 id="pop-h">Your population</h2>
+    {% if populations %}<ul class="sp-small mb-2">{% for p in populations %}<li><strong>{{ p.label }}</strong>: {{ p.sites|thousands }} SNPs from a {{ p.format }}{% if p.fish %}
+      of {{ p.fish|thousands }} fish{% endif %} ({{ p.added_utc }})
+      <form class="d-inline" method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0 align-baseline" type="submit" name="population_remove" value="{{ p.slug }}">Remove</button></form></li>{% endfor %}</ul>{% endif %}
+    <form class="d-flex flex-wrap gap-2 align-items-center sp-small" method="post" action="{% url 'snpportal:panel_change' %}" enctype="multipart/form-data">{% csrf_token %}
+      <input class="form-control form-control-sm w-auto" type="file" name="population" aria-label="Genotypes (VCF) or allele frequencies">
+      <input class="form-control form-control-sm w-auto" name="population_name" maxlength="40" placeholder="name, e.g. 2025 broodstock" aria-label="Population name">
+      <button class="btn btn-sm btn-outline-primary" type="submit">Add</button></form>
+    <p class="sp-small sp-muted mt-2 mb-0">Genotypes (a VCF) or a table of allele frequencies (chrom, pos, ref, alt, af) for the fish
+      the panel is for: the list then shows their MAF, call rate and HWE p instead of the public panel's. Only those numbers are
+      kept, on this computer; the genotypes are never stored.</p>
+  </section>
+  {% endif %}
+  {% if ss4r %}
+  <section class="sp-card" aria-labelledby="uniq-h">
+    <h2 id="uniq-h">Probe uniqueness</h2>
+    {% if uniqueness %}<div class="sp-kpis"><div class="sp-kpi"><b>{{ uniqueness.checked|thousands }}</b><span>SNPs checked{% if uniqueness.capped %} (the first {{ uniqueness_max|thousands }}){% endif %}</span></div>
+      <div class="sp-kpi"><b>{{ uniqueness.with_ohnolog|thousands }}</b><span>with an Ss4R duplicate gene</span></div>
+      <div class="sp-kpi"><b>{{ uniqueness.close|thousands }}</b><span>with a close copy (≥ 89%) on both flanks</span></div>
+      <div class="sp-kpi"><b>{{ uniqueness.high|thousands }}</b><span>≥ 97% on both flanks</span></div></div>
+      <p class="sp-small sp-muted mt-2 mb-0">Checked {{ uniqueness.checked_utc }}. The Duplicate column is the cleaner flank's best match.
+        {% if uniqueness.limit is None %}No SNP is flagged: the identity that is too high is still to be set (provisional).{% else %}{{ uniqueness.over|thousands }} above {{ uniqueness.limit }}, flagged.{% endif %}</p>
+    {% else %}<p class="sp-small mb-2">How closely each SNP's 35-nt flanks match the paired Ss4R duplicate region (its gene's ohnolog,
+      ±50 kb), where an Axiom or KASP probe could also bind. Up to {{ uniqueness_max|thousands }} SNPs, about a second per 50.</p>{% endif %}
+    {% if genome %}<form method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}
+      <button class="btn btn-sm btn-outline-primary" type="submit" name="uniqueness" value="1">{% if uniqueness %}Check again{% else %}Check probe uniqueness{% endif %}</button></form>
+    {% else %}<p class="sp-small sp-muted mb-0">Needs the genome on this computer: <code>salmo-snp download</code>.</p>{% endif %}
+  </section>
+  {% endif %}
   {% endif %}
     </div>
     {% if n %}<div class="col-lg-6 d-flex flex-column gap-3">
@@ -71,6 +145,21 @@
     </div>{% endif %}
   </div>
 
+  {% if matrix %}
+  <section class="sp-card" aria-labelledby="matrix-h">
+    <h2 id="matrix-h">Chips side by side</h2>
+    <div class="table-responsive"><table class="table table-sm sp-table sp-small mb-1">
+        <caption class="sp-small">Functional columns count the markers that are public sites{% if not matrix.pool %} (needs the public pool){% endif %};
+          the last columns, each one's markers within {{ matrix.window }} of a marker of that chip.</caption>
+        <thead><tr><th scope="col"></th><th scope="col" class="sp-num">Markers</th><th scope="col" class="sp-num">Per Mb</th><th scope="col" class="sp-num">Median spacing</th>
+          <th scope="col" class="sp-num">Gaps</th>{% if matrix.pool %}<th scope="col" class="sp-num">Public</th><th scope="col" class="sp-num">Tier 1–2</th><th scope="col" class="sp-num">CDS</th>
+          <th scope="col" class="sp-num">MAF ≥ 0.05</th>{% endif %}{% for label in matrix.labels %}<th scope="col" class="sp-num">Near {{ label }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for r in matrix.rows %}<tr><th scope="row">{{ r.label }}</th><td class="sp-num">{{ r.markers|thousands }}</td><td class="sp-num">{{ r.per_mb|default_if_none:"" }}</td>
+          <td class="sp-num">{% if r.median_kb is not None %}{{ r.median_kb }} kb{% endif %}</td><td class="sp-num">{{ r.gaps|thousands }}</td>
+          {% if matrix.pool %}<td class="sp-num">{{ r.public|thousands }}</td><td class="sp-num">{{ r.tier12|thousands }}</td><td class="sp-num">{{ r.coding|thousands }}</td><td class="sp-num">{{ r.maf05|thousands }}</td>{% endif %}
+          {% for k in r.near %}<td class="sp-num">{{ k|thousands }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+  </section>
+  {% endif %}
   {% if n %}
   <section class="sp-card" aria-labelledby="list-h">
     <div class="sp-card-head flex-wrap gap-2"><h2 id="list-h">Panel SNPs</h2>
@@ -83,8 +172,8 @@
           <a class="btn {% if new_only %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?chip=new{% if order == 'genome' %}&amp;order=genome{% endif %}#list-h">Not on the chip</a></span>{% endif %}</span></div>
     <div class="table-responsive"><table class="table table-sm sp-table sp-small sp-results mb-1">
       <thead><tr><th scope="col" class="sp-pickcol" title="+ in the panel, − dropped: click to switch">+/&minus;</th><th scope="col">SNP</th><th scope="col">Gene</th><th scope="col">Consequence</th>
-        <th scope="col" class="sp-ctr">Tier</th><th scope="col">Assay</th><th scope="col" class="sp-num">MAF</th>
-        <th scope="col" title="Another panel SNP closer than the panel designer's minimum spacing">Too close</th>{% if chip %}<th scope="col">Chip</th>{% endif %}<th scope="col">Sources</th></tr></thead>
+        <th scope="col" class="sp-ctr">Tier</th><th scope="col">Assay</th><th scope="col" class="sp-num">{% if populations %}MAF ({{ populations.0.label }}){% else %}MAF{% endif %}</th>
+        <th scope="col" title="Another panel SNP closer than the panel designer's minimum spacing">Too close</th>{% if uniqueness %}<th scope="col" class="sp-num" title="Probe uniqueness: the cleaner flank's best match in the Ss4R duplicate">Duplicate</th>{% endif %}{% if chip %}<th scope="col">Chip</th>{% endif %}<th scope="col">Sources</th></tr></thead>
       <tbody>{% for r in rows %}<tr{% if r.dropped %} class="sp-out"{% endif %}>
         <td class="sp-pickcol"><form method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}
           {% if order == 'genome' %}<input type="hidden" name="order" value="genome">{% endif %}{% if new_only %}<input type="hidden" name="chip" value="new">{% endif %}
@@ -94,8 +183,9 @@
         <td>{{ r.gene }}</td><td>{{ r.region }}</td>
         <td class="sp-ctr">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
         <td><span class="sp-as sp-as-{{ r.assay.1 }}"><span aria-hidden="true">{{ r.assay.0 }}</span> {{ r.assay.2 }}</span>{% if r.lore %} <span class="sp-as sp-as-warn">LORe</span>{% endif %}</td>
-        <td class="sp-num">{% if r.maf %}{% if r.maf.1 %}<span class="sp-as sp-as-warn" title="Below the panel designer's minimum MAF">{{ r.maf.0 }}</span>{% else %}{{ r.maf.0 }}{% endif %}{% endif %}</td>
+        <td class="sp-num">{% if r.maf %}{% if r.maf.1 %}<span class="sp-as sp-as-warn" title="Below the panel designer's minimum MAF · {{ r.maf.2 }}">{{ r.maf.0 }}</span>{% else %}<span title="{{ r.maf.2 }}">{{ r.maf.0 }}</span>{% endif %}{% endif %}</td>
         <td>{% if r.close %}<span class="sp-as sp-as-warn">{{ r.close }}</span>{% endif %}</td>
+        {% if uniqueness %}<td class="sp-num">{% if r.paralog %}<span{% if r.paralog.1 %} class="sp-as sp-as-warn"{% endif %} title="{{ r.paralog.2 }}">{{ r.paralog.0 }}</span>{% endif %}</td>{% endif %}
         {% if chip %}<td>{{ r.chip }}</td>{% endif %}<td>{{ r.sources }}</td></tr>{% endfor %}</tbody>
     </table></div>
     {% if not rows %}<p class="sp-small sp-muted">{% if new_only %}Every panel SNP is on the chip.{% else %}No SNPs to list.{% endif %}</p>{% endif %}

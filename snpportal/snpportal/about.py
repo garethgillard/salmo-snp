@@ -466,3 +466,32 @@ def state_palette(request):
     if name in palette.STATE_PALETTES:
         response.set_cookie(palette.COOKIE, name, max_age=365 * 86400, samesite="Lax", httponly=True, secure=request.is_secure())
     return response
+
+
+def releases(request):
+    """/snp/releases/ (I17, local installs): the releases this computer holds, which one new work uses, and a switch.
+    Results, Design panels and saved versions keep reading the release they were made with."""
+    if not jobs.local():
+        from django.http import Http404
+        raise Http404("One release on a server")
+    if request.method == "POST":
+        jobs.choose(request.POST.get("version") or None)
+        chosen = jobs.chosen()
+        if chosen is not None and int(jobs.setting("SNPPORTAL_WORKERS", 1)):  # its public pool, in the background (not in
+            # tests, which run inline): the Overview leaves the comparison out until it is there
+            import threading
+            threading.Thread(target=serve.ensure_pool, args=(chosen,), daemon=True).start()
+        return redirect(reverse("snpportal:releases"))
+    from snpscore.annotate import genome_location
+    from snpscore.pool import stale
+    using = jobs.chosen() or jobs.installed()[next(iter(jobs.installed()))]
+    rows = []
+    for version, folder in jobs.installed().items():
+        m = jobs.manifest(folder)
+        where = genome_location(m) or ""
+        rows.append({"version": version, "assembly": m.get("assembly", "Ssal_v3.1"), "created": m.get("created"),
+                     "layers": len(m.get("layers") or []), "genome": "on this computer" if where and not where.startswith("http") else
+                     "read from salmobase" if where else "none", "pool": not stale(folder), "using": folder == using,
+                     "expected": version == serve.RELEASE})
+    return render(request, "snpportal/releases.html", {"nav": "", "title": "Releases", "rows": rows,
+                                                       "meta": "Data releases on this computer"})

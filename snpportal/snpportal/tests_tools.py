@@ -156,6 +156,40 @@ class ToolsTest(SimpleTestCase):
         self.assertFalse(d.exists())
         self.client.get(self.url, {"tab": "table"})  # the whole list again, for the other tests
 
+    def test_chips_side_by_side_and_upgrade(self):  # I11, with SYNTHETIC chips
+        self.client.get(self.url, {"tab": "table"})  # the whole list as the selection
+        self.client.post(reverse("snpportal:panel_add", args=[self.key]))
+        change = reverse("snpportal:panel_change")
+        a = SimpleUploadedFile("a_SYNTHETIC.tsv", b"chrom\tpos\n9\t23007708\n9\t23008875\n9\t23200000\n1\t110987765\n")
+        self.client.post(change, {"chip": a})
+        b = SimpleUploadedFile("b_SYNTHETIC.tsv", b"chrom\tpos\n9\t23007708\n9\t23500000\n")
+        self.client.post(change, {"chip": b, "extra": "1", "chip_name": "Vendor B"})
+        page = self.client.get(reverse("snpportal:design_panel")).content.decode()
+        self.assertIn("Other chips: <strong>Vendor B</strong> (2 markers)", page)
+        self.assertIn("Near Vendor B", page)
+        self.assertIn('<th scope="row">This panel</th>', page)
+        self.assertIn("Compared with your chip", page)  # the panel's chip is still the first one
+        page = self.client.get(reverse("snpportal:design_panel"), {"upgrade": "1", "n": "10"}).content.decode()
+        self.assertIn("<b>4</b><span>markers kept</span>", page)  # no population of yours: every marker kept
+        self.assertIn("dropped (no QC data)", page)
+        tsv = self.client.get(reverse("snpportal:panel_upgrade"), {"n": "10"}).content.decode()
+        self.assertIn("# no population of yours", tsv)
+        self.assertIn("# SYNTHETIC", tsv)
+        table = [line.split("\t") for line in tsv.splitlines() if not line.startswith("#")]
+        self.assertEqual(table[0], ["chrom", "pos", "id", "action", "reason", "tier"])
+        out = {}
+        for chrom, pos, _, action, _, _ in table[1:]:
+            out.setdefault(chrom, []).append((int(pos), action))
+        self.assertEqual(sum(x == "keep" for ps in out.values() for _, x in ps), 4)
+        self.assertTrue(5 <= sum(len(ps) for ps in out.values()) <= 10)  # added up to 10
+        spacing = panel.snp_panel.settings(jobs.weights())["min_spacing"]
+        for ps in out.values():  # every SNP added is far enough from the others and from the markers kept
+            ps.sort()
+            self.assertTrue(all(q - p >= spacing for (p, x), (q, y) in zip(ps, ps[1:]) if "add" in (x, y)))
+        self.client.post(change, {"chip_extra_remove": "vendor_b"})
+        self.assertNotIn("Other chips", self.client.get(reverse("snpportal:design_panel")).content.decode())
+        self.assertEqual(Client().get(reverse("snpportal:panel_upgrade")).status_code, 404)  # another browser: no panel
+
     def test_panel_parameters(self):
         self.client.get(self.url, {"tab": "table"})  # the Panel designs from the Table selection: the whole list
         con = jobs.connect([self.d])
@@ -185,6 +219,44 @@ class ToolsTest(SimpleTestCase):
         url = bare.url.split("?")[0]
         self.assertContains(self.client.get(url + "?tab=panel"), 'id="selected-h"')
         self.assertEqual(self.client.get(reverse("snpportal:download", args=[url.split("/")[-2]]), {"scope": "all", "format": "kasp"}).status_code, 200)
+
+    def test_chip_placed_by_flank(self):  # I18: a SYNTHETIC manifest on 'another assembly', placed by its flank sequences
+        self.client.get(self.url, {"tab": "table"})
+        self.client.post(reverse("snpportal:panel_add", args=[self.key]))
+        genome = Fasta(FIXTURE / "Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz")
+        sites = duckdb.sql(f"SELECT chrom, pos FROM read_parquet('{self.release / 'flank_keys.parquet'}') ORDER BY pos LIMIT 3").fetchall()
+        lines = ["Name\tChr\tMapInfo\tSourceSeq"] + [
+            f"m{i}\t1\t{100 + i}\t{genome.fetch(c, p - 41, p - 1)}[{genome.fetch(c, p - 1, p).upper()}/N]{genome.fetch(c, p, p + 40)}"
+            for i, (c, p) in enumerate(sites)] + ["lost\t1\t999\t" + "ACGT" * 10 + "[A/G]" + "TTGA" * 10]
+        chip = SimpleUploadedFile("v2_chip_SYNTHETIC.tsv", ("\n".join(lines) + "\n").encode())
+        self.client.post(reverse("snpportal:panel_change"), {"chip": chip, "by_flank": "1"})
+        page = self.client.get(reverse("snpportal:design_panel")).content.decode()
+        self.assertIn("Placed by flank sequence: 3 markers; 1 not found among the known variant sites", page)
+        self.assertIn('name="by_flank"', page)
+        plain = SimpleUploadedFile("plain_SYNTHETIC.tsv", b"chrom\tpos\n9\t23007708\n")
+        response = self.client.post(reverse("snpportal:panel_change"), {"chip": plain, "by_flank": "1"})
+        self.assertIn("chip_error=flank", response.url)  # no flank column
+
+    def test_panel_purpose(self):  # I8: a purpose sets the designer's defaults; the panel, report and exports name it
+        self.client.get(self.url, {"tab": "table"})
+        page = self.client.get(self.url, {"tab": "panel", "purpose": "parentage"}).content.decode()
+        self.assertIn("<strong title=", page)
+        self.assertIn('name="purpose" value="parentage"', page)  # kept when the form is sent
+        self.assertIn('list="sp-sizes"', page)  # the target sizes as suggestions
+        h = re.search(r'scope=panel-([0-9a-f]{16})', page).group(1)
+        info = jobs.read_json(self.d / "panels" / f"{h}.json")
+        self.assertEqual((info["params"]["purpose"], info["params"]["min_spacing"], info["params"]["min_maf"]), ("parentage", 2_000_000, 0.3))
+        self.assertIn("Parentage and traceability", page[page.index('id="panel-h"'):page.index("</h2>", page.index('id="panel-h"'))])
+        picked = rows(self.d / "panels" / f"{h}.parquet")
+        self.assertTrue(all(r["assay_status"] == "pass" for r in picked))  # the preset asks for assay pass only
+        posted = self.client.post(reverse("snpportal:panel_design", args=[self.key]), {"design": "1", "purpose": "parentage", "n": "3"})
+        self.assertEqual(jobs.read_json(self.d / "panels" / f"{re.search(r'panel=([0-9a-f]{16})', posted.url).group(1)}.json")
+                         ["params"]["min_spacing"], 2_000_000)  # the form's blank fields keep the preset's numbers
+        report = self.client.get(reverse("snpportal:report", args=[self.key]), {"trait": "all", "panel": h}).content.decode()
+        self.assertIn("Designed with: purpose Parentage and traceability", report)
+        tsv = body(self.client.get(reverse("snpportal:download", args=[self.key]), {"scope": f"panel-{h}", "format": "tsv"})).decode()
+        self.assertIn("(purpose Parentage and traceability;", tsv)
+        self.assertNotIn('name="purpose"', self.client.get(self.url, {"tab": "panel", "purpose": "nope"}).content.decode())
 
     def test_export_lists_recent_panels(self):
         """The Export tab lists the newest panel of each parameter set, newest first, at most 3, plus one asked for."""

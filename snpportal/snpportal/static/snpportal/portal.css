@@ -282,6 +282,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-results th.sp-num, .sp-results th.sp-ctr { text-align: right; }
 .sp-results th.sp-ctr, .sp-results td.sp-ctr { text-align: center; }
 .sp-results .sp-clip { max-width: 15rem; }  /* long gene names and ids: cut, the tooltip has them */
+.sp-nowrap { white-space: nowrap; }
 .sp-results .sp-clip.sp-wide { max-width: 22rem; }
 /* the selector column: + in the selection (no colour), − taken out (the row dimmed) */
 .sp-results .sp-pickcol { width: 2.6rem; text-align: center; padding-left: .25rem; padding-right: .25rem; }
@@ -572,3 +573,4 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-eq > div > :last-child { flex: 1 1 auto; }
 .sp-eq .sp-card, .sp-eq .sp-figure { margin: 0; }
 .sp button.sp-pick { padding: 0; }  /* the Design panel's +/−: a form button, as the Table's link */
+.sp-num-in { width: 7rem; }  /* small number fields (the Design panel's Upgrade form) */

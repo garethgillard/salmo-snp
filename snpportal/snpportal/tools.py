@@ -69,7 +69,10 @@ CHIP_ERRORS = {  # ?chip_error= -> message (codes only: no file content or names
     "size": "The chip file is too large. Compress it with gzip, or keep only the chromosome and position columns.",
     "format": "The chip file could not be read. It needs chromosome and position columns (e.g. Chr/MapInfo, CHROM/POS) or "
               "a VCF, PLINK or Illumina/Axiom manifest layout: see Help for the accepted formats.",
-    "empty": "None of the chip's positions are on Ssal_v3.1 chromosomes 1–29. Are they on another assembly (ICSASG_v2)?",
+    "empty": "None of the chip's positions are on Ssal_v3.1 chromosomes 1–29. Are they on another assembly (ICSASG_v2)? "
+             "Then tick 'Positions on another assembly' to place the markers by their flank sequences.",
+    "flank": "The chip's markers could not be placed by flank sequence: the file needs a column of flank or probe sequences "
+             "(Axiom 'Flank', Illumina 'SourceSeq' or 'TopGenomicSeq', with the SNP as [A/B]), and the release flank keys.",
     "rows": "The chip file has more than {cap} markers. Keep only the markers you need, or compare it on your own "
             "computer with python -m snpportal.lib.cli compare (see Run it locally).",
 }
@@ -376,7 +379,9 @@ def _params(data, weights, types, ids=()):
     must-include `ids` (the POST's only): blank or out-of-range values give the release's 'design' defaults. Before the
     form is first sent (no design=1) the default checkboxes are ticked. The Assay select (assay=, as on the Table) sets
     require_assay_pass and the LORe exclusion; assay_pass=1 and exclude=lore of older links still work."""
-    get, default = data.get, snp_panel.settings(weights)
+    get = data.get
+    purpose = get("purpose") if get("purpose") in snp_panel.presets(weights) else None  # I8: the preset's numbers are the defaults
+    default = snp_panel.settings(weights, purpose)
     sent = get("design") == "1"
     allowed = [f for f in EXCLUDE if f in types]
     if sent:
@@ -397,6 +402,8 @@ def _params(data, weights, types, ids=()):
         "exclude_flags": sorted(f for f in flags if f in allowed),
         "must_include": sorted(set(ids))[:MAX_MUST],
     }
+    if purpose:  # only then in the parameters, so other panels keep their hash
+        p["purpose"] = purpose
     if {"cm_female", "cm_male"} <= set(types):  # R5: also keep markers this many cM apart (blank or 0: bp only)
         cm = _number(get("spacing_cm"), float, 0, 1000, None if sent else default.get("min_spacing_cm"))
         if cm:  # only then in the parameters, so bp-only panels keep their hash
@@ -406,7 +413,7 @@ def _params(data, weights, types, ids=()):
 
 def _state(p, weights, gap):
     """The designer's form state for parameters p: the Assay choice and how many Advanced settings are not the defaults."""
-    default = snp_panel.settings(weights)
+    default = snp_panel.settings(weights, p.get("purpose"))
     choice = "pass" if p["require_assay_pass"] else "ok_nolore" if "lore" in p["exclude_flags"] else "ok"
     changed = sum([p["min_maf"] != float(default["min_maf"]), p["backbone_fraction"] != float(default["backbone_fraction"]),
                    p["max_per_gene"] != int(default["max_per_gene"]), p["max_per_element"] != int(default["max_per_element"]),
@@ -434,6 +441,7 @@ def _fields(p, types, gap_mb):
         ("gap_mb", "Highlight gaps over (Mb)", f"{gap_mb:g}", 0.01, 1000, "any", "Display only: gaps this long are highlighted in the figure"),
     ]
     fields = [dict(zip(("name", "label", "value", "min", "max", "step", "help"), f)) for f in fields if f]
+    fields[0]["list"] = "sp-sizes"  # the target sizes (I8) as suggestions
     return fields[:2], fields[2:]
 
 
@@ -458,7 +466,7 @@ def _design(con, view, d, trait, p, weights, chip):
         r = snp_panel.design(con, trait, p["n_target"], p["min_spacing"], p["min_maf"], p["backbone_fraction"], p["max_per_gene"],
                              p["max_per_element"], p["require_assay_pass"], p["exclude_flags"], p["must_include"], weights=weights,
                              chrom_sizes=jobs.manifest(d).get("chrom_sizes"), table=view, out=tmp,
-                             **{k: p[k] for k in ("min_spacing_cm", "cm_map") if k in p})
+                             **{k: p[k] for k in ("min_spacing_cm", "cm_map", "purpose") if k in p})
         info = {"hash": h, "selection_hash": r["hash"], "preset": trait, "params": p, "summary": r["summary"], "table": _selection_key(d),
                 "chip": chip.get("label"), "chip_synthetic": bool(chip.get("synthetic")), "created_utc": jobs.utc()}
         jobs._write_json(folder / f"{h}.json", info)
@@ -511,7 +519,26 @@ def panel_name(info, time=False):
         when = f"{when.day} {when:%b}" + (f" {when:%H:%M}" if time else "")
     except ValueError:
         pass
-    return " · ".join(x for x in [f"{info['summary']['n_selected']:,} markers", jobs.trait_label(info.get("preset") or "all"), when] if x)
+    purpose = (info.get("params") or {}).get("purpose")
+    label = (purpose_label(purpose) if purpose else None) or jobs.trait_label(info.get("preset") or "all")
+    return " · ".join(x for x in [f"{info['summary']['n_selected']:,} markers", label, when] if x)
+
+
+def panel_params(p):
+    """A designed panel's parameters in one line (its purpose first, I8), for the report and the export provenance."""
+    parts = [f"purpose {purpose_label(p['purpose']) or p['purpose']}"] if p.get("purpose") else []
+    parts += [f"{int(p['n_target']):,} markers", f"at least {_bp(p['min_spacing'])} apart"
+              + (f" and {p['min_spacing_cm']:g} cM" if p.get("min_spacing_cm") else ""), f"MAF ≥ {p['min_maf']:g}",
+              f"backbone {p['backbone_fraction']:g}", f"≤ {p['max_per_gene']} per gene", f"≤ {p['max_per_element']} per element",
+              "assay pass only" if p.get("require_assay_pass") else "no assay fail"]
+    if p.get("exclude_flags"):
+        parts.append("excluding " + ", ".join(p["exclude_flags"]))
+    return "; ".join(parts)
+
+
+def purpose_label(name, weights=None):
+    """A design purpose's label (weights.yaml design.presets, I8), or None."""
+    return (snp_panel.presets(weights or jobs.weights()).get(name) or {}).get("label")
 
 
 def panel_line(s):
@@ -623,7 +650,10 @@ def panel(request, key, job):
         "rows": _listed(con, info, d, trait, key, LISTED if every else SHOWN), "n_rows": s["n_selected"], "listed": LISTED,
         "show_all": None if every or s["n_selected"] <= SHOWN else "?" + more.urlencode(),
         "export_link": "?" + urlencode({"tab": "export", "trait": trait, "scope": f"panel-{pv['hash']}"}),
-        "reset": "?" + urlencode({"tab": "panel", "trait": trait}),
+        "reset": "?" + urlencode({"tab": "panel", "trait": trait, **({"purpose": p["purpose"]} if p.get("purpose") else {})}),
+        "purposes": [("", "General", "The release's design defaults", not p.get("purpose"))] + [
+            (k, x.get("label") or k, x.get("help") or "", k == p.get("purpose")) for k, x in snp_panel.presets(weights).items()],
+        "purpose": p.get("purpose"), "sizes": snp_panel.target_sizes(weights),
     }
     return {"designer": designer, "readiness": assay_readiness(con, types, _synthetic(job), link),
             "chip": _chip_context(request, key, job, d, trait, con, weights, chip, link)}
@@ -858,6 +888,9 @@ def export(request, key, job, fmt):
     formats = ["tsv", "bed"] + (list(VENDORS) if n <= cap else [])
     notes = {"vendor_files": f"left out above {cap:,} SNPs"} if fmt == "bundle" and n > cap else {}
     meta = _meta(job, trait, synthetic, {**filters, **notes}, panel_hash, _command(job, trait, tag, fmt))
+    saved = _saved(d, panel_hash) if panel_hash else None
+    if saved and saved.get("params"):
+        meta["panel_params"] = panel_params(saved["params"])
     if fmt == "bundle" and job.get("input_kind") == "gwas":  # methods.txt gains the fine-mapping paragraph and Wakefield 2009
         from . import association  # association imports views, which imports this module
         meta["finemap"] = association.finemap_used(association.analyse(request, key))

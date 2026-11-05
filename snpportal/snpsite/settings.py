@@ -13,7 +13,8 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")  # behind Caddy on
 STATIC_ROOT = os.environ.get("DJANGO_STATIC_ROOT")  # collectstatic's target; Caddy serves it when DEBUG is off
 INSTALLED_APPS = ["django.contrib.staticfiles", "snpportal"]
 MIDDLEWARE = ["django.middleware.common.CommonMiddleware", "django.middleware.csrf.CsrfViewMiddleware",
-              "snpportal.palette.middleware"]  # a viewer's chromatin colours (the locus browser's toggle)
+              "snpportal.palette.middleware",  # a viewer's chromatin colours (the locus browser's toggle)
+              "snpportal.jobs.middleware"]  # the release each request reads (several releases installed, I17)
 ROOT_URLCONF = "snpsite.urls"
 TEMPLATES = [{
     "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -31,6 +32,8 @@ if os.environ.get("SNPPORTAL_RESULTS_DIR"):
     SNPPORTAL_RESULTS_DIR = os.environ["SNPPORTAL_RESULTS_DIR"]
 SNPPORTAL_WORKERS = int(os.environ.get("SNPPORTAL_WORKERS", 1))  # background job threads; 0 = run inline (tests)
 SNPPORTAL_KEEP_HOURS = float(os.environ.get("SNPPORTAL_KEEP_HOURS", 24))
+if os.environ.get("SNPPORTAL_RELEASES_DIR"):  # salmo-snp serve: the data folder's releases/, to switch between (I17)
+    SNPPORTAL_RELEASES_DIR = os.environ["SNPPORTAL_RELEASES_DIR"]
 SNPPORTAL_LOCAL = os.environ.get("SNPPORTAL_LOCAL") == "1"  # salmo-snp serve: nothing expires, the pages say it is local
 SNPPORTAL_MAX_UPLOAD_MB = 300  # checked on Content-Length before the body is read
 SNPPORTAL_MAX_SNPS = 3_000_000

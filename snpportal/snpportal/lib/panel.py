@@ -25,6 +25,7 @@ DEFAULTS = {  # PROVISIONAL; weights.yaml 'design' overrides these
     "score": {"tier": 1.0, "assay": 0.3, "maf": 0.3}, "chip_window": 10000, "chip_gap": 1000000,
     "min_spacing_cm": None,  # also keep markers this many cM apart (needs annotate's cm_male / cm_female columns)
     "cm_map": "mean",  # which map: female, male or mean (sex-averaged); the male map is short on chr 2, 8 and 17
+    "upgrade_min_call_rate": 0.95, "upgrade_min_hwe_p": 1e-6,  # upgrade(): QC of the chip's markers in your population
 }
 CM_MAPS = {"female": "try_cast(cm_female AS DOUBLE)", "male": "try_cast(cm_male AS DOUBLE)",
            "mean": "(coalesce(cm_male, cm_female) + coalesce(cm_female, cm_male)) / 2"}
@@ -36,9 +37,25 @@ TEXT = ("chrom", "id", "ref", "alt", "genome_base")  # columns read as text from
 CHIP_MAX = 3_000_000  # read_chip refuses longer chip lists (a small .gz can hold billions of rows)
 
 
-def settings(weights=None, **given):
-    """The design parameters: DEFAULTS, then weights.yaml 'design', then the given values that are not None."""
-    p = {**DEFAULTS, **((weights or {}).get("design") or {})}
+def presets(weights=None):
+    """{name: {label, help, and design parameters}} of weights.yaml design.presets (ROADMAP I8; PROVISIONAL numbers)."""
+    return ((weights or {}).get("design") or {}).get("presets") or {}
+
+
+def target_sizes(weights=None):
+    """Panel sizes offered as quick choices (weights.yaml design.target_sizes; vendor formats to confirm)."""
+    return [int(x) for x in ((weights or {}).get("design") or {}).get("target_sizes") or []]
+
+
+def settings(weights=None, purpose=None, **given):
+    """The design parameters: DEFAULTS, then weights.yaml 'design', then the `purpose` preset's (design.presets), then
+    the given values that are not None. With a purpose, p['purpose'] names it."""
+    p = {k: v for k, v in {**DEFAULTS, **((weights or {}).get("design") or {})}.items() if k not in ("presets", "target_sizes")}
+    if purpose:
+        if purpose not in presets(weights):
+            raise InputError(f"Unknown purpose '{purpose}'. Choose from: {', '.join(presets(weights)) or 'none defined'}")
+        p.update({k: v for k, v in presets(weights)[purpose].items() if k in DEFAULTS})
+        p["purpose"] = purpose
     p.update({k: v for k, v in given.items() if v is not None})
     p["exclude_flags"] = sorted(set(p["exclude_flags"] or []))
     p["must_include"] = sorted(set(p.get("must_include") or []))
@@ -146,19 +163,20 @@ def vendor_checks(snps):
 
 def design(source, preset="all", n_target=None, min_spacing_bp=None, min_maf=None, backbone_fraction=None,
            max_per_gene=None, max_per_element=None, require_assay_pass=None, exclude_flags=None, must_include=None,
-           weights=None, chrom_sizes=None, table="v", out=None, min_spacing_cm=None, cm_map=None, synthetic=()):
+           weights=None, chrom_sizes=None, table="v", out=None, min_spacing_cm=None, cm_map=None, synthetic=(), purpose=None):
     """Choose a panel from annotated SNPs: `source` is a parquet/TSV path or a DuckDB connection with `table`.
     Parameters left None come from weights['design'] (else DEFAULTS). `exclude_flags` are column names: rows where
     they are true (or > 0 for counts, e.g. flank_variants) are dropped; `must_include` ids are always selected first.
     `chrom_sizes` (manifest) sets the backbone bins (default: the largest position per chromosome). With
     `min_spacing_cm`, markers are also kept that many cM apart on the `cm_map` map (female, male or mean of annotate's
     cm_female and cm_male; SNPs beyond the first or last map marker take that marker's cM, and on a chromosome without
-    a map they are left out). A path's tiers are recomputed for `preset` with `weights` when it has no tier__<preset>
+    a map they are left out). `purpose` (a weights.yaml design.presets name, I8) sets the defaults for the parameters
+    left None. A path's tiers are recomputed for `preset` with `weights` when it has no tier__<preset>
     columns (see _open). Writes the selected rows (all columns plus selection_reason, panel_rank, design_score) to
     `out` if given.
     Returns {'params', 'hash', 'summary', 'selected': [{row, chrom, pos, id, selection_reason, panel_rank,
     design_score, tier}]}; selection_reason is must_include, backbone, functional (tier 1-3) or fill (tier 4)."""
-    p = settings(weights, n_target=n_target, min_spacing=min_spacing_bp, min_maf=min_maf,
+    p = settings(weights, purpose, n_target=n_target, min_spacing=min_spacing_bp, min_maf=min_maf,
                  backbone_fraction=backbone_fraction, max_per_gene=max_per_gene, max_per_element=max_per_element,
                  require_assay_pass=require_assay_pass, exclude_flags=exclude_flags, must_include=must_include,
                  min_spacing_cm=min_spacing_cm, cm_map=cm_map)
@@ -280,7 +298,8 @@ def _finish(con, rel, columns, p, chosen, sizes, n_rows, n_ok, skipped, out):
         "pos - lag(pos) OVER (PARTITION BY chrom ORDER BY pos)", "round(_cm - lag(_cm) OVER (PARTITION BY chrom ORDER BY pos), 4)"))
     checks = vendor_checks(rows("SELECT chrom, pos, ref, alt FROM _sel ORDER BY panel_rank"))
     summary = {
-        "preset": p["preset"], "n_target": p["n_target"], "n_selected": len(chosen), "n_rows": n_rows,
+        "preset": p["preset"], **({"purpose": p["purpose"]} if p.get("purpose") else {}),
+        "n_target": p["n_target"], "n_selected": len(chosen), "n_rows": n_rows,
         "n_candidates": n_ok,
         "reasons": dict(rows("SELECT selection_reason, count(*) FROM _sel GROUP BY 1 ORDER BY 1")),
         "tiers": {str(t): c for t, c in rows("SELECT tier, count(*) FROM _sel GROUP BY 1 ORDER BY 1 NULLS LAST")},
@@ -386,18 +405,124 @@ def compare(source, chip, preset="all", window_bp=None, gap_bp=None, pool=None, 
     return {"summary": summary, "gaps": gaps}
 
 
-def read_chip(chip_path, release_dir, out_path, max_snps=CHIP_MAX):
+def read_chip(chip_path, release_dir, out_path, max_snps=CHIP_MAX, place_by_flank=False):
     """Read a chip's SNP list (any snpscore input layout: manifest, PLINK, VCF, table) through the release's chromosome
-    aliases and write chrom, pos, id to out_path (parquet). Returns the validation counts. A list with more than
-    `max_snps` rows raises TooMany, an InputError (reading stops there)."""
+    aliases and write chrom, pos, id to out_path (parquet). With `place_by_flank` (I18), the positions are on another
+    assembly and the markers are placed by their flank sequences (the release's flank_keys.parquet). Returns the
+    validation counts. A list with more than `max_snps` rows raises TooMany, an InputError (reading stops there)."""
     path, release, out = Path(chip_path).resolve(), Path(release_dir).resolve(), Path(out_path).resolve()
     manifest = json.loads((release / "manifest.json").read_text())
     con = connect([path.parent, release], out.parent)
     try:
         alias = release / "alias.parquet"
-        report = read_snps(con, path, manifest.get("chrom_sizes") or [], alias if alias.exists() else None, max_snps)
+        keys = release / "flank_keys.parquet"
+        if place_by_flank and not keys.exists():
+            raise InputError("This release has no flank keys, so chip markers can't be placed by their flank sequence.")
+        report = read_snps(con, path, manifest.get("chrom_sizes") or [], alias if alias.exists() else None, max_snps,
+                           flank_keys=keys if place_by_flank else None)
         ident = "id" if "id" in [r[0] for r in con.execute("DESCRIBE snps").fetchall()] else "NULL::VARCHAR AS id"
         con.execute(f"COPY (SELECT chrom, pos, {ident} FROM snps ORDER BY idx) TO {lit(out)} (FORMAT parquet)")
     finally:
         con.close()
     return report
+
+
+def chip_matrix(chips, pool=None, chrom_sizes=None, window_bp=10_000, gap_bp=1_000_000):
+    """Several chips side by side (ROADMAP I11). chips: [(label, parquet with chrom, pos)]; pool: the release's
+    pool/pool.parquet, which gives the functional content of the markers that are public sites. Returns {rows: [{label,
+    markers, per_mb, median_kb, gaps, public, tier12, coding, maf05}], overlap: [(label, [markers within window_bp of a
+    marker of each chip, in chips' order])]}. Gaps count stretches over gap_bp, chromosome ends included."""
+    files = [Path(p).resolve() for _, p in chips] + ([Path(pool).resolve()] if pool else [])
+    con = connect(sorted({f.parent for f in files}))
+    sizes = {str(k): int(v) for k, v in (chrom_sizes or {}).items()}
+    genome_mb = sum(sizes.values()) / 1e6 if sizes else None
+    ends = "".join(f" WHEN {lit(c)} THEN {n}" for c, n in sizes.items())
+    for i, (_, path) in enumerate(chips):
+        con.execute(f"CREATE TEMP TABLE c{i} AS SELECT DISTINCT chrom::VARCHAR AS chrom, pos::BIGINT AS pos "
+                    f"FROM read_parquet({lit(Path(path).resolve())})")
+    rows = []
+    for i, (label, _) in enumerate(chips):
+        n, median = con.execute(f"""SELECT count(*), median(d) FROM (SELECT pos - lag(pos) OVER (PARTITION BY chrom ORDER BY pos)
+                                     AS d FROM c{i})""").fetchall()[0]
+        gaps = con.execute(f"""SELECT count(*) FROM (SELECT coalesce(lead(pos) OVER w, {f'CASE chrom{ends} END' if sizes else 'NULL'})
+                                   - pos AS g FROM (SELECT chrom, pos FROM c{i}{''.join(f" UNION ALL SELECT {lit(c)}, 0" for c in sizes)})
+                                   WINDOW w AS (PARTITION BY chrom ORDER BY pos)) WHERE g > {int(gap_bp)}""").fetchall()[0][0]
+        row = {"label": label, "markers": n, "per_mb": round(n / genome_mb, 2) if genome_mb else None,
+               "median_kb": None if median is None else round(median / 1000, 1), "gaps": gaps}
+        if pool:
+            cols = {r[0] for r in con.execute(f"DESCRIBE SELECT * FROM read_parquet({lit(Path(pool).resolve())})").fetchall()}
+            tier = "tier__all" if "tier__all" in cols else "tier"
+            public, t12, coding, maf05 = con.execute(f"""
+                SELECT count(*), count(*) FILTER (WHERE p.{tier} <= 2),
+                       count(*) FILTER (WHERE {'p.region_class' if 'region_class' in cols else 'NULL'} = 'CDS'),
+                       count(*) FILTER (WHERE {'p.public_af_maf' if 'public_af_maf' in cols else 'NULL'} >= 0.05)
+                FROM c{i} c JOIN read_parquet({lit(Path(pool).resolve())}) p USING (chrom, pos)""").fetchall()[0]
+            row.update(public=public, tier12=t12, coding=coding, maf05=maf05)
+        rows.append(row)
+    overlap = []
+    for i, (label, _) in enumerate(chips):
+        near = []
+        for j in range(len(chips)):
+            near.append(rows[i]["markers"] if i == j else con.execute(f"""
+                SELECT count(*) FROM (SELECT a.pos, least(a.pos - u.pos, d.pos - a.pos) AS dist FROM c{i} a
+                    ASOF LEFT JOIN c{j} u ON a.chrom = u.chrom AND a.pos >= u.pos
+                    ASOF LEFT JOIN c{j} d ON a.chrom = d.chrom AND a.pos <= d.pos) WHERE dist <= {int(window_bp)}""").fetchall()[0][0])
+        overlap.append((label, near))
+    con.close()
+    return {"rows": rows, "overlap": overlap}
+
+
+def upgrade(chip, candidates, qc=None, n_target=None, min_call_rate=0.95, min_hwe_p=1e-6, min_spacing_bp=20_000,
+            gap_bp=1_000_000, chrom_sizes=None, read=()):
+    """Upgrade a chip (ROADMAP I11): keep its markers that pass the QC, drop the failing ones, then add candidates up to
+    n_target (default: the chip's size), those inside the chip's gaps first, then by tier and tier score, each at
+    least min_spacing_bp from every marker kept or added. chip: parquet with chrom, pos, id; candidates: parquet of
+    annotated SNPs (chrom, pos, id, tier, tier_score); qc: parquet with chrom, pos, call_rate, hwe_p (the user's
+    population, lib.population), or None (every marker kept). Returns [{chrom, pos, id, action (keep, drop, add),
+    reason, tier}] in genome order, the dropped markers included."""
+    files = [Path(x).resolve() for x in (chip, candidates, qc) if x]
+    con = connect(sorted({f.parent for f in files} | {Path(r).resolve() for r in read}))
+    q = (f"LEFT JOIN read_parquet({lit(Path(qc).resolve())}) q ON q.chrom = c.chrom::VARCHAR AND q.pos = c.pos::BIGINT"
+         if qc else "")
+    cr, hw = ("q.call_rate", "q.hwe_p") if qc else ("NULL::DOUBLE", "NULL::DOUBLE")
+    markers = con.execute(f"""SELECT DISTINCT ON (c.chrom, c.pos) c.chrom::VARCHAR, c.pos::BIGINT, c.id::VARCHAR, {cr}, {hw}
+                              FROM read_parquet({lit(Path(chip).resolve())}) c {q} ORDER BY c.chrom, c.pos""").fetchall()
+    out, kept = [], {}
+    for chrom, pos, ident, call_rate, hwe in markers:
+        if call_rate is not None and call_rate < min_call_rate:
+            out.append({"chrom": chrom, "pos": pos, "id": ident, "action": "drop", "tier": None,
+                        "reason": f"call rate {call_rate:.2f} < {min_call_rate:g}"})
+        elif hwe is not None and hwe < min_hwe_p:
+            out.append({"chrom": chrom, "pos": pos, "id": ident, "action": "drop", "tier": None,
+                        "reason": f"HWE p {hwe:.2g} < {min_hwe_p:g}"})
+        else:
+            out.append({"chrom": chrom, "pos": pos, "id": ident, "action": "keep", "tier": None,
+                        "reason": "passes" if call_rate is not None else "no QC data: kept"})
+            kept.setdefault(chrom, []).append(pos)
+    target = int(n_target or len(markers))
+    cand = con.execute(f"""SELECT chrom::VARCHAR, pos::BIGINT, id::VARCHAR, tier, tier_score
+                           FROM read_parquet({lit(Path(candidates).resolve())})""").fetchall()
+    con.close()
+    taken = {c: sorted(ps) for c, ps in kept.items()}
+    sizes = {str(k): int(v) for k, v in (chrom_sizes or {}).items()}
+
+    def in_gap(chrom, pos):  # between two kept markers (or a chromosome end) more than gap_bp apart
+        here = taken.get(chrom, [])
+        i = bisect.bisect_left(here, pos)
+        lo, hi = (here[i - 1] if i else 0), (here[i] if i < len(here) else sizes.get(chrom))
+        return (hi - lo if hi is not None else pos - lo) > gap_bp
+    cand = sorted(((c, p, i, t, s, in_gap(c, p)) for c, p, i, t, s in cand),
+                  key=lambda r: (not r[5], 9 if r[3] is None else r[3], -(r[4] or 0), r[0], r[1]))
+    n = sum(len(ps) for ps in taken.values())
+    for chrom, pos, ident, tier, _, in_gap in cand:
+        if n >= target:
+            break
+        here = taken.setdefault(chrom, [])
+        i = bisect.bisect_left(here, pos)
+        if (i < len(here) and here[i] - pos < min_spacing_bp) or (i and pos - here[i - 1] < min_spacing_bp):
+            continue
+        here.insert(i, pos)
+        n += 1
+        out.append({"chrom": chrom, "pos": pos, "id": ident, "action": "add", "tier": tier,
+                    "reason": "fills a chip gap" if in_gap else f"tier {tier}" if tier else "candidate"})
+    return sorted(out, key=lambda r: (int(r["chrom"]) if str(r["chrom"]).isdigit() else 99, str(r["chrom"]), r["pos"]))

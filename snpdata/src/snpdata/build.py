@@ -268,10 +268,25 @@ def read_bgee(paths):
                GROUP BY 1, 2"""
 
 
+def read_variant_scores(path, layer):
+    # Precomputed per-variant scores (ROADMAP I15: DeepFARM, a CADD-like score): a tab-separated file, optionally
+    # gzipped, with a header chrom, pos (1-based), ref, alt, score. percentile = the share of the scored set with a
+    # lower score (0 to 1, ties share one value), so scores of different models read alike; annotate gives
+    # <layer>_score and <layer>_percentile, and <layer> false (shown 'not scored') for a variant outside the set.
+    return f"""
+        SELECT chrom, pos - 1 AS start, pos AS "end", ref, alt, score,
+               round(percent_rank() OVER (ORDER BY score), 4) AS percentile
+        FROM (SELECT chrom, try_cast(pos AS BIGINT) AS pos, upper(ref) AS ref, upper(alt) AS alt,
+                     try_cast(score AS DOUBLE) AS score
+              FROM read_csv({lit(path)}, delim='\t', header=true, all_varchar=true, quote=''))
+        WHERE pos IS NOT NULL AND score IS NOT NULL"""
+
+
 READERS = {"bed": read_bed, "tsv": read_tsv, "aquafaang_peaks": read_aquafaang_peaks, "gff3": read_gff3,
            "gff3_regions": read_gff3_regions, "vcf": read_vcf, "rna_counts": read_rna_counts,
            "gff3_transcripts": read_gff3_transcripts, "gff3_ncbi_transcripts": read_gff3_ncbi_transcripts, "vcf_info": read_vcf_info, "gene_tsv": read_gene_tsv,
-           "nfrasqual": read_nfrasqual, "genetic_map": read_genetic_map, "ss4r": read_ss4r}
+           "nfrasqual": read_nfrasqual, "genetic_map": read_genetic_map, "ss4r": read_ss4r,
+           "variant_scores": read_variant_scores}
 POSITIONAL = ("interval", "nearest", "count", "point", "features")  # layer types with chrom, start, end
 UNIQUE = {"point": ["chrom", "end", "ref", "alt"], "count": ["chrom", "end"], "gene": ["gene_id"]}  # annotate's join keys
 
@@ -526,6 +541,10 @@ def build(layers_yaml, data_dir, out_dir):
                             "urls": [s.get("url") for s in rsid["files"]], "citation": rsid.get("citation"),
                             "source_sha256": hashes(paths)[1], "sha256": hashes([out / "rsid.parquet"])[1]}
         print(f"rsid: {manifest['rsid']['rows']} rows", flush=True)
+    keys = cfg.get("flank_keys")
+    if keys and genome and (data / genome["file"]).exists():
+        manifest["flank_keys"] = build_flank_keys(con, keys, out, data / genome["file"])
+        print(f"flank_keys: {manifest['flank_keys']['rows']} rows", flush=True)
     for name, block, sql in (("synteny", cfg.get("synteny"), lambda b: read_synteny(data / b["file"])),
                              ("bgee", cfg.get("bgee"), lambda b: read_bgee([data / s["file"] for s in bgee_sources(b)]))):
         paths = [data / block["file"]] if name == "synteny" and block else [data / s["file"] for s in bgee_sources(block)]
@@ -605,6 +624,31 @@ def chrom_sizes(fai, ends):
             name, length = line.split("\t")[:2]
             sizes[name] = max(int(length), sizes.get(name, 0))
     return {c: sizes[c] for c in sorted(sizes, key=lambda c: int(c) if c.isdigit() else 0) if c.isdigit()}
+
+
+def build_flank_keys(con, cfg, out, genome):
+    """flank_keys.parquet (key, chrom, pos, canonical; snpscore.placement): the packed k bases either side of every site
+    of the layers cfg['sites'] names (point layers already built in out), from the genome; keys at more than one site
+    are left out, so a key places a SNP on one site."""
+    from snpscore.fasta import Fasta
+    from snpscore.placement import K, site_keys
+    k = int(cfg.get("k", K))
+    parts = [f"SELECT chrom, \"end\" AS pos FROM read_parquet({lit(out / (name + '.parquet'))})" for name in cfg["sites"]
+             if (out / f"{name}.parquet").exists()]
+    if not parts:
+        return {"file": None, "rows": 0}
+    sites = con.execute(f"SELECT DISTINCT chrom, pos FROM ({' UNION ALL '.join(parts)}) ORDER BY chrom, pos").fetchall()
+    with tempfile.TemporaryDirectory() as tmp:
+        tsv = Path(tmp) / "keys.tsv"
+        written = site_keys(sites, Fasta(genome), tsv, k)
+        target = out / "flank_keys.parquet"
+        con.execute(f"""COPY (SELECT * FROM read_csv({lit(tsv)}, delim='\t', header=false,
+                             columns={{'key': 'UBIGINT', 'chrom': 'VARCHAR', 'pos': 'BIGINT', 'canonical': 'BOOLEAN'}})
+                         QUALIFY count(*) OVER (PARTITION BY key) = 1 ORDER BY key)
+                         TO {lit(target)} (FORMAT parquet, COMPRESSION zstd)""")
+    rows = con.execute(f"SELECT count(*) FROM read_parquet({lit(target)})").fetchone()[0]
+    return {"file": target.name, "rows": rows, "k": k, "sites": cfg["sites"], "sites_read": len(sites),
+            "ambiguous": written - rows, "sha256": hashes([target])[1]}
 
 
 def build_aliases(con, path, target, extra=()):

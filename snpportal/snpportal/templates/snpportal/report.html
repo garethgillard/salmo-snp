@@ -38,6 +38,7 @@
     <div class="sp-card-head"><h2 id="panel-h">Panel: {{ panel.name }}</h2><a class="ms-auto sp-small sp-noprint" href="{{ panel.url }}">Panel tab</a></div>
     {% if panel.short %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ panel.short }}</div>{% endif %}
     <p class="sp-small mb-0">{{ panel.line }}</p>
+    {% if panel.params %}<p class="sp-small sp-muted mb-0">Designed with: {{ panel.params }}.</p>{% endif %}
   </section>{% endif %}
 
   {% if figs %}<div class="sp-stack">{% for fig in figs %}<figure class="sp-card sp-figure" id="fig-{{ fig.name }}">

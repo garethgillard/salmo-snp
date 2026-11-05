@@ -4,7 +4,7 @@
    release's examples (views.TRY) and the inputs, one tab each with the same hint line and Score button; beside them the
    tour, with a screenshot of a SNP's card.{% endcomment %}
 {% block main %}
-<p class="sp-lead">Upload Atlantic salmon SNPs (Ssal_v3.1) to see which lie in open chromatin or an active regulatory element in
+<p class="sp-lead">Upload Atlantic salmon SNPs (positions on {{ rel.assembly|default:"Ssal_v3.1" }}{% if rel.several %}, release {{ rel.version }}{% endif %}) to see which lie in open chromatin or an active regulatory element in
   21 AQUA-FAANG tissues and stages, change a protein, or sit in conserved sequence. Each SNP gets a tier from 1 (strongest) to
   4 (no evidence found), with the evidence behind it.</p>
 <div class="row g-4 align-items-start">

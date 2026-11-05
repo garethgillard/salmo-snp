@@ -104,8 +104,23 @@ def download(version=None, source=None, genome=True):
         sys.exit("salmo-snp: the downloaded release is damaged:\n  " + "\n  ".join(problems))
     if genome:
         download_genome(folder, source)
+    ensure_pool(folder)
     print("done: start it with `salmo-snp serve`")
     return folder
+
+
+def ensure_pool(release):
+    """The release's public background pool (snpscore pool: the Overview's comparison with public sites, gene-page
+    candidates), built when it is missing or was made for other rules or another snpscore; about a minute."""
+    from snpscore.pool import build_pool, stale
+    if not stale(release):
+        return
+    print("salmo-snp: scoring the release's public sites for comparison (about a minute, once per release and rules)",
+          flush=True)
+    try:
+        build_pool(release, threads=max(2, min(8, os.cpu_count() or 2)), memory_limit="4GB")
+    except Exception as e:  # the portal works without it: the Overview then leaves out the public comparison
+        print(f"salmo-snp: could not build the public pool ({type(e).__name__}): the Overview leaves out its comparison")
 
 
 def download_genome(release, source):
@@ -152,13 +167,14 @@ def serve(release=None, port=8000):
     if problems:
         sys.exit(f"salmo-snp: {release} can't be used:\n  " + "\n  ".join(problems))
     genome = local_genome(release)
+    ensure_pool(release)
     os.environ.update({
         "DJANGO_SETTINGS_MODULE": "snpsite.settings", "DJANGO_DEBUG": "0",
-        "SNPSCORE_RELEASE": str(release.resolve()), "SNPPORTAL_RESULTS_DIR": str(HOME / "results"), "SNPPORTAL_LOCAL": "1"})
+        "SNPSCORE_RELEASE": str(release.resolve()), "SNPPORTAL_RESULTS_DIR": str(HOME / "results"), "SNPPORTAL_LOCAL": "1",
+        "SNPPORTAL_RELEASES_DIR": str(HOME / "releases"),  # the others installed, to switch to (I17)
+        "SNPSCORE_GENOME_DIR": str(HOME / "genome")})  # each release's genome by its file name, so assemblies never mix
     # 127.0.0.1 only either way; a cloud session's preview pane may name the host otherwise (AGENTS.md "Cloud sessions")
     os.environ.setdefault("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost")
-    if genome:
-        os.environ["SNPSCORE_GENOME"] = str(genome)
     (HOME / "results").mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("DJANGO_SECRET_KEY", secret())
     import django
@@ -191,7 +207,9 @@ def size(path):
 
 
 def info():
+    from snpportal.lib.export import installed
     gb = lambda n: f"{n / 1e9:.2f} GB" if n >= 1e9 else f"{n / 1e6:.0f} MB"  # noqa: E731
+    print("versions      " + ", ".join(f"{k} {v}" for k, v in installed().items()) + f", Python {sys.version.split()[0]}")
     print(f"data folder   {HOME}")
     for r in releases():
         print(f"release       {r.name} ({gb(size(r))})" + ("  <- this version's" if r.name == RELEASE else ""))
@@ -201,6 +219,8 @@ def info():
     jobs = [p for p in (HOME / "results").glob("*") if (p / "job.json").exists()] if (HOME / "results").exists() else []
     print(f"results       {len(jobs)} scored lists ({gb(size(HOME / 'results'))}), kept until you delete them "
           "(Delete in the portal, or remove the folder)")
+    saved = [p for p in (HOME / "projects").glob("*/project.json")] if (HOME / "projects").exists() else []
+    print(f"projects      {len(saved)} saved design projects ({gb(size(HOME / 'projects'))})")
 
 
 def main(argv=None):

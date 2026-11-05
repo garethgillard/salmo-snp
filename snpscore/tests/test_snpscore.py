@@ -457,3 +457,80 @@ def test_motif_changes():
     assert motif.changes(seq, w, good, good, ctcf) == []
     assert motif.threshold(lo, 1e-6) > motif.threshold(lo, 1e-5) > motif.threshold(lo, 1e-4)
     assert motif.summary(found)[:3] == (True, 1, f"CTCF ({good})")
+
+
+def test_variant_score_layer(tmp_path, monkeypatch):  # I15: a SYNTHETIC per-variant score layer, as DeepFARM's will be
+    import importlib
+
+    import yaml
+    sites = fixture_sites(3)  # scores 0.1, 0.5 and 0.9 for the fixture's first three sites; every other SNP is unscored
+    scores = tmp_path / "variant_scores_SYNTHETIC.tsv"
+    scores.write_text("chrom\tpos\tref\talt\tscore\n" + "".join(
+        f"{c}\t{p}\t{r}\t{a}\t{s}\n" for (c, p, _, r, a), s in zip(sites, (0.1, 0.5, 0.9))))
+    layer = {"name": "synscore", "type": "point", "format": "variant_scores", "file": str(scores), "label": "Synthetic",
+             "description": "SYNTHETIC test scores"}
+    b = importlib.import_module("snpdata.build")
+    load = b.load_yaml
+    monkeypatch.setattr(b, "load_yaml", lambda p: (lambda c: {**c, "layers": c["layers"] + [layer]} if "layers" in c else c)(load(p)))
+    rel = build(DATA / "layers.yaml", FIXTURE, tmp_path / "scored")
+    rows = {(r["chrom"], r["pos"]): r for r in read(annotate(FIXTURE / "snps.vcf", rel, tmp_path / "out.parquet"))}
+    first, last = rows[sites[0][0], int(sites[0][1])], rows[sites[2][0], int(sites[2][1])]
+    assert (first["synscore"], first["synscore_score"], first["synscore_percentile"]) == (True, 0.1, 0.0)
+    assert (last["synscore_score"], last["synscore_percentile"]) == (0.9, 1.0)
+    other = next(r for k, r in rows.items() if k not in {(c, int(p)) for c, p, *_ in sites})
+    assert other["synscore"] is False and other["synscore_score"] is None  # outside the scored set: not scored, not 0
+    weights = load_weights()  # weight 0 / no percentile: shown, never counted; with G's numbers it counts
+    assert "synscore" not in str(last["tier_terms"])
+    weights = {**weights, "variant_scores": {"synscore": 0.9}, "weights": {**weights["weights"], "synscore": 2}}
+    con = duckdb.connect()
+    con.execute(f"CREATE TABLE a AS SELECT * FROM read_parquet('{tmp_path / 'out.parquet'}')")
+    columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE a)").fetchall()]
+    terms = {(c, p): [t["term"] for t in tt] for c, p, tt in con.execute(
+        f"SELECT chrom, pos, tier_terms FROM ({scored('a', weights, columns, 'all')})").fetchall()}
+    assert "synscore" in terms[sites[2][0], int(sites[2][1])] and "synscore" not in terms[sites[0][0], int(sites[0][1])]
+
+
+def test_genome_location_by_file_name(tmp_path, monkeypatch):  # I17: a data folder may hold the genomes of several releases
+    from snpscore.annotate import genome_location
+    m = {"genome": {"file": "g.fa.gz", "url": "https://example.org/g.fa.gz", "path": "/nowhere/g.fa.gz"}}
+    monkeypatch.delenv("SNPSCORE_GENOME", raising=False)
+    monkeypatch.setenv("SNPSCORE_GENOME_DIR", str(tmp_path))
+    assert genome_location(m) == "https://example.org/g.fa.gz"  # not there (yet): the URL
+    for ext in ("", ".fai", ".gzi"):
+        (tmp_path / f"g.fa.gz{ext}").write_text("")
+    assert genome_location(m) == str(tmp_path / "g.fa.gz")
+    assert genome_location({"genome": {**m["genome"], "file": "other.fa.gz"}}) == "https://example.org/g.fa.gz"  # another release's
+    monkeypatch.setenv("SNPSCORE_GENOME", "/srv/genome.fa.gz")  # a server's own copy comes first
+    assert genome_location(m) == "/srv/genome.fa.gz"
+
+
+def test_place_by_flank(release, tmp_path):  # I18: SYNTHETIC manifest rows on 'another assembly', placed by their flanks
+    from snpscore.fasta import Fasta
+    from snpscore.placement import COMPLEMENT
+    genome = Fasta(FIXTURE / "Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz")
+    sites = duckdb.sql(f"SELECT chrom, pos FROM read_parquet('{release / 'flank_keys.parquet'}') ORDER BY chrom, pos LIMIT 4").fetchall()
+    rc = lambda s: s.upper().translate(COMPLEMENT)[::-1]  # noqa: E731
+    lines = ["chrom\tpos\tid\tref\talt\tFlank"]
+    for i, (chrom, pos) in enumerate(sites):
+        left, base, right = (genome.fetch(chrom, pos - 36, pos - 1), genome.fetch(chrom, pos - 1, pos).upper(),
+                             genome.fetch(chrom, pos, pos + 35))
+        other = "A" if base != "A" else "G"
+        if i == 3:  # given on the other strand, alleles too
+            lines.append(f"1\t{1000 + i}\tm{i}\t{rc(base)}\t{rc(other)}\t{rc(right)}[{rc(base)}/{rc(other)}]{rc(left)}")
+        else:
+            lines.append(f"1\t{1000 + i}\tm{i}\t{base}\t{other}\t{left}[{base}/{other}]{right}")
+    lines.append("1\t2000\tnowhere\tA\tG\t" + "ACGTTGCA" * 5 + "[A/G]" + "TTGGCCAA" * 5)
+    path = tmp_path / "v2_manifest_SYNTHETIC.tsv"
+    path.write_text("\n".join(lines) + "\n")
+    m = json.loads((release / "manifest.json").read_text())
+    con = connect([tmp_path, release])
+    report = read_snps(con, path, m["chrom_sizes"], None, None, None, release / "flank_keys.parquet")
+    got = {i: (c, p, r, s) for i, c, p, r, s in con.execute("SELECT id, chrom, pos, ref, position_source FROM snps").fetchall()}
+    assert report["flank"] == {"placed": 4, "complemented": 1, "not_found": 1}
+    for i, (chrom, pos) in enumerate(sites):
+        assert got[f"m{i}"][:2] == (chrom, pos) and got[f"m{i}"][3] == "flank"
+        assert got[f"m{i}"][2] == genome.fetch(chrom, pos - 1, pos).upper()  # the reverse row's alleles complemented back
+    assert report["rejected"] == {"flank_not_found": 1}
+    with pytest.raises(InputError):  # no flank column
+        (tmp_path / "plain.tsv").write_text("chrom\tpos\n1\t5\n")
+        read_snps(con, tmp_path / "plain.tsv", m["chrom_sizes"], None, None, None, release / "flank_keys.parquet")

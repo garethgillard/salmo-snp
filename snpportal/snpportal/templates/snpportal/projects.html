@@ -1,0 +1,60 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% comment %}Saved design projects (projects.py, ROADMAP I7; local installs only): each project's versions, with downloads,
+   Open in Design panel, a diff of two versions, export as a zip; an import form.{% endcomment %}
+{% block main %}
+<div class="sp-stack">
+  {% if error %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ error }}</div>{% endif %}
+  {% if not projects %}
+  <section class="sp-card" aria-labelledby="none-h">
+    <h2 id="none-h">No saved projects yet</h2>
+    <p class="sp-small mb-0">On the <a href="{% url 'snpportal:design_panel' %}">Design panel</a>, <strong>Save as version</strong> keeps
+      the panel as it is (its SNPs, chip and a note) in a named project on this computer. Each save is a new version that
+      never changes, so you can compare versions, share a project as a file and open any version again.</p>
+  </section>
+  {% endif %}
+  {% if diff %}
+  <section class="sp-card" aria-labelledby="diff-h" id="diff">
+    <h2 id="diff-h">{{ diff.project }}: version {{ diff.b }} against version {{ diff.a }}</h2>
+    <p class="sp-small">{{ diff.n_added|thousands }} SNPs added, {{ diff.n_removed|thousands }} removed.</p>
+    {% for title, rows, n in diff.tables %}
+    <h3 class="h6 mt-2">{{ title }} ({{ n|thousands }})</h3>
+    {% if rows %}<div class="table-responsive"><table class="table table-sm sp-table sp-small mb-1">
+      <thead><tr><th scope="col">Tier</th><th scope="col">SNP</th><th scope="col">Position</th><th scope="col">Gene</th><th scope="col">Region</th><th scope="col">Assay</th></tr></thead>
+      <tbody>{% for r in rows %}<tr><td>{{ r.tier|default_if_none:"" }}</td><td>{{ r.id|default_if_none:"" }}</td><td>{{ r.chrom }}:{{ r.pos|thousands }} {{ r.ref|default_if_none:"" }}{% if r.alt %}&gt;{{ r.alt }}{% endif %}</td>
+        <td>{{ r.gene_name|default_if_none:"" }}</td><td>{{ r.region_class|default_if_none:"" }}</td><td>{{ r.assay_status|default_if_none:"" }}</td></tr>{% endfor %}</tbody>
+    </table></div>{% else %}<p class="sp-small sp-muted mb-1">None.</p>{% endif %}
+    {% endfor %}
+  </section>
+  {% endif %}
+  {% for p in projects %}
+  <section class="sp-card" aria-labelledby="p-{{ p.slug }}" id="{{ p.slug }}">
+    <div class="sp-card-head"><h2 id="p-{{ p.slug }}">{{ p.name }}</h2>
+      <a class="ms-auto btn btn-sm btn-outline-secondary" href="{% url 'snpportal:project_export' p.slug %}">Export project</a></div>
+    <div class="table-responsive"><table class="table table-sm sp-table sp-small mb-2">
+      <thead><tr><th scope="col">Version</th><th scope="col">Saved</th><th scope="col" class="sp-num">SNPs</th><th scope="col">Note</th><th scope="col">Sources</th><th scope="col">Chip</th><th scope="col">Downloads</th><th scope="col"></th></tr></thead>
+      <tbody>{% for v in p.versions %}<tr><td>{{ v.version }}</td><td class="text-nowrap">{{ v.created_utc }}</td><td class="sp-num">{{ v.n|thousands }}</td>
+        <td>{{ v.note }}</td><td>{{ v.sources|join:" · " }}</td><td>{{ v.chip|default_if_none:"" }}</td>
+        <td class="text-nowrap">{% for fmt in formats %}<a href="{% url 'snpportal:project_download' p.slug v.version %}?format={{ fmt }}">{{ fmt|upper }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}
+          · <a href="{% url 'snpportal:project_report' p.slug v.version %}">Report</a></td>
+        <td><form method="post" action="{% url 'snpportal:project_open' p.slug v.version %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0" type="submit">Open in Design panel</button></form></td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% if p.versions|length > 1 %}<form class="d-flex flex-wrap gap-2 align-items-center sp-small" method="get" action="{% url 'snpportal:projects' %}">
+      <input type="hidden" name="project" value="{{ p.slug }}">
+      <label for="a-{{ p.slug }}">Compare version</label>
+      <select class="form-select form-select-sm w-auto" id="a-{{ p.slug }}" name="a">{% for v in p.versions %}<option value="{{ v.version }}"{% if forloop.revcounter == 2 %} selected{% endif %}>{{ v.version }}</option>{% endfor %}</select>
+      <label for="b-{{ p.slug }}">with</label>
+      <select class="form-select form-select-sm w-auto" id="b-{{ p.slug }}" name="b">{% for v in p.versions %}<option value="{{ v.version }}"{% if forloop.last %} selected{% endif %}>{{ v.version }}</option>{% endfor %}</select>
+      <button class="btn btn-sm btn-outline-primary" type="submit">Show changes</button></form>{% endif %}
+  </section>
+  {% endfor %}
+  <section class="sp-card" aria-labelledby="import-h">
+    <h2 id="import-h">Import a project</h2>
+    <form class="d-flex flex-wrap gap-2 align-items-center" method="post" action="{% url 'snpportal:project_import' %}" enctype="multipart/form-data">{% csrf_token %}
+      <input class="form-control form-control-sm w-auto" type="file" name="project" accept=".zip" aria-label="Project zip">
+      <button class="btn btn-sm btn-outline-primary" type="submit">Import</button></form>
+    <p class="sp-small sp-muted mt-2 mb-0">A zip from <strong>Export project</strong>, from this or another computer. Projects stay on this
+      computer until you delete their folder (projects/ in the data folder that <code>salmo-snp info</code> shows).</p>
+  </section>
+</div>
+{% endblock main %}

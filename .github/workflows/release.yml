@@ -16,8 +16,12 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install build
+      - run: pip install build -e "snpscore[test]" -e snpdata -e snpportal
+      - name: The checks, on the versions this release ships with
+        run: bash tools/check.sh
+      - name: constraints.txt, those exact versions, for installs that must reproduce a result (pip install -c)
+        run: pip freeze --exclude-editable > constraints.txt
       - run: for d in snpscore snpdata snpportal; do python -m build --wheel --outdir dist "$d"; done
-      - run: gh release create "$GITHUB_REF_NAME" dist/*.whl --title "$GITHUB_REF_NAME" --generate-notes
+      - run: gh release create "$GITHUB_REF_NAME" dist/*.whl constraints.txt --title "$GITHUB_REF_NAME" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}

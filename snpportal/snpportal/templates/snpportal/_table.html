@@ -61,6 +61,7 @@
         {% elif col == 'cm' %}<td class="sp-num">{{ r.cm }}</td>
         {% elif col == 'gerp' %}<td class="sp-num">{{ r.gerp }}</td>
         {% elif col == 'regbuild' %}<td>{{ r.regbuild }}</td>
+        {% elif col == 'scores' %}<td>{% for label, text, tip in r.scores %}<span class="sp-nowrap" title="{{ tip }}">{{ label }} {{ text }}</span>{% if not forloop.last %} &middot; {% endif %}{% endfor %}</td>
         {% elif col == 'maf' %}<td class="sp-num">{{ r.maf }}</td>
         {% elif col == 'assay' %}<td>{% if r.assay %}<span class="sp-as sp-as-{{ r.assay.1 }}" title="{{ r.assay.3|default:r.assay.2 }}"><span aria-hidden="true">{{ r.assay.0 }}</span> {{ r.assay.2 }}</span>{% endif %}</td>
         {% elif col == 'flags' %}<td>{% for icon, text, tip in r.flags %}<span class="sp-badge sp-badge-flag" title="{{ tip }}"><span aria-hidden="true">{{ icon }}</span> {{ text }}</span> {% endfor %}</td>

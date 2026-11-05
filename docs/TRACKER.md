@@ -14,17 +14,17 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
 
 ## Next
-Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9), in this order:
-1. **Phase 1, ready to hand to companies** (I1-I6): pages that work offline, a data-handling sheet, the public pool in
-   every install, versions users can name (v0.1.0, constraints, PyPI names), macOS and Windows, and G's tier rules.
-2. **Phase 2, chip design, Axiom first** (I7-I12, then I13-I14): saved design projects, panel presets and target sizes,
-   the user's own population, probe uniqueness, comparing and upgrading chips, a design report; then the vendor round
-   trip and the later chip items.
-3. **Phase 3, variant scores** (I15, then I16 when G's DeepFARM and CADD-like data is ready).
-4. **Phase 4, genomes, later** (I17-I20).
-5. **On hold** (G, 2026-11-04): genome comparison (G is asking the users what they need; DECISIONS #28) and a shared
+Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Built on the branch of
+pull request #2, waiting for G's review: I1-I5, I7-I12, I15, I17 and I18 (step 9). What remains:
+1. **G's answers** (DECISIONS.md #25-#34 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
+   is PROVISIONAL until then.
+2. **A new release** (G's Mac: `snpdata build`, then `bash prep/github_release.sh`): it adds flank_keys.parquet (I18).
+3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13), then I14.
+4. **Phase 3**: G's DeepFARM and CADD-like data as variant-score layers (I16).
+5. **Phase 4 rest**: coordinate conversion (I19), a release on the new assembly (I20).
+6. **On hold** (G, 2026-11-04): genome comparison (G is asking the users what they need; DECISIONS #28) and a shared
    company server with accounts (one user per install, who shares results as files).
-6. **Backlog**: the other open boxes below, and the questions in DECISIONS.md.
+7. **Backlog**: the other open boxes below, and the questions in DECISIONS.md.
 
 ## Step 0: decisions and contract
 - [x] Assembly Ssal_v3.1, chromosomes named 1-29 (same as AQUA-FAANG and Ensembl)
@@ -121,30 +121,56 @@ Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes i
 
 ## Step 9: Push 3, industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3")
 Phase 1, ready to hand to companies:
-- [ ] I1 Bootstrap 5.1.3 and htmx 2.0.11 shipped with the package: the pages work offline and behind a CDN block
-- [ ] I2 Data-handling sheet (README and Help): what is stored where and for how long, every network request, deleting
-- [ ] I3 The public background pool in every install, built from the release (DECISIONS #15 picks the sites)
-- [ ] I4 Versions users can name: v0.1.0 tag, install by tag, constraints.txt per release, PyPI names (DECISIONS #25)
-- [ ] I5 The install checked on macOS and Windows (DECISIONS #26)
+- [x] I1 Bootstrap 5.1.3 and htmx 2.0.11 shipped with the package (static/snpportal/vendor/, sha256 in its
+      README.txt): no page loads a script or style from elsewhere (tested)
+- [x] I2 Data-handling sheet: README "What is stored, and what goes over the network" and its short form on a local
+      install's Help page. A draft: the wording is G's to confirm (DECISIONS #30)
+- [x] I3 The public pool in every install: `salmo-snp download` and `serve` build it from the release when it is
+      missing or stale (snpscore.pool stamp: the rules, snpscore and the sites); NREC's deploy too. Sites: the
+      12-fish set until DECISIONS #15
+- [x] I4 Versions users can name, the code parts: every export names the installed salmo-snp, snpscore and DuckDB;
+      `salmo-snp info` lists them; release.yml checks a tag and attaches constraints.txt; README "install by tag".
+      Still G's: the v0.1.0 tag and the PyPI names (DECISIONS #25)
+- [x] I5 The install on macOS and Windows: .github/workflows/platforms.yml runs tools/user_install_test.sh there (tags,
+      weekly, by hand, and on pull requests that touch packaging); both passed. Which systems to promise: DECISIONS #26
 - [ ] I6 G's tier rules (DECISIONS #1-#5), then the genome-wide release v0.1 (step 4)
 
 Phase 2, chip design (Axiom first: DECISIONS #27):
-- [ ] I7 Saved design projects: versions, diff, export and import (P6.7)
-- [ ] I8 Panel presets (genomic selection, parentage, trait, mixed) and target sizes by vendor format
-- [ ] I9 The user's own population: frequencies or genotypes (counts kept, genotypes never stored)
-- [ ] I10 Probe uniqueness: Ss4R duplicate and genome-wide flank matches (P6.8, assay part 2b)
-- [ ] I11 Compare several chips; upgrade a chip (keep, drop failing, fill gaps, add functional)
-- [ ] I12 A design report per panel version
+- [x] I7 Saved design projects (local installs): the Design panel saved as versions of a named project in the data
+      folder, the diff of two versions, downloads per version, export and import as a zip, a version opened in the
+      Design panel again (projects.py)
+- [x] I8 Purposes and target sizes: weights.yaml design.presets (genomic selection, parentage and traceability, trait
+      panel) set the designer's defaults (Panel tab Purpose links, `lib.cli panel --purpose`); design.target_sizes are
+      suggestions for Markers. Every number PROVISIONAL (DECISIONS #31). Not done: mixtures of purposes (the backbone
+      share already mixes even coverage and function)
+- [x] I9 The user's own population (local installs): a VCF with genotypes or a table of frequencies, counted as it
+      streams (af, maf, n, call rate, exact HWE p) and deleted; the Design panel's MAF, the upgrade's QC and the
+      design report use it (lib/population.py)
+- [x] I10 Probe uniqueness against the Ss4R duplicate: the Design panel's check (lib/uniqueness.py), a Duplicate
+      column, counts in the design report. LORe SNPs have close copies on both flanks 3x as often as others (43% vs
+      14% of 2,000 SNPs). The threshold that warns is G's (weights.yaml assay.max_paralog_identity, DECISIONS #32). A
+      genome-wide seed index was measured and left out: ~11 GB for 2.76 Gb, against a 341 MB release
+- [x] I11 Several chips side by side (markers, density, spacing, gaps, functional content, overlap) and 'Upgrade a
+      chip' (keep passing markers, drop failing ones by call rate and HWE in your population, fill gaps and add the
+      panel's SNPs up to a size); thresholds PROVISIONAL (weights.yaml design.upgrade_*, DECISIONS #31)
+- [x] I12 A printable design report per Design panel and per project version (panel_report.py): two A4 pages for the
+      known-loci example
 - [ ] I13 Vendor round trip with real Axiom files from a partner, then Illumina and KASP
 - [ ] I14 Later: LD-aware thinning, amplicon and GT-seq panels, Agena
 
 Phase 3, variant scores:
-- [ ] I15 One layer format for per-variant scores (score, percentile, 'not scored'), shown everywhere, weight 0
+- [x] I15 One layer format for per-variant scores (layers.yaml format variant_scores: score and percentile; shown on
+      the Table, card and locus pages; weight 0 until weights.yaml variant_scores names a percentile, DECISIONS #33)
 - [ ] I16 DeepFARM (retrained by G) and a CADD-like score, as I15 layers in a release (G's data)
 
 Phase 4, genomes (later):
-- [ ] I17 Several releases side by side, possibly on different assemblies
-- [ ] I18 Placement by probe sequence, whatever assembly the positions came from
+- [x] I17 Several releases side by side on a local install: the Releases page switches the release new work uses; a
+      job, a Design panel and a saved version keep reading their own; each release's genome is found by its file name
+      in the data folder, so assemblies never mix
+- [x] I18 Placement by probe sequence: flank_keys.parquet (16 nt either side of every public site, from the genome;
+      5.58M unique keys of 7.57M sites, 65 MB), `snpscore annotate --place-by-flank` and the Design panel's chip
+      upload. Needs the next `snpdata build`; the acceptance check against a real ICSASG_v2 Axiom manifest and the rs
+      bridge waits for such a file (DECISIONS #34)
 - [ ] I19 Coordinate conversion between assemblies (P2.5)
 - [ ] I20 A release on the new Atlantic salmon assembly (G's re-run analyses)
 

@@ -1,0 +1,30 @@
+name: platforms
+# A new user's install on macOS and Windows (tools/user_install_test.sh; Linux runs it on every pull request in
+# tests.yml). A private repository's macOS minutes count 10x and Windows' 2x (DECISIONS.md #26), so it runs on tags,
+# weekly, by hand (Actions tab: Run workflow), and on pull requests that change what it tests.
+on:
+  push:
+    tags: ["v*"]
+  schedule:
+    - cron: "17 4 * * 1"  # Mondays 04:17 UTC
+  workflow_dispatch:
+  pull_request:
+    paths: ["tools/user_install_test.sh", ".github/workflows/platforms.yml", "*/pyproject.toml",
+            "snpportal/snpportal/serve.py"]
+
+jobs:
+  user-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash  # Git Bash on Windows
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: bash tools/user_install_test.sh python

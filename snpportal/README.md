@@ -179,6 +179,21 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
   how far, new) and `chip=new` for the new ones only.
 - +/- drops a SNP by hand or puts it back (POST `drop`/`keep`, kept in panel.json 'dropped'): dropped SNPs stay in the
   list, dimmed, and leave the counts, figure and downloads.
+- Other chips beside the panel's chip (`chips/<slug>.parquet`) and 'Chips side by side' (lib.panel.chip_matrix);
+  'Upgrade <chip>' (lib.panel.upgrade): its markers that pass call rate and HWE in your population, then the panel's
+  SNPs not on it, gaps first, up to a size; panel/upgrade/ downloads every marker kept, dropped or added. A chip on
+  another assembly is placed by its flank sequences ('positions on another assembly', snpscore.placement).
+- Your population (local installs, lib/population.py): a VCF with genotypes or a frequency table, counted as it
+  streams (af, maf, n, call rate, exact HWE p) into `populations/<slug>.parquet`; the upload is deleted.
+- Probe uniqueness (lib/uniqueness.py): each SNP's flanks against its gene's Ss4R ohnolog regions, from the local
+  genome, into `uniqueness.parquet`: the Duplicate column and the counts.
+- The design report (panel_report.py): `panel/report/` and `projects/<name>/<n>/report/`, two A4 pages.
+- Saved projects (local installs, projects.py): `projects/<name>/v<N>/` in the data folder holds panel.parquet (the
+  kept SNPs with their annotations), the chip, the populations, the other chips, the uniqueness check and meta.json;
+  versions are compared, downloaded, exported and imported as a zip, and opened in the Design panel again.
+- A panel holds SNPs of one release (panel.json `release`). With several releases installed (local), a job's pages, a
+  Design panel and a saved version read their own release (`jobs.for_request`, the request's context variable); the
+  Releases page (`/snp/releases/`) picks the one new work uses.
 
 
 Search (`search.py`): positions and regions, rs IDs (the catalogue's, else `snpscore.rsid` on the release's EVA release 9

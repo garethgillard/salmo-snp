@@ -65,3 +65,20 @@ def test_file_positives_with_the_pool(release):
     columns = duckdb.sql(f"DESCRIBE SELECT * FROM '{release / 'pool' / 'pool.parquet'}'").fetchall()
     if any(c[0].endswith("_consequence") for c in columns):  # the pool was built with the coding step (vgll3 Met54Thr)
         assert any(f.endswith("_consequence = missense_variant") and r[3] > 0 for f, r in features.items())
+
+
+def test_pool_from_the_release_matches_the_12_fish_vcf(release, tmp_path):  # I3: any install can build the pool
+    import json
+    import shutil
+
+    from snpscore.pool import stale
+    own = tmp_path / "release"
+    shutil.copytree(release, own, ignore=shutil.ignore_patterns("pool"))
+    assert stale(own)
+    build_pool(own, threads=2, memory_limit="1GB")  # the release's public_af sites of the 12 AQUA-FAANG fish
+    assert not stale(own)
+    vcf, mine = (json.loads((r / "pool" / "background.json").read_text()) for r in (release, own))
+    assert mine["source"] == "public_af.parquet (aquafaang12)" and mine["n_sites"] == vcf["n_sites"] > 0
+    assert mine["tiers"] == vcf["tiers"] and mine["region_class"] == vcf["region_class"]
+    (own / "pool" / "background.json").write_text(json.dumps({**mine, "weights_sha256": "other"}))
+    assert stale(own)  # made with other weights

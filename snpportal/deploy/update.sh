@@ -13,10 +13,11 @@ if [[ ! $want =~ ^[0-9a-f]{40}$ ]] || ! git merge-base --is-ancestor "$want" ori
   want=$(git rev-parse origin/main)
 fi
 
-install() {  # check out $1, install its packages, collect static files, restart; succeed only when the portal answers
+install() {  # check out $1, install its packages, rebuild a stale pool, collect static files, restart; succeed only when the portal answers
   git checkout -q --force --detach "$1"
   # the newest versions the packages allow (security fixes arrive with each deploy)
   /srv/snpportal/venv/bin/pip install -q --upgrade --upgrade-strategy eager gunicorn -e snpscore -e snpportal || return 1
+  /srv/snpportal/venv/bin/snpscore pool --release /srv/snpportal/release --if-stale --memory 4GB || true  # new rules
   (set -a && . /srv/snpportal/env && cd snpportal && /srv/snpportal/venv/bin/python manage.py collectstatic --noinput -v 0)
   sudo systemctl restart snpportal
   host=$(sed -n 's/^DJANGO_ALLOWED_HOSTS=\([^,]*\).*/\1/p' /srv/snpportal/env)

@@ -72,6 +72,14 @@ class PaletteTest(SimpleTestCase):
                 self.assertNotIn("style=", text, path.name)
                 self.assertFalse([x for x in text.splitlines() if "{#" in x and "#}" not in x], path.name)  # {# #} is one line
 
+    def test_pages_load_no_scripts_or_styles_from_elsewhere(self):  # I1: works offline and behind a CDN block
+        site = APP.parent / "snpsite" / "templates"
+        for path in list((APP / "templates").rglob("*.html")) + list(site.rglob("*.html")):
+            text = path.read_text()
+            self.assertEqual(re.findall(r"<(?:script|link)[^>]+(?:src|href)=\"(?:https?:)?//", text), [], path.name)
+        for name in ("bootstrap-5.1.3.min.css", "bootstrap-5.1.3.bundle.min.js", "htmx-2.0.11.min.js"):
+            self.assertTrue((APP / "static" / "snpportal" / "vendor" / name).is_file(), name)
+
 
 @skipUnless(FIXTURE.exists(), "needs snpscore/ next to snpportal/")
 class PortalTest(SimpleTestCase):
