@@ -169,8 +169,9 @@ Phase 4, genomes (later):
       in the data folder, so assemblies never mix
 - [x] I18 Placement by probe sequence: flank_keys.parquet (16 nt either side of every public site, from the genome;
       5.58M unique keys of 7.57M sites, 65 MB), `snpscore annotate --place-by-flank` and the Design panel's chip
-      upload. Needs the next `snpdata build`; the acceptance check against a real ICSASG_v2 Axiom manifest and the rs
-      bridge waits for such a file (DECISIONS #34)
+      upload. Needs the next `snpdata build`. Every upload is its own acceptance check (2026-11-05): placements
+      checked against the genome (whole flank, no mismatch allowed) and the rs IDs (agreement counted, disagreements
+      kept at the flank's position and named), misses explained, on the chip card and in the CLI (DECISIONS #34-#35)
 - [ ] I19 Coordinate conversion between assemblies (P2.5)
 - [ ] I20 A release on the new Atlantic salmon assembly (G's re-run analyses)
 

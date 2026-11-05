@@ -28,6 +28,7 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 from .lib import export as snp_export
 from .lib import panel as snp_panel
+from snpscore import placement
 from snpscore.formats import lit
 
 from . import figures, jobs, results, tools
@@ -272,6 +273,7 @@ def page(request):
                meta=("Kept until you clear it" if jobs.keep_seconds() is None
                      else f"Deleted after {jobs.utc((d / 'created').stat().st_mtime + jobs.keep_seconds())}") + " · only this browser can open it",
                chip=chip, chip_demo=(jobs.release() / "demo" / "chip_demo_SYNTHETIC.tsv").is_file(),
+               chip_flank=placement.describe(chip["flank"]) if chip.get("flank") else None,
                chip_error=tools.CHIP_ERRORS.get(request.GET.get("chip_error"), "").format(cap=f"{tools.chip_cap():,}") or None)
     if rel is None:
         return render(request, "snpportal/panel.html", ctx)
@@ -289,7 +291,7 @@ def page(request):
         ctx["compare"] = [(f"{cs['chip_snps']:,}", "chip markers"), (f"{on[0]:,}", "already on the chip"),
                           (f"{on[1]:,}", "not on the chip"), (f"{cs['novel_functional']:,}", f"tier 1–2 with no chip marker within {tools._bp(cs['window_bp'])}"),
                           (f"{cs['gaps']:,}", f"chip gaps over {tools._bp(cs['gap_bp'])}")]
-        ctx["chips"] = chips(d)
+        ctx["chips"] = [{**c, "flank_text": " ".join(placement.describe(c["flank"])) if c.get("flank") else None} for c in chips(d)]
         if ctx["chips"]:
             ctx["matrix"] = _matrix(con, d, chip)
         params = _upgrade_params(request.GET, chip)

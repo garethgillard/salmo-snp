@@ -79,9 +79,8 @@ def main():
             print(f"rs IDs: {r['placed']} placed, {r['moved_from_icsasg_v2']} moved from ICSASG_v2 "
                   f"({r['alleles_complemented']} with complemented alleles), {r['unknown']} unknown")
         if report.get("flank"):
-            f = report["flank"]
-            print(f"by flank sequence: {f['placed']} placed ({f['complemented']} with complemented alleles), "
-                  f"{f['not_found']} not found among the known sites")
+            from .placement import describe
+            print("\n".join(describe(report["flank"])))
         for w in report.get("alias_warnings", []):
             print(f"warning ({w['rows']} rows): {w['message']}")
         if report.get("assembly", {}).get("message"):
