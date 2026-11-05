@@ -34,8 +34,8 @@ You need:
    salmobase it is a GitHub Release of this repository, named after the release this version of salmo-snp expects
    (`salmo-snp info` names it):
    ```bash
-   gh release download data-2026-11-03 -R garethgillard/salmo-snp      # two files, ~1.1 GB
-   tar -xf salmo-snp-data-2026-11-03.tar && tar -xf salmo-snp-genome-Ssal_v3.1.tar
+   gh release download data-2026-11-05 -R garethgillard/salmo-snp      # two files, ~1.2 GB
+   tar -xf salmo-snp-data-2026-11-05.tar && tar -xf salmo-snp-genome-Ssal_v3.1.tar
    salmo-snp download --from site      # checks every file, copies it into the data folder and scores the public
                                        # sites for comparison (about a minute); then delete site/
    ```
