@@ -27,6 +27,27 @@ INFO with AF, MAF, AC, AN, NS; 88 MB): genotypes and sample names never reach th
 (the Synchrosmolt parents, whose VCF has no frequencies) gets AC, AN, NS, AF and MAF counted from its genotypes as it
 streams, and only those are kept.
 
+## The fSalSal1 conversion
+
+The conversion between Ssal_v3.1 and fSalSal1 (GCA_965601325.1, NCBI's RefSeq reference for Atlantic salmon) comes
+from an alignment made once, before `snpdata build`; minimap2 (through its Python binding, mappy) is needed for this
+step only. About 5 hours on 4 cores and 7 GB of memory; less with more cores:
+
+```bash
+pip install mappy
+B=https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/965/601/325/GCA_965601325.1_fSalSal1
+curl -o data/raw/GCA_965601325.1_fSalSal1_genomic.fna.gz $B/GCA_965601325.1_fSalSal1_genomic.fna.gz
+curl -o data/raw/GCA_965601325.1_fSalSal1_assembly_report.txt $B/GCA_965601325.1_fSalSal1_assembly_report.txt
+python prep/align_assemblies.py data/raw/Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz \
+    data/raw/GCA_965601325.1_fSalSal1_genomic.fna.gz data/raw/GCA_965601325.1_fSalSal1_assembly_report.txt \
+    data/raw/ssal31_to_fsalsal1.paf.gz data/raw/fsalsal1_names.tsv --threads 8
+```
+
+Each Ssal_v3.1 chromosome is aligned to the same fSalSal1 chromosome only (asm5 preset), so the Ss4R duplicate of a
+region can't take its place; build keeps primary alignments with mapq >= 5 and drops blocks that overlap. Checked on
+chromosome 25 (2026-11-06): 93.7% of Ssal_v3.1 and 92.0% of fSalSal1 in blocks; 94.5% of the public sites convert, the
+fSalSal1 base is one of the two alleles at 99.97% of them, 99.66% come back to the same position.
+
 ## Publishing the data
 
 ```bash
@@ -65,10 +86,13 @@ release/2026-11-03/
   rsid.parquet           rs (BIGINT, the number), chrom, pos, ref, alt (Ssal_v3.1), v2_chrom, v2_pos, v2_ref, v2_alt
                          (ICSASG_v2; NULL unless on exactly one ICSASG_v2 line) from EVA release 9, sorted by rs, zstd;
                          rs IDs on several Ssal_v3.1 lines are left out. `snpscore.rsid(release, rs)` looks one up
-  liftover_<name>.parquet  chrom, start, end (BED, on the assembly converted from), to_chrom, shift, strand, pairs:
-                         collinear blocks (a position p goes to p + shift on '+', shift - p on '-'); layers.yaml
-                         `liftover` (icsasg_v2 from EVA's rs IDs on both assemblies, or a chain file). snpscore.liftover
-                         converts input positions with it (I19); optional
+  liftover_<name>.parquet  chrom, start, end (BED, on the assembly converted from), to_chrom, shift, strand (pairs for
+                         EVA's): collinear blocks (a position p goes to p + shift on '+', shift - p on '-'); layers.yaml
+                         `liftover`: icsasg_v2 from EVA's rs IDs on both assemblies, fsalsal1 from an alignment ("The
+                         fSalSal1 conversion"). snpscore.liftover converts input positions with it (I19); optional
+  liftover_to_<name>.parquet  the same, from this release's assembly to <name> (from an alignment): the exports'
+                         <label>_chrom and <label>_pos columns. The manifest's `liftover` entries give each table's
+                         label, direction and the chromosome names users may give (aliases)
   flank_keys.parquet     key (UBIGINT: the 16 bases either side of a site, packed 2 bits each, on the strand that sorts
                          first), chrom, pos, canonical (the genome's forward strand is the one keyed): every site of the
                          layers layers.yaml `flank_keys.sites` names, read from the genome; keys at more than one site

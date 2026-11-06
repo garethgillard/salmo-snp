@@ -17,18 +17,20 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
 
 ## Next
-Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged (PR #2, 2026-11-05):
-I1-I5, I7-I12, I15, I17, I18. On the branch of pull request #3, waiting for G's review: mixed purposes (I8), Primer3
-and Agena files (I14), ICSASG_v2 conversion (I19), the salmobase container, health and release checks (P8.4, P8.5),
-the guided tour retaken. What remains:
-1. **G's answers** (DECISIONS.md #25-#35 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
+Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged: I1-I5, I7-I12, I15,
+I17, I18 (PR #2, 2026-11-05); mixed purposes (I8), Primer3 and Agena files (I14), the ICSASG_v2 conversion (I19), the
+salmobase container, health and release checks (P8.4, P8.5) (PR #3, 2026-11-06). On the session's branch: the
+Ssal_v3.1 <-> fSalSal1 conversion (I19, G 2026-11-06: prepare it now, before the data tracks move to fSalSal1).
+What remains:
+1. **G's answers** (DECISIONS.md #25-#36 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
    is PROVISIONAL until then.
-2. **A new release** after PR #3 (G's Mac: `snpdata build`, then `bash prep/github_release.sh`): it adds
-   liftover_icsasg_v2.parquet (I19). Release 2026-11-05 already has flank_keys.parquet (I18); the I18 check against a
-   real ICSASG_v2 Axiom manifest still waits for one (DECISIONS #34).
+2. **A new release** (G's Mac): the fSalSal1 alignment (snpdata README "The fSalSal1 conversion"), then `snpdata build`
+   and `bash prep/github_release.sh`: it adds liftover_icsasg_v2.parquet and the two fSalSal1 tables (I19). The I18
+   check against a real ICSASG_v2 Axiom manifest still waits for one (DECISIONS #34).
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
 4. **Phase 3**: G's DeepFARM and CADD-like data as variant-score layers (I16).
-5. **Phase 4 rest**: a release on the new assembly (I20), with a chain file for I19's conversion.
+5. **Phase 4 rest**: a release with the data tracks on fSalSal1 (I20, once AQUA-FAANG and the other analyses are re-run
+   there); the fSalSal1 conversion then moves older lists, panels and projects to it.
 6. **On hold** (G, 2026-11-04): genome comparison (G is asking the users what they need; DECISIONS #28) and a shared
    company server with accounts (one user per install, who shares results as files).
 7. **Backlog**: the other open boxes below, and the questions in DECISIONS.md.
@@ -187,8 +189,13 @@ Phase 4, genomes (later):
 - [x] I19 ICSASG_v2 to Ssal_v3.1 for any position: liftover_icsasg_v2.parquet, collinear blocks from EVA's rs IDs on
       both assemblies (735,344 blocks over 1.49 Gb, 5.3 MB; a hold-out of 10% of the rs IDs: 89.5% inside a block,
       99.97% of those to EVA's own position); `snpscore annotate --from-assembly ICSASG_v2`, the Score form's and
-      chip upload's 'Positions on'. A chain file (read_chain) serves the new assembly later. Needs a release built after PR #3
-- [ ] I20 A release on the new Atlantic salmon assembly (G's re-run analyses)
+      chip upload's 'Positions on'. Needs a release built after PR #3
+- [x] I19 Ssal_v3.1 <-> fSalSal1 (GCA_965601325.1, NCBI's RefSeq reference): prep/align_assemblies.py (each chromosome
+      against the same fSalSal1 chromosome, minimap2 asm5 through mappy), liftover_fsalsal1.parquet for uploads and
+      liftover_to_fsalsal1.parquet for the exports' fSalSal1_chrom/pos columns; fSalSal1 chromosome names (OZ..., NC_...)
+      accepted. Chromosome 25 checked (2026-11-06): 94.5% of its public sites convert, the fSalSal1 base is one of the two
+      alleles at 99.97% of them, 99.66% come back to the same position. Needs the alignment run before a build
+- [ ] I20 A release on the new Atlantic salmon assembly (G's re-run analyses; fSalSal1, NCBI's RefSeq reference)
 
 ## Portal roadmap v2 (full specs in [ROADMAP.md](ROADMAP.md))
 

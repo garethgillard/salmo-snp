@@ -135,7 +135,8 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   (assay.max_paralog_identity: null); variant scores shown, never counted (variant_scores: {}); flank keys from the
   504-fish panel's sites (layers.yaml flank_keys); the data-handling sheet's wording; Primer3 (70-120 bp products,
   150 bp flanks) and Agena (100 bp flanks, layout unverified) files; ICSASG_v2 converted only inside blocks of EVA rs
-  IDs with one offset (layers.yaml liftover).
+  IDs with one offset (layers.yaml liftover); fSalSal1 from same-chromosome minimap2 asm5 alignments, mapq >= 5,
+  overlapping blocks dropped (DECISIONS #36).
 - Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
   counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
   priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).

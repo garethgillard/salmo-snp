@@ -63,6 +63,11 @@ HG993268.2, HG993270.2, HG993277.2, HG993285.2). `HG993277.1` is an older chromo
   given), alleles complemented where EVA's two placements are on opposite strands. EVA's Ssal_v3.1 positions are
   EVA's remaps of the older submissions.
 
+`--from-assembly fSalSal1` (`lift_from="fsalsal1"`) does the same for fSalSal1 positions (chromosomes 1-29, ssa01, or
+its GenBank OZ271732.1-OZ271760.1 and RefSeq NC_138291.1-NC_138319.1 names) through `liftover_fsalsal1.parquet`, made
+from an alignment of the two assemblies (snpdata README "The fSalSal1 conversion"); the portal's TSV and Parquet exports
+add each SNP's fSalSal1 position (`fSalSal1_chrom`, `fSalSal1_pos`) from `liftover_to_fsalsal1.parquet`.
+
 With `--from-assembly ICSASG_v2` (`annotate(..., lift_from="icsasg_v2")`, ROADMAP I19), the positions are taken to be
 ICSASG_v2 ones (chromosomes 1-29, ssaNN, chrNN, or the v2 GenBank and RefSeq accessions CM003279.1-CM003307.1 and
 NC_027300.1-NC_027328.1) and converted through the release's `liftover_icsasg_v2.parquet`: collinear blocks of EVA's rs
