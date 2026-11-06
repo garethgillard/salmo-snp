@@ -44,6 +44,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.NREC_HOST != ''
     runs-on: ubuntu-latest
     concurrency: nrec
+    timeout-minutes: 10  # a deploy takes ~20 s; a stuck one shouldn't hold the nrec group for GitHub's 6 h
     steps:
       - name: Update the demo
         env:

@@ -54,8 +54,8 @@ rm -rf salmo-snpscore salmo-snpportal  # the copies older versions of this scrip
 [ -d venv ] || python3 -m venv venv
 venv/bin/pip install -q --upgrade pip
 venv/bin/pip install -q --upgrade --upgrade-strategy eager gunicorn -e salmo-snp/snpscore -e salmo-snp/snpportal
-venv/bin/snpscore pool --release release --if-stale --threads "$(nproc)" --memory 4GB ||  # main's rules differ from this Mac's
-  echo "the public pool could not be rebuilt on the VM: the Overview leaves out its comparison" >&2
+venv/bin/python -c 'import sys; from snpscore.pool import stale; sys.exit(stale(sys.argv[1]))' release ||  # not built here
+  echo "the public pool is stale for main's rules (this Mac's checkout differs from main?): pull main here and rerun" >&2
 [ -f secret_key ] || (umask 077 && python3 -c "import secrets; print(secrets.token_urlsafe(50))" > secret_key)
 mkdir -p results && chmod 700 results
 cat > env <<EOF

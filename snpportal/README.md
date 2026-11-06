@@ -77,12 +77,14 @@ points snpscore at the VM's genome copy. Logs: `journalctl -u snpportal`.
 Every push to `main` (a merged pull request, or G's own push) runs the tests on GitHub; when they pass, the `deploy`
 job in `.github/workflows/tests.yml` connects to the VM and runs `deploy/update.sh` with the tested commit. The script
 checks it out, reinstalls snpscore, collects static files and restarts the portal; if the portal doesn't answer within
-40 s it goes back to the previous commit and the job fails (Actions tab). The key GitHub uses can run nothing else on
+40 s it goes back to the previous commit and the job fails (Actions tab), as it does after 10 minutes. The key GitHub uses can run nothing else on
 the VM (a forced command in `authorized_keys`). One-time setup, after `nrec.sh`:
 `bash deploy/github_deploy.sh nrec 158.39.75.9` (makes that key, stores it as the repository secret `NREC_DEPLOY_KEY`
 with the host key, and sets the variable `NREC_HOST`; rerun it to replace the key). Releases are not in git: a new
-release still goes up with `nrec.sh`, and so does the public pool after a change to weights.yaml (update.sh tries,
-but the VM can't build it; the Overview then leaves out its comparison).
+release still goes up with `nrec.sh`, and so does the public pool after a change to weights.yaml or snpscore: the VM
+(2 GB RAM) can't build it, so update.sh only says in the job's log that it is stale, and the Overview leaves out its
+comparison until `nrec.sh` sends a new one. (Building it there swapped for 17 minutes until the SSH session dropped,
+2026-11-06.)
 
 ## salmobase container
 
