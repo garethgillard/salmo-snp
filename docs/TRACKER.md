@@ -5,12 +5,15 @@ sections after it record what was built (ticked when built and tested), and thei
 Specs: [ROADMAP.md](ROADMAP.md). Questions only G can answer: [DECISIONS.md](DECISIONS.md) (ask, don't decide).
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
-## Where things stand (2026-11-05)
+## Where things stand (2026-11-06)
 - Phase: feature work on the local install, the main product (AGENTS.md plan 4, G 2026-11-03); the live site moves
   to salmobase later.
 - main is green on GitHub (tests, user-install). The NREC demo https://158.39.75.9/snp/ runs what G last had deployed
   (the manual `deploy` workflow since 2026-11-06; merges no longer deploy), with release 2026-11-05 (cloud sessions
-  use https://158-39-75-9.sslip.io/snp/: the bare IP didn't connect through their proxy).
+  use https://158-39-75-9.sslip.io/snp/: the bare IP didn't connect through their proxy). On 2026-11-06 that is
+  d258c59 (2026-11-05): PRs #3, #4, #7 and #8 wait for the next deploy (the two automatic deploys of #3 and #4 timed
+  out building the pool on the VM, which #8 stopped). After it, the Release page calls the pool stale (weights.yaml
+  gained a design preset; tiers unchanged) until nrec.sh sends a new one from G's Mac.
 - The data for real use: the private GitHub Release data-2026-11-05 (`bash tools/get_data.sh`); not on salmobase yet.
   Release 2026-11-05 = 2026-11-03 plus flank_keys.parquet (I18), built with Python 3.12 and DuckDB 2.0.0: every other
   table is identical, except the allele named in `motif_tfs` for 33 of 512,745 motif sites (float ties); the demo
@@ -21,16 +24,17 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged: I1-I5, I7-I12, I15,
 I17, I18 (PR #2, 2026-11-05); mixed purposes (I8), Primer3 and Agena files (I14), the ICSASG_v2 conversion (I19), the
 salmobase container, health and release checks (P8.4, P8.5) (PR #3, 2026-11-06); the Ssal_v3.1 <-> fSalSal1
-conversion (I19, PR #7, 2026-11-06: prepared before the data tracks move to fSalSal1). What remains:
+conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: see 5). What remains:
 1. **G's answers** (DECISIONS.md #25-#37 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
    is PROVISIONAL until then. #34 and #36 (chip placement by flank) are answered for now (G, 2026-11-05), to revisit.
-2. **A new release** (G's Mac): the fSalSal1 alignment (snpdata README "The fSalSal1 conversion"), then `snpdata build`
-   and `bash prep/github_release.sh`: it adds liftover_icsasg_v2.parquet and the two fSalSal1 tables (I19). The I18
+2. **A new release** (G's Mac): `snpdata build` and `bash prep/github_release.sh`: it adds liftover_icsasg_v2.parquet
+   (I19); no fSalSal1 alignment (postponed: build skips the fSalSal1 tables without its PAF). The I18
    check against a real ICSASG_v2 Axiom manifest still waits for one; its counts settle DECISIONS #34 and #36.
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
 4. **Phase 3**: G's DeepFARM and CADD-like data as variant-score layers (I16).
-5. **Phase 4 rest**: a release with the data tracks on fSalSal1 (I20, once AQUA-FAANG and the other analyses are re-run
-   there); the fSalSal1 conversion then moves older lists, panels and projects to it.
+5. **Phase 4 rest, postponed** (G, 2026-11-06): the fSalSal1 conversion's data (the alignment, snpdata README "The
+   fSalSal1 conversion"; the code is merged and tested) and a release with the data tracks on fSalSal1 (I20, once
+   AQUA-FAANG and the other analyses are re-run there); the conversion then moves older lists, panels and projects to it.
 6. **On hold** (G, 2026-11-04): genome comparison (G is asking the users what they need; DECISIONS #28) and a shared
    company server with accounts (one user per install, who shares results as files).
 7. **Backlog**: the other open boxes below, and the questions in DECISIONS.md.
@@ -196,7 +200,7 @@ Phase 4, genomes (later):
 - [x] I19 Ssal_v3.1 <-> fSalSal1 (GCA_965601325.1, NCBI's RefSeq reference): prep/align_assemblies.py (each chromosome
       against the same fSalSal1 chromosome, minimap2 asm5 through mappy), liftover_fsalsal1.parquet for uploads and
       liftover_to_fsalsal1.parquet for the exports' fSalSal1_chrom/pos columns; fSalSal1 chromosome names (OZ..., NC_...)
-      accepted. Chromosome 25 checked (2026-11-06): 94.5% of its public sites convert, the fSalSal1 base is one of the two
+      accepted (the code; the alignment and its tables postponed, G 2026-11-06). Chromosome 25 checked (2026-11-06): 94.5% of its public sites convert, the fSalSal1 base is one of the two
       alleles at 99.97% of them, 99.66% come back to the same position. Needs the alignment run before a build
 - [ ] I20 A release on the new Atlantic salmon assembly (G's re-run analyses; fSalSal1, NCBI's RefSeq reference)
 
