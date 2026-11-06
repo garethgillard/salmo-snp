@@ -218,7 +218,9 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 - Other chips beside the panel's chip (`chips/<slug>.parquet`) and 'Chips side by side' (lib.panel.chip_matrix);
   'Upgrade <chip>' (lib.panel.upgrade): its markers that pass call rate and HWE in your population, then the panel's
   SNPs not on it, gaps first, up to a size; panel/upgrade/ downloads every marker kept, dropped or added. A chip on
-  another assembly is placed by its flank sequences ('positions on another assembly', snpscore.placement).
+  another assembly is placed by its flank sequences ('positions on another assembly', snpscore.placement), each
+  placement checked against the genome and the chip's rs IDs; the card says how many were placed, why the others
+  were not, and where flank and rs ID agree (snpscore.placement.describe).
 - Your population (local installs, lib/population.py): a VCF with genotypes or a frequency table, counted as it
   streams (af, maf, n, call rate, exact HWE p) into `populations/<slug>.parquet`; the upload is deleted.
 - Probe uniqueness (lib/uniqueness.py): each SNP's flanks against its gene's Ss4R ohnolog regions, from the local

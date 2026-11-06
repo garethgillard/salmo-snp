@@ -43,10 +43,10 @@
       {% if compare %}<div class="sp-kpis">{% for value, label in compare %}<div class="sp-kpi"><b>{{ value }}</b><span>{{ label }}</span></div>{% endfor %}</div>
       {% if chip.liftover %}<p class="sp-small sp-muted mt-2 mb-0">Converted from ICSASG_v2: {{ chip.liftover.converted|thousands }} markers;
         {{ chip.liftover.unmapped|thousands }} outside the conversion table, left out.</p>{% endif %}
-      {% if chip.flank %}<p class="sp-small sp-muted mt-2 mb-0">Placed by flank sequence: {{ chip.flank.placed|thousands }} markers{% if chip.flank.complemented %}
-        ({{ chip.flank.complemented|thousands }} given on the other strand){% endif %}; {{ chip.flank.not_found|thousands }} not found among the known variant sites, left out.</p>{% endif %}
+      {% if chip_flank %}<p class="sp-small sp-muted mt-2 mb-1">{% for line in chip_flank %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% endif %}
       {% if chips %}<p class="sp-small mb-1">Other chips: {% for c in chips %}<strong>{{ c.label }}</strong> ({{ c.kept|thousands }} markers)
-        <form class="d-inline" method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0 align-baseline" type="submit" name="chip_extra_remove" value="{{ c.slug }}">Remove</button></form>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+        <form class="d-inline" method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0 align-baseline" type="submit" name="chip_extra_remove" value="{{ c.slug }}">Remove</button></form>{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+      {% for c in chips %}{% if c.flank_text %}<p class="sp-small sp-muted mb-1">{{ c.label }}: {{ c.flank_text }}</p>{% endif %}{% endfor %}{% endif %}
       <form method="post" action="{% url 'snpportal:panel_change' %}" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-center sp-small mt-1">{% csrf_token %}
         <input type="hidden" name="extra" value="1">
         <input class="form-control form-control-sm w-auto" type="file" name="chip" aria-label="Another chip's SNP list">

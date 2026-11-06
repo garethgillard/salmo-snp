@@ -101,6 +101,12 @@ Decided:
   (I17-I20). One user per install, who shares results as files: no accounts, no shared server (on hold). Chip tools
   serve Thermo Fisher Axiom first (G's guess for Norwegian aquaculture; to confirm), then Illumina and KASP. Genome
   comparison is on hold until G has asked the users.
+- Chip placement by flank (I18; G, 2026-11-05: Claude's recommendations for now, on the safe side; DECISIONS #34, #36
+  stay open, under Open below): flank keys from the 504-fish panel's sites; a placement's whole flank must match the
+  genome exactly (IUPAC and N skipped), else it is not placed, not by its rs ID either, and a row its rs ID places
+  must agree the same way at the rs ID's site when it has a flank (either strand); where the flank and the rs ID
+  disagree, the flank's position is kept (the only one checked against the genome), and the rs ID's is named
+  (position_source) and counted.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.
@@ -130,10 +136,10 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     5e-8 / 1e-5, 1 Mb clumping; one causal variant per locus and no LD reference (stated on the page).
   - Locus browser: up to 8 signal rows (R1), ATAC/H3K27ac/H3K4me3, signal and ChromHMM up to 500 kb, lanes up to 2 Mb, 4 s deadline.
   - Vendor layouts (Illumina 60 bp TOP/BOT, Axiom 35 bp, KASP 50 bp) are 'to confirm against the vendor template' (see docs/RESEARCH.md 5).
-- Push 3 (2026-11-04, DECISIONS #30-#35): panel purposes, mixes and target sizes (weights.yaml design.presets,
+- Push 3 (2026-11-04, DECISIONS #30-#33, #35): panel purposes, mixes and target sizes (weights.yaml design.presets,
   target_sizes); the chip upgrade's QC (call rate 0.95, HWE p 1e-6); probe uniqueness shown, never flagged
-  (assay.max_paralog_identity: null); variant scores shown, never counted (variant_scores: {}); flank keys from the
-  504-fish panel's sites (layers.yaml flank_keys); the data-handling sheet's wording; Primer3 (70-120 bp products,
+  (assay.max_paralog_identity: null); variant scores shown, never counted (variant_scores: {}); the data-handling
+  sheet's wording; Primer3 (70-120 bp products,
   150 bp flanks) and Agena (100 bp flanks, layout unverified) files; ICSASG_v2 converted only inside blocks of EVA rs
   IDs with one offset (layers.yaml liftover).
 - Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
@@ -156,6 +162,8 @@ Open (ask G; all collected with options and recommendations in docs/DECISIONS.md
   while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
 - Assay QC: flank repeat shares are mostly 0 or 1, so ~55% of public SNPs warn on 'repeat' whatever the cut-off; should fully
   soft-masked flanks warn at all? (without it ~46% pass instead of ~20%)
+- Chip placement by flank (DECISIONS #34, #36): decided for now (see Decided); revisit with the first real ICSASG_v2
+  manifest's counts: zero mismatches or some, and which position wins where the flank and the rs ID disagree.
 - Not biology, still G's: the PyPI names, the systems the install is promised on, the Axiom assumption, what
   'genome comparison' means and the data-handling sheet's wording (DECISIONS.md #25-#30).
 

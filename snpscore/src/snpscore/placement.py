@@ -3,17 +3,31 @@ Illumina 'SourceSeq' or 'TopGenomicSeq': LEFT[A/B]RIGHT) puts its SNPs on Ssal_v
 are on, by an exact match of the K bases either side of the SNP against the same bases at every known variant site
 (the release's flank_keys.parquet, which snpdata build makes from the genome). A key is the 2K bases packed two bits
 each (K = 16: one 64-bit number), on the strand that sorts first, so a flank given on either strand finds its site.
-Keys found at more than one site are left out of the release, so a placement is unique among the known sites."""
+Keys found at more than one site are left out of the release, so a placement is unique among the known sites. Each
+placement is then checked against the genome: every A, C, G or T of the manifest's whole flank (Axiom gives 35 bases a
+side) must be the genome's base there, so a key shared with a duplicated region (e.g. the Ss4R duplicate) whose outer
+flank differs places nothing. No mismatch is tolerated (G, 2026-11-05, for now: DECISIONS #34); annotate.read_snps
+checks the rows its rs IDs place the same way (contradicted)."""
 from __future__ import annotations
 
 import csv
 
+from .assay import REMOTE_MAX
+from .fasta import Fasta
 from .formats import lit
 
 K = 16
 CODE = {"A": 0, "C": 1, "G": 2, "T": 3}
 COMPLEMENT = str.maketrans("ACGT", "TGCA")
 FLANK_COLUMNS = ("in_flank", "in_sourceseq", "in_topgenomicseq", "in_flank_seq", "in_probe_seq")  # first one present
+RS_COLUMNS = ("in_dbsnp_rs_id", "in_dbsnp_rsid", "in_dbsnp", "in_rs_id", "in_rsid")  # rs IDs beside a probe set id (Axiom)
+MISSES = {  # why a row's flank placed nothing: the reject reasons, in plain words after a count (describe)
+    "no_flank": "with no flank sequence",
+    "flank_too_short": f"with fewer than {K} A, C, G or T bases next to the SNP on a side",
+    "flank_unknown_site": "not at a known variant site",
+    "flank_genome_mismatch": "whose full flank differs from the genome at the site it matches (perhaps a duplicated "
+                             "region, such as the Ss4R duplicate)",
+}
 
 
 def pack(seq):
@@ -60,10 +74,24 @@ def site_keys(sites, fasta, out, k=K):
     return n
 
 
-def place(con, flank_keys, table="raw", k=K):
+def agrees(fasta, flank, chrom, pos, flip):
+    """Whether every A, C, G or T of a manifest flank 'LEFT[A/B]RIGHT' (all of it, however long) is the genome's base
+    around chrom:pos (the SNP, 1-based), the flank turned to the genome's strand when `flip`. Other letters in the
+    flank (IUPAC codes, N) and N in the genome, or bases past the chromosome's ends, are skipped."""
+    left, right = (s.upper() for s in split(flank))
+    if flip:
+        left, right = right.translate(COMPLEMENT)[::-1], left.translate(COMPLEMENT)[::-1]
+    start = pos - 1 - len(left)
+    seq = ("N" * max(0, -start) + fasta.fetch(chrom, start, pos + len(right)).upper()).ljust(len(left) + 1 + len(right), "N")
+    return all(a == b for a, b in zip(left + right, seq[:len(left)] + seq[len(left) + 1:]) if a in CODE and b in CODE)
+
+
+def place(con, flank_keys, table="raw", genome=None, k=K):
     """Rewrite `table`'s chrom and pos from its flank column (FLANK_COLUMNS) where the flank's key is a known site in
-    flank_keys.parquet, with ref and alt complemented when the flank is on the genome's other strand; adds _flank
-    ('flank' or 'flank_not_found'). Returns {placed, complemented, not_found, column}, or None without a flank column."""
+    flank_keys.parquet and, with `genome` (a snpscore.fasta location), the whole flank is the genome's there (agrees);
+    ref and alt are complemented when the flank is on the genome's other strand. Rows it doesn't place get chrom and
+    pos NULL. Adds _flank: 'flank', or why not (a MISSES key). Returns {placed, complemented, missed: {reason: rows},
+    genome: 'checked' or why not, column}, or None without a flank column."""
     cols = [r[0] for r in con.execute(f"DESCRIBE {table}").fetchall()]
     column = next((c for want in FLANK_COLUMNS for c in cols if c.lower() == want), None)
     if column is None:
@@ -72,22 +100,76 @@ def place(con, flank_keys, table="raw", k=K):
     for (flank,) in con.execute(f'SELECT DISTINCT "{column}" FROM {table} WHERE "{column}" IS NOT NULL').fetchall():
         pair = split(flank)
         got = key(*pair, k) if pair else None
-        if got:
-            rows.append((flank, got[0], got[1]))
-    con.execute("CREATE OR REPLACE TEMP TABLE _fk (flank VARCHAR, key UBIGINT, canonical BOOLEAN)")
-    if rows:
-        con.executemany("INSERT INTO _fk VALUES (?, ?, ?)", rows)
+        rows.append((flank, *(got or (None, None)), None if got else "flank_too_short" if pair else "no_flank"))
+    con.execute("CREATE OR REPLACE TEMP TABLE _fk (flank VARCHAR, key UBIGINT, canonical BOOLEAN, miss VARCHAR)")
+    if rows:  # as lists, not executemany (one statement per row: ~30 s for a 50,000-marker chip)
+        con.execute("INSERT INTO _fk SELECT unnest(?::VARCHAR[]), unnest(?::UBIGINT[]), unnest(?::BOOLEAN[]), "
+                    "unnest(?::VARCHAR[])", [list(c) for c in zip(*rows)])
+    con.execute(f"""CREATE OR REPLACE TEMP TABLE _fp AS SELECT f.flank, s.chrom, s.pos, f.canonical <> s.canonical AS flip
+                    FROM _fk f JOIN read_parquet({lit(flank_keys)}) s USING (key)""")
+    checked = check_genome(con, genome)
     flip = lambda c: f"CASE WHEN p.flip THEN translate(upper(r.{c}), 'ACGT', 'TGCA') ELSE r.{c} END AS {c}"  # noqa: E731
     alleles = [c for c in ("ref", "alt") if c in cols]
     replace = ", ".join(["p.chrom AS chrom", "p.pos::VARCHAR AS pos"] + [flip(c) for c in alleles])
     con.execute(f"""CREATE OR REPLACE TABLE {table} AS
-        WITH p AS (SELECT f.flank, s.chrom, s.pos, f.canonical <> s.canonical AS flip
-                   FROM _fk f JOIN read_parquet({lit(flank_keys)}) s USING (key))
-        SELECT r.* REPLACE ({replace}), CASE WHEN p.chrom IS NULL THEN 'flank_not_found' ELSE 'flank' END AS _flank,
-               coalesce(p.flip, false) AS _flank_flip
-        FROM {table} r LEFT JOIN p ON p.flank = r."{column}" ORDER BY r.idx""")
-    placed, flipped, missing = con.execute(f"""SELECT count(*) FILTER (WHERE _flank = 'flank'), count(*) FILTER (WHERE _flank_flip),
-                                                  count(*) FILTER (WHERE _flank = 'flank_not_found') FROM {table}""").fetchall()[0]
+        SELECT r.* REPLACE ({replace}),
+               CASE WHEN p.chrom IS NOT NULL THEN 'flank' WHEN f.flank IS NULL THEN 'no_flank'
+                    ELSE coalesce(f.miss, 'flank_unknown_site') END AS _flank, coalesce(p.flip, false) AS _flank_flip
+        FROM {table} r LEFT JOIN _fk f ON f.flank = r."{column}" LEFT JOIN _fp p ON p.flank = r."{column}" ORDER BY r.idx""")
+    placed, flipped = con.execute(f"SELECT count(*) FILTER (WHERE _flank = 'flank'), count(*) FILTER (WHERE _flank_flip) "
+                                  f"FROM {table}").fetchall()[0]
+    missed = dict(con.execute(f"SELECT _flank, count(*) FROM {table} WHERE _flank <> 'flank' GROUP BY 1").fetchall())
     con.execute(f"ALTER TABLE {table} DROP COLUMN _flank_flip")
-    con.execute("DROP TABLE _fk")
-    return {"placed": placed, "complemented": flipped, "not_found": missing, "column": column}
+    con.execute("DROP TABLE _fk; DROP TABLE _fp")
+    return {"placed": placed, "complemented": flipped, "missed": {m: missed[m] for m in MISSES if m in missed},
+            "genome": checked, "column": column}
+
+
+def contradicted(genome, rows):
+    """Of `rows` (id, flank, chrom, pos, flip; sorted by chrom, pos), the ids whose flank the genome contradicts there
+    (agrees; flip None: on both strands), or why the genome was not read (a str)."""
+    if not genome:
+        return "no genome for this release"
+    if str(genome).startswith(("http://", "https://")) and len(rows) > REMOTE_MAX:
+        return f"the genome is read remotely, which is too slow for over {REMOTE_MAX:,} markers: `salmo-snp download` fetches it"
+    try:
+        fasta = Fasta(genome)
+        return [i for i, flank, chrom, pos, flip in rows
+                if not any(agrees(fasta, flank, chrom, pos, s) for s in ((False, True) if flip is None else (flip,)))]
+    except OSError:
+        return "the genome could not be read"
+
+
+def check_genome(con, genome):
+    """Drop from _fp (flank, chrom, pos, flip) the placements whose flank the genome contradicts (contradicted),
+    marking them flank_genome_mismatch in _fk. Returns 'checked', or why the genome was not read."""
+    bad = contradicted(genome, con.execute("SELECT flank, flank, chrom, pos, flip FROM _fp ORDER BY chrom, pos").fetchall())
+    if isinstance(bad, str):
+        return bad
+    if bad:
+        con.execute("CREATE OR REPLACE TEMP TABLE _bad AS SELECT unnest(?::VARCHAR[]) AS flank", [bad])
+        con.execute("UPDATE _fk SET miss = 'flank_genome_mismatch' WHERE flank IN (SELECT flank FROM _bad)")
+        con.execute("DELETE FROM _fp WHERE flank IN (SELECT flank FROM _bad)")
+        con.execute("DROP TABLE _bad")
+    return "checked"
+
+
+def describe(block):
+    """A validation report's `flank` block (place, plus read_snps' rs ID agreement) in plain words: a list of sentences,
+    for the CLI and the chip card."""
+    text = f"Placed by flank sequence: {block['placed']:,} marker{'' if block['placed'] == 1 else 's'}"
+    if block.get("complemented"):
+        text += f" ({block['complemented']:,} given on the other strand)"
+    genome = block.get("genome")
+    lines = [text + (", each checked against the genome." if genome == "checked" else
+                     f"; not checked against the genome ({genome})." if genome else ".")]
+    if block.get("missed"):
+        lines.append("Not placed by flank: " + "; ".join(f"{v:,} {MISSES.get(m, m)}" for m, v in block["missed"].items()) + ".")
+    r = block.get("rsid")
+    if r:
+        lines.append(f"Against the manifest's rs IDs: {r['same']:,} at the same position, {r['different']:,} at another "
+                     f"position (kept at the flank's position for now), {r['flank_only']:,} placed by flank "
+                     f"only, {r['rsid_only']:,} by rs ID only"
+                     + (f"; {r['genome_mismatch']:,} not placed by rs ID either, as {'its' if r['genome_mismatch'] == 1 else 'their'} "
+                        "flank differs from the genome at the rs ID's site." if r.get("genome_mismatch") else "."))
+    return lines

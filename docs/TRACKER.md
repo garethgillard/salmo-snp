@@ -18,14 +18,14 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 
 ## Next
 Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged (PR #2, 2026-11-05):
-I1-I5, I7-I12, I15, I17, I18. On the branch of pull request #3, waiting for G's review: mixed purposes (I8), Primer3
-and Agena files (I14), ICSASG_v2 conversion (I19), the salmobase container, health and release checks (P8.4, P8.5),
-the guided tour retaken. What remains:
-1. **G's answers** (DECISIONS.md #25-#35 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
-   is PROVISIONAL until then.
+I1-I5, I7-I12, I15, I17, I18; (PR #3, 2026-11-06): mixed purposes (I8), Primer3 and Agena files (I14), ICSASG_v2
+conversion (I19), the salmobase container, health and release checks (P8.4, P8.5), the guided tour retaken. What
+remains:
+1. **G's answers** (DECISIONS.md #25-#36 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
+   is PROVISIONAL until then. #34 and #36 (chip placement by flank) are answered for now (G, 2026-11-05), to revisit.
 2. **A new release** after PR #3 (G's Mac: `snpdata build`, then `bash prep/github_release.sh`): it adds
    liftover_icsasg_v2.parquet (I19). Release 2026-11-05 already has flank_keys.parquet (I18); the I18 check against a
-   real ICSASG_v2 Axiom manifest still waits for one (DECISIONS #34).
+   real ICSASG_v2 Axiom manifest still waits for one; its counts settle DECISIONS #34 and #36 (answered for now).
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
 4. **Phase 3**: G's DeepFARM and CADD-like data as variant-score layers (I16).
 5. **Phase 4 rest**: a release on the new assembly (I20), with a chain file for I19's conversion.
@@ -182,8 +182,10 @@ Phase 4, genomes (later):
 - [x] I18 Placement by probe sequence: flank_keys.parquet (16 nt either side of every public site, from the genome),
       `snpscore annotate --place-by-flank` and the Design panel's chip upload. In release 2026-11-05: 5,582,506
       unique keys from 7,572,808 sites (1,990,301 sites left out, their key found at another site too), 65 MB, built in
-      about 2 min on G's Mac. The acceptance check against a real ICSASG_v2 Axiom manifest and the rs bridge waits for
-      such a file: none on G's Mac on 2026-11-05 (DECISIONS #34)
+      about 2 min on G's Mac. Every upload is its own acceptance check (2026-11-05): placements checked against the
+      genome (whole flank, no mismatch allowed) and the rs IDs (agreement counted, disagreements kept at the flank's
+      position and named), misses explained, on the chip card and in the CLI. A real ICSASG_v2 Axiom manifest's
+      counts are still to come: none on G's Mac on 2026-11-05 (DECISIONS #34, #36)
 - [x] I19 ICSASG_v2 to Ssal_v3.1 for any position: liftover_icsasg_v2.parquet, collinear blocks from EVA's rs IDs on
       both assemblies (735,344 blocks over 1.49 Gb, 5.3 MB; a hold-out of 10% of the rs IDs: 89.5% inside a block,
       99.97% of those to EVA's own position); `snpscore annotate --from-assembly ICSASG_v2`, the Score form's and
