@@ -141,7 +141,7 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     5e-8 / 1e-5, 1 Mb clumping; one causal variant per locus and no LD reference (stated on the page).
   - Locus browser: up to 8 signal rows (R1), ATAC/H3K27ac/H3K4me3, signal and ChromHMM up to 500 kb, lanes up to 2 Mb, 4 s deadline.
   - Vendor layouts (Illumina 60 bp TOP/BOT, Axiom 35 bp, KASP 50 bp) are 'to confirm against the vendor template' (see docs/RESEARCH.md 5).
-- Push 3 (2026-11-04, DECISIONS #30-#33, #35): panel purposes, mixes and target sizes (weights.yaml design.presets,
+- Push 3 (2026-11-04, DECISIONS #30-#33, #35, #37): panel purposes, mixes and target sizes (weights.yaml design.presets,
   target_sizes); the chip upgrade's QC (call rate 0.95, HWE p 1e-6); probe uniqueness shown, never flagged
   (assay.max_paralog_identity: null); variant scores shown, never counted (variant_scores: {}); the data-handling
   sheet's wording; Primer3 (70-120 bp products,
