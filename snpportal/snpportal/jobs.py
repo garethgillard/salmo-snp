@@ -481,21 +481,24 @@ def _beat():
             update(key, heartbeat=time.time())
 
 
-POSITIONS = {"icsasg_v2": "ICSASG_v2 (converted to Ssal_v3.1)",  # I19: needs the release's liftover_icsasg_v2.parquet
-             "flank": "another assembly (placed by flank sequence)"}  # I18: flank_keys.parquet and a flank column
-
-
 def position_choices():
-    """[(value, label)] of the assemblies an upload's positions may be on besides Ssal_v3.1 ('' ), for this release."""
-    files = {"icsasg_v2": "liftover_icsasg_v2.parquet", "flank": "flank_keys.parquet"}
-    return [("", f"{manifest().get('assembly', 'Ssal_v3.1')} (as is)")] + [
-        (k, label) for k, label in POSITIONS.items() if (release() / files[k]).exists()]
+    """[(value, label)] of the assemblies an upload's positions may be on, for this release: its own ('' ), each
+    assembly its liftover tables convert from (I19: icsasg_v2, fsalsal1) and, with flank keys, any other one placed by
+    flank sequence (I18: 'flank')."""
+    from snpscore.annotate import conversions
+    m = manifest()
+    own = m.get("assembly", "Ssal_v3.1")
+    out = [("", f"{own} (as is)")] + [(k, f"{v['label']} (converted to {own})") for k, v in conversions(m).items()
+                                      if (release() / v["file"]).exists()]
+    if (release() / "flank_keys.parquet").exists():
+        out.append(("flank", "another assembly (placed by flank sequence)"))
+    return out
 
 
 def create(src, suffix, input_kind="snps", preset="all", label="", input_format=None, synthetic=False, move=True,
            positions=None):
     """Make a job from the input file `src` (moved into the job folder, or copied if move=False) and queue it.
-    `positions` (POSITIONS): the input's positions are on another assembly. Returns the key. Raises QueueFull before
+    `positions` (a position_choices value): the input's positions are on another assembly. Returns the key. Raises QueueFull before
     creating anything when MAX_QUEUED jobs are already waiting."""
     if executor() is not None and len(_queued) >= MAX_QUEUED:
         raise QueueFull()
@@ -519,7 +522,7 @@ def create(src, suffix, input_kind="snps", preset="all", label="", input_format=
         "weights_sha256": sha256(d / "weights.yaml") if (d / "weights.yaml").exists() else None,
         "snpscore_version": _version("snpscore"), "duckdb_version": duckdb.__version__,
         "created": now, "created_utc": utc(now), "started": None, "heartbeat": now, "timings": {},
-        "error_code": None, "error": None, **({"positions": positions} if positions in POSITIONS else {}),
+        "error_code": None, "error": None, **({"positions": positions} if positions and positions in dict(position_choices()) else {}),
     })
     log.info("job_created job_ref=%s kind=%s", job_ref(key), input_kind)
     submit(key)
@@ -623,10 +626,10 @@ def _annotate(src, d, progress):
     cap = int(setting("SNPPORTAL_MAX_SNPS", 3_000_000))
     kwargs = {k: v for k, v in [("progress", progress), ("max_snps", cap), *limits().items()] if k in params}
     positions = read_json(d / "job.json").get("positions")  # I18, I19: positions on another assembly
-    if positions == "icsasg_v2":
-        kwargs["lift_from"] = "icsasg_v2"
-    elif positions == "flank":
+    if positions == "flank":
         kwargs["place_by_flank"] = True
+    elif positions:
+        kwargs["lift_from"] = positions
     if "max_snps" not in params:
         check_rows(src, cap)
     try:

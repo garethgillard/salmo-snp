@@ -55,7 +55,13 @@ rsid:
 # chain file of a whole-genome alignment in data/raw (chain: <file>, chromosome names as the input files use them).
 liftover:
   icsasg_v2:
+    label: ICSASG_v2
     from: rsid
+  fsalsal1:  # fSalSal1 (GCA_965601325.1, EBP-Nor, NCBI's RefSeq reference): prep/align_assemblies.py makes both files
+    label: fSalSal1
+    paf: ssal31_to_fsalsal1.paf.gz  # Ssal_v3.1 chromosomes aligned to fSalSal1's, one pair at a time (minimap2 asm5)
+    names: fsalsal1_names.tsv       # its GenBank and RefSeq chromosome accessions
+    min_mapq: 5                     # PROVISIONAL: primary alignments below this mapping quality are left out
 
 # Flank keys for placing chip SNPs by their probe sequence (ROADMAP I18; snpscore annotate --place-by-flank, the
 # Design panel's chip upload): the 16 bases either side of every site of the layers named, read from the genome;

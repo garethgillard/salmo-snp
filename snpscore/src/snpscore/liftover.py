@@ -4,8 +4,8 @@ A conversion table holds collinear blocks: chrom, start, end (BED, on the assemb
 strand; a position p inside a block goes to p + shift ('+') or shift - p ('-'). snpdata build makes one from EVA's
 rs IDs placed on both assemblies (rsid.parquet): runs of consecutive rs IDs (in ICSASG_v2 order) whose two
 positions keep the same offset are collinear, so every position between the first and the last of a run converts
-exactly; positions between runs (where an insertion or deletion changed the offset) don't. A chain file from a
-whole-genome alignment (read_chain) gives the same table, for the new assembly later."""
+exactly; positions between runs (where an insertion or deletion changed the offset) don't. An alignment of two
+assemblies (read_paf: prep/align_assemblies.py, fSalSal1; or read_chain, a UCSC chain) gives the same table, both ways."""
 from __future__ import annotations
 
 import gzip
@@ -13,17 +13,23 @@ import re
 
 from .formats import lit
 
-V2_GENBANK = re.compile(r"^CM00(\d{4})(\.\d+)?$", re.I)  # ICSASG_v2 chromosomes 1-29: CM003279.1-CM003307.1
-V2_REFSEQ = re.compile(r"^NC_0(\d{5})(\.\d+)?$", re.I)  # and NC_027300.1-NC_027328.1
+# ICSASG_v2 chromosomes 1-29 by their GenBank (CM003279.1-CM003307.1) and RefSeq (NC_027300.1-NC_027328.1) names
+V2_ALIASES = {**{f"CM00{3279 + i}.1": str(i + 1) for i in range(29)}, **{f"NC_0{27300 + i}.1": str(i + 1) for i in range(29)}}
 
 
-def v2_chrom_sql(expr):
-    """SQL for an ICSASG_v2 chromosome name as '1'-'29' (25, chr25, ssa25, CM003303.1, NC_027324.1), else NULL."""
+def chrom_sql(expr, aliases=None):
+    """SQL for a chromosome name of the assembly converted from as '1'-'29': an accession of `aliases` ({name:
+    chrom}, with or without its version), else 25, 025, chr25 or ssa25; NULL for anything else."""
     e = f"lower(trim({expr}))"
-    number = f"""CASE WHEN regexp_full_match({e}, 'cm00[0-9]{{4}}(\\.[0-9]+)?') THEN try_cast(substr({e}, 5, 4) AS INTEGER) - 3278
-                      WHEN regexp_full_match({e}, 'nc_0[0-9]{{5}}(\\.[0-9]+)?') THEN try_cast(substr({e}, 5, 5) AS INTEGER) - 27299
-                      ELSE try_cast(regexp_replace({e}, '^(chr|ssa)', '') AS INTEGER) END"""
-    return f"CASE WHEN ({number}) BETWEEN 1 AND 29 THEN ({number})::VARCHAR END"
+    pairs = {}
+    for name, chrom in (aliases or {}).items():
+        pairs[name.lower()] = pairs[name.lower().split(".")[0]] = str(chrom)
+    number = f"try_cast(regexp_replace({e}, '^(chr|ssa)', '') AS INTEGER)"
+    numbered = f"CASE WHEN ({number}) BETWEEN 1 AND 29 THEN ({number})::VARCHAR END"
+    if not pairs:
+        return f"({numbered})"
+    named = "".join(f" WHEN {lit(k)} THEN {lit(v)}" for k, v in sorted(pairs.items()))
+    return f"(CASE {e}{named} ELSE {numbered} END)"
 
 
 def blocks_from_rsid_sql(rsid):
@@ -73,23 +79,54 @@ def read_chain(path):
                 t_pos, q_pos = t_pos + size + int(fields[1]), q_pos + size + int(fields[2])
 
 
-def lift(con, blocks, table="raw"):
-    """Rewrite `table`'s chrom and pos from ICSASG_v2 to Ssal_v3.1 through the conversion table `blocks` (parquet),
-    alleles complemented on '-' blocks; adds _lift ('ICSASG_v2 <chrom>:<pos>' as given, or 'liftover_unmapped').
-    Returns {converted, complemented, unmapped}."""
+def read_paf(path, reverse=False, min_mapq=0):
+    """(chrom, start, end, to_chrom, shift, strand) blocks of a PAF with CIGARs (cg:Z; prep/align_assemblies.py), from
+    its query to its target, or from target to query with `reverse`: one block per run of aligned bases (M, =, X),
+    insertions and deletions between them. Only primary alignments (tp:A:P, or no tp tag) with mapq >= min_mapq."""
+    opener = gzip.open if str(path).endswith(".gz") else open
+    with opener(path, "rt") as f:
+        for line in f:
+            x = line.rstrip("\n").split("\t")
+            tags = dict(t.split(":", 2)[0::2] for t in x[12:] if t.count(":") >= 2)
+            if len(x) < 12 or int(x[11]) < min_mapq or tags.get("tp", "P") != "P" or "cg" not in tags:
+                continue
+            qname, qs, qe, strand, tname, ts = x[0], int(x[2]), int(x[3]), x[4], x[5], int(x[7])
+            q, t = qs if strand == "+" else qe, ts  # the query is walked backwards on '-'
+            for n, op in re.findall(r"(\d+)([MIDNSHP=X])", tags["cg"]):
+                n = int(n)
+                if op in "M=X":
+                    if strand == "+":
+                        b = (qname, q, q + n, tname, t - q, "+") if not reverse else (tname, t, t + n, qname, q - t, "+")
+                        q += n
+                    else:  # query forward 1-based p -> target t + q + 1 - p, and back the same way
+                        b = (qname, q - n, q, tname, t + q + 1, "-") if not reverse else (tname, t, t + n, qname, t + q + 1, "-")
+                        q -= n
+                    t += n
+                    yield b
+                elif op == "I":
+                    q += n if strand == "+" else -n
+                elif op in "DN":
+                    t += n
+
+
+def lift(con, blocks, table="raw", label="ICSASG_v2", aliases=None):
+    """Rewrite `table`'s chrom and pos from the assembly `label` to the release's through the conversion table
+    `blocks` (parquet), chromosome names through `aliases` (ICSASG_v2: V2_ALIASES), alleles complemented on '-' blocks;
+    adds _lift ('<label> <chrom>:<pos>' as given, or 'liftover_unmapped'). Returns {converted, complemented, unmapped}."""
+    aliases = V2_ALIASES if aliases is None and label == "ICSASG_v2" else aliases
     cols = [r[0] for r in con.execute(f"DESCRIBE {table}").fetchall()]
     flip = lambda c: f"CASE WHEN b.strand = '-' THEN translate(upper(r.{c}), 'ACGT', 'TGCA') ELSE r.{c} END AS {c}"  # noqa: E731
     replace = ", ".join(["b.to_chrom AS chrom",
                          "(CASE WHEN b.strand = '+' THEN r._v2pos + b.shift ELSE b.shift - r._v2pos END)::VARCHAR AS pos"]
                         + [flip(c) for c in ("ref", "alt") if c in cols])
     con.execute(f"CREATE OR REPLACE TEMP TABLE _blocks AS SELECT * FROM read_parquet({lit(blocks)})")  # tables, not a CTE
-    con.execute(f"""CREATE OR REPLACE TEMP TABLE _v2 AS SELECT *, {v2_chrom_sql('chrom')} AS _v2chrom,  -- over a file: a slow plan
+    con.execute(f"""CREATE OR REPLACE TEMP TABLE _v2 AS SELECT *, {chrom_sql('chrom', aliases)} AS _v2chrom,  -- over a file: a slow plan
                         CASE WHEN regexp_full_match(trim(pos), '[0-9]+') THEN try_cast(trim(pos) AS BIGINT) END AS _v2pos FROM {table}""")
     con.execute(f"""CREATE OR REPLACE TABLE {table} AS
         WITH j AS (SELECT r.*, b.to_chrom, b.shift, b.strand, b."end" AS _bend FROM _v2 r
                    ASOF LEFT JOIN _blocks b ON b.chrom = r._v2chrom AND r._v2pos > b.start)
         SELECT r.* EXCLUDE (_v2chrom, _v2pos, to_chrom, shift, strand, _bend) REPLACE ({replace.replace('b.', 'r.')}),
-               CASE WHEN r._v2pos <= r._bend THEN 'ICSASG_v2 ' || trim(r.chrom) || ':' || r._v2pos
+               CASE WHEN r._v2pos <= r._bend THEN {lit(label + ' ')} || trim(r.chrom) || ':' || r._v2pos
                     ELSE 'liftover_unmapped' END AS _lift, coalesce(r.strand = '-' AND r._v2pos <= r._bend, false) AS _lift_flip
         FROM j r ORDER BY r.idx""")
     con.execute("DROP TABLE _blocks; DROP TABLE _v2")
@@ -98,3 +135,16 @@ def lift(con, blocks, table="raw"):
                                  count(*) FILTER (WHERE _lift = 'liftover_unmapped') FROM {table}""").fetchall()[0]
     con.execute(f"ALTER TABLE {table} DROP COLUMN _lift_flip")
     return dict(zip(("converted", "complemented", "unmapped"), out))
+
+
+def positions(con, rel, blocks, label, out="_lifted"):
+    """View `out`: `rel` (with chrom, pos) plus <label>_chrom and <label>_pos, its positions on another assembly through
+    the conversion table `blocks` (liftover_to_<name>.parquet), NULL outside it."""
+    c = re.sub(r"[^A-Za-z0-9_]", "_", label)
+    con.execute(f"CREATE OR REPLACE TEMP TABLE {out}_blocks AS SELECT * FROM read_parquet({lit(blocks)})")  # one per view
+    con.execute(f"""CREATE OR REPLACE TEMP VIEW {out} AS SELECT r.*,
+                        CASE WHEN r.pos <= b."end" THEN b.to_chrom END AS "{c}_chrom",
+                        CASE WHEN r.pos <= b."end" THEN CASE WHEN b.strand = '+' THEN r.pos + b.shift ELSE b.shift - r.pos END END
+                            AS "{c}_pos"
+                    FROM {rel} r ASOF LEFT JOIN {out}_blocks b ON b.chrom = r.chrom AND r.pos > b.start""")
+    return out

@@ -67,9 +67,10 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
     or a 'dbSNP RS ID' column beside an Axiom probe set id), else rejected with the flank's reason (placement.MISSES);
     a row whose flank the genome contradicts, at the flank's site or at its rs ID's, is rejected (flank_genome_mismatch).
     Where both place a row and disagree, the flank's position is kept and position_source names the rs ID's; the
-    report's `flank` block counts the agreement. With `lift` (a conversion table, I19), the positions are ICSASG_v2
-    ones: each is converted (liftover.lift; position_source 'ICSASG_v2 <chrom>:<pos>'), else placed by its rs ID, else
-    rejected (liftover_unmapped). Returns the counts."""
+    report's `flank` block counts the agreement. With `lift` (a conversion table, I19: its path, or {file, label,
+    aliases} as the manifest's liftover entries), the positions are on that assembly (ICSASG_v2 by default): each is
+    converted (liftover.lift; position_source '<label> <chrom>:<pos>'), else placed by its rs ID, else rejected
+    (liftover_unmapped). Returns the counts."""
     layout = detect(path)
     limit = int(max_snps) + 1 if max_snps else None
     con.execute(f"CREATE OR REPLACE TABLE raw AS SELECT row_number() OVER () AS idx, * FROM ({source(path, layout, limit)})")
@@ -86,7 +87,9 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
     lifted = None
     if lift:
         from . import liftover
-        lifted = liftover.lift(con, lift)
+        spec = lift if isinstance(lift, dict) else {"file": lift}
+        label = spec.get("label", "ICSASG_v2")
+        lifted = liftover.lift(con, spec["file"], label=label, aliases=spec.get("aliases"))
     cols = [r[0] for r in con.execute("DESCRIBE raw").fetchall()]
     con.execute("CREATE OR REPLACE TEMP TABLE known AS SELECT unnest(?::VARCHAR[]) AS chrom", [list(known)])
     mapped, join, warning = "trim(r.chrom)", "", "NULL"
@@ -160,7 +163,7 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
                                         AND reason IS DISTINCT FROM 'flank_genome_mismatch'),
                        count(*) FILTER (WHERE _flank <> 'flank' AND position_source IS NOT NULL
                                         AND reason = 'flank_genome_mismatch') FROM checked""").fetchall()[0]))
-    if lifted:  # converted from ICSASG_v2 (I19): say from where; the rows it could not convert, unless an rs ID did, say why
+    if lifted:  # converted from another assembly (I19): say from where; the rows it could not convert, unless an rs ID did, say why
         con.execute("UPDATE checked SET position_source = _lift WHERE _lift <> 'liftover_unmapped' AND position_source IS NULL")
         con.execute("UPDATE checked SET reason = 'liftover_unmapped' WHERE _lift = 'liftover_unmapped' AND position_source IS NULL "
                     "AND reason IN ('missing_chrom', 'bad_pos', 'unknown_rsid')")
@@ -202,7 +205,7 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
     if by_flank:
         report["flank"] = {k: v for k, v in by_flank.items() if k != "column"}
     if lifted:
-        report["liftover"] = {"from": "ICSASG_v2", **lifted}
+        report["liftover"] = {"from": label, **lifted}
     report["duplicates_merged"] = report["rejected"].get("duplicate", 0)
     if alleles:
         report["indels"], report["multiallelic"] = fetch("""SELECT count(*) FILTER (WHERE (length(ref) <> 1 OR length(alt) <> 1)
@@ -352,6 +355,16 @@ def gene_sql(name, cols, parquet, gene_table):
 LAYER_SQL = {"interval": interval_sql, "nearest": nearest_sql, "count": count_sql, "point": point_sql}
 
 
+def conversions(manifest):
+    """{name: manifest liftover entry} of the release's tables that convert positions on another assembly to its own
+    (I19: icsasg_v2, fsalsal1), each with its file, label and chromosome aliases."""
+    out = {}
+    for name, entry in (manifest.get("liftover") or {}).items():
+        if entry and entry.get("file") and entry.get("direction", "from") == "from" and re.fullmatch(r"[a-z0-9_]+", name):
+            out[name] = {"label": "ICSASG_v2" if name == "icsasg_v2" else name, **entry}
+    return out
+
+
 def genome_location(manifest):
     """$SNPSCORE_GENOME (a server's own copy of the release's genome) if set, else the release's genome file in
     $SNPSCORE_GENOME_DIR (salmo-snp's data folder, which may hold the genomes of several releases) when it is there,
@@ -423,8 +436,9 @@ def annotate(snps_path, release_dir, out_path, trait="all", sequence=True, progr
     <stem>.validation.json and <stem>.rejects.tsv. Adds the release's layers, the known-loci catalogue, the sequence
     checks and assay QC (if the release knows where the genome is and `sequence`) and the tier columns for the preset.
     `progress(stage)` is called with stage names. `place_by_flank` (I18): the input's positions are on another assembly,
-    so its SNPs are placed by their flank sequences (read_snps). `lift_from` 'icsasg_v2' (I19): the positions are
-    ICSASG_v2 ones, converted through the release's liftover_icsasg_v2.parquet. Problems with the input raise
+    so its SNPs are placed by their flank sequences (read_snps). `lift_from` (I19: 'icsasg_v2', 'fsalsal1', a name in
+    the manifest's liftover entries converting to this release): the positions are on that assembly, converted through
+    the release's liftover_<name>.parquet. Problems with the input raise
     InputError with a safe message."""
     path, release, out = Path(snps_path).resolve(), Path(release_dir).resolve(), Path(out_path).resolve()
     step = progress or (lambda stage: None)
@@ -456,10 +470,13 @@ def _annotate(con, path, release, out, manifest, weights, trait, sequence, step,
     flank_keys = release / "flank_keys.parquet"
     if place_by_flank and not flank_keys.exists():
         raise InputError("This release has no flank keys (flank_keys.parquet), so SNPs can't be placed by their flank sequence.")
-    lift = release / f"liftover_{lift_from}.parquet" if lift_from else None
-    if lift_from and (place_by_flank or not re.fullmatch(r"[a-z0-9_]+", lift_from) or not lift.exists()):
-        raise InputError(f"This release can't convert positions from {lift_from}." if not place_by_flank else
-                         "Choose either placing by flank sequence or converting positions, not both.")
+    lift = None
+    if lift_from:
+        entry = conversions(manifest).get(lift_from)
+        if place_by_flank or entry is None or not (release / entry["file"]).exists():
+            raise InputError(f"This release can't convert positions from {lift_from}." if not place_by_flank else
+                             "Choose either placing by flank sequence or converting positions, not both.")
+        lift = {**entry, "file": release / entry["file"]}
     report = read_snps(con, path, known, alias if alias.exists() else None, max_snps,
                        rsid_table if rsid_table.exists() else None, flank_keys if place_by_flank else None, lift,
                        genome=genome_location(manifest) if place_by_flank else None)

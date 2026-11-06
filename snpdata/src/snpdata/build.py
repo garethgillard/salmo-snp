@@ -546,8 +546,9 @@ def build(layers_yaml, data_dir, out_dir):
                             "source_sha256": hashes(paths)[1], "sha256": hashes([out / "rsid.parquet"])[1]}
         print(f"rsid: {manifest['rsid']['rows']} rows", flush=True)
     for name, spec in (cfg.get("liftover") or {}).items():
-        manifest.setdefault("liftover", {})[name] = build_liftover(con, name, spec, out, data)
-        print(f"liftover_{name}: {manifest['liftover'][name]['blocks']} blocks", flush=True)
+        for table, entry in build_liftover(con, name, spec, out, data).items():
+            manifest.setdefault("liftover", {})[table] = entry
+            print(f"liftover_{table}: {entry['blocks']} blocks", flush=True)
     keys = cfg.get("flank_keys")
     if keys and genome and (data / genome["file"]).exists():
         manifest["flank_keys"] = build_flank_keys(con, keys, out, data / genome["file"])
@@ -634,24 +635,58 @@ def chrom_sizes(fai, ends):
 
 
 def build_liftover(con, name, spec, out, data):
-    """liftover_<name>.parquet (snpscore.liftover): collinear blocks from EVA's pairs in rsid.parquet (spec from: rsid)
-    or from a chain file in data (spec chain: <file>)."""
-    from snpscore.liftover import blocks_from_rsid_sql, read_chain
-    target = out / f"liftover_{name}.parquet"
-    if spec.get("chain"):
-        with tempfile.TemporaryDirectory() as tmp:
+    """{name: manifest entry} of the conversion tables of one layers.yaml `liftover` entry (snpscore.liftover):
+    liftover_<name>.parquet converts positions on assembly `label` to this release's; an alignment (paf: or chain:)
+    also gives liftover_to_<name>.parquet, this release's positions on `label`. Blocks from EVA's pairs (from: rsid),
+    a PAF of prep/align_assemblies.py (paf: <file>, its primary alignments with mapq >= min_mapq) or a UCSC chain
+    (chain: <file>). Where two blocks overlap on the assembly converted from, neither is kept (that sequence aligns
+    twice). names: <file> (accession, chrom) gives the chromosome names users may give for `label`."""
+    from snpscore.liftover import blocks_from_rsid_sql, read_chain, read_paf
+    label = spec.get("label", name)
+    columns = "{'chrom': 'VARCHAR', 'start': 'BIGINT', 'end': 'BIGINT', 'to_chrom': 'VARCHAR', 'shift': 'BIGINT', 'strand': 'VARCHAR'}"
+
+    def write(blocks, target):
+        with tempfile.TemporaryDirectory(dir=out) as tmp:
             tsv = Path(tmp) / "blocks.tsv"
-            tsv.write_text("".join("\t".join(map(str, b)) + "\n" for b in read_chain(data / spec["chain"])))
-            sql = f"""SELECT * FROM read_csv({lit(tsv)}, delim='\t', header=false, columns={{'chrom': 'VARCHAR', 'start': 'BIGINT',
-                      'end': 'BIGINT', 'to_chrom': 'VARCHAR', 'shift': 'BIGINT', 'strand': 'VARCHAR'}}) ORDER BY chrom, start"""
-            con.execute(f"COPY ({sql}) TO {lit(target)} (FORMAT parquet, COMPRESSION zstd)")
+            with open(tsv, "w") as f:
+                f.writelines("\t".join(map(str, x)) + "\n" for x in blocks)
+            con.execute(f"""COPY (SELECT * EXCLUDE (_prev_end, _next_start) FROM (
+                                SELECT *, max("end") OVER (w ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS _prev_end,
+                                       lead(start) OVER w AS _next_start  -- blocks sorted by start: the next overlaps first
+                                FROM read_csv({lit(tsv)}, delim='\t', header=false, columns={columns}) WINDOW w AS (PARTITION BY chrom ORDER BY start))
+                            WHERE coalesce(_prev_end <= start, true) AND coalesce("end" <= _next_start, true) ORDER BY chrom, start)
+                            TO {lit(target)} (FORMAT parquet, COMPRESSION zstd)""")
+
+    tables = {}
+    if spec.get("paf") or spec.get("chain"):
+        source = data / (spec.get("paf") or spec["chain"])
+        if not source.exists():
+            return {}
+        if spec.get("paf"):
+            mapq = int(spec.get("min_mapq", 0))
+            write(read_paf(source, reverse=True, min_mapq=mapq), out / f"liftover_{name}.parquet")
+            write(read_paf(source, min_mapq=mapq), out / f"liftover_to_{name}.parquet")
+            tables = {name: "from", f"to_{name}": "to"}
+        else:
+            write(read_chain(source), out / f"liftover_{name}.parquet")
+            tables = {name: "from"}
+        how = f"{'PAF' if spec.get('paf') else 'chain'} {source.name}"
     else:
         if not (out / "rsid.parquet").exists():
-            return {"file": None, "blocks": 0}
-        con.execute(f"COPY ({blocks_from_rsid_sql(out / 'rsid.parquet')}) TO {lit(target)} (FORMAT parquet, COMPRESSION zstd)")
-    blocks, bp = con.execute(f'SELECT count(*), sum("end" - start) FROM read_parquet({lit(target)})').fetchall()[0]
-    return {"file": target.name, "blocks": blocks, "bp": int(bp or 0), "source": f"chain {spec['chain']}" if spec.get("chain")
-            else "EVA rs IDs on both assemblies (rsid.parquet)", "sha256": hashes([target])[1]}
+            return {}
+        con.execute(f"COPY ({blocks_from_rsid_sql(out / 'rsid.parquet')}) TO {lit(out / f'liftover_{name}.parquet')} "
+                    "(FORMAT parquet, COMPRESSION zstd)")
+        tables, how = {name: "from"}, "EVA rs IDs on both assemblies (rsid.parquet)"
+    names = {}
+    if spec.get("names") and (data / spec["names"]).exists():
+        names = dict(line.split("\t")[:2] for line in (data / spec["names"]).read_text().splitlines()[1:] if "\t" in line)
+    out_entries = {}
+    for table, direction in tables.items():
+        target = out / f"liftover_{table}.parquet"
+        blocks, bp = con.execute(f'SELECT count(*), sum("end" - start) FROM read_parquet({lit(target)})').fetchall()[0]
+        out_entries[table] = {"file": target.name, "label": label, "direction": direction, "blocks": blocks, "bp": int(bp or 0),
+                              "source": how, "sha256": hashes([target])[1], **({"aliases": names} if names and direction == "from" else {})}
+    return out_entries
 
 
 def build_flank_keys(con, cfg, out, genome):

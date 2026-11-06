@@ -21,8 +21,8 @@ def main():
     a.add_argument("--threads", type=int, default=4)
     a.add_argument("--memory", default="4GB", help="DuckDB memory limit")
     a.add_argument("--max-snps", type=int, help="refuse files with more SNPs than this")
-    a.add_argument("--from-assembly", choices=["ICSASG_v2"], help="the positions are on ICSASG_v2: convert them to "
-                   "Ssal_v3.1 (the release's liftover table, built from EVA's rs IDs on both assemblies)")
+    a.add_argument("--from-assembly", help="the positions are on another assembly (ICSASG_v2, fSalSal1, as the release "
+                   "has them): convert them to the release's (its liftover tables)")
     a.add_argument("--place-by-flank", action="store_true", help="the positions are on another assembly (e.g. an ICSASG_v2 "
                    "chip manifest): place the SNPs by their flank sequences (Flank, SourceSeq or TopGenomicSeq column)")
 
@@ -97,7 +97,7 @@ def main():
                   f"({r['alleles_complemented']} with complemented alleles), {r['unknown']} unknown")
         if report.get("liftover"):
             f = report["liftover"]
-            print(f"from ICSASG_v2: {f['converted']} converted ({f['complemented']} on the other strand), {f['unmapped']} "
+            print(f"from {f['from']}: {f['converted']} converted ({f['complemented']} on the other strand), {f['unmapped']} "
                   "outside the conversion table")
         if report.get("flank"):
             from .placement import describe

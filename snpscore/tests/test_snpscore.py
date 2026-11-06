@@ -611,3 +611,37 @@ def test_verify_and_diff(release, tmp_path):  # P8.5: a damaged file is named; t
     lines = diff(release, copy)
     assert lines[0] == "release test -> test-2" and "layer removed: gerp" in lines
     assert any(x.startswith(f"layer {m['layers'][0]['name']}: rows ") for x in lines)
+
+
+def test_alignment_conversion(release, tmp_path):  # I19: Ssal_v3.1 <-> fSalSal1 from a PAF (SYNTHETIC alignments)
+    from snpdata.build import build_liftover
+    from snpscore.liftover import read_paf
+    paf = tmp_path / "SYNTHETIC.paf"
+    paf.write_text("1\t1000\t100\t200\t+\t1\t1000\t300\t402\t98\t102\t60\ttp:A:P\tcg:Z:50M2D50M\n"
+                   "2\t1000\t0\t100\t-\t2\t1000\t500\t600\t100\t100\t60\ttp:A:P\tcg:Z:100M\n"
+                   "3\t1000\t0\t100\t+\t3\t1000\t0\t100\t100\t100\t2\ttp:A:P\tcg:Z:100M\n")  # mapq 2: left out below
+    assert list(read_paf(paf, min_mapq=5)) == [("1", 100, 150, "1", 200, "+"), ("1", 150, 200, "1", 202, "+"),
+                                               ("2", 0, 100, "2", 601, "-")]  # query 2:1 -> target 2:600 (601 - 1)
+    assert list(read_paf(paf, reverse=True, min_mapq=5))[:2] == [("1", 300, 350, "1", -200, "+"), ("1", 352, 402, "1", -202, "+")]
+    # fSalSal1 25:1,001-1,100 is Ssal_v3.1 25:28,996,301-28,996,400 (the vgll3 SNP at 28,996,360 inside)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "aln.paf").write_text("25\t50000000\t28996300\t28996400\t+\t25\t48000000\t1000\t1100\t100\t100\t60\t"
+                                               "tp:A:P\tcg:Z:100M\n")
+    (tmp_path / "data" / "names.tsv").write_text("accession\tchrom\nOZ271756.1\t25\nNC_138315.1\t25\n")
+    out = tmp_path / "rel"
+    out.mkdir()
+    con = connect([tmp_path, release])
+    entries = build_liftover(con, "fsalsal1", {"label": "fSalSal1", "paf": "aln.paf", "names": "names.tsv"}, out, tmp_path / "data")
+    assert set(entries) == {"fsalsal1", "to_fsalsal1"} and entries["fsalsal1"]["aliases"]["OZ271756.1"] == "25"
+    assert entries["fsalsal1"]["bp"] == entries["to_fsalsal1"]["bp"] == 100
+    (tmp_path / "in.tsv").write_text("chrom\tpos\tid\nOZ271756.1\t1060\tvgll3\nssa25\t5000\tnowhere\n")
+    m = json.loads((release / "manifest.json").read_text())
+    report = read_snps(con, tmp_path / "in.tsv", m["chrom_sizes"], None, None, None, None,
+                       {**entries["fsalsal1"], "file": out / entries["fsalsal1"]["file"]})
+    assert con.execute("SELECT chrom, pos, position_source FROM snps").fetchall() == [("25", 28996360, "fSalSal1 OZ271756.1:1060")]
+    assert report["liftover"]["from"] == "fSalSal1" and report["rejected"] == {"liftover_unmapped": 1}
+    from snpscore.liftover import positions  # and the other way, as the exports add it: Ssal_v3.1 -> fSalSal1
+    con.execute("CREATE TABLE mine AS SELECT * FROM (VALUES ('25', 28996360), ('25', 5)) t(chrom, pos)")
+    view = positions(con, "mine", out / entries["to_fsalsal1"]["file"], "fSalSal1")
+    assert con.execute(f'SELECT pos, "fSalSal1_chrom", "fSalSal1_pos" FROM {view} ORDER BY pos').fetchall() == [
+        (5, None, None), (28996360, "25", 1060)]

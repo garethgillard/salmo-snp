@@ -78,5 +78,8 @@ rm "$OUT/genes.tmp" "$OUT/ogs.tmp"
 # Ss4R blocks touching the fixture chromosomes.
 awk -F'\t' 'NR == 1 || $2 ~ /^(1|9|21|25|26)$/ || $5 ~ /^(1|9|21|25|26)$/' "$RAW/AtlanticSalmon_synteny.tsv" > "$OUT/AtlanticSalmon_synteny.tsv"
 awk -F'\t' '$1 == "1" || $1 == "9" || $1 == "21" || $1 == "25" || $1 == "26"' "$RAW/alias_filtered.txt" > "$OUT/alias_filtered.txt"
+# The Ssal_v3.1 -> fSalSal1 alignment (prep/align_assemblies.py): its alignments inside the regions, and the names table.
+gzip -dc "$RAW/ssal31_to_fsalsal1.paf.gz" | awk -F'\t' "$HIT hit(\$1, \$3, \$4)" | gzip > "$OUT/ssal31_to_fsalsal1.paf.gz"
+cp "$RAW/fsalsal1_names.tsv" "$OUT/fsalsal1_names.tsv"
 .venv/bin/python prep/make_fixture_genome.py
 wc -l "$OUT"/*
