@@ -11,8 +11,9 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 - On users' own computers, the main product (G, 2026-11-03): `salmo-snp serve` (serve.py) sets `SNPPORTAL_LOCAL`, so
   results stay until deleted and the Score, Help, Design panel and Run locally pages say they are on this computer.
 - The public demo (no password) on an NREC VM, https://158.39.75.9/snp/ (G, 2026-10-12): gunicorn behind Caddy, 24 h
-  retention. Code deploys itself: a push or merged pull request on main runs the tests, then GitHub Actions runs
-  `deploy/update.sh` on the VM (README "Automatic deploys"). A new data release goes up with `bash deploy/nrec.sh nrec
+  retention. Code goes there only when G says so (G, 2026-11-06; ../AGENTS.md "Deploying the NREC demo"): the
+  manual `deploy` workflow runs the tests, then `deploy/update.sh` on the VM (README "Deploying the demo"); merging
+  to main deploys nothing. A new data release goes up with `bash deploy/nrec.sh nrec
   158.39.75.9 158-39-75-9.sslip.io`, which needs G's Mac (the VM's SSH key and the release folder); always pass the IP
   address, as the script rewrites the Caddy sites and allowed hosts from the names it is given.
 - salmobase later: a container installing a tagged version (../AGENTS.md plan 4): `deploy/Dockerfile`, README
