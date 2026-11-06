@@ -35,8 +35,8 @@ from snpscore.formats import lit
 
 from . import figures, jobs, palette, results
 
-EXPORTS = ("tsv", "parquet", "bed", "illumina", "axiom", "kasp", "bundle", "priors")  # ?format= of the download URL
-VENDORS = ("illumina", "axiom", "kasp")
+EXPORTS = ("tsv", "parquet", "bed", "illumina", "axiom", "kasp", "agena", "primer3", "bundle", "priors")  # ?format=
+VENDORS = ("illumina", "axiom", "kasp", "agena", "primer3")
 MAX_TARGET = 20_000  # largest panel the form designs
 MAX_MUST = 200  # must-include ids per panel
 SHOWN = 25  # selected SNPs listed on the page, then 'Show all' (up to LISTED; the exports have all)
@@ -54,14 +54,16 @@ BINDING = {"min_spacing": "the minimum spacing", "min_spacing_cm": "the minimum 
 CM_MAPS = {"mean": "sex-averaged", "female": "female", "male": "male"}  # lib.panel.CM_MAPS
 FORMATS = [  # (format, label, contents) of the Export tab's rows; vendor rows add their counts and checks
     ("tsv", "Table (TSV)", "Every annotation column, one row per SNP."),
-    ("kasp", "KASP", ""), ("illumina", "Illumina", ""), ("axiom", "Axiom", ""),  # no Agena layout: not checked (docs/RESEARCH.md 10)
+    ("kasp", "KASP", ""), ("illumina", "Illumina", ""), ("axiom", "Axiom", ""),
+    ("agena", "Agena MassARRAY", ""), ("primer3", "Primer3 (amplicon, GT-seq)", ""),  # I14: layouts PROVISIONAL
     ("bundle", "Everything (zip)", "The table, BED and vendor files, with methods, provenance and figures."),
 ]
 MORE_FORMATS = [("parquet", "Parquet", "the same columns; provenance in the file's metadata"),
                 ("bed", "BED", "chrom, pos − 1, pos and the SNP name, for genome browsers"),
                 ("priors", "Genomic-prediction priors (zip)", "SNP categories for BayesRC, GFBLUP/MultiBLUP and LDAK")]  # P6.5
 MIME = {"tsv": "text/tab-separated-values; charset=utf-8", "bed": "text/plain; charset=utf-8", "parquet": "application/vnd.apache.parquet",
-        "bundle": "application/zip", "priors": "application/zip", **{v: "text/csv; charset=utf-8" for v in VENDORS}}
+        "bundle": "application/zip", "priors": "application/zip", **{v: "text/csv; charset=utf-8" for v in VENDORS},
+        "primer3": "text/plain; charset=utf-8"}
 CHIP_ERRORS = {  # ?chip_error= -> message (codes only: no file content or names in URLs)
     "missing": "Choose a chip file, or use the demo chip.",
     "type": "This file type isn't accepted for a chip. Upload a manifest or table (.csv, .tsv, .txt, optionally gzipped), "
@@ -71,6 +73,7 @@ CHIP_ERRORS = {  # ?chip_error= -> message (codes only: no file content or names
               "a VCF, PLINK or Illumina/Axiom manifest layout: see Help for the accepted formats.",
     "empty": "None of the chip's positions are on Ssal_v3.1 chromosomes 1–29. Are they on another assembly (ICSASG_v2)? "
              "Then tick 'Positions on another assembly' to place the markers by their flank sequences.",
+    "icsasg_v2": "The chip's positions could not be converted from ICSASG_v2 with this release.",
     "flank": "The chip's markers could not be placed by flank sequence: the file needs a column of flank or probe sequences "
              "(Axiom 'Flank', Illumina 'SourceSeq' or 'TopGenomicSeq', with the SNP as [A/B]), and the release flank keys.",
     "rows": "The chip file has more than {cap} markers. Keep only the markers you need, or compare it on your own "
@@ -404,6 +407,9 @@ def _params(data, weights, types, ids=()):
     }
     if purpose:  # only then in the parameters, so other panels keep their hash
         p["purpose"] = purpose
+        mixed = snp_panel.presets(weights)[purpose].get("mix")
+        if mixed:  # each part designs with its own purpose's numbers: only Markers and must-include apply
+            p["mix"] = [[k, float(v)] for k, v in mixed.items()]
     if {"cm_female", "cm_male"} <= set(types):  # R5: also keep markers this many cM apart (blank or 0: bp only)
         cm = _number(get("spacing_cm"), float, 0, 1000, None if sent else default.get("min_spacing_cm"))
         if cm:  # only then in the parameters, so bp-only panels keep their hash
@@ -442,6 +448,8 @@ def _fields(p, types, gap_mb):
     ]
     fields = [dict(zip(("name", "label", "value", "min", "max", "step", "help"), f)) for f in fields if f]
     fields[0]["list"] = "sp-sizes"  # the target sizes (I8) as suggestions
+    if p.get("mix"):  # a mix: each part has its purpose's settings, so only Markers (and the gap highlight) apply
+        return fields[:1], [f for f in fields if f["name"] == "gap_mb"]
     return fields[:2], fields[2:]
 
 
@@ -527,6 +535,10 @@ def panel_name(info, time=False):
 def panel_params(p):
     """A designed panel's parameters in one line (its purpose first, I8), for the report and the export provenance."""
     parts = [f"purpose {purpose_label(p['purpose']) or p['purpose']}"] if p.get("purpose") else []
+    if p.get("mix"):
+        total = sum(v for _, v in p["mix"]) or 1
+        return "; ".join(parts + [f"{int(p['n_target']):,} markers: " + ", ".join(
+            f"{v / total:.0%} {purpose_label(k) or k}" for k, v in p["mix"]) + ", each with its purpose's settings"])
     parts += [f"{int(p['n_target']):,} markers", f"at least {_bp(p['min_spacing'])} apart"
               + (f" and {p['min_spacing_cm']:g} cM" if p.get("min_spacing_cm") else ""), f"MAF ≥ {p['min_maf']:g}",
               f"backbone {p['backbone_fraction']:g}", f"≤ {p['max_per_gene']} per gene", f"≤ {p['max_per_element']} per element",
@@ -534,6 +546,12 @@ def panel_params(p):
     if p.get("exclude_flags"):
         parts.append("excluding " + ", ".join(p["exclude_flags"]))
     return "; ".join(parts)
+
+
+def tools_mix_line(p):
+    """'90% Genomic selection, 10% Trait panel' for the designer's Purpose line."""
+    total = sum(v for _, v in p["mix"]) or 1
+    return ", ".join(f"{v / total:.0%} {purpose_label(k) or k}" for k, v in p["mix"])
 
 
 def purpose_label(name, weights=None):
@@ -653,8 +671,10 @@ def panel(request, key, job):
         "reset": "?" + urlencode({"tab": "panel", "trait": trait, **({"purpose": p["purpose"]} if p.get("purpose") else {})}),
         "purposes": [("", "General", "The release's design defaults", not p.get("purpose"))] + [
             (k, x.get("label") or k, x.get("help") or "", k == p.get("purpose")) for k, x in snp_panel.presets(weights).items()],
-        "purpose": p.get("purpose"), "sizes": snp_panel.target_sizes(weights),
+        "purpose": p.get("purpose"), "sizes": snp_panel.target_sizes(weights), "mix": tools_mix_line(p) if p.get("mix") else None,
     }
+    if p.get("mix"):  # each part has its purpose's settings: no controls that wouldn't apply
+        designer.update(assay=[], cm_maps=[], checks=[])
     return {"designer": designer, "readiness": assay_readiness(con, types, _synthetic(job), link),
             "chip": _chip_context(request, key, job, d, trait, con, weights, chip, link)}
 
@@ -985,7 +1005,9 @@ def _vendor_notes(con, rel, n):
     within = f"{close:,} SNPs within 60 bp of another" if close else ""
     bins = f"Infinium bins: A/T {b['A']:,}, C/G {b['B']:,}, other {b['C']:,}" + (" (below Illumina's minimums)" if any(
         "Infinium" in w for w in c["warnings"]) else "")
-    return {"kasp": [included], "illumina": [included, bins, within], "axiom": [included, within]}
+    return {"kasp": [included], "illumina": [included, bins, within], "axiom": [included, within],
+            "agena": [included, "layout not yet checked against Agena's template"],
+            "primer3": [included, "for primer design: the SNP as target, PCR settings to set with the lab"]}
 
 
 def exports(request, key, job):

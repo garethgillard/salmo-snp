@@ -106,6 +106,11 @@ design:
       min_spacing: 1000
       min_maf: 0.01
       max_per_gene: 4
+    selection_and_traits:  # a mix (I8): each purpose designs its share in turn, with its own numbers above
+      label: Genomic selection + trait loci
+      help: Mostly even coverage for genomic prediction, plus the best SNPs of the Table selection
+      n_target: 5000
+      mix: {genomic_selection: 0.9, trait: 0.1}
   target_sizes: [96, 192, 384, 1536, 5000, 50000]  # quick choices for Markers (KASP plates, Axiom formats: to confirm with the vendor)
 
 # GWAS loci and fine-mapping (snpscore.gwas, the portal's Association page). PROVISIONAL: chosen by Claude so the

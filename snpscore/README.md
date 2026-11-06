@@ -63,12 +63,23 @@ HG993268.2, HG993270.2, HG993277.2, HG993285.2). `HG993277.1` is an older chromo
   given), alleles complemented where EVA's two placements are on opposite strands. EVA's Ssal_v3.1 positions are
   EVA's remaps of the older submissions.
 
+With `--from-assembly ICSASG_v2` (`annotate(..., lift_from="icsasg_v2")`, ROADMAP I19), the positions are taken to be
+ICSASG_v2 ones (chromosomes 1-29, ssaNN, chrNN, or the v2 GenBank and RefSeq accessions CM003279.1-CM003307.1 and
+NC_027300.1-NC_027328.1) and converted through the release's `liftover_icsasg_v2.parquet`: collinear blocks of EVA's rs
+IDs placed on both assemblies, so a position between two rs IDs that keep the same offset converts exactly
+(`position_source` = `ICSASG_v2 <chrom>:<pos>`, alleles complemented on blocks of the other strand); a position outside
+them is placed by its rs ID if it has one, else rejected as `liftover_unmapped`. The validation report's `liftover`
+counts them.
+
 With `--place-by-flank` (`annotate(..., place_by_flank=True)`, ROADMAP I18), the positions are taken to be on another
 assembly, as in an ICSASG_v2 chip manifest: each row is placed by its flank sequence (a column `Flank`, `SourceSeq` or
 `TopGenomicSeq` holding `LEFT[A/B]RIGHT`) where the 16 bases either side match a known variant site of the release's
 `flank_keys.parquet` exactly, on either strand (alleles complemented when given on the other one; `position_source` =
 `flank`); else by its rs ID as above; else it is rejected as `flank_not_found`. The validation report's `flank` counts
 them.
+
+Checking releases: `snpscore verify <release>` re-hashes every file against its SHA256SUMS (a damaged or edited file
+is named); `snpscore diff <old> <new>` lists what changed between two releases, for a changelog.
 
 ## Annotate output
 

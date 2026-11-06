@@ -146,6 +146,7 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
         "targets": targets, "flanks": FLANKS, "flank": FLANK, "paste_lines": PASTE_LINES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}",
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(),
+        "positions": jobs.position_choices(),
         "results_dir": jobs.results_dir(),
     }, status=status))
 
@@ -210,7 +211,8 @@ def start_job(request):
         if not upload.size:
             raise jobs.InputError("The uploaded file is empty.")
         name = Path(upload.name or "").name[:80] or "Uploaded list"  # the file's name names the results
-        return jobs.create(Path(upload.path), suffix, "snps", preset, name), preset
+        positions = request.POST.get("positions") if request.POST.get("positions") in dict(jobs.position_choices()) else None
+        return jobs.create(Path(upload.path), suffix, "snps", preset, name, positions=positions or None), preset
     if paste:
         rows = jobs.parse_paste(paste, PASTE_LINES)
         return jobs.create_from_rows(rows, f"Pasted {jobs.utc()}", preset, kind="snps", input_format="paste"), preset
