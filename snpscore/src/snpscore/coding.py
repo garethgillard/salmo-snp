@@ -112,7 +112,7 @@ def consequences(con, location, transcripts, public_af=None, table="snps", pos="
     text = "\n".join(f"{idx}\t{codon_bases(fasta, chrom, ps)}" for idx, chrom, *ps in rows)
     con.execute("""CREATE OR REPLACE TEMP TABLE _bases AS SELECT split_part(x, '\t', 1)::BIGINT AS idx,
                    split_part(x, '\t', 2) AS bases FROM (SELECT unnest(string_split(?, '\n')) AS x) WHERE x <> ''""", [text])
-    code = ", ".join(f"({lit(k)}, {lit(v)})" for k, v in CODE.items())
+    code = "MAP {" + ", ".join(f"{lit(k)}: {lit(v)}" for k, v in CODE.items()) + "}"  # a lookup, not a join: DuckDB 2.0.0 joins fail here at 4+ threads (INTERNAL dict cache)
     public = public_af and con.execute("SELECT count(*) FROM _cs WHERE coalesce(alt, '.') = '.'").fetchone()[0]
     panel = (f"""LEFT JOIN (SELECT chrom, "end" AS pos, ref AS public_ref, min(alt) AS public_alt,
                                    count(*) OVER (PARTITION BY chrom, "end") AS n FROM read_parquet({lit(public_af)})
@@ -133,8 +133,7 @@ def consequences(con, location, transcripts, public_af=None, table="snps", pos="
                         CASE WHEN strand = '-' THEN {comp.format('bases')} ELSE bases END AS rc FROM a),
         x AS (SELECT *, substr(rc, 1, k) || CASE WHEN strand = '-' THEN {comp.format('alt_fwd')} ELSE alt_fwd END
                         || substr(rc, k + 2) AS ac FROM f),
-        t AS (SELECT x.*, r.aa AS ref_aa, v.aa AS alt_aa FROM x
-              LEFT JOIN (VALUES {code}) r(codon, aa) ON r.codon = x.rc LEFT JOIN (VALUES {code}) v(codon, aa) ON v.codon = x.ac),
+        t AS (SELECT *, {code}[rc] AS ref_aa, {code}[ac] AS alt_aa FROM x),
         e AS (SELECT *, CASE WHEN incomplete THEN 'incomplete_terminal_codon_variant'
                              WHEN alt_fwd IS NULL OR ref_aa IS NULL OR alt_aa IS NULL THEN 'coding_sequence_variant'
                              WHEN ref_aa = 'Ter' AND alt_aa = 'Ter' THEN 'stop_retained_variant'

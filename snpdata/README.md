@@ -65,6 +65,10 @@ release/2026-11-03/
   rsid.parquet           rs (BIGINT, the number), chrom, pos, ref, alt (Ssal_v3.1), v2_chrom, v2_pos, v2_ref, v2_alt
                          (ICSASG_v2; NULL unless on exactly one ICSASG_v2 line) from EVA release 9, sorted by rs, zstd;
                          rs IDs on several Ssal_v3.1 lines are left out. `snpscore.rsid(release, rs)` looks one up
+  liftover_<name>.parquet  chrom, start, end (BED, on the assembly converted from), to_chrom, shift, strand, pairs:
+                         collinear blocks (a position p goes to p + shift on '+', shift - p on '-'); layers.yaml
+                         `liftover` (icsasg_v2 from EVA's rs IDs on both assemblies, or a chain file). snpscore.liftover
+                         converts input positions with it (I19); optional
   flank_keys.parquet     key (UBIGINT: the 16 bases either side of a site, packed 2 bits each, on the strand that sorts
                          first), chrom, pos, canonical (the genome's forward strand is the one keyed): every site of the
                          layers layers.yaml `flank_keys.sites` names, read from the genome; keys at more than one site

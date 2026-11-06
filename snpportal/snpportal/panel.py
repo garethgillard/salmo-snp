@@ -264,7 +264,7 @@ def page(request):
     con, rel = _open(d)
     ctx["populations"] = populations(d)
     ctx["genome"] = genome() is not None
-    ctx["flank_keys"] = (jobs.release() / "flank_keys.parquet").exists()  # I18: chips on another assembly
+    ctx["positions"] = jobs.position_choices()  # I18, I19: chips on another assembly
     chip = jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}
     synthetic = any(x.get("synthetic") for x in s["sources"]) or bool(chip.get("synthetic"))
     ctx.update(sources=[{**x, "url": f"{reverse('snpportal:projects')}#{x['project']}" if x.get("project") else
@@ -395,7 +395,8 @@ def _downloads(con, chip, n):
     url = reverse("snpportal:panel_download")
     new = con.execute("SELECT count(*) FILTER (WHERE NOT on_chip) FROM p").fetchone()[0] if chip else None
     scopes = [("all", f"All panel SNPs ({n:,})")] + ([("new", f"Not on the chip ({new:,})")] if chip else [])
-    return {"scopes": scopes, "formats": [("kasp", "KASP"), ("illumina", "Illumina"), ("axiom", "Axiom")],
+    return {"scopes": scopes, "formats": [("kasp", "KASP"), ("illumina", "Illumina"), ("axiom", "Axiom"), ("agena", "Agena"),
+                                          ("primer3", "Primer3")],
             "tsv": f"{url}?format=tsv", "url": url}
 
 
@@ -591,11 +592,13 @@ def _chip(request, d):
         label = (request.POST.get("chip_name") or "").strip()[:40] or f"Chip {len(chips(d)) + 2}"
     new = d / ".chip-new.parquet"
     try:
-        report = snp_panel.read_chip(src, jobs.release(), new, max_snps=tools.chip_cap(),
-                                     place_by_flank=bool(request.POST.get("by_flank")) and src != demo)
+        positions = request.POST.get("positions") or ("flank" if request.POST.get("by_flank") else None)  # I18, I19
+        positions = positions if positions in jobs.POSITIONS and src != demo else None
+        report = snp_panel.read_chip(src, jobs.release(), new, max_snps=tools.chip_cap(), place_by_flank=positions == "flank",
+                                     lift_from="icsasg_v2" if positions == "icsasg_v2" else None)
     except (snpscore.InputError, duckdb.Error):
         new.unlink(missing_ok=True)
-        return redirect(f"{reverse('snpportal:design_panel')}?chip_error={'flank' if request.POST.get('by_flank') else 'format'}")
+        return redirect(f"{reverse('snpportal:design_panel')}?chip_error={positions or 'format'}")
     finally:
         if src != demo:
             src.unlink(missing_ok=True)
@@ -619,7 +622,8 @@ def _chip(request, d):
     jobs._write_json(d / "chip.json", {"label": label, "synthetic": synthetic, "kept": report["snps_kept"],
                                        "rejected": {k: v for k, v in (report.get("rejected") or {}).items() if v},
                                        "density": density, "created_utc": jobs.utc(),
-                                       **({"flank": report["flank"]} if report.get("flank") else {})})
+                                       **({"flank": report["flank"]} if report.get("flank") else {}),
+                                       **({"liftover": report["liftover"]} if report.get("liftover") else {})})
     return redirect(back)
 
 

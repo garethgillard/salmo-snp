@@ -17,15 +17,18 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
 
 ## Next
-Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Built on the branch of
-pull request #2, waiting for G's review: I1-I5, I7-I12, I15, I17 and I18 (step 9). What remains:
-1. **G's answers** (DECISIONS.md #25-#35 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
-   is PROVISIONAL until then. #34-#35 (chip placement by flank) are answered for now (G, 2026-11-05), to revisit.
-2. ~~A new release~~: done, release 2026-11-05 with flank_keys.parquet (I18). The I18 check against a real ICSASG_v2
-   Axiom manifest still waits for one; its counts settle DECISIONS #34-#35 (answered for now).
-3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13), then I14.
+Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged (PR #2, 2026-11-05):
+I1-I5, I7-I12, I15, I17, I18; (PR #3, 2026-11-06): mixed purposes (I8), Primer3 and Agena files (I14), ICSASG_v2
+conversion (I19), the salmobase container, health and release checks (P8.4, P8.5), the guided tour retaken. What
+remains:
+1. **G's answers** (DECISIONS.md #25-#36 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
+   is PROVISIONAL until then. #34 and #36 (chip placement by flank) are answered for now (G, 2026-11-05), to revisit.
+2. **A new release** after PR #3 (G's Mac: `snpdata build`, then `bash prep/github_release.sh`): it adds
+   liftover_icsasg_v2.parquet (I19). Release 2026-11-05 already has flank_keys.parquet (I18); the I18 check against a
+   real ICSASG_v2 Axiom manifest still waits for one; its counts settle DECISIONS #34 and #36 (answered for now).
+3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
 4. **Phase 3**: G's DeepFARM and CADD-like data as variant-score layers (I16).
-5. **Phase 4 rest**: coordinate conversion (I19), a release on the new assembly (I20).
+5. **Phase 4 rest**: a release on the new assembly (I20), with a chain file for I19's conversion.
 6. **On hold** (G, 2026-11-04): genome comparison (G is asking the users what they need; DECISIONS #28) and a shared
    company server with accounts (one user per install, who shares results as files).
 7. **Backlog**: the other open boxes below, and the questions in DECISIONS.md.
@@ -108,7 +111,8 @@ pull request #2, waiting for G's review: I1-I5, I7-I12, I15, I17 and I18 (step 9
 - [ ] Host the published folder (`snpdata publish --raw`: releases/, latest.json, raw/) on salmobase's Apache and set
       serve.py DATA_URL; the nf-RASQUAL and 504-fish layers only once their owners agree to redistribution
 - v0.1.0 tag (G decides when; release.yml builds the three wheels): now step 9's I4
-- [ ] Dockerfile for salmobase (installs a tagged version; release folder mounted); salmobase links to it with a button
+- [x] Dockerfile for salmobase (snpportal/deploy/Dockerfile; README "salmobase container": the Apache lines); built and
+      run in a cloud session. Still to do with salmobase's admins: the host, the volumes and the button
 - [ ] Before the repository goes public: synthetic stand-ins for the fixture cuts of licence-pending data
 
 ## Step 8: platform, pool and sharing (review of 2026-11-04)
@@ -147,8 +151,8 @@ Phase 2, chip design (Axiom first: DECISIONS #27):
       Design panel again (projects.py)
 - [x] I8 Purposes and target sizes: weights.yaml design.presets (genomic selection, parentage and traceability, trait
       panel) set the designer's defaults (Panel tab Purpose links, `lib.cli panel --purpose`); design.target_sizes are
-      suggestions for Markers. Every number PROVISIONAL (DECISIONS #31). Not done: mixtures of purposes (the backbone
-      share already mixes even coverage and function)
+      suggestions for Markers. Every number PROVISIONAL (DECISIONS #31). Mixes: a purpose with a share per purpose
+      (`mix:`; lib.panel.mix designs each share in turn, each with its own numbers; selection_and_traits 90/10)
 - [x] I9 The user's own population (local installs): a VCF with genotypes or a table of frequencies, counted as it
       streams (af, maf, n, call rate, exact HWE p) and deleted; the Design panel's MAF, the upgrade's QC and the
       design report use it (lib/population.py)
@@ -162,7 +166,9 @@ Phase 2, chip design (Axiom first: DECISIONS #27):
 - [x] I12 A printable design report per Design panel and per project version (panel_report.py): two A4 pages for the
       known-loci example
 - [ ] I13 Vendor round trip with real Axiom files from a partner, then Illumina and KASP
-- [ ] I14 Later: LD-aware thinning, amplicon and GT-seq panels, Agena
+- [x] I14, part: Primer3 input for amplicon and GT-seq panels (the SNP as target, PCR settings PROVISIONAL, amplicon
+      overlaps noted) and an Agena MassARRAY file (layout unverified), on the Export tab and the Design panel
+- [ ] I14 rest: LD-aware thinning (needs the LD reference, DECISIONS #19: a population upload keeps counts only)
 
 Phase 3, variant scores:
 - [x] I15 One layer format for per-variant scores (layers.yaml format variant_scores: score and percentile; shown on
@@ -179,8 +185,11 @@ Phase 4, genomes (later):
       about 2 min on G's Mac. Every upload is its own acceptance check (2026-11-05): placements checked against the
       genome (whole flank, no mismatch allowed) and the rs IDs (agreement counted, disagreements kept at the flank's
       position and named), misses explained, on the chip card and in the CLI. A real ICSASG_v2 Axiom manifest's
-      counts are still to come: none on G's Mac on 2026-11-05 (DECISIONS #34-#35)
-- [ ] I19 Coordinate conversion between assemblies (P2.5)
+      counts are still to come: none on G's Mac on 2026-11-05 (DECISIONS #34, #36)
+- [x] I19 ICSASG_v2 to Ssal_v3.1 for any position: liftover_icsasg_v2.parquet, collinear blocks from EVA's rs IDs on
+      both assemblies (735,344 blocks over 1.49 Gb, 5.3 MB; a hold-out of 10% of the rs IDs: 89.5% inside a block,
+      99.97% of those to EVA's own position); `snpscore annotate --from-assembly ICSASG_v2`, the Score form's and
+      chip upload's 'Positions on'. A chain file (read_chain) serves the new assembly later. Needs a release built after PR #3
 - [ ] I20 A release on the new Atlantic salmon assembly (G's re-run analyses)
 
 ## Portal roadmap v2 (full specs in [ROADMAP.md](ROADMAP.md))
@@ -202,7 +211,7 @@ First push = waves A-C (items marked **now**), then wave D (GWAS, M7). Ticked wh
 - [x] P2.2 Upload page redesign with examples, paste box and safe limits (S, must, **now**)
 - [x] P2.3 Privacy and data-lifecycle hardening (S, must, **now**)
 - [ ] P2.4 Optional in-browser genotype stripping before upload (S, should)
-- [ ] P2.5 ICSASG_v2 -> Ssal_v3.1 offline position table (L, should): now I19
+- [x] P2.5 ICSASG_v2 -> Ssal_v3.1 offline position table (L, should): I19, from EVA's rs IDs
 - [x] P2.6 Chip manifests, PLINK files and header aliases (S, should, **now**)
 
 ### M3 Results overview and table
@@ -271,8 +280,9 @@ First push = waves A-C (items marked **now**), then wave D (GWAS, M7). Ticked wh
 - [x] P8.1 Speed up annotate (nearest gene by ASOF joins, narrow table) (M, should) (nearest gene 79.5 s -> 2.1 s on 1.6M SNPs)
 - [ ] P8.2 Versioned JSON API v1 (M, should)
 - [ ] P8.3 Offline CLI parity for confidential data (M, should)
-- [ ] P8.4 Observability without content and a health endpoint (S, should)
-- [ ] P8.5 Release integrity: verify, diff and Django system checks (S, should)
+- [x] P8.4 Health endpoint (/snp/health/, no content) and a test that no log line holds a coordinate; Server-Timing
+      headers and counters not done
+- [x] P8.5 `snpscore verify`, `snpscore diff`, and a Django system check (a damaged release fails `manage.py check`)
 - [ ] P8.6 Fair-use limits and queue fairness (S, could)
 - [ ] P8.7 Genome-wide annotated public catalogue and per-category downloads (M, could)
 - [ ] P8.8 Remote reader extras deferred from P1.2 (S, should)

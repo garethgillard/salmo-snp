@@ -15,7 +15,11 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   `deploy/update.sh` on the VM (README "Automatic deploys"). A new data release goes up with `bash deploy/nrec.sh nrec
   158.39.75.9 158-39-75-9.sslip.io`, which needs G's Mac (the VM's SSH key and the release folder); always pass the IP
   address, as the script rewrites the Caddy sites and allowed hosts from the names it is given.
-- salmobase later: a container installing a tagged version (../AGENTS.md plan 4).
+- salmobase later: a container installing a tagged version (../AGENTS.md plan 4): `deploy/Dockerfile`, README
+  "salmobase container" (Apache proxies /snp/ to it; it serves its own static files under /snp/static/). In a cloud
+  session `dockerd &` starts Docker; build with `--secret id=ca,src=/root/.ccr/ca-bundle.crt` and the proxy as build
+  args (HTTPS_PROXY), so pip trusts the session's proxy.
+- Health: `/snp/health/` (JSON, no content) and a Django system check (`manage.py check`: the release re-hashed).
 
 ## Look like salmobase
 - Pages extend `snpportal/base_portal.html` (which extends `salmobase/base.html` and fills its blocks `head`, `content`, `scripts`). Bootstrap 5.1.3 and jQuery are already loaded there.
