@@ -9,7 +9,7 @@
 # this script registers with gh). It installs
 # the Python packages (the newest versions they allow; they need Python >= 3.11, so Ubuntu 24.04), Caddy (HTTPS from
 # Let's Encrypt), a 2 GB swap file if there is none, and three systemd units: gunicorn, and an hourly snpportal_cleanup. DuckDB gets half the RAM and every CPU. Code updates after that come
-# from GitHub Actions (update.sh, README "Automatic deploys"); rerun this for a new release or new web names. Safe to
+# from GitHub Actions when G asks (update.sh, README "Deploying the demo"); rerun this for a new release or new web names. Safe to
 # rerun: results and the secret key are kept.
 set -euo pipefail
 HOST=$1

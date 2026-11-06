@@ -32,7 +32,8 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
    README's "Run it on your own computer" is the user guide; tools/user_install_test.sh is that path as a test (CI).
    Where it runs:
    - development: clone, `conda env create -f environment.yml` (conda-forge only), editable installs;
-   - NREC (demo and staging until salmobase): git checkout, deployed automatically after the tests pass on main;
+   - NREC (demo and staging until salmobase): git checkout, updated only when G says so (the manual `deploy`
+     workflow, a batch of tested changes at a time; G, 2026-11-06), never by a merge;
    - salmobase (the live installation, later): a container installing a tagged version behind salmobase's Apache at
      /snp/, linked from salmobase with a button (not merged into its Django), the release folder mounted;
    - breeding companies and everyone else: the local install.
@@ -45,8 +46,9 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
    computers without internet. Fetching public data at given locations (AQUA-FAANG signal for a viewed region) is
    fine; users' SNPs and results are never sent or stored online. Never edit a release by hand: rebuild it
    (snpscore.release.check refuses damaged ones).
-6. GitHub: branches and pull requests; tests on every pull request; G reviews biology files (CODEOWNERS); a merge to
-   main deploys to NREC; a vX.Y.Z tag builds the wheels (and later the image) as a GitHub Release.
+6. GitHub: branches and pull requests; tests on every pull request and push to main; G reviews biology files
+   (CODEOWNERS); a merge to main deploys nothing: the NREC demo is updated when G asks (the `deploy` workflow);
+   a vX.Y.Z tag builds the wheels (and later the image) as a GitHub Release.
 
 ## Rules
 - Never commit breeder data (genotypes, GWAS results, array manifests): not in fixtures, tests or docs either.
@@ -101,6 +103,9 @@ Decided:
   (I17-I20). One user per install, who shares results as files: no accounts, no shared server (on hold). Chip tools
   serve Thermo Fisher Axiom first (G's guess for Norwegian aquaculture; to confirm), then Illumina and KASP. Genome
   comparison is on hold until G has asked the users.
+- NREC deploys (G, 2026-11-06): the demo is updated only when G says so in a chat, after enough merged and tested
+  changes for a larger update; merging a pull request no longer deploys (how: "Deploying the NREC demo",
+  under Cloud sessions; it applies to every session).
 - Chip placement by flank (I18; G, 2026-11-05: Claude's recommendations for now, on the safe side; DECISIONS #34, #36
   stay open, under Open below): flank keys from the 504-fish panel's sites; a placement's whole flank must match the
   genome exactly (IUPAC and N skipped), else it is not placed, not by its rs ID either, and a row its rs ID places
@@ -219,13 +224,20 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
      of any pages (and says whether htmx and Bootstrap loaded); send them to the chat, before and after when a page
      changes. Score an example first when the page needs a job (`/snp/` POST `example=known_loci`, as
      tour_images does).
-  4. Push and open (or update) the pull request; CI runs. NREC runs main only: it is public, so branches are not
-     deployed there.
+  4. Push and open (or update) the pull request; CI runs. NREC runs main only, and only what G has had deployed:
+     it is public, so branches never go there.
 - Checking pages without a browser: fetch them with curl from a `salmo-snp serve` in the background;
   `bash tools/user_install_test.sh` checks the whole user path.
 - Merging (G, 2026-11-04): features collect on the session's branch and its pull request, and go live only when G
   says so in the chat, usually several at a time (no auto-merge). Claude then merges the PR with the GitHub tools,
-  once CI is green, and the merge deploys to the NREC demo. Before merging, say whether the PR touches the CODEOWNERS
+  once CI is green; the merge deploys nothing. Before merging, say whether the PR touches the CODEOWNERS
   files (the biology) and wait for G's OK. main's protection asks for a PR and the `tests` check, not approvals (the
   PRs are under G's account, and GitHub doesn't let an author approve). After a merge, the branch restarts from main
   for the next PR. `deploy/nrec.sh` and new data releases need G's Mac (SSH key, data/raw).
+- Deploying the NREC demo (G, 2026-11-06): only when G asks in the chat ("deploy to NREC"), usually after several
+  merged pull requests; never on your own initiative, and never a branch. Run the `deploy` workflow on main:
+  `gh workflow run deploy.yml --ref main` (cloud sessions, REST only: `gh api -X POST
+  repos/garethgillard/salmo-snp/actions/workflows/deploy.yml/dispatches -f ref=main`), or G uses Actions > deploy >
+  Run workflow. It runs the tests, then `deploy/update.sh` on the VM (~20 s). Then check
+  https://158-39-75-9.sslip.io/snp/health/ and tell G what went live (the merges since the last deploy run). A new
+  data release, or the public pool after a weights.yaml change, still needs `deploy/nrec.sh` from G's Mac.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Update the NREC demo to a commit of origin/main. GitHub Actions runs it over SSH after the tests pass on main (the
-# deploy key's authorized_keys line forces this script, so that key can do nothing else); nrec.sh runs it too.
+# Update the NREC demo to a commit of origin/main. GitHub Actions' deploy workflow (run when G asks) runs it over SSH
+# after the tests pass (the deploy key's authorized_keys line forces this script, so that key can do nothing else);
+# nrec.sh runs it too.
 # The commit comes in SSH_ORIGINAL_COMMAND (or $1); anything that is not a commit on origin/main means origin/main.
 # If the portal doesn't answer after the restart, it goes back to the previous commit and fails.
 set -euo pipefail

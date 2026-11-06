@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time: let GitHub Actions update the NREC demo after the tests pass on main (README "Automatic deploys").
+# One-time: let GitHub Actions' deploy workflow update the NREC demo (README "Deploying the demo").
 #   bash deploy/github_deploy.sh <ssh host> <IPv4>      e.g.  bash deploy/github_deploy.sh nrec 158.39.75.9
 # Run deploy/nrec.sh first (it makes the VM's git checkout and its read-only key). This makes a new SSH key, allows it
 # on the VM only to run update.sh (a forced command, no shell, no forwarding), stores it as the repository secret

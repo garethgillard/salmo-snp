@@ -8,8 +8,9 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 ## Where things stand (2026-11-05)
 - Phase: feature work on the local install, the main product (AGENTS.md plan 4, G 2026-11-03); the live site moves
   to salmobase later.
-- main is green on GitHub (tests, user-install, deploy). The NREC demo https://158.39.75.9/snp/ runs the latest main
-  with release 2026-11-05 (cloud sessions use https://158-39-75-9.sslip.io/snp/: the bare IP didn't connect through their proxy).
+- main is green on GitHub (tests, user-install). The NREC demo https://158.39.75.9/snp/ runs what G last had deployed
+  (the manual `deploy` workflow since 2026-11-06; merges no longer deploy), with release 2026-11-05 (cloud sessions
+  use https://158-39-75-9.sslip.io/snp/: the bare IP didn't connect through their proxy).
 - The data for real use: the private GitHub Release data-2026-11-05 (`bash tools/get_data.sh`); not on salmobase yet.
   Release 2026-11-05 = 2026-11-03 plus flank_keys.parquet (I18), built with Python 3.12 and DuckDB 2.0.0: every other
   table is identical, except the allele named in `motif_tfs` for 33 of 512,745 motif sites (float ties); the demo
@@ -92,7 +93,8 @@ remains:
       (the bigWig reader stays in snpscore: the genome reader is built on it; GWAS fine-mapping stays too, with `snpscore gwas`)
 - [x] One AGENTS.md per folder (CLAUDE.md imports it) instead of the duplicated notes; CI runs both test suites and
       rejects data files outside tests/fixture
-- [x] Automatic deploys to NREC from main (update.sh, GitHub Actions deploy job; both keys set up 2026-10-29)
+- [x] Deploys to NREC (update.sh, GitHub Actions; both keys set up 2026-10-29): on every merge until 2026-11-06, since
+      then only when G asks (the manual `deploy` workflow)
 - [x] Gene models: a representative Ensembl isoform, expandable to every Ensembl and NCBI RefSeq isoform
       (transcripts_ncbi layer, in release 2026-11-03)
 - [x] environment.yml (conda-forge, python 3.8) for development
