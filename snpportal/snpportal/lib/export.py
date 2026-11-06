@@ -425,6 +425,11 @@ def export(source, fmt, out, release_dir, preset="all", meta=None, include_faile
     con, rel, columns = _open(source, table, [release], out, preset, w, synthetic)
     hide = ", ".join(c for c in ("_row", "file_row_number") if c == "_row" or c in columns)
     ordered = isinstance(source, (str, Path))  # a file is read in order; a view may not be (a join)
+    if fmt in ("tsv", "parquet"):  # I19: the SNPs' positions on the assemblies the release converts to (fSalSal1)
+        for name, entry in sorted((m.get("liftover") or {}).items()):
+            if entry and entry.get("direction") == "to" and (release / entry["file"]).exists():
+                from snpscore.liftover import positions
+                rel, ordered = positions(con, rel, release / entry["file"], entry.get("label", name), out=f"_to_{name}"), False
     body = out.with_name(out.name + ".part")
     try:
         if fmt == "parquet":

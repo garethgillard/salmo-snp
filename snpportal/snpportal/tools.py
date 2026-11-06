@@ -74,6 +74,7 @@ CHIP_ERRORS = {  # ?chip_error= -> message (codes only: no file content or names
     "empty": "None of the chip's positions are on Ssal_v3.1 chromosomes 1–29. Are they on another assembly (ICSASG_v2)? "
              "Then tick 'Positions on another assembly' to place the markers by their flank sequences.",
     "icsasg_v2": "The chip's positions could not be converted from ICSASG_v2 with this release.",
+    "fsalsal1": "The chip's positions could not be converted from fSalSal1 with this release.",
     "flank": "The chip's markers could not be placed by flank sequence: the file needs a column of flank or probe sequences "
              "(Axiom 'Flank', Illumina 'SourceSeq' or 'TopGenomicSeq', with the SNP as [A/B]), and the release flank keys.",
     "rows": "The chip file has more than {cap} markers. Keep only the markers you need, or compare it on your own "

@@ -591,9 +591,9 @@ def _chip(request, d):
     new = d / ".chip-new.parquet"
     try:
         positions = request.POST.get("positions") or ("flank" if request.POST.get("by_flank") else None)  # I18, I19
-        positions = positions if positions in jobs.POSITIONS and src != demo else None
+        positions = positions if positions and positions in dict(jobs.position_choices()) and src != demo else None
         report = snp_panel.read_chip(src, jobs.release(), new, max_snps=tools.chip_cap(), place_by_flank=positions == "flank",
-                                     lift_from="icsasg_v2" if positions == "icsasg_v2" else None)
+                                     lift_from=positions if positions not in (None, "flank") else None)
     except (snpscore.InputError, duckdb.Error):
         new.unlink(missing_ok=True)
         return redirect(f"{reverse('snpportal:design_panel')}?chip_error={positions or 'format'}")

@@ -255,6 +255,22 @@ class ToolsTest(SimpleTestCase):
                                                              "positions": "icsasg_v2"})
         self.assertIn("Converted from ICSASG_v2: 3 markers", self.client.get(reverse("snpportal:design_panel")).content.decode())
 
+    def test_positions_from_fsalsal1(self):  # I19: fSalSal1 positions converted (the fixture's cut of the real alignment)
+        b = duckdb.sql(f"""SELECT start, shift FROM read_parquet('{self.release / 'liftover_fsalsal1.parquet'}')
+                           WHERE strand = '+' AND "end" - start > 100 ORDER BY start LIMIT 1""").fetchall()[0]
+        page = self.client.get(reverse("snpportal:upload")).content.decode()
+        self.assertIn('<option value="fsalsal1">fSalSal1 (converted to Ssal_v3.1)</option>', page)
+        text = f"chrom\tpos\nOZ271756.1\t{b[0] + 50}\n"  # fSalSal1 chromosome 25 by its GenBank name
+        url = self.client.post(reverse("snpportal:upload"), {"snps": SimpleUploadedFile("fsal_SYNTHETIC.tsv", text.encode()),
+                                                              "positions": "fsalsal1"}).url.split("?")[0]
+        key = url.rstrip("/").split("/")[-1]
+        got = rows(jobs.folder(key) / "result.parquet")
+        self.assertEqual((got[0]["chrom"], got[0]["pos"]), ("25", b[0] + 50 + b[1]))
+        tsv = body(self.client.get(reverse("snpportal:download", args=[key]), {"scope": "all", "format": "tsv"})).decode()
+        lines = [line.split("\t") for line in tsv.splitlines() if line and not line.startswith("#")]
+        values = dict(zip(lines[0], lines[1]))
+        self.assertEqual((values["fSalSal1_chrom"], values["fSalSal1_pos"]), ("25", str(b[0] + 50)))  # and back
+
     def test_panel_purpose(self):  # I8: a purpose sets the designer's defaults; the panel, report and exports name it
         self.client.get(self.url, {"tab": "table"})
         page = self.client.get(self.url, {"tab": "panel", "purpose": "parentage"}).content.decode()
