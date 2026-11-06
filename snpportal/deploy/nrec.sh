@@ -4,8 +4,9 @@
 #   e.g.  bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io   (the address: https://158.39.75.9/snp/)
 # Each name gets its own Caddy site and HTTPS certificate; an IPv4 address gets Let's Encrypt's short-lived IP
 # certificate (Caddy 2.10 or newer). The first name is the one checked at the end.
-# From this Mac it copies the release and the genome to /srv/snpportal; on the VM the code is a clone of the GitHub
-# repository (/srv/snpportal/salmo-snp, read with a read-only deploy key that this script registers with gh). It installs
+# From this Mac (snpscore installed) it copies the release, with its public pool, and the genome to /srv/snpportal; on
+# the VM the code is a clone of the GitHub repository (/srv/snpportal/salmo-snp, read with a read-only deploy key that
+# this script registers with gh). It installs
 # the Python packages (the newest versions they allow; they need Python >= 3.11, so Ubuntu 24.04), Caddy (HTTPS from
 # Let's Encrypt), a 2 GB swap file if there is none, and three systemd units: gunicorn, and an hourly snpportal_cleanup. DuckDB gets half the RAM and every CPU. Code updates after that come
 # from GitHub Actions (update.sh, README "Automatic deploys"); rerun this for a new release or new web names. Safe to
@@ -26,7 +27,10 @@ ssh "$HOST" 'sudo mkdir -p /srv/snpportal/genome && sudo chown -R "$USER" /srv/s
 key=$(ssh "$HOST" cat .ssh/salmo_snp_read.pub)
 gh repo deploy-key list --repo "$REPO" --json key -q '.[].key' | grep -qF "$(echo "$key" | cut -d" " -f2)" ||
   echo "$key" | gh repo deploy-key add - --repo "$REPO" --title "NREC demo (read-only)"
-rsync -az --delete --exclude pool/ "$RELEASE/" "$HOST:/srv/snpportal/release/"  # pool/: built on the VM (below)
+# The public pool is built here and sent with the release: on DuckDB 2 the VM's 2 GB RAM can't (killed at --memory 4GB,
+# out of memory at half the RAM; 2026-11-05)
+snpscore pool --release "$RELEASE" --if-stale
+rsync -az --delete "$RELEASE/" "$HOST:/srv/snpportal/release/"
 rsync -az "$GENOME" "$GENOME.fai" "$GENOME.gzi" "$HOST:/srv/snpportal/genome/"
 
 ssh "$HOST" "NAMES='$NAMES' NAME=$NAME GENOME=$(basename "$GENOME") bash -s" <<'REMOTE'
@@ -50,7 +54,8 @@ rm -rf salmo-snpscore salmo-snpportal  # the copies older versions of this scrip
 [ -d venv ] || python3 -m venv venv
 venv/bin/pip install -q --upgrade pip
 venv/bin/pip install -q --upgrade --upgrade-strategy eager gunicorn -e salmo-snp/snpscore -e salmo-snp/snpportal
-venv/bin/snpscore pool --release release --if-stale --threads "$(nproc)" --memory 4GB  # the public pool, if stale
+venv/bin/snpscore pool --release release --if-stale --threads "$(nproc)" --memory 4GB ||  # main's rules differ from this Mac's
+  echo "the public pool could not be rebuilt on the VM: the Overview leaves out its comparison" >&2
 [ -f secret_key ] || (umask 077 && python3 -c "import secrets; print(secrets.token_urlsafe(50))" > secret_key)
 mkdir -p results && chmod 700 results
 cat > env <<EOF

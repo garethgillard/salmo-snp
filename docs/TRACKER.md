@@ -5,12 +5,15 @@ sections after it record what was built (ticked when built and tested), and thei
 Specs: [ROADMAP.md](ROADMAP.md). Questions only G can answer: [DECISIONS.md](DECISIONS.md) (ask, don't decide).
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
-## Where things stand (2026-11-04)
+## Where things stand (2026-11-05)
 - Phase: feature work on the local install, the main product (AGENTS.md plan 4, G 2026-11-03); the live site moves
   to salmobase later.
 - main is green on GitHub (tests, user-install, deploy). The NREC demo https://158.39.75.9/snp/ runs the latest main
-  with release 2026-11-03 (cloud sessions use https://158-39-75-9.sslip.io/snp/: the bare IP didn't connect through their proxy).
-- The data for real use: the private GitHub Release data-2026-11-03 (`bash tools/get_data.sh`); not on salmobase yet.
+  with release 2026-11-05 (cloud sessions use https://158-39-75-9.sslip.io/snp/: the bare IP didn't connect through their proxy).
+- The data for real use: the private GitHub Release data-2026-11-05 (`bash tools/get_data.sh`); not on salmobase yet.
+  Release 2026-11-05 = 2026-11-03 plus flank_keys.parquet (I18), built with Python 3.12 and DuckDB 2.0.0: every other
+  table is identical, except the allele named in `motif_tfs` for 33 of 512,745 motif sites (float ties); the demo
+  lists score the same tiers.
 - Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
 
 ## Next
@@ -20,8 +23,9 @@ and Agena files (I14), ICSASG_v2 conversion (I19), the salmobase container, heal
 the guided tour retaken. What remains:
 1. **G's answers** (DECISIONS.md #25-#35 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
    is PROVISIONAL until then.
-2. **A new release** (G's Mac: `snpdata build`, then `bash prep/github_release.sh`), after PR #3: it adds
-   flank_keys.parquet (I18) and liftover_icsasg_v2.parquet (I19); then serve.py RELEASE.
+2. **A new release** after PR #3 (G's Mac: `snpdata build`, then `bash prep/github_release.sh`): it adds
+   liftover_icsasg_v2.parquet (I19). Release 2026-11-05 already has flank_keys.parquet (I18); the I18 check against a
+   real ICSASG_v2 Axiom manifest still waits for one (DECISIONS #34).
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
 4. **Phase 3**: G's DeepFARM and CADD-like data as variant-score layers (I16).
 5. **Phase 4 rest**: a release on the new assembly (I20), with a chain file for I19's conversion.
@@ -98,9 +102,11 @@ the guided tour retaken. What remains:
       download and publish refuse a damaged release); genome downloaded with the release (no positions sent for
       sequence checks); platform data folder, results kept until deleted (SNPPORTAL_LOCAL); salmo-snp info; download
       from a URL or a folder; snpdata publish (releases/ + raw/ mirror) and fetch --mirror; CI user-install job
-- [x] release/2026-11-03 rebuilt cleanly (with transcripts_ncbi); serve.py RELEASE names it
-- [x] Temporary data hosting: GitHub Release data-2026-11-03 (snpdata/prep/github_release.sh; tools/get_data.sh);
-      delete it once the data is on salmobase
+- [x] release/2026-11-03 rebuilt cleanly (with transcripts_ncbi)
+- [x] release/2026-11-05 (adds flank_keys, I18; the first built with Python 3.12 and DuckDB 2: the Bgee table is
+      grouped per library first, as DuckDB 2.0's count(DISTINCT) spilled 210 GB); serve.py RELEASE names it
+- [x] Temporary data hosting: GitHub Releases data-2026-11-03 and data-2026-11-05 (snpdata/prep/github_release.sh;
+      tools/get_data.sh); delete them once the data is on salmobase
 - [x] Cloud sessions: tools/cloud_setup.sh (SessionStart hook in .claude/settings.json), AGENTS.md "Cloud sessions"
 - [ ] Host the published folder (`snpdata publish --raw`: releases/, latest.json, raw/) on salmobase's Apache and set
       serve.py DATA_URL; the nf-RASQUAL and 504-fish layers only once their owners agree to redistribution
@@ -173,14 +179,15 @@ Phase 4, genomes (later):
 - [x] I17 Several releases side by side on a local install: the Releases page switches the release new work uses; a
       job, a Design panel and a saved version keep reading their own; each release's genome is found by its file name
       in the data folder, so assemblies never mix
-- [x] I18 Placement by probe sequence: flank_keys.parquet (16 nt either side of every public site, from the genome;
-      5.58M unique keys of 7.57M sites, 65 MB), `snpscore annotate --place-by-flank` and the Design panel's chip
-      upload. Needs the next `snpdata build`; the acceptance check against a real ICSASG_v2 Axiom manifest and the rs
-      bridge waits for such a file (DECISIONS #34)
+- [x] I18 Placement by probe sequence: flank_keys.parquet (16 nt either side of every public site, from the genome),
+      `snpscore annotate --place-by-flank` and the Design panel's chip upload. In release 2026-11-05: 5,582,506
+      unique keys from 7,572,808 sites (1,990,301 sites left out, their key found at another site too), 65 MB, built in
+      about 2 min on G's Mac. The acceptance check against a real ICSASG_v2 Axiom manifest and the rs bridge waits for
+      such a file: none on G's Mac on 2026-11-05 (DECISIONS #34)
 - [x] I19 ICSASG_v2 to Ssal_v3.1 for any position: liftover_icsasg_v2.parquet, collinear blocks from EVA's rs IDs on
       both assemblies (735,344 blocks over 1.49 Gb, 5.3 MB; a hold-out of 10% of the rs IDs: 89.5% inside a block,
       99.97% of those to EVA's own position); `snpscore annotate --from-assembly ICSASG_v2`, the Score form's and
-      chip upload's 'Positions on'. A chain file (read_chain) serves the new assembly later. Needs the next build
+      chip upload's 'Positions on'. A chain file (read_chain) serves the new assembly later. Needs a release built after PR #3
 - [ ] I20 A release on the new Atlantic salmon assembly (G's re-run analyses)
 
 ## Portal roadmap v2 (full specs in [ROADMAP.md](ROADMAP.md))

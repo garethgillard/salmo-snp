@@ -259,13 +259,17 @@ def read_synteny(path):
 
 def read_bgee(paths):
     # Bgee processed RNA-seq values, one file per study (one row per library and gene; the anatomical entity name is
-    # in double quotes). Per gene and entity: libraries, libraries called present, median TPM, studies.
-    return f"""SELECT "Gene ID" AS gene_id, trim("Anatomical entity name", '"') AS tissue,
-                      count(DISTINCT "Library ID")::INTEGER AS libraries,
-                      count(DISTINCT "Library ID") FILTER (WHERE "Detection flag" = 'present')::INTEGER AS present,
-                      median(TPM::DOUBLE) AS median_tpm, count(DISTINCT "Experiment ID")::INTEGER AS studies
-               FROM read_csv({[str(p) for p in paths]}, delim='\t', header=true, all_varchar=true, quote='')
-               GROUP BY 1, 2"""
+    # in double quotes). Per gene and entity: libraries, libraries called present, median TPM, studies. Grouped per
+    # library first: DuckDB 2.0's count(DISTINCT) over these 48.7M rows spilled 210 GB to disk (same output as before).
+    return f"""WITH r AS (SELECT "Gene ID" AS gene_id, trim("Anatomical entity name", '"') AS tissue, "Library ID" AS library,
+                                "Detection flag" = 'present' AS present, TPM::DOUBLE AS tpm, "Experiment ID" AS study
+                         FROM read_csv({[str(p) for p in paths]}, delim='\t', header=true, all_varchar=true, quote='')),
+                    l AS (SELECT gene_id, tissue, library, bool_or(present) AS present, list(tpm) AS tpms,
+                                 list(DISTINCT study) AS studies FROM r GROUP BY ALL)
+               SELECT gene_id, tissue, count(*)::INTEGER AS libraries, count(*) FILTER (WHERE present)::INTEGER AS present,
+                      list_median(flatten(list(tpms))) AS median_tpm,
+                      length(list_distinct(flatten(list(studies))))::INTEGER AS studies
+               FROM l GROUP BY 1, 2"""
 
 
 def read_variant_scores(path, layer):
