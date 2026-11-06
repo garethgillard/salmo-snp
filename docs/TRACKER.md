@@ -12,8 +12,10 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
   (the manual `deploy` workflow since 2026-11-06; merges no longer deploy), with release 2026-11-05 (cloud sessions
   use https://158-39-75-9.sslip.io/snp/: the bare IP didn't connect through their proxy). On 2026-11-06 that is
   d258c59 (2026-11-05): PRs #3, #4, #7 and #8 wait for the next deploy (the two automatic deploys of #3 and #4 timed
-  out building the pool on the VM, which #8 stopped). After it, the Release page calls the pool stale (weights.yaml
-  gained a design preset; tiers unchanged) until nrec.sh sends a new one from G's Mac.
+  out building the pool on the VM, which #8 stopped). The deploy key runs the VM's own copy of update.sh, still
+  d258c59's, so the workflow can't bring #8 in: two runs on 2026-11-06 swapped the VM (down 13:43-13:58 UTC). Next
+  deploy: `nrec.sh` from G's Mac with main pulled (it builds the pool there, sends it and installs main); the
+  workflow works after that.
 - The data for real use: the private GitHub Release data-2026-11-05 (`bash tools/get_data.sh`); not on salmobase yet.
   Release 2026-11-05 = 2026-11-03 plus flank_keys.parquet (I18), built with Python 3.12 and DuckDB 2.0.0: every other
   table is identical, except the allele named in `motif_tfs` for 33 of 512,745 motif sites (float ties); the demo
