@@ -6,7 +6,8 @@ each (K = 16: one 64-bit number), on the strand that sorts first, so a flank giv
 Keys found at more than one site are left out of the release, so a placement is unique among the known sites. Each
 placement is then checked against the genome: every A, C, G or T of the manifest's whole flank (Axiom gives 35 bases a
 side) must be the genome's base there, so a key shared with a duplicated region (e.g. the Ss4R duplicate) whose outer
-flank differs places nothing. No mismatch is tolerated (G, 2026-11-05, for now: DECISIONS #34)."""
+flank differs places nothing. No mismatch is tolerated (G, 2026-11-05, for now: DECISIONS #34); annotate.read_snps
+checks the rows its rs IDs place the same way (contradicted)."""
 from __future__ import annotations
 
 import csv
@@ -124,19 +125,27 @@ def place(con, flank_keys, table="raw", genome=None, k=K):
             "genome": checked, "column": column}
 
 
-def check_genome(con, genome):
-    """Drop from _fp (flank, chrom, pos, flip) the placements whose flank the genome contradicts (agrees), marking them
-    flank_genome_mismatch in _fk. Returns 'checked', or why the genome was not read."""
+def contradicted(genome, rows):
+    """Of `rows` (id, flank, chrom, pos, flip; sorted by chrom, pos), the ids whose flank the genome contradicts there
+    (agrees; flip None: on both strands), or why the genome was not read (a str)."""
     if not genome:
         return "no genome for this release"
-    rows = con.execute("SELECT flank, chrom, pos, flip FROM _fp ORDER BY chrom, pos").fetchall()
     if str(genome).startswith(("http://", "https://")) and len(rows) > REMOTE_MAX:
         return f"the genome is read remotely, which is too slow for over {REMOTE_MAX:,} markers: `salmo-snp download` fetches it"
     try:
         fasta = Fasta(genome)
-        bad = [f for f, chrom, pos, flip in rows if not agrees(fasta, f, chrom, pos, flip)]
+        return [i for i, flank, chrom, pos, flip in rows
+                if not any(agrees(fasta, flank, chrom, pos, s) for s in ((False, True) if flip is None else (flip,)))]
     except OSError:
         return "the genome could not be read"
+
+
+def check_genome(con, genome):
+    """Drop from _fp (flank, chrom, pos, flip) the placements whose flank the genome contradicts (contradicted),
+    marking them flank_genome_mismatch in _fk. Returns 'checked', or why the genome was not read."""
+    bad = contradicted(genome, con.execute("SELECT flank, flank, chrom, pos, flip FROM _fp ORDER BY chrom, pos").fetchall())
+    if isinstance(bad, str):
+        return bad
     if bad:
         con.execute("CREATE OR REPLACE TEMP TABLE _bad AS SELECT unnest(?::VARCHAR[]) AS flank", [bad])
         con.execute("UPDATE _fk SET miss = 'flank_genome_mismatch' WHERE flank IN (SELECT flank FROM _bad)")
@@ -155,10 +164,12 @@ def describe(block):
     lines = [text + (", each checked against the genome." if genome == "checked" else
                      f"; not checked against the genome ({genome})." if genome else ".")]
     if block.get("missed"):
-        lines.append("Not placed: " + "; ".join(f"{v:,} {MISSES.get(m, m)}" for m, v in block["missed"].items()) + ".")
+        lines.append("Not placed by flank: " + "; ".join(f"{v:,} {MISSES.get(m, m)}" for m, v in block["missed"].items()) + ".")
     r = block.get("rsid")
     if r:
         lines.append(f"Against the manifest's rs IDs: {r['same']:,} at the same position, {r['different']:,} at another "
                      f"position (kept at the flank's position for now), {r['flank_only']:,} placed by flank "
-                     f"only, {r['rsid_only']:,} by rs ID only.")
+                     f"only, {r['rsid_only']:,} by rs ID only"
+                     + (f"; {r['genome_mismatch']:,} not placed by rs ID either, as {'its' if r['genome_mismatch'] == 1 else 'their'} "
+                        "flank differs from the genome at the rs ID's site." if r.get("genome_mismatch") else "."))
     return lines

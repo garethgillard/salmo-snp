@@ -103,7 +103,8 @@ Decided:
   comparison is on hold until G has asked the users.
 - Chip placement by flank (I18; G, 2026-11-05: Claude's recommendations for now, on the safe side; DECISIONS #34-#35
   stay open, under Open below): flank keys from the 504-fish panel's sites; a placement's whole flank must match the
-  genome exactly (IUPAC and N skipped), else it is not placed, not by its rs ID either; where the flank and the rs ID
+  genome exactly (IUPAC and N skipped), else it is not placed, not by its rs ID either, and a row its rs ID places
+  must agree the same way at the rs ID's site when it has a flank (either strand); where the flank and the rs ID
   disagree, the flank's position is kept (the only one checked against the genome), and the rs ID's is named
   (position_source) and counted.
 

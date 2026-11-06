@@ -534,6 +534,11 @@ def test_place_by_flank(release, tmp_path):  # I18: a SYNTHETIC Axiom manifest o
     lines.append(row("paralog", rs3, *other[2], left=changed(fa.fetch(other[2][0], other[2][1] - 36, other[2][1] - 1).upper())))
     lines += [f"rs_only\t{rs2}\t1\t1999\tA\tG\t---", "none\t---\t1\t2000\tA\tG\t---", "short\t---\t1\t2001\tA\tG\t" + "ACGT" * 9 + "[A/G]ACGTNACGTACGTACGTACG",
               "nowhere\t---\t1\t2002\tA\tG\t" + "ACGTTGCA" * 5 + "[A/G]" + "TTGGCCAA" * 5]
+    c4, p4, rs4 = rs[4]  # rows the flank can't place but the rs ID can: the genome checks the flank there
+    right = fa.fetch(c4, p4, p4 + 35).upper()
+    lines.append(row("rs_ok", rs4, c4, p4, right=right[:2] + "N" + right[3:], reverse=True))  # agrees, other strand
+    bad = row("same", rs0, c0, p0).split("\t")  # the 'same' row's rs ID and alleles, but not its site's flank, and first:
+    lines.insert(1, "\t".join(["rs_bad", *bad[1:6], "TTGGCCAA" * 5 + "[A/G]" + "ACGTTGCA" * 5]))  # it drops no row
     path = tmp_path / "v2_axiom_SYNTHETIC.tsv"
     path.write_text("\n".join(lines) + "\n")
     m = json.loads((release / "manifest.json").read_text())
@@ -541,15 +546,17 @@ def test_place_by_flank(release, tmp_path):  # I18: a SYNTHETIC Axiom manifest o
     report = read_snps(con, path, m["chrom_sizes"], None, None, rsid, keys, genome)
     got = {i: (c, p, r, s) for i, c, p, r, s in con.execute("SELECT id, chrom, pos, ref, position_source FROM snps").fetchall()}
     assert report["flank"] == {"placed": 4, "complemented": 1, "genome": "checked",
-                               "missed": {"no_flank": 2, "flank_too_short": 1, "flank_unknown_site": 1, "flank_genome_mismatch": 1},
-                               "rsid": {"same": 1, "different": 1, "flank_only": 2, "rsid_only": 1}}
+                               "missed": {"no_flank": 2, "flank_too_short": 2, "flank_unknown_site": 2, "flank_genome_mismatch": 1},
+                               "rsid": {"same": 1, "different": 1, "flank_only": 2, "rsid_only": 2, "genome_mismatch": 1}}
     for name, (chrom, pos) in {"same": (c0, p0), "different": (c1, p1), "reverse": other[0], "iupac": other[1]}.items():
         assert got[name][:2] == (chrom, pos)
         assert got[name][2] == fa.fetch(chrom, pos - 1, pos).upper()  # the reverse row's alleles complemented back
     assert got["same"][3] == got["reverse"][3] == "flank" and got["rs_only"][:2] == (c2, p2) and got["rs_only"][3] == "rsid"
     assert got["different"][3].startswith("flank; rs ID at ")  # kept where the flank puts it, and says where its rs ID is
-    assert report["rejected"] == {"flank_genome_mismatch": 1, "flank_too_short": 1, "flank_unknown_site": 1, "no_flank": 1}
-    assert "1 at another position" in " ".join(describe(report["flank"]))
+    assert got["rs_ok"][:2] == (c4, p4) and got["rs_ok"][3] == "rsid" and "rs_bad" not in got
+    assert report["rejected"] == {"flank_genome_mismatch": 2, "flank_too_short": 1, "flank_unknown_site": 1, "no_flank": 1}
+    text = " ".join(describe(report["flank"]))
+    assert "1 at another position" in text and "1 not placed by rs ID either" in text
     unchecked = read_snps(con, path, m["chrom_sizes"], None, None, None, keys)  # no genome, no rs IDs: the paralog placed
     assert unchecked["flank"]["placed"] == 5 and unchecked["flank"]["genome"] != "checked" and "rsid" not in unchecked["flank"]
     with pytest.raises(InputError):  # no flank column

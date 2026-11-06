@@ -234,7 +234,7 @@ class ToolsTest(SimpleTestCase):
         self.client.post(reverse("snpportal:panel_change"), {"chip": chip, "by_flank": "1"})
         page = self.client.get(reverse("snpportal:design_panel")).content.decode()
         self.assertIn("Placed by flank sequence: 2 markers, each checked against the genome.", page)
-        self.assertIn("Not placed: 1 not at a known variant site; 1 whose full flank differs from the genome", page)
+        self.assertIn("Not placed by flank: 1 not at a known variant site; 1 whose full flank differs from the genome", page)
         self.assertIn('name="by_flank"', page)
         plain = SimpleUploadedFile("plain_SYNTHETIC.tsv", b"chrom\tpos\n9\t23007708\n")
         response = self.client.post(reverse("snpportal:panel_change"), {"chip": plain, "by_flank": "1"})

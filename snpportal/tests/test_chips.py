@@ -60,6 +60,6 @@ def test_read_chip_by_flank(tmp_path):  # I18: the placements checked against th
     report = panel.read_chip(path, release, tmp_path / "chip.parquet", place_by_flank=True)
     assert report["flank"]["genome"] == "checked"
     assert report["flank"]["missed"] == {"no_flank": 1, "flank_genome_mismatch": 1} and report["rejected"] == {"flank_genome_mismatch": 1}
-    assert report["flank"]["rsid"] == {"same": 1, "different": 1, "flank_only": 0, "rsid_only": 1}
+    assert report["flank"]["rsid"] == {"same": 1, "different": 1, "flank_only": 0, "rsid_only": 1, "genome_mismatch": 0}
     placed = duckdb.sql(f"SELECT chrom, pos FROM read_parquet('{tmp_path / 'chip.parquet'}')").fetchall()
     assert placed == [(c0, p0), (c1, p1), (c2, p2)]  # the disagreeing row stays where its flank puts it, for now
