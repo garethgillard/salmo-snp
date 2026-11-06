@@ -1,6 +1,9 @@
-"""Several chips compared, and a chip upgraded (snpportal.lib.panel.chip_matrix and upgrade, ROADMAP I11), on small
-SYNTHETIC chips."""
+"""Several chips compared, a chip upgraded (snpportal.lib.panel.chip_matrix and upgrade, ROADMAP I11) and a chip on
+another assembly placed by its flank sequences (read_chip, I18), on small SYNTHETIC chips."""
 import duckdb
+from conftest import DATA
+from snpdata import build
+from snpscore.fasta import Fasta
 
 from snpportal.lib import panel
 
@@ -39,3 +42,24 @@ def test_upgrade(tmp_path):
     # 2 kept, then 2 added: first the candidates in the gap from 1.2 Mb to the chromosome's end, the best tier first
     # ('c' at 2.6 Mb, then 'gap' at 4 Mb, 1.4 Mb from it); 'near' and 'b' between the kept markers wait
     assert [(r["id"], r["reason"]) for r in rows if r["action"] == "add"] == [("c", "fills a chip gap"), ("gap", "fills a chip gap")]
+
+
+def test_read_chip_by_flank(tmp_path):  # I18: the placements checked against the genome and the chip's rs IDs
+    release = build(DATA / "layers.yaml", DATA / "tests" / "fixture", tmp_path / "release")
+    genome = Fasta(DATA / "tests" / "fixture" / "Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz")
+    sites = duckdb.sql(f"SELECT chrom, pos, 'rs' || rs FROM read_parquet('{release / 'flank_keys.parquet'}') k "
+                       f"JOIN read_parquet('{release / 'rsid.parquet'}') x USING (chrom, pos) ORDER BY chrom, pos LIMIT 3").fetchall()
+    seq = lambda c, p: f"{genome.fetch(c, p - 36, p - 1)}[{genome.fetch(c, p - 1, p).upper()}/N]{genome.fetch(c, p, p + 35)}"  # noqa: E731
+    (c0, p0, rs0), (c1, p1, _), (c2, p2, rs2) = sites
+    lines = ["Name\tChr\tMapInfo\tSourceSeq", f"{rs0}\t1\t100\t{seq(c0, p0)}",  # its rs ID is at the same site
+             f"{rs2}\t1\t101\t{seq(c1, p1)}",  # its rs ID is at another site
+             f"{rs2}\t1\t102\t",  # no flank: its rs ID places it
+             "paralog\t1\t103\t" + ("A" if seq(c1, p1)[0].upper() != "A" else "C") + seq(c1, p1)[1:]]  # outermost base differs
+    path = tmp_path / "v2_chip_SYNTHETIC.tsv"
+    path.write_text("\n".join(lines) + "\n")
+    report = panel.read_chip(path, release, tmp_path / "chip.parquet", place_by_flank=True)
+    assert report["flank"]["genome"] == "checked"
+    assert report["flank"]["missed"] == {"no_flank": 1, "flank_genome_mismatch": 1} and report["rejected"] == {"flank_genome_mismatch": 1}
+    assert report["flank"]["rsid"] == {"same": 1, "different": 1, "flank_only": 0, "rsid_only": 1, "genome_mismatch": 0}
+    placed = duckdb.sql(f"SELECT chrom, pos FROM read_parquet('{tmp_path / 'chip.parquet'}')").fetchall()
+    assert placed == [(c0, p0), (c1, p1), (c2, p2)]  # the disagreeing row stays where its flank puts it, for now

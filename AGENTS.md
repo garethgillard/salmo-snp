@@ -32,7 +32,8 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
    README's "Run it on your own computer" is the user guide; tools/user_install_test.sh is that path as a test (CI).
    Where it runs:
    - development: clone, `conda env create -f environment.yml` (conda-forge only), editable installs;
-   - NREC (demo and staging until salmobase): git checkout, deployed automatically after the tests pass on main;
+   - NREC (demo and staging until salmobase): git checkout, updated only when G says so (the manual `deploy`
+     workflow, a batch of tested changes at a time; G, 2026-11-06), never by a merge;
    - salmobase (the live installation, later): a container installing a tagged version behind salmobase's Apache at
      /snp/, linked from salmobase with a button (not merged into its Django), the release folder mounted;
    - breeding companies and everyone else: the local install.
@@ -45,8 +46,9 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
    computers without internet. Fetching public data at given locations (AQUA-FAANG signal for a viewed region) is
    fine; users' SNPs and results are never sent or stored online. Never edit a release by hand: rebuild it
    (snpscore.release.check refuses damaged ones).
-6. GitHub: branches and pull requests; tests on every pull request; G reviews biology files (CODEOWNERS); a merge to
-   main deploys to NREC; a vX.Y.Z tag builds the wheels (and later the image) as a GitHub Release.
+6. GitHub: branches and pull requests; tests on every pull request and push to main; G reviews biology files
+   (CODEOWNERS); a merge to main deploys nothing: the NREC demo is updated when G asks (the `deploy` workflow);
+   a vX.Y.Z tag builds the wheels (and later the image) as a GitHub Release.
 
 ## Rules
 - Never commit breeder data (genotypes, GWAS results, array manifests): not in fixtures, tests or docs either.
@@ -101,6 +103,15 @@ Decided:
   (I17-I20). One user per install, who shares results as files: no accounts, no shared server (on hold). Chip tools
   serve Thermo Fisher Axiom first (G's guess for Norwegian aquaculture; to confirm), then Illumina and KASP. Genome
   comparison is on hold until G has asked the users.
+- NREC deploys (G, 2026-11-06): the demo is updated only when G says so in a chat, after enough merged and tested
+  changes for a larger update; merging a pull request no longer deploys (how: "Deploying the NREC demo",
+  under Cloud sessions; it applies to every session).
+- Chip placement by flank (I18; G, 2026-11-05: Claude's recommendations for now, on the safe side; DECISIONS #34, #36
+  stay open, under Open below): flank keys from the 504-fish panel's sites; a placement's whole flank must match the
+  genome exactly (IUPAC and N skipped), else it is not placed, not by its rs ID either, and a row its rs ID places
+  must agree the same way at the rs ID's site when it has a flank (either strand); where the flank and the rs ID
+  disagree, the flank's position is kept (the only one checked against the genome), and the rs ID's is named
+  (position_source) and counted.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.
@@ -130,13 +141,13 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     5e-8 / 1e-5, 1 Mb clumping; one causal variant per locus and no LD reference (stated on the page).
   - Locus browser: up to 8 signal rows (R1), ATAC/H3K27ac/H3K4me3, signal and ChromHMM up to 500 kb, lanes up to 2 Mb, 4 s deadline.
   - Vendor layouts (Illumina 60 bp TOP/BOT, Axiom 35 bp, KASP 50 bp) are 'to confirm against the vendor template' (see docs/RESEARCH.md 5).
-- Push 3 (2026-11-04, DECISIONS #30-#35): panel purposes, mixes and target sizes (weights.yaml design.presets,
+- Push 3 (2026-11-04, DECISIONS #30-#33, #35): panel purposes, mixes and target sizes (weights.yaml design.presets,
   target_sizes); the chip upgrade's QC (call rate 0.95, HWE p 1e-6); probe uniqueness shown, never flagged
-  (assay.max_paralog_identity: null); variant scores shown, never counted (variant_scores: {}); flank keys from the
-  504-fish panel's sites (layers.yaml flank_keys); the data-handling sheet's wording; Primer3 (70-120 bp products,
+  (assay.max_paralog_identity: null); variant scores shown, never counted (variant_scores: {}); the data-handling
+  sheet's wording; Primer3 (70-120 bp products,
   150 bp flanks) and Agena (100 bp flanks, layout unverified) files; ICSASG_v2 converted only inside blocks of EVA rs
   IDs with one offset (layers.yaml liftover); fSalSal1 from same-chromosome minimap2 asm5 alignments, mapq >= 5,
-  overlapping blocks dropped (DECISIONS #36).
+  overlapping blocks dropped (DECISIONS #37).
 - Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
   counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
   priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).
@@ -157,6 +168,8 @@ Open (ask G; all collected with options and recommendations in docs/DECISIONS.md
   while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
 - Assay QC: flank repeat shares are mostly 0 or 1, so ~55% of public SNPs warn on 'repeat' whatever the cut-off; should fully
   soft-masked flanks warn at all? (without it ~46% pass instead of ~20%)
+- Chip placement by flank (DECISIONS #34, #36): decided for now (see Decided); revisit with the first real ICSASG_v2
+  manifest's counts: zero mismatches or some, and which position wins where the flank and the rs ID disagree.
 - Not biology, still G's: the PyPI names, the systems the install is promised on, the Axiom assumption, what
   'genome comparison' means and the data-handling sheet's wording (DECISIONS.md #25-#30).
 
@@ -212,13 +225,20 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
      of any pages (and says whether htmx and Bootstrap loaded); send them to the chat, before and after when a page
      changes. Score an example first when the page needs a job (`/snp/` POST `example=known_loci`, as
      tour_images does).
-  4. Push and open (or update) the pull request; CI runs. NREC runs main only: it is public, so branches are not
-     deployed there.
+  4. Push and open (or update) the pull request; CI runs. NREC runs main only, and only what G has had deployed:
+     it is public, so branches never go there.
 - Checking pages without a browser: fetch them with curl from a `salmo-snp serve` in the background;
   `bash tools/user_install_test.sh` checks the whole user path.
 - Merging (G, 2026-11-04): features collect on the session's branch and its pull request, and go live only when G
   says so in the chat, usually several at a time (no auto-merge). Claude then merges the PR with the GitHub tools,
-  once CI is green, and the merge deploys to the NREC demo. Before merging, say whether the PR touches the CODEOWNERS
+  once CI is green; the merge deploys nothing. Before merging, say whether the PR touches the CODEOWNERS
   files (the biology) and wait for G's OK. main's protection asks for a PR and the `tests` check, not approvals (the
   PRs are under G's account, and GitHub doesn't let an author approve). After a merge, the branch restarts from main
   for the next PR. `deploy/nrec.sh` and new data releases need G's Mac (SSH key, data/raw).
+- Deploying the NREC demo (G, 2026-11-06): only when G asks in the chat ("deploy to NREC"), usually after several
+  merged pull requests; never on your own initiative, and never a branch. Run the `deploy` workflow on main:
+  `gh workflow run deploy.yml --ref main` (cloud sessions, REST only: `gh api -X POST
+  repos/garethgillard/salmo-snp/actions/workflows/deploy.yml/dispatches -f ref=main`), or G uses Actions > deploy >
+  Run workflow. It runs the tests, then `deploy/update.sh` on the VM (~20 s). Then check
+  https://158-39-75-9.sslip.io/snp/health/ and tell G what went live (the merges since the last deploy run). A new
+  data release, or the public pool after a weights.yaml change, still needs `deploy/nrec.sh` from G's Mac.

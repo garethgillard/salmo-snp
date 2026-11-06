@@ -228,10 +228,13 @@ class ToolsTest(SimpleTestCase):
         lines = ["Name\tChr\tMapInfo\tSourceSeq"] + [
             f"m{i}\t1\t{100 + i}\t{genome.fetch(c, p - 41, p - 1)}[{genome.fetch(c, p - 1, p).upper()}/N]{genome.fetch(c, p, p + 40)}"
             for i, (c, p) in enumerate(sites)] + ["lost\t1\t999\t" + "ACGT" * 10 + "[A/G]" + "TTGA" * 10]
+        name, chrom, pos, seq = lines[3].split("\t")  # m2's outermost base differs from the genome: not placed
+        lines[3] = "\t".join([name, chrom, pos, ("A" if seq[0].upper() != "A" else "C") + seq[1:]])
         chip = SimpleUploadedFile("v2_chip_SYNTHETIC.tsv", ("\n".join(lines) + "\n").encode())
         self.client.post(reverse("snpportal:panel_change"), {"chip": chip, "by_flank": "1"})
         page = self.client.get(reverse("snpportal:design_panel")).content.decode()
-        self.assertIn("Placed by flank sequence: 3 markers; 1 not found among the known variant sites", page)
+        self.assertIn("Placed by flank sequence: 2 markers, each checked against the genome.", page)
+        self.assertIn("Not placed by flank: 1 not at a known variant site; 1 whose full flank differs from the genome", page)
         self.assertIn('<option value="flank">positions on another assembly (placed by flank sequence)</option>', page)
         plain = SimpleUploadedFile("plain_SYNTHETIC.tsv", b"chrom\tpos\n9\t23007708\n")
         response = self.client.post(reverse("snpportal:panel_change"), {"chip": plain, "by_flank": "1"})

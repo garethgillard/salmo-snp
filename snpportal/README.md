@@ -72,17 +72,20 @@ hourly `snpportal_cleanup`. Rerun it for a new release or new web names: results
 snpsite project serves the demo with `DJANGO_DEBUG=0` and the settings in `/srv/snpportal/env`; `SNPSCORE_GENOME`
 points snpscore at the VM's genome copy. Logs: `journalctl -u snpportal`.
 
-### Automatic deploys
+### Deploying the demo
 
-Every push to `main` (a merged pull request, or G's own push) runs the tests on GitHub; when they pass, the `deploy`
-job in `.github/workflows/tests.yml` connects to the VM and runs `deploy/update.sh` with the tested commit. The script
-checks it out, reinstalls snpscore, collects static files and restarts the portal; if the portal doesn't answer within
-40 s it goes back to the previous commit and the job fails (Actions tab). The key GitHub uses can run nothing else on
-the VM (a forced command in `authorized_keys`). One-time setup, after `nrec.sh`:
-`bash deploy/github_deploy.sh nrec 158.39.75.9` (makes that key, stores it as the repository secret `NREC_DEPLOY_KEY`
-with the host key, and sets the variable `NREC_HOST`; rerun it to replace the key). Releases are not in git: a new
-release still goes up with `nrec.sh`, and so does the public pool after a change to weights.yaml (update.sh tries,
-but the VM can't build it; the Overview then leaves out its comparison).
+The demo is updated only when G decides (G, 2026-11-06): a batch of merged, tested changes at a time, not every merge.
+Run the `deploy` workflow on `main` (Actions > deploy > Run workflow, or `gh workflow run deploy.yml --ref main`): it
+runs the tests (`.github/workflows/tests.yml`), then connects to the VM and runs `deploy/update.sh` with the tested
+commit. Pushes and merges to `main` run the tests only. The script checks it out, reinstalls snpscore, collects static
+files and restarts the portal; if the portal doesn't answer within 40 s it goes back to the previous commit and the
+job fails (Actions tab), as it does after 10 minutes. The key GitHub uses can run nothing else on the VM (a forced
+command in `authorized_keys`). One-time setup, after `nrec.sh`: `bash deploy/github_deploy.sh nrec 158.39.75.9` (makes
+that key, stores it as the repository secret `NREC_DEPLOY_KEY` with the host key, and sets the variable `NREC_HOST`;
+rerun it to replace the key). Releases are not in git: a new release still goes up with `nrec.sh`, and so does the
+public pool after a change to weights.yaml or snpscore: the VM (2 GB RAM) can't build it, so update.sh only says in
+the job's log that it is stale, and the Overview leaves out its comparison until `nrec.sh` sends a new one. (Building
+it there swapped for 17 minutes until the SSH session dropped, 2026-11-06.)
 
 ## salmobase container
 
@@ -218,7 +221,9 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 - Other chips beside the panel's chip (`chips/<slug>.parquet`) and 'Chips side by side' (lib.panel.chip_matrix);
   'Upgrade <chip>' (lib.panel.upgrade): its markers that pass call rate and HWE in your population, then the panel's
   SNPs not on it, gaps first, up to a size; panel/upgrade/ downloads every marker kept, dropped or added. A chip on
-  another assembly is placed by its flank sequences ('positions on another assembly', snpscore.placement).
+  another assembly is placed by its flank sequences ('positions on another assembly', snpscore.placement), each
+  placement checked against the genome and the chip's rs IDs; the card says how many were placed, why the others
+  were not, and where flank and rs ID agree (snpscore.placement.describe).
 - Your population (local installs, lib/population.py): a VCF with genotypes or a frequency table, counted as it
   streams (af, maf, n, call rate, exact HWE p) into `populations/<slug>.parquet`; the upload is deleted.
 - Probe uniqueness (lib/uniqueness.py): each SNP's flanks against its gene's Ss4R ohnolog regions, from the local

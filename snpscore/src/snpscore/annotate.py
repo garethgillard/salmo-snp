@@ -56,17 +56,21 @@ def user_message(error):
     return next((m for cls, m in ERRORS if isinstance(error, cls)), "The file could not be annotated. " + ACCEPTED)
 
 
-def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys=None, lift=None):
+def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys=None, lift=None, genome=None):
     """Load a SNP file into table `snps` (idx = input row, chrom, pos, then the other columns) and the rows that can't
     be used into `rejects` (row, chrom, pos, ..., reason). Chromosome names go through `alias` (alias.parquet);
     `known` lists the release's chromosomes. With `rsid` (rsid.parquet), a row whose id is an rs ID is placed on
     Ssal_v3.1 when it has no position, or moved there when its position is the rs ID's ICSASG_v2 position
     (column position_source; alleles complemented where the two assemblies' strands differ). With `flank_keys`
     (flank_keys.parquet, I18), the input's positions are taken to be on another assembly: each row is placed by its
-    flank sequence (placement.place), else by its rs ID, else rejected (flank_not_found). With `lift` (a conversion
-    table, I19: its path, or {file, label, aliases} as the manifest's liftover entries), the positions are on that
-    assembly (ICSASG_v2 by default): each is converted (liftover.lift; position_source '<label> <chrom>:<pos>'), else
-    placed by its rs ID, else rejected (liftover_unmapped). Returns the counts."""
+    flank sequence (placement.place, checked against `genome`, a snpscore.fasta location), else by its rs ID (from id,
+    or a 'dbSNP RS ID' column beside an Axiom probe set id), else rejected with the flank's reason (placement.MISSES);
+    a row whose flank the genome contradicts, at the flank's site or at its rs ID's, is rejected (flank_genome_mismatch).
+    Where both place a row and disagree, the flank's position is kept and position_source names the rs ID's; the
+    report's `flank` block counts the agreement. With `lift` (a conversion table, I19: its path, or {file, label,
+    aliases} as the manifest's liftover entries), the positions are on that assembly (ICSASG_v2 by default): each is
+    converted (liftover.lift; position_source '<label> <chrom>:<pos>'), else placed by its rs ID, else rejected
+    (liftover_unmapped). Returns the counts."""
     layout = detect(path)
     limit = int(max_snps) + 1 if max_snps else None
     con.execute(f"CREATE OR REPLACE TABLE raw AS SELECT row_number() OVER () AS idx, * FROM ({source(path, layout, limit)})")
@@ -76,7 +80,7 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
     by_flank = None
     if flank_keys:
         from . import placement
-        by_flank = placement.place(con, flank_keys)
+        by_flank = placement.place(con, flank_keys, genome=genome)
         if by_flank is None:
             raise InputError("Placing by flank sequence needs a column of probe or flank sequences (Axiom 'Flank', "
                              "Illumina 'SourceSeq' or 'TopGenomicSeq', with the SNP as [A/B]).")
@@ -92,13 +96,20 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
     if alias:
         mapped, join = "coalesce(a.chrom, trim(r.chrom))", f"LEFT JOIN read_parquet({lit(alias)}) a ON a.alias = lower(trim(r.chrom))"
         warning = "a.warning" if "warning" in parquet_columns(con, alias) else "NULL"
-    is_rs = "regexp_full_match(lower(trim(r.id)), 'rs[0-9]+')" if "id" in cols else "false"
-    use_rs = rsid and con.execute(f"SELECT count(*) FROM raw r WHERE {is_rs}").fetchone()[0] > 0
+    rs_col = "id" if "id" in cols else None
+    rs_sql = lambda c: f"regexp_full_match(lower(trim(r.{q(c)})), 'rs[0-9]+')"  # noqa: E731
+    rs_rows = lambda c: con.execute(f"SELECT count(*) FROM raw r WHERE {rs_sql(c)}").fetchone()[0]  # noqa: E731
+    if by_flank and not (rs_col and rs_rows(rs_col)):  # an Axiom manifest's id is its probe set's: rs IDs are apart
+        rs_col = next((c for c in cols if c.lower() in placement.RS_COLUMNS), rs_col)
+    is_rs = rs_sql(rs_col) if rs_col else "false"
+    use_rs = rsid and rs_col and rs_rows(rs_col) > 0
     x = ("x.chrom AS x_chrom, x.pos AS x_pos, x.ref AS x_ref, x.v2_chrom, x.v2_pos, x.v2_ref" if use_rs else
          "NULL::VARCHAR AS x_chrom, NULL::BIGINT AS x_pos, NULL::VARCHAR AS x_ref, NULL::VARCHAR AS v2_chrom, "
          "NULL::BIGINT AS v2_pos, NULL::VARCHAR AS v2_ref")
     if use_rs:
-        join += f" LEFT JOIN read_parquet({lit(rsid)}) x ON {is_rs} AND x.rs = try_cast(substr(trim(r.id), 3) AS BIGINT)"
+        join += f" LEFT JOIN read_parquet({lit(rsid)}) x ON {is_rs} AND x.rs = try_cast(substr(trim(r.{q(rs_col)}), 3) AS BIGINT)"
+    # placed by flank sequence: the rs ID never moves it; contradicted by the genome: the rs ID doesn't place it either
+    kept = "_flank IN ('flank', 'flank_genome_mismatch')" if by_flank else "false"
     alleles = "ref" in cols and "alt" in cols
     flip = ", ".join(f"CASE WHEN flip THEN translate(upper({c}), 'ACGT', 'TGCA') ELSE {c} END AS {c}"
                      for c in ("ref", "alt") if c in cols)
@@ -109,7 +120,8 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
                           {warning} AS alias_warning, {is_rs} AS is_rs, {x},
                           r.chrom AS input_chrom, r.pos AS input_pos, r.* EXCLUDE (idx, chrom, pos) FROM raw r {join}),
         p AS (SELECT * EXCLUDE (x_chrom, x_pos, x_ref, v2_chrom, v2_pos, v2_ref),
-                     CASE WHEN x_chrom IS NULL THEN NULL WHEN m_chrom IS NULL OR m_pos IS NULL THEN 'rsid'
+                     CASE WHEN x_chrom IS NULL OR {kept} THEN NULL
+                          WHEN m_chrom IS NULL OR m_pos IS NULL THEN 'rsid'
                           WHEN m_pos = v2_pos AND NOT (m_chrom = x_chrom AND m_pos = x_pos)
                                AND (m_chrom = v2_chrom OR m_chrom NOT IN (SELECT chrom FROM known))
                                THEN 'ICSASG_v2 ' || trim(input_chrom) || ':' || m_pos END AS position_source,
@@ -117,7 +129,7 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
               FROM j),
         c AS (SELECT idx, CASE WHEN position_source IS NULL THEN m_chrom ELSE x_chrom END AS chrom,
                      CASE WHEN position_source IS NULL THEN m_pos ELSE x_pos END AS pos,
-                     * EXCLUDE (idx, m_chrom, m_pos, x_chrom, x_pos, v2_flip),
+                     * EXCLUDE (idx, m_chrom, m_pos, x_chrom, x_pos, v2_flip), x_chrom AS rs_chrom, x_pos AS rs_pos,
                      starts_with(position_source, 'ICSASG_v2') AND v2_flip AS flip FROM p),
         d AS (SELECT * {f"REPLACE ({flip})" if flip else ""} FROM c)
         SELECT *,
@@ -127,15 +139,36 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
                     WHEN row_number() OVER (PARTITION BY {key} ORDER BY idx) > 1 THEN 'duplicate' END AS reason
         FROM d""")
     if by_flank:  # placed by flank sequence (I18): say so; the rows it could not place, unless their rs ID did, say why
-        con.execute("UPDATE checked SET position_source = 'flank' WHERE _flank = 'flank' AND position_source IS NULL")
-        con.execute("UPDATE checked SET reason = 'flank_not_found' WHERE _flank = 'flank_not_found' AND position_source IS NULL "
+        con.execute("""UPDATE checked SET position_source = CASE WHEN rs_chrom = chrom AND rs_pos = pos OR rs_chrom IS NULL
+                       THEN 'flank' ELSE 'flank; rs ID at ' || rs_chrom || ':' || rs_pos END WHERE _flank = 'flank'""")
+        con.execute("UPDATE checked SET reason = _flank WHERE _flank <> 'flank' AND position_source IS NULL "
                     "AND reason IN ('missing_chrom', 'bad_pos', 'unknown_rsid')")
+        if use_rs and by_flank["genome"] == "checked":  # a row its rs ID places: its flank, if any, must be the genome's
+            bad = placement.contradicted(genome, con.execute(f"""SELECT idx, {q(by_flank['column'])}, chrom, pos, NULL
+                FROM checked WHERE _flank IN ('flank_too_short', 'flank_unknown_site') AND position_source = 'rsid'
+                AND coalesce(reason, 'duplicate') = 'duplicate' ORDER BY chrom, pos""").fetchall())  # either strand: no key
+            if isinstance(bad, str):
+                by_flank["genome"] = bad  # not all checked, so none is said to be
+            elif bad:  # rejected; then the duplicates again, so a rejected row isn't the 'first' of a site and drops none
+                con.execute("UPDATE checked SET reason = 'flank_genome_mismatch' WHERE idx IN (SELECT unnest(?::BIGINT[]))", [bad])
+                con.execute(f"""UPDATE checked SET reason = CASE WHEN idx IN (SELECT idx FROM (SELECT idx, row_number() OVER
+                                (PARTITION BY {key} ORDER BY idx) AS n FROM checked WHERE coalesce(reason, 'duplicate') = 'duplicate')
+                                WHERE n > 1) THEN 'duplicate' END WHERE coalesce(reason, 'duplicate') = 'duplicate'""")
+        if use_rs:  # both methods, side by side (where they disagree the flank's wins, for now: DECISIONS #36)
+            by_flank["rsid"] = dict(zip(("same", "different", "flank_only", "rsid_only", "genome_mismatch"), con.execute("""
+                SELECT count(*) FILTER (WHERE _flank = 'flank' AND rs_chrom = chrom AND rs_pos = pos),
+                       count(*) FILTER (WHERE _flank = 'flank' AND (rs_chrom <> chrom OR rs_pos <> pos)),
+                       count(*) FILTER (WHERE _flank = 'flank' AND rs_chrom IS NULL),
+                       count(*) FILTER (WHERE _flank <> 'flank' AND position_source IS NOT NULL
+                                        AND reason IS DISTINCT FROM 'flank_genome_mismatch'),
+                       count(*) FILTER (WHERE _flank <> 'flank' AND position_source IS NOT NULL
+                                        AND reason = 'flank_genome_mismatch') FROM checked""").fetchall()[0]))
     if lifted:  # converted from another assembly (I19): say from where; the rows it could not convert, unless an rs ID did, say why
         con.execute("UPDATE checked SET position_source = _lift WHERE _lift <> 'liftover_unmapped' AND position_source IS NULL")
         con.execute("UPDATE checked SET reason = 'liftover_unmapped' WHERE _lift = 'liftover_unmapped' AND position_source IS NULL "
                     "AND reason IN ('missing_chrom', 'bad_pos', 'unknown_rsid')")
     placed = con.execute("SELECT count(*) FROM checked WHERE position_source IS NOT NULL AND reason IS NULL").fetchone()[0]
-    helper = "input_chrom, input_pos, reason, alias_warning, is_rs, flip" + ("" if placed else ", position_source") \
+    helper = "input_chrom, input_pos, reason, alias_warning, is_rs, flip, rs_chrom, rs_pos" + ("" if placed else ", position_source") \
         + (", _flank" if by_flank else "") + (", _lift" if lifted else "")
     con.execute(f"CREATE OR REPLACE TABLE snps AS SELECT * EXCLUDE ({helper}) FROM checked WHERE reason IS NULL")
     extra = "".join(f", {c}" for c in ("id", "ref", "alt") if c in cols)
@@ -170,7 +203,7 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
                       count(*) FILTER (WHERE flip AND reason IS NULL), count(*) FILTER (WHERE reason = 'unknown_rsid')
                FROM checked""")[0]))
     if by_flank:
-        report["flank"] = {k: by_flank[k] for k in ("placed", "complemented", "not_found")}
+        report["flank"] = {k: v for k, v in by_flank.items() if k != "column"}
     if lifted:
         report["liftover"] = {"from": label, **lifted}
     report["duplicates_merged"] = report["rejected"].get("duplicate", 0)
@@ -445,7 +478,8 @@ def _annotate(con, path, release, out, manifest, weights, trait, sequence, step,
                              "Choose either placing by flank sequence or converting positions, not both.")
         lift = {**entry, "file": release / entry["file"]}
     report = read_snps(con, path, known, alias if alias.exists() else None, max_snps,
-                       rsid_table if rsid_table.exists() else None, flank_keys if place_by_flank else None, lift)
+                       rsid_table if rsid_table.exists() else None, flank_keys if place_by_flank else None, lift,
+                       genome=genome_location(manifest) if place_by_flank else None)
     stem = out.parent / out.stem
     if report["snps_kept"]:
         cols = [r[0] for r in con.execute("DESCRIBE snps").fetchall()]

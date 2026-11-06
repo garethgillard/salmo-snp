@@ -80,8 +80,28 @@ With `--place-by-flank` (`annotate(..., place_by_flank=True)`, ROADMAP I18), the
 assembly, as in an ICSASG_v2 chip manifest: each row is placed by its flank sequence (a column `Flank`, `SourceSeq` or
 `TopGenomicSeq` holding `LEFT[A/B]RIGHT`) where the 16 bases either side match a known variant site of the release's
 `flank_keys.parquet` exactly, on either strand (alleles complemented when given on the other one; `position_source` =
-`flank`); else by its rs ID as above; else it is rejected as `flank_not_found`. The validation report's `flank` counts
-them.
+`flank`); else by its rs ID as above (the `id` column, or an Axiom manifest's `dbSNP RS ID` beside its probe set id);
+else it is rejected with the reason: `no_flank`, `flank_too_short` (fewer than 16 A, C, G or T bases next to the SNP
+on a side), `flank_unknown_site` (no known site has those 32 bases, or several do) or `flank_genome_mismatch`.
+
+Every upload checks itself, so a user's own manifest is its own acceptance check:
+- against the genome (the one annotate reads, `genome_location`): each placement's whole manifest flank (all the bases
+  given, e.g. Axiom's 35 a side), turned to the genome's strand, must equal the genome there base for base; IUPAC
+  codes and N in the flank, and N in the genome, are skipped, and no mismatch is allowed (G, 2026-11-05, for now:
+  DECISIONS #34). A flank whose 32 bases match a known site but whose outer bases differ (a duplicated region, e.g.
+  the Ss4R duplicate) is not placed (`flank_genome_mismatch`), not by its rs ID either. A row its rs ID places that has
+  a flank (one too short or at no known site) is checked the same way at the rs ID's site, on either strand, and
+  rejected (`flank_genome_mismatch`) when they differ. With a remote genome, lists of over 2,000 placed markers are
+  not checked (`genome` says why).
+- against the rs IDs, when the input has them: the two placements are counted side by side. Where they disagree the
+  row stays at the flank's position, and `position_source` says `flank; rs ID at <chrom>:<pos>` (the flank's wins for
+  now, being checked against the genome: DECISIONS #36).
+
+The validation report's `flank` block: `placed`, `complemented`, `missed` ({reason: rows} for the rows the flank did
+not place; their rs IDs may still place them), `genome` (`checked`, or why not) and, with rs IDs, `rsid` (`same`,
+`different`, `flank_only`, `rsid_only`, and `genome_mismatch`: rows their rs ID would place, but whose flank
+differs from the genome there). `snpscore.placement.describe()` turns it into the sentences the CLI prints
+and the Design panel's chip card shows.
 
 Checking releases: `snpscore verify <release>` re-hashes every file against its SHA256SUMS (a damaged or edited file
 is named); `snpscore diff <old> <new>` lists what changed between two releases, for a changelog.
@@ -144,7 +164,7 @@ Next to the output, `<stem>.validation.json` and `<stem>.rejects.tsv`:
   reason), `coding` ({consequence: SNPs}) and `coding_notes` ({note: SNPs}).
 - rejects.tsv: `row` (1 = first SNP row of the input), `chrom`, `pos`, (`id`, `ref`, `alt`), `reason`
   (`missing_chrom`, `unknown_rsid`, `bad_pos`, `unknown_chrom`, `duplicate`: same chrom, pos, ref, alt as an earlier
-  row, after rs placement).
+  row, after rs placement; with `--place-by-flank`, the flank's reasons above).
 
 Problems with the input raise `snpscore.InputError` (a ValueError) with a message that is safe to show: no SQL, file
 paths or input lines. DuckDB runs in a sandbox (`snpscore.connect(read_dirs, write_dir, threads=2,

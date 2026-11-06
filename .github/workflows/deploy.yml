@@ -1,0 +1,30 @@
+name: deploy
+# The NREC demo is updated only when G says so (G, 2026-11-06): a batch of merged, tested changes at a time, never on
+# every merge. Actions > deploy > Run workflow on main, or a session asked to in the chat (AGENTS.md "Deploying the
+# NREC demo"). A new data release, or the public pool after a weights.yaml change, still goes up with deploy/nrec.sh.
+on:
+  workflow_dispatch:
+
+jobs:
+  tests:  # the checks every pull request runs, on the commit going live
+    uses: ./.github/workflows/tests.yml
+
+  deploy:
+    # snpportal/deploy/update.sh on the VM (snpportal/README.md "Deploying the demo"); the key in NREC_DEPLOY_KEY can
+    # run nothing else there. Main only; off until the NREC_HOST variable is set.
+    needs: tests
+    if: github.ref == 'refs/heads/main' && vars.NREC_HOST != ''
+    runs-on: ubuntu-latest
+    concurrency: nrec
+    timeout-minutes: 10  # a deploy takes ~20 s; a stuck one shouldn't hold the nrec group for GitHub's 6 h
+    steps:
+      - name: Update the demo
+        env:
+          KEY: ${{ secrets.NREC_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.NREC_KNOWN_HOSTS }}
+          HOST: ${{ vars.NREC_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes ubuntu@"$HOST" "$GITHUB_SHA"

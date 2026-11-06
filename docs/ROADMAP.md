@@ -2107,7 +2107,10 @@ matched against the flanks of known variant sites (the 504-fish panel, EVA) kept
 against the genome near the given position. This fixes ICSASG_v2 chips beyond the rs-ID bridge.
 
 **Acceptance.** An ICSASG_v2 Axiom manifest places at least as many SNPs as the rs bridge, and none where the flank
-differs from the genome.
+differs from the genome. Every upload checks this itself (2026-11-05), so each user's manifest is its own acceptance
+check: each placement's whole flank is compared with the genome (a mismatch is not placed), the rs IDs are placed as
+well and the two counted side by side (same position, another position, flank only, rs ID only), and the rows not
+placed say why (no flank, too short, not a known site, genome mismatch); snpscore/README.md "--place-by-flank".
 
 #### I19 Coordinate conversion between assemblies
 

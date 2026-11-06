@@ -504,36 +504,64 @@ def test_genome_location_by_file_name(tmp_path, monkeypatch):  # I17: a data fol
     assert genome_location(m) == "/srv/genome.fa.gz"
 
 
-def test_place_by_flank(release, tmp_path):  # I18: SYNTHETIC manifest rows on 'another assembly', placed by their flanks
+def test_place_by_flank(release, tmp_path):  # I18: a SYNTHETIC Axiom manifest on 'another assembly', placed by its flanks
     from snpscore.fasta import Fasta
-    from snpscore.placement import COMPLEMENT
-    genome = Fasta(FIXTURE / "Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz")
-    sites = duckdb.sql(f"SELECT chrom, pos FROM read_parquet('{release / 'flank_keys.parquet'}') ORDER BY chrom, pos LIMIT 4").fetchall()
+    from snpscore.placement import COMPLEMENT, describe
+    genome = FIXTURE / "Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz"
+    fa = Fasta(genome)
+    keys, rsid = release / "flank_keys.parquet", release / "rsid.parquet"
+    rs = duckdb.sql(f"SELECT chrom, pos, 'rs' || rs FROM read_parquet('{keys}') k JOIN read_parquet('{rsid}') x USING (chrom, pos) "
+                    "ORDER BY chrom, pos").fetchall()  # known sites with an rs ID
+    other = duckdb.sql(f"SELECT chrom, pos FROM read_parquet('{keys}') k ANTI JOIN read_parquet('{rsid}') x USING (chrom, pos) "
+                       "ORDER BY chrom, pos LIMIT 3").fetchall()
     rc = lambda s: s.upper().translate(COMPLEMENT)[::-1]  # noqa: E731
-    lines = ["chrom\tpos\tid\tref\talt\tFlank"]
-    for i, (chrom, pos) in enumerate(sites):
-        left, base, right = (genome.fetch(chrom, pos - 36, pos - 1), genome.fetch(chrom, pos - 1, pos).upper(),
-                             genome.fetch(chrom, pos, pos + 35))
-        other = "A" if base != "A" else "G"
-        if i == 3:  # given on the other strand, alleles too
-            lines.append(f"1\t{1000 + i}\tm{i}\t{rc(base)}\t{rc(other)}\t{rc(right)}[{rc(base)}/{rc(other)}]{rc(left)}")
-        else:
-            lines.append(f"1\t{1000 + i}\tm{i}\t{base}\t{other}\t{left}[{base}/{other}]{right}")
-    lines.append("1\t2000\tnowhere\tA\tG\t" + "ACGTTGCA" * 5 + "[A/G]" + "TTGGCCAA" * 5)
-    path = tmp_path / "v2_manifest_SYNTHETIC.tsv"
+    changed = lambda s: s[:4] + ("A" if s[4] != "A" else "C") + s[5:]  # 31 bases from the SNP: outside the 16-base key  # noqa: E731
+
+    def row(name, rs_id, chrom, pos, left=None, right=None, reverse=False):
+        base = fa.fetch(chrom, pos - 1, pos).upper()
+        left = left or fa.fetch(chrom, pos - 36, pos - 1).upper()
+        right = right or fa.fetch(chrom, pos, pos + 35).upper()
+        a, b = (rc(base), rc("A" if base != "A" else "G")) if reverse else (base, "A" if base != "A" else "G")
+        flank = f"{rc(right)}[{a}/{b}]{rc(left)}" if reverse else f"{left}[{a}/{b}]{right}"
+        return f"{name}\t{rs_id}\t1\t{1000 + len(lines)}\t{a}\t{b}\t{flank}"
+    lines = ["Probe Set ID\tdbSNP RS ID\tChromosome\tPhysical Position\tAllele A\tAllele B\tFlank"]
+    (c0, p0, rs0), (c1, p1, _), (c2, p2, rs2), (_, _, rs3), (_, _, rs5) = rs[0], rs[1], rs[2], rs[3], rs[5]
+    lines.append(row("same", rs0, c0, p0))  # its rs ID is at the same site
+    lines.append(row("different", rs5, c1, p1))  # its rs ID is at another site
+    lines.append(row("reverse", "---", *other[0], reverse=True))  # given on the other strand, alleles too
+    lines.append(row("iupac", "---", *other[1], left="R" + fa.fetch(*other[1][:1], other[1][1] - 35, other[1][1] - 1).upper()))
+    # the paralog's rs ID (another site's) doesn't place it either: the genome contradicts its flank
+    lines.append(row("paralog", rs3, *other[2], left=changed(fa.fetch(other[2][0], other[2][1] - 36, other[2][1] - 1).upper())))
+    lines += [f"rs_only\t{rs2}\t1\t1999\tA\tG\t---", "none\t---\t1\t2000\tA\tG\t---", "short\t---\t1\t2001\tA\tG\t" + "ACGT" * 9 + "[A/G]ACGTNACGTACGTACGTACG",
+              "nowhere\t---\t1\t2002\tA\tG\t" + "ACGTTGCA" * 5 + "[A/G]" + "TTGGCCAA" * 5]
+    c4, p4, rs4 = rs[4]  # rows the flank can't place but the rs ID can: the genome checks the flank there
+    right = fa.fetch(c4, p4, p4 + 35).upper()
+    lines.append(row("rs_ok", rs4, c4, p4, right=right[:2] + "N" + right[3:], reverse=True))  # agrees, other strand
+    bad = row("same", rs0, c0, p0).split("\t")  # the 'same' row's rs ID and alleles, but not its site's flank, and first:
+    lines.insert(1, "\t".join(["rs_bad", *bad[1:6], "TTGGCCAA" * 5 + "[A/G]" + "ACGTTGCA" * 5]))  # it drops no row
+    path = tmp_path / "v2_axiom_SYNTHETIC.tsv"
     path.write_text("\n".join(lines) + "\n")
     m = json.loads((release / "manifest.json").read_text())
     con = connect([tmp_path, release])
-    report = read_snps(con, path, m["chrom_sizes"], None, None, None, release / "flank_keys.parquet")
+    report = read_snps(con, path, m["chrom_sizes"], None, None, rsid, keys, genome=genome)
     got = {i: (c, p, r, s) for i, c, p, r, s in con.execute("SELECT id, chrom, pos, ref, position_source FROM snps").fetchall()}
-    assert report["flank"] == {"placed": 4, "complemented": 1, "not_found": 1}
-    for i, (chrom, pos) in enumerate(sites):
-        assert got[f"m{i}"][:2] == (chrom, pos) and got[f"m{i}"][3] == "flank"
-        assert got[f"m{i}"][2] == genome.fetch(chrom, pos - 1, pos).upper()  # the reverse row's alleles complemented back
-    assert report["rejected"] == {"flank_not_found": 1}
+    assert report["flank"] == {"placed": 4, "complemented": 1, "genome": "checked",
+                               "missed": {"no_flank": 2, "flank_too_short": 2, "flank_unknown_site": 2, "flank_genome_mismatch": 1},
+                               "rsid": {"same": 1, "different": 1, "flank_only": 2, "rsid_only": 2, "genome_mismatch": 1}}
+    for name, (chrom, pos) in {"same": (c0, p0), "different": (c1, p1), "reverse": other[0], "iupac": other[1]}.items():
+        assert got[name][:2] == (chrom, pos)
+        assert got[name][2] == fa.fetch(chrom, pos - 1, pos).upper()  # the reverse row's alleles complemented back
+    assert got["same"][3] == got["reverse"][3] == "flank" and got["rs_only"][:2] == (c2, p2) and got["rs_only"][3] == "rsid"
+    assert got["different"][3].startswith("flank; rs ID at ")  # kept where the flank puts it, and says where its rs ID is
+    assert got["rs_ok"][:2] == (c4, p4) and got["rs_ok"][3] == "rsid" and "rs_bad" not in got
+    assert report["rejected"] == {"flank_genome_mismatch": 2, "flank_too_short": 1, "flank_unknown_site": 1, "no_flank": 1}
+    text = " ".join(describe(report["flank"]))
+    assert "1 at another position" in text and "1 not placed by rs ID either" in text
+    unchecked = read_snps(con, path, m["chrom_sizes"], None, None, None, keys)  # no genome, no rs IDs: the paralog placed
+    assert unchecked["flank"]["placed"] == 5 and unchecked["flank"]["genome"] != "checked" and "rsid" not in unchecked["flank"]
     with pytest.raises(InputError):  # no flank column
         (tmp_path / "plain.tsv").write_text("chrom\tpos\n1\t5\n")
-        read_snps(con, tmp_path / "plain.tsv", m["chrom_sizes"], None, None, None, release / "flank_keys.parquet")
+        read_snps(con, tmp_path / "plain.tsv", m["chrom_sizes"], None, None, None, keys)
 
 
 def test_lift_from_icsasg_v2(release, tmp_path):  # I19: positions with an EVA rs ID convert to its other position
