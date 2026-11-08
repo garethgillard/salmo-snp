@@ -242,4 +242,5 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   repos/garethgillard/salmo-snp/actions/workflows/deploy.yml/dispatches -f ref=main`), or G uses Actions > deploy >
   Run workflow. It runs the tests, then `deploy/update.sh` on the VM (~20 s). Then check
   https://158-39-75-9.sslip.io/snp/health/ and tell G what went live (the merges since the last deploy run). A new
-  data release, or the public pool after a weights.yaml change, still needs `deploy/nrec.sh` from G's Mac.
+  data release still needs `deploy/nrec.sh` from G's Mac; a stale public pool (after a weights.yaml or snpscore
+  change) is built on GitHub's runner and sent by the same workflow run (snpportal/README.md "Deploying the demo").

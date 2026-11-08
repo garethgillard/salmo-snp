@@ -13,9 +13,9 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
   use https://158-39-75-9.sslip.io/snp/: the bare IP didn't connect through their proxy). Since 2026-11-06 14:09 UTC
   that is 2e008b9 (PRs #3, #4, #7, #8). The deploy key runs the VM's own copy of update.sh, so #8's fix (no pool
   built on the VM) only took effect once nrec.sh had installed main: two workflow runs before it swapped the VM
-  (down 13:43-13:58 UTC). The VM's pool is still stale for main's weights.yaml (a design preset added; tiers
-  unchanged): nrec.sh must build it with main's snpscore (`python -c "import snpscore.pool as p; print(p.stamp())"`
-  on the Mac should give weights_sha256 fd2fe92f...).
+  (down 13:43-13:58 UTC). Its pool stayed stale for main's weights.yaml (a design preset added; tiers unchanged), so
+  since PR #9 the deploy workflow builds a stale pool on GitHub's runner and sends it (snpportal/README.md
+  "Deploying the demo"): pools no longer need G's Mac.
 - The data for real use: the private GitHub Release data-2026-11-05 (`bash tools/get_data.sh`); not on salmobase yet.
   Release 2026-11-05 = 2026-11-03 plus flank_keys.parquet (I18), built with Python 3.12 and DuckDB 2.0.0: every other
   table is identical, except the allele named in `motif_tfs` for 33 of 512,745 motif sites (float ties); the demo
