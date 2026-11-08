@@ -147,7 +147,8 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   sheet's wording; Primer3 (70-120 bp products,
   150 bp flanks) and Agena (100 bp flanks, layout unverified) files; ICSASG_v2 converted only inside blocks of EVA rs
   IDs with one offset (layers.yaml liftover); fSalSal1 from same-chromosome minimap2 asm5 alignments, mapq >= 5,
-  overlapping blocks dropped (DECISIONS #37).
+  overlapping blocks dropped (DECISIONS #37; the alignment postponed, G 2026-11-06: no fSalSal1
+  tables in a release until I20).
 - Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
   counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
   priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).
@@ -241,4 +242,5 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   repos/garethgillard/salmo-snp/actions/workflows/deploy.yml/dispatches -f ref=main`), or G uses Actions > deploy >
   Run workflow. It runs the tests, then `deploy/update.sh` on the VM (~20 s). Then check
   https://158-39-75-9.sslip.io/snp/health/ and tell G what went live (the merges since the last deploy run). A new
-  data release, or the public pool after a weights.yaml change, still needs `deploy/nrec.sh` from G's Mac.
+  data release still needs `deploy/nrec.sh` from G's Mac; a stale public pool (after a weights.yaml or snpscore
+  change) is built on GitHub's runner and sent by the same workflow run (snpportal/README.md "Deploying the demo").

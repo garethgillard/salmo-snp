@@ -64,7 +64,7 @@ HG993268.2, HG993270.2, HG993277.2, HG993285.2). `HG993277.1` is an older chromo
   EVA's remaps of the older submissions.
 
 `--from-assembly fSalSal1` (`lift_from="fsalsal1"`) does the same for fSalSal1 positions (chromosomes 1-29, ssa01, or
-its GenBank OZ271732.1-OZ271760.1 and RefSeq NC_138291.1-NC_138319.1 names) through `liftover_fsalsal1.parquet`, made
+its GenBank OZ271732.1-OZ271760.1 and RefSeq NC_138291.1-NC_138319.1 names) through `liftover_fsalsal1.parquet` (in a release only once the alignment is run: postponed), made
 from an alignment of the two assemblies (snpdata README "The fSalSal1 conversion"); the portal's TSV and Parquet exports
 add each SNP's fSalSal1 position (`fSalSal1_chrom`, `fSalSal1_pos`) from `liftover_to_fsalsal1.parquet`.
 

@@ -31,7 +31,9 @@ streams, and only those are kept.
 
 The conversion between Ssal_v3.1 and fSalSal1 (GCA_965601325.1, NCBI's RefSeq reference for Atlantic salmon) comes
 from an alignment made once, before `snpdata build`; minimap2 (through its Python binding, mappy) is needed for this
-step only. About 5 hours on 4 cores and 7 GB of memory; less with more cores:
+step only. Postponed (G, 2026-11-06): releases are built without it until the data tracks move to fSalSal1 (I20);
+`snpdata build` leaves the two fSalSal1 tables out while the PAF is missing. About 5 hours on 4 cores and 7 GB of
+memory; less with more cores:
 
 ```bash
 pip install mappy
