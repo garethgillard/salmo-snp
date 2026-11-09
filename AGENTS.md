@@ -1,7 +1,8 @@
 # salmo-snp: notes for people and their AI assistants
 
 Functional SNP scoring for Atlantic salmon (Ssal_v3.1): public annotation data, a scoring engine and a web portal.
-Owner: Gareth Gillard (G). The repository is private (invite only); licence: PolyForm Noncommercial 1.0.0 (LICENSE).
+Owner: NMBU; maintainer Gareth Gillard (G). The repository is private (invite only); licence: PolyForm Noncommercial
+1.0.0 (LICENSE); contributors accept CLA.md (CONTRIBUTING.md).
 Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says what's next.
 
 ## Layout
@@ -71,7 +72,10 @@ Don't invent thresholds, weights, "active" state definitions or trait-to-tissue 
 
 Decided:
 - Repository and deployment (2026-10-28): see Plan above. Licence: PolyForm Noncommercial 1.0.0 (commercial use only
-  with G's permission).
+  with permission). Ownership and contributions (G, 2026-11-09): copyright NMBU (LICENSE); invited collaborators
+  contribute by pull request and accept CLA.md once (a licence grant: they keep their copyright, NMBU may license the
+  project with their work on any terms), checked by the `cla` workflow; CONTRIBUTING.md says how. CLA.md is a draft
+  until NMBU's legal office approves it.
 - Primary element set: AQUA-FAANG per-condition ChromHMM states (Ensembl regulatory build may be added as a second layer).
 - RNA-seq strands (2026-10-08): the trackhub's '.forward' files are the + strand (checked at vgll3: 16x the reverse
   files' reads over the gene).

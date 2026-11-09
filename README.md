@@ -129,7 +129,10 @@ A public site (on salmobase, later) runs the same code. For developers and their
 
 ## Licence
 
+Copyright Norwegian University of Life Sciences (NMBU); author and maintainer Gareth Gillard.
 [PolyForm Noncommercial 1.0.0](LICENSE): free for research, teaching and other noncommercial use, including by
 universities, public research institutes and government bodies. Commercial use (for example by breeding companies)
-needs the author's permission; contact Gareth Gillard. The data in a release keep their sources' licences (listed in
-`snpdata/layers.yaml`).
+needs NMBU's permission; contact Gareth Gillard. The data in a release keep their sources' licences (listed in
+`snpdata/layers.yaml`). Contributions are welcome from invited collaborators: see [CONTRIBUTING.md](CONTRIBUTING.md);
+contributors accept the [Contributor License Agreement](CLA.md), which keeps their copyright and gives NMBU a licence
+to their work.
