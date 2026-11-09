@@ -11,6 +11,7 @@ delta (the largest score difference between the alleles, bits).
 from __future__ import annotations
 
 import math
+import multiprocessing
 import os
 import re
 from concurrent.futures import ProcessPoolExecutor
@@ -137,8 +138,10 @@ def effects(windows, meme, p_value=P_VALUE, min_delta=MIN_DELTA, processes=None,
         yield from _chunk(list(windows))
         return
     batch = []
-    with ProcessPoolExecutor(processes or os.cpu_count() or 1, initializer=_start,
-                             initargs=(str(meme), p_value, min_delta)) as pool:
+    # spawned, not forked: a fork of a process running DuckDB's threads can deadlock its children (a CI run hung
+    # 2026-11-08); macOS and Windows spawn anyway
+    with ProcessPoolExecutor(processes or os.cpu_count() or 1, mp_context=multiprocessing.get_context("spawn"),
+                             initializer=_start, initargs=(str(meme), p_value, min_delta)) as pool:
         futures = []
         for item in windows:
             batch.append(item)
