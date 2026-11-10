@@ -70,8 +70,8 @@ site/raw/                    with --raw: every input file of data/raw that layer
 A published version never changes: build a new version folder instead. `publish` refuses a release that
 `snpscore.release.check` finds damaged (a layer missing from the manifest, a missing file), the check `serve` and
 `annotate` make too; never edit a release by hand. `build` writes SHA256SUMS and the genome's sha256 into the
-manifest. Before publishing, the licence of each layer must allow redistribution (layers.yaml `licence`; the nf-RASQUAL
-and 504-fish layers are still to confirm with their owners, AGENTS.md "Open"): `--raw` redistributes the inputs as
+manifest. Before publishing, the licence of each layer must allow redistribution (layers.yaml `licence`; for the nf-RASQUAL
+and 504-fish layers the authors agreed, G 2026-11-10): `--raw` redistributes the inputs as
 well as the derived tables. Each salmo-snp version names the release it expects (`snpportal/snpportal/serve.py`
 `RELEASE`), and `DATA_URL` there gets the site's address once it is hosted.
 
@@ -162,7 +162,7 @@ public sites in robust peaks, scored by snpscore.motif), `molqtl` (point: n, tis
   hide population structure, and the 12 AQUA-FAANG fish are among the 504.
   `aquafaang12_af` and `aquafaang12_dr2` are the 12-fish VCF's INFO AF and DR2 (frequency in those 12 fish and their
   imputation quality); every 12-fish site is a panel site. vgll3 Met54Thr (25:28996360 C/T): af 0.480159 (504 fish),
-  aquafaang12_af 0.67. layers.yaml records the `population` and `licence: to confirm`.
+  aquafaang12_af 0.67. layers.yaml records the `population` and the `licence` (redistribution agreed with the authors).
 - `synchrosmolt_af`: the 108 whole-genome sequenced parents of the Synchrosmolt family experiment (NMBU; ENA
   PRJEB114348, 411,908 SNPs, Beagle-phased; chromosomes ssa01-ssa29, mapped to 1-29 with `rename_chrom` through the
   alias table). The ENA analysis also has 2,730 offspring imputed from these parents: 99.97% of their sites are
@@ -182,7 +182,7 @@ public sites in robust peaks, scored by snpscore.motif), `molqtl` (point: n, tis
   IDs (all 1,175 significant ones are in Ensembl 116) and peaks as `chrom:start-end` (BED; the table's 1-based
   `Interval_N:chrom:start:end` minus 1 at the start, unverified). pi is RASQUAL's effect size; which allele it refers
   to is not confirmed. The tables' `FDR` column is a copy of `pvalue` and is not read. Weight 0 (display only);
-  `licence: to confirm with the authors`.
+  redistribution agreed with the authors (G, 2026-11-10).
 - `cm`: Brekke et al. 2023 linkage map (AquaGen, 34,842 markers, native Ssal_v3.1, CC BY 4.0; bioRxiv supplement
   media-1.txt, whose `Mb` column holds base pairs): `cm_male` and `cm_female` interpolated between the flanking
   markers; `cm` false and NULL values before a chromosome's first and after its last marker (unmarked ends up to 12 Mb,

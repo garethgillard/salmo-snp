@@ -5,13 +5,13 @@
 
 ## Ownership and where it runs
 
-salmo-snp is NMBU software for scoring Atlantic salmon DNA variants, kept in a private GitHub repository.
+salmo-snp is NMBU software for scoring Atlantic salmon DNA variants, in a public GitHub repository.
 
 NMBU is named as the copyright holder; Gareth Gillard (NMBU) is the author and maintainer.
 
 - **Copyright notice** (in `LICENSE`): "Copyright 2026 Norwegian University of Life Sciences (NMBU)".
-- **Repository:** private on GitHub (account garethgillard/salmo-snp); access by invitation only. Making it public is
-  planned but not scheduled.
+- **Repository:** public on GitHub (garethgillard/salmo-snp) since 2026-11-10. Anyone may read and propose changes;
+  invited collaborators may also push branches.
 
 ## The software licence: PolyForm Noncommercial 1.0.0
 
@@ -77,16 +77,16 @@ repository. The pull request cannot be merged until they accept.
 ## Third-party data in the releases
 
 The software ships with a separate data release built from public sources. Each source keeps its own licence, and
-NMBU's licence and permissions cover none of them. Two sources still need their owners' permission to redistribute,
-and several have no licence recorded in the project.
+NMBU's licence and permissions cover none of them. The authors of the two nf-rasqual sources agreed to their
+redistribution; several other sources have no licence recorded in the project.
 
-The releases are currently hosted in the private GitHub repository. The public demo shows their contents openly, and
-they will later be published on salmobase.org.
+The releases are currently GitHub Releases of the public repository, which anyone can download. The public demo
+shows their contents openly, and they will later be published on salmobase.org.
 
 | Source | What the project uses | Licence as recorded in the project |
 | --- | --- | --- |
-| nf-rasqual molQTL tables (Nguyen et al. 2025, GitHub repository datngu/nf-RASQUAL_paper) | Lead variant per feature, as a layer | **To confirm with the authors:** the repository has no licence file; the article is CC BY-NC-ND 4.0 |
-| nf-rasqual 504-fish reference panel (salmobase.org) | Allele frequencies and variant positions only; genotypes never kept | **To confirm:** mostly wild and farmed fish from Bertolotti et al. 2020 (ENA PRJEB38061), plus 12 AQUA-FAANG fish of a commercial strain (AquaGen) |
+| nf-rasqual molQTL tables (Nguyen et al. 2025, GitHub repository datngu/nf-RASQUAL_paper) | Lead variant per feature, as a layer | Redistribution agreed with the authors (2026-11-10); the repository has no licence file; the article is CC BY-NC-ND 4.0 |
+| nf-rasqual 504-fish reference panel (salmobase.org) | Allele frequencies and variant positions only; genotypes never kept | Redistribution agreed with the authors (2026-11-10); mostly wild and farmed fish from Bertolotti et al. 2020 (ENA PRJEB38061), plus 12 AQUA-FAANG fish of a commercial strain (AquaGen) |
 | nf-rasqual RNA-seq gene counts (salmobase.org) | Expression counts per tissue | Not recorded |
 | AQUA-FAANG consortium data (salmobase.org): ATAC peaks, chromatin states, blacklist, rediploidisation table, salmon-trout orthologs, signal tracks | The main regulatory layers | Not recorded |
 | salmobase synteny blocks (2021-11) | Duplicated-genome pairs | Not recorded |

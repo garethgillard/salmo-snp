@@ -13,8 +13,9 @@
             "git+https://github.com/garethgillard/salmo-snp#subdirectory=snpportal"</pre></li>
     <li class="mb-2">Get the data once: release {{ release.version }} and the genome (about 1 GB), every file checked against its sha256:
       {% if data_url %}<pre class="sp-mono mb-0">salmo-snp download</pre>{% else %}until it is hosted online, it comes as a
-      GitHub Release of the repository, which is private for now (you need access to it and the GitHub CLI, <code>gh</code>):
-      <pre class="sp-mono mb-0">gh release download data-{{ release.version }} -R garethgillard/salmo-snp
+      GitHub Release of the repository:
+      <pre class="sp-mono mb-0">curl -LO https://github.com/garethgillard/salmo-snp/releases/download/data-{{ release.version }}/salmo-snp-data-{{ release.version }}.tar
+curl -LO https://github.com/garethgillard/salmo-snp/releases/download/data-{{ release.version }}/salmo-snp-genome-Ssal_v3.1.tar
 tar -xf salmo-snp-data-{{ release.version }}.tar &amp;&amp; tar -xf salmo-snp-genome-Ssal_v3.1.tar
 salmo-snp download --from site</pre>{% endif %}</li>
     <li class="mb-2">Start it, then open <code>http://127.0.0.1:8000/snp/</code> (only this computer can reach it):

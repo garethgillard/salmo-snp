@@ -6,7 +6,7 @@ changes, conserved sequence, TF motifs and published associations. Each SNP gets
 to 4 (none found), with the evidence behind it. The portal also shows each SNP's evidence card and a locus browser,
 fine-maps GWAS summary statistics with a functional prior, and designs marker panels with vendor-ready files.
 
-Public demo: https://158.39.75.9/snp/ (public data only: don't upload confidential lists there).
+Public demo: https://test.salmobase.org/snp/ (public data only: don't upload confidential lists there).
 
 ## Run it on your own computer
 
@@ -16,8 +16,6 @@ You need:
 - Python 3.11 or newer (3.12 recommended; tested on 3.11 and 3.14 too). Linux is tested on every change; macOS and
   Windows aren't tested automatically yet.
 - About 2 GB of disk: the release (~300 MB), the genome (~800 MB) and your results.
-- While the repository is private, a GitHub account with access to it and the GitHub CLI, `gh`, logged in
-  (`gh auth login`, then `gh auth setup-git` so that pip can read the repository).
 
 1. Make a Python environment and install the two packages (one command, so pip takes both from GitHub):
    ```bash
@@ -34,7 +32,8 @@ You need:
    salmobase it is a GitHub Release of this repository, named after the release this version of salmo-snp expects
    (`salmo-snp info` names it):
    ```bash
-   gh release download data-2026-11-05 -R garethgillard/salmo-snp      # two files, ~1.2 GB
+   curl -LO https://github.com/garethgillard/salmo-snp/releases/download/data-2026-11-05/salmo-snp-data-2026-11-05.tar       # ~300 MB
+   curl -LO https://github.com/garethgillard/salmo-snp/releases/download/data-2026-11-05/salmo-snp-genome-Ssal_v3.1.tar      # ~800 MB
    tar -xf salmo-snp-data-2026-11-05.tar && tar -xf salmo-snp-genome-Ssal_v3.1.tar
    salmo-snp download --from site      # checks every file, copies it into the data folder and scores the public
                                        # sites for comparison (about a minute); then delete site/
@@ -136,6 +135,6 @@ needs NMBU's permission; contact Gareth Gillard. Permission is given by email, f
 the one it names (`salmo-snp info` shows which version you have), for internal use only: no redistribution, no
 warranty, otherwise on the licence's terms; later versions need a new permission, and NMBU may end one with notice.
 The data in a release keep their sources' licences (listed in `snpdata/layers.yaml`); a permission covers only the
-software. Contributions are welcome from invited collaborators: see [CONTRIBUTING.md](CONTRIBUTING.md);
+software. Contributions are welcome by pull request: see [CONTRIBUTING.md](CONTRIBUTING.md);
 contributors accept the [Contributor License Agreement](CLA.md), which keeps their copyright and gives NMBU a licence
 to their work. [docs/LICENSING.md](docs/LICENSING.md) sums up all of it, third-party data and software included.

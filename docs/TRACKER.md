@@ -15,7 +15,7 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
   (PR #9: pools no longer need G's Mac). On 2026-11-08 the VM had hung (Active in NREC, nothing answering on 22 or
   443) until G hard-rebooted it; the cause is unknown (its console log would say): with 2 GB RAM and 1 vCPU, a 4 GB
   flavor is the fix if it hangs again.
-- The data for real use: the private GitHub Release data-2026-11-05 (`bash tools/get_data.sh`); not on salmobase yet.
+- The data for real use: the GitHub Release data-2026-11-05 (`bash tools/get_data.sh`); not on salmobase yet.
   Release 2026-11-05 = 2026-11-03 plus flank_keys.parquet (I18), built with Python 3.12 and DuckDB 2.0.0: every other
   table is identical, except the allele named in `motif_tfs` for 33 of 512,745 motif sites (float ties); the demo
   lists score the same tiers.
@@ -121,7 +121,8 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
 - v0.1.0 tag (G decides when; release.yml builds the three wheels): now step 9's I4
 - [x] Dockerfile for salmobase (snpportal/deploy/Dockerfile; README "salmobase container": the Apache lines); built and
       run in a cloud session. Still to do with salmobase's admins: the host, the volumes and the button
-- [ ] Before the repository goes public: synthetic stand-ins for the fixture cuts of licence-pending data
+- [x] Before the repository goes public: the fixture's nf-RASQUAL and 504-fish cuts stay (redistribution agreed with the
+      authors, G 2026-11-10); no synthetic stand-ins needed
 
 ## Step 8: platform, pool and sharing (review of 2026-11-04)
 - [x] Off end-of-life versions (G, 2026-11-04: the newest that suit). Python 3.8 had had no fixes since 2024-10-07
