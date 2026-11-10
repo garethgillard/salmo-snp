@@ -14,7 +14,8 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 - `snpportal/`: the Django web portal; reads a release and calls snpscore. `snpportal/lib/` holds its plain-Python
   parts (locus data, panel design, exports, the track registry; `python -m snpportal.lib.cli panel|export|compare`).
 - `docs/`: TRACKER (what's next, then what's built), DECISIONS (questions for G, with options and a recommendation),
-  ROADMAP (the spec of every roadmap item); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
+  ROADMAP (the spec of every roadmap item), LICENSING (the licences, the CLA, commercial permission, third-party
+  data and software); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
   (the simplification plan of 2026-10-07, built).
 - `tools/`: check.sh (what CI runs), user_install_test.sh (a new user's install), get_data.sh (the data for real use),
   cloud_setup.sh (cloud sessions).
