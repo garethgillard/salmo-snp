@@ -1,0 +1,38 @@
+name: cla
+# Contributors accept CLA.md (a licence grant to NMBU) once, by a comment on their first pull request; the check then
+# passes for their later ones. Signatures are kept on the cla-signatures branch (main is protected). The maintainer,
+# NMBU colleagues added to the allowlist and bots don't sign.
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:  # runs this file from main with a write token; it never checks out the pull request's code
+    types: [opened, synchronize, closed]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  cla:
+    if: >-
+      github.event_name == 'pull_request_target' || github.event.comment.body == 'recheck' ||
+      github.event.comment.body == 'I have read the salmo-snp CLA and I accept it'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: contributor-assistant/github-action@v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-document: https://github.com/garethgillard/salmo-snp/blob/main/CLA.md
+          path-to-signatures: signatures/cla.json
+          branch: cla-signatures
+          allowlist: garethgillard,*[bot]
+          custom-pr-sign-comment: I have read the salmo-snp CLA and I accept it
+          custom-notsigned-prcomment: >-
+            Thank you for contributing to salmo-snp. Before it can be merged, please read the
+            [Contributor License Agreement](https://github.com/garethgillard/salmo-snp/blob/main/CLA.md) (you keep your
+            copyright and give NMBU a licence to your contribution) and accept it by commenting the sentence below. You
+            only do this once.
+          custom-allsigned-prcomment: All contributors have accepted the salmo-snp CLA.
