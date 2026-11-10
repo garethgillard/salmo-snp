@@ -74,8 +74,8 @@ Decided:
 - Repository and deployment (2026-10-28): see Plan above. Licence: PolyForm Noncommercial 1.0.0 (commercial use only
   with permission). Ownership and contributions (G, 2026-11-09): copyright NMBU (LICENSE); invited collaborators
   contribute by pull request and accept CLA.md once (a licence grant: they keep their copyright, NMBU may license the
-  project with their work on any terms), checked by the `cla` workflow; CONTRIBUTING.md says how. CLA.md is a draft
-  until NMBU's legal office approves it.
+  project with their work on any terms), checked by the `cla` workflow; CONTRIBUTING.md says how. CLA.md in force
+  (G, 2026-11-10).
 - Primary element set: AQUA-FAANG per-condition ChromHMM states (Ensembl regulatory build may be added as a second layer).
 - RNA-seq strands (2026-10-08): the trackhub's '.forward' files are the + strand (checked at vgll3: 16x the reverse
   files' reads over the gene).

@@ -1,7 +1,5 @@
 # salmo-snp Contributor License Agreement (version 1)
 
-DRAFT for review by NMBU's legal office before it is used.
-
 This agreement is between you (the person, or the organisation on whose behalf you act, that submits a
 Contribution) and the Norwegian University of Life Sciences (NMBU), which owns and manages the salmo-snp project
 (https://github.com/garethgillard/salmo-snp). You keep the copyright in your Contributions; this agreement gives NMBU
