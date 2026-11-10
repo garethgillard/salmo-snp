@@ -14,7 +14,8 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 - `snpportal/`: the Django web portal; reads a release and calls snpscore. `snpportal/lib/` holds its plain-Python
   parts (locus data, panel design, exports, the track registry; `python -m snpportal.lib.cli panel|export|compare`).
 - `docs/`: TRACKER (what's next, then what's built), DECISIONS (questions for G, with options and a recommendation),
-  ROADMAP (the spec of every roadmap item); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
+  ROADMAP (the spec of every roadmap item), LICENSING (the licences, the CLA, commercial permission, third-party
+  data and software); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
   (the simplification plan of 2026-10-07, built).
 - `tools/`: check.sh (what CI runs), user_install_test.sh (a new user's install), get_data.sh (the data for real use),
   cloud_setup.sh (cloud sessions).
@@ -74,8 +75,8 @@ Decided:
 - Repository and deployment (2026-10-28): see Plan above. Licence: PolyForm Noncommercial 1.0.0 (commercial use only
   with permission). Ownership and contributions (G, 2026-11-09): copyright NMBU (LICENSE); invited collaborators
   contribute by pull request and accept CLA.md once (a licence grant: they keep their copyright, NMBU may license the
-  project with their work on any terms), checked by the `cla` workflow; CONTRIBUTING.md says how. CLA.md is a draft
-  until NMBU's legal office approves it.
+  project with their work on any terms), checked by the `cla` workflow; CONTRIBUTING.md says how. CLA.md in force
+  (G, 2026-11-10).
 - Primary element set: AQUA-FAANG per-condition ChromHMM states (Ensembl regulatory build may be added as a second layer).
 - RNA-seq strands (2026-10-08): the trackhub's '.forward' files are the + strand (checked at vgll3: 16x the reverse
   files' reads over the gene).

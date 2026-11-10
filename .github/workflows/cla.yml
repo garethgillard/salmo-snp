@@ -1,7 +1,8 @@
 name: cla
 # Contributors accept CLA.md (a licence grant to NMBU) once, by a comment on their first pull request; the check then
 # passes for their later ones. Signatures are kept on the cla-signatures branch (main is protected). The maintainer,
-# NMBU colleagues added to the allowlist and bots don't sign.
+# the AI assistant that commits for him (GitHub account `claude`), NMBU colleagues added to the allowlist and bots
+# don't sign.
 on:
   issue_comment:
     types: [created]
@@ -28,7 +29,7 @@ jobs:
           path-to-document: https://github.com/garethgillard/salmo-snp/blob/main/CLA.md
           path-to-signatures: signatures/cla.json
           branch: cla-signatures
-          allowlist: garethgillard,*[bot]
+          allowlist: garethgillard,claude,*[bot]  # claude: the AI assistant's commits, made for the maintainer
           custom-pr-sign-comment: I have read the salmo-snp CLA and I accept it
           custom-notsigned-prcomment: >-
             Thank you for contributing to salmo-snp. Before it can be merged, please read the

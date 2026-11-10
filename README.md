@@ -138,4 +138,4 @@ warranty, otherwise on the licence's terms; later versions need a new permission
 The data in a release keep their sources' licences (listed in `snpdata/layers.yaml`); a permission covers only the
 software. Contributions are welcome from invited collaborators: see [CONTRIBUTING.md](CONTRIBUTING.md);
 contributors accept the [Contributor License Agreement](CLA.md), which keeps their copyright and gives NMBU a licence
-to their work.
+to their work. [docs/LICENSING.md](docs/LICENSING.md) sums up all of it, third-party data and software included.
