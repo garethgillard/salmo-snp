@@ -59,7 +59,7 @@ def test_manifest(release):
     assert {"active_states", "weights", "presets"} <= set(load_weights()["provisional"])  # the rules live in snpscore
     layers = {l["name"]: l for l in m["layers"]}
     assert "Bertolotti" in layers["public_af"]["population"] and "European farmed" not in json.dumps(m)
-    assert layers["molqtl"]["licence"].startswith("to confirm") and len(layers["molqtl"]["urls"]) == 9
+    assert layers["molqtl"]["licence"].startswith("redistribution agreed") and len(layers["molqtl"]["urls"]) == 9
     assert m["rsid"]["rows"] > 0 and m["catalog"]["rows"] == 40
     assert m["duckdb_version"] == duckdb.__version__ and list(m["files"]) == ["tracks.yaml"]
     aliases = dict(duckdb.sql(f"SELECT alias, chrom FROM read_parquet('{release / 'alias.parquet'}')").fetchall())

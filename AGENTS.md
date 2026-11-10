@@ -1,7 +1,7 @@
 # salmo-snp: notes for people and their AI assistants
 
 Functional SNP scoring for Atlantic salmon (Ssal_v3.1): public annotation data, a scoring engine and a web portal.
-Owner: NMBU; maintainer Gareth Gillard (G). The repository is private (invite only); licence: PolyForm Noncommercial
+Owner: NMBU; maintainer Gareth Gillard (G). The repository is public on GitHub (G, 2026-11-10); licence: PolyForm Noncommercial
 1.0.0 (LICENSE); contributors accept CLA.md (CONTRIBUTING.md).
 Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says what's next.
 
@@ -92,7 +92,8 @@ Decided:
   at least one chosen condition (tissues, maturity, sex) and changes no tier, Overview or card. One SNP's card opens in
   the Table's drawer.
 - Public demo (2026-10-12): the portal runs openly (no password) on an NREC VM, so the molQTL rows and the 504-fish
-  allele frequencies are shown publicly; the licence questions under Open are still to confirm with their owners.
+  allele frequencies are shown publicly. Redistribution of both (the releases, the test fixture, the public
+  repository) is agreed with their authors, G's colleagues (G, 2026-11-10).
 - TF motifs (2026-10-19): JASPAR 2024 CORE vertebrates non-redundant (879 motifs, the set SalMotifDB v2 uses), scored
   ourselves in pure Python (no FIMO). +1 (weights.motif) when, inside a robust ATAC peak, one allele matches a motif at
   p < 1e-5 and the other doesn't, with at least 4 bits between them (about 15% of in-peak public SNPs; at FIMO's
@@ -165,10 +166,10 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
 
 Open (ask G; all collected with options and recommendations in docs/DECISIONS.md):
 - Everything under Provisional.
-- nf-rasqual tables: found public at github.com/datngu/nf-RASQUAL_paper (lead SNP per feature only; no licence on the repo):
-  may we redistribute derived rows, which significance rule (paper: eigenMT BF < 0.1), which allele does pi refer to?
-- Public AF: the 504-fish panel is mostly Bertolotti 2020 (PRJEB38061) wild/farmed fish plus the 12 AQUA-FAANG fish; may we host
-  derived AF, and how should the population be described? (docs/RESEARCH.md section 4)
+- nf-rasqual tables: found public at github.com/datngu/nf-RASQUAL_paper (lead SNP per feature only; no licence on the repo;
+  redistribution agreed, G 2026-11-10): which significance rule (paper: eigenMT BF < 0.1), which allele does pi refer to?
+- Public AF: the 504-fish panel is mostly Bertolotti 2020 (PRJEB38061) wild/farmed fish plus the 12 AQUA-FAANG fish (hosting
+  derived AF agreed, G 2026-11-10): how should the population be described? (docs/RESEARCH.md section 4)
 - ImmunoMap regions; Enhancer-CNE source; vetting of the 40-row known-loci catalogue (docs/RESEARCH.md section 2).
 - Data gap: the public 12-fish VCF (pool, demo list, synthetic GWAS) has only 70 sites on chr10 and stops near 105 Mb on chr1,
   while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
