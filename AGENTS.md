@@ -219,8 +219,9 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   2026-11-04, so check before changing anything.
 - GitHub: the cloud proxy refuses GitHub's GraphQL API, so `gh` works only through `gh api` (REST): no
   `gh release download` or `gh pr create`. Pull requests, their checks and comments go through the GitHub MCP tools.
-- The NREC demo: https://158-39-75-9.sslip.io/snp/ (the bare https://158.39.75.9/snp/ didn't connect through the
-  session's proxy on 2026-11-04).
+- The NREC demo: https://test.salmobase.org/snp/ for people (salmobase's Apache redirects it to https://158.39.75.9/snp/;
+  G, 2026-11-10); sessions use https://158-39-75-9.sslip.io/snp/ (the bare IP didn't connect through the session's
+  proxy on 2026-11-04).
 - Building and showing a feature (G, 2026-11-04: G sees changes before they are merged):
   1. Work on the session's branch, one feature at a time, with a test in the right suite (pytest for snpscore,
      snpdata and snpportal/lib; `snpportal/snpportal/tests*.py` for pages); `bash tools/check.sh` before each push.

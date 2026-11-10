@@ -6,7 +6,7 @@ changes, conserved sequence, TF motifs and published associations. Each SNP gets
 to 4 (none found), with the evidence behind it. The portal also shows each SNP's evidence card and a locus browser,
 fine-maps GWAS summary statistics with a functional prior, and designs marker panels with vendor-ready files.
 
-Public demo: https://158.39.75.9/snp/ (public data only: don't upload confidential lists there).
+Public demo: https://test.salmobase.org/snp/ (public data only: don't upload confidential lists there).
 
 ## Run it on your own computer
 
