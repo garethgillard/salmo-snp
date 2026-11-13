@@ -212,7 +212,7 @@ def search(request):
     if len(hits) == 1:
         return redirect(hits[0]["url"])
     return render(request, "snpportal/search.html", {"nav": "explore", "title": "Search", "query": query, "hits": hits,
-                                                     "examples": EXAMPLES, "rsid": bool(RSID.match(query.strip())),
+                                                     "examples": jobs.species().get("searches") or EXAMPLES, "rsid": bool(RSID.match(query.strip())),
                                                      "loc": bool(LOC.match(query.strip())), "v2": v2_position(" ".join(query.split()))})
 
 

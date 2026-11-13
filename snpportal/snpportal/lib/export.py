@@ -54,7 +54,8 @@ VENDORS = {  # flank: default bases either side of the SNP and the allowed range
 PRIMER3 = {"PRIMER_TASK": "generic", "PRIMER_PICK_LEFT_PRIMER": 1, "PRIMER_PICK_RIGHT_PRIMER": 1,
            "PRIMER_PICK_INTERNAL_OLIGO": 0, "PRIMER_PRODUCT_SIZE_RANGE": "70-120", "PRIMER_NUM_RETURN": 1,
            "PRIMER_MAX_NS_ACCEPTED": 0}
-ACCESSIONS = {"Ssal_v3.1": "GenBank GCA_905237065.2, RefSeq GCF_905237065.1"}
+ACCESSIONS = {"Ssal_v3.1": "GenBank GCA_905237065.2, RefSeq GCF_905237065.1",
+              "USDA_OmykA_1.1": "GenBank GCA_013265735.3, RefSeq GCF_013265735.2"}
 LOOKUP = ["locus_name", "id", "chrom", "pos", "ref", "alt", "topbot", "allele_a", "allele_b", "two_probes",
           "assay_status", "assay_reasons", "export_notes"]
 FORMATS = ("tsv", "parquet", "bed", *VENDORS, "priors")

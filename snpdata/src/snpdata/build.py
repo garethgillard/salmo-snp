@@ -6,10 +6,13 @@ from __future__ import annotations
 import datetime
 import gzip
 import hashlib
+import http.client
 import itertools
 import json
 import shutil
 import tempfile
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -145,6 +148,9 @@ def read_vcf_info(path, layer):
     # the VCF header says Type=Integer). With several `files`, the first gives the sites and each other adds its own
     # `info` columns where chrom, pos, ref and alt match. rename_chrom: true maps other chromosome names (ssa01,
     # HG993260.1, ...) to 1-29 through the alias table; id_as: <column> keeps the VCF ID (e.g. an array probe name).
+    # pool: true (cohorts of one study, each with AC, AN and NS): the counts are summed per site and af and maf come
+    # from the sums; biallelic SNPs only (a position with several alternative alleles is left out), with at least
+    # min_an called alleles and a minor allele frequency of at least min_maf.
     def one(p, info):
         types = info_types(p)
         values = "".join(f", try_cast(regexp_extract(info, '(?:^|;){key}=([^;,]+)', 1) AS {types.get(key, 'DOUBLE')}) "
@@ -157,6 +163,13 @@ def read_vcf_info(path, layer):
                    FROM read_csv({lit(p)}, header=false, all_varchar=true, delim='\t', comment='#', quote='',
                                  names=['chrom', 'pos', 'id', 'ref', 'alt', 'qual', 'filter', 'info']) v {alias}"""
     paths = path if isinstance(path, list) else [path]
+    if layer.get("pool"):  # the files are cohorts of one study: allele counts summed per site, frequencies from the sums
+        both = " UNION ALL ".join(f"SELECT chrom, start, \"end\", ref, alt, ac, an, ns FROM ({one(p, layer['info'])})" for p in paths)
+        return f"""SELECT chrom, start, "end", ref, alt, round(ac / an, 6) AS af, round(least(ac, an - ac) / an, 6) AS maf, ac, an, ns
+                   FROM (SELECT chrom, start, "end", ref, alt, sum(ac)::BIGINT AS ac, sum(an)::BIGINT AS an, sum(ns)::BIGINT AS ns
+                         FROM ({both}) WHERE regexp_full_match(ref || alt, '[ACGT]{{2}}') GROUP BY ALL)
+                   WHERE an >= {int(layer.get('min_an', 1))} AND least(ac, an - ac) / an >= {float(layer.get('min_maf', 0))}
+                   QUALIFY count(*) OVER (PARTITION BY chrom, "end") = 1"""
     first, *others = [one(p, src.get("info", layer.get("info"))) for p, src in zip(paths, sources(layer))]
     return f"SELECT * FROM ({first})" + "".join(f' LEFT JOIN ({o}) USING (chrom, start, "end", ref, alt)' for o in others)
 
@@ -227,12 +240,15 @@ def read_ss4r(path, layer):
     # AQUA-FAANG salmon-trout clades (SalmonTroutOrthologs.tsv): a salmon gene's Ss4R duplicates are the other salmon genes
     # of its clade on the paired chromosome of its syntenic quartet ('((Omy03,Ssa25),(Omy22,Ssa21))': 25 <-> 21), or on
     # any other chromosome when the quartet is unknown. class: AORe or LORe (rediploidisation), from the clade or its neighbours.
+    # `species` picks the table's rows: Ssal (the default; chromosomes Ssa01...) or Omyk (Omy01...).
+    spc = layer.get("species", "Ssal")
+    pre = spc[:3]
     return f"""
-        WITH t AS (SELECT subOG AS og, geneID AS gene_id, ltrim(replace(chr, 'Ssa', ''), '0') AS chrom,
-                          regexp_extract_all(coalesce(nullif(synteny, 'NA'), nullif(proxiSynteny, 'NA'), ''), 'Ssa0*([0-9]+)', 1) AS quartet,
+        WITH t AS (SELECT subOG AS og, geneID AS gene_id, ltrim(replace(chr, {lit(pre)}, ''), '0') AS chrom,
+                          regexp_extract_all(coalesce(nullif(synteny, 'NA'), nullif(proxiSynteny, 'NA'), ''), {lit(pre + '0*([0-9]+)')}, 1) AS quartet,
                           CASE WHEN phylogeny IN ('AORe', 'LORe') THEN phylogeny
                                WHEN proxiPhylogeny IN ('AORe', 'LORe') THEN proxiPhylogeny END AS class
-                   FROM read_csv({lit(path)}, delim='\t', header=true, all_varchar=true, quote='') WHERE spc = 'Ssal')
+                   FROM read_csv({lit(path)}, delim='\t', header=true, all_varchar=true, quote='') WHERE spc = {lit(spc)})
         SELECT a.gene_id,
                nullif(array_to_string(list(b.gene_id ORDER BY b.chrom, b.gene_id) FILTER (WHERE b.gene_id IS NOT NULL), ','), '') AS ohnolog,
                nullif(array_to_string(list(b.chrom ORDER BY b.chrom, b.gene_id) FILTER (WHERE b.gene_id IS NOT NULL), ','), '') AS ohnolog_chrom,
@@ -285,6 +301,8 @@ def read_variant_scores(path, layer):
               FROM read_csv({lit(path)}, delim='\t', header=true, all_varchar=true, quote=''))
         WHERE pos IS NOT NULL AND score IS NOT NULL"""
 
+
+SALMON = {"key": "atlantic_salmon", "name": "Atlantic salmon", "latin": "Salmo salar", "prefix": "ssa"}  # layers.yaml `species`
 
 READERS = {"bed": read_bed, "tsv": read_tsv, "aquafaang_peaks": read_aquafaang_peaks, "gff3": read_gff3,
            "gff3_regions": read_gff3_regions, "vcf": read_vcf, "rna_counts": read_rna_counts,
@@ -357,13 +375,17 @@ def fetch(layers_yaml, data_dir, mirror=None):
             target.parent.mkdir(parents=True, exist_ok=True)
             part = target.with_name(target.name + ".part")
             if layer.get("sites_only"):
-                sites_only(url, part, layer["sites_only"], layer.get("count_gt", False))
+                sites_only(url, part, layer["sites_only"], layer.get("count_gt", False), layer.get("snps_only", False))
             elif url.endswith(".bb") and target.suffix == ".bed":
                 with tempfile.NamedTemporaryFile(suffix=".bb") as bb:
                     download(url, Path(bb.name))
                     part.write_text("".join(f"{c}\t{s}\t{e}\t{rest}\n" for c, s, e, rest in BBIFile(bb.name).all_entries()))
             else:
                 download(url, part)
+                if layer.get("query") and part.read_bytes()[:11] == b"Query ERROR":  # BioMart answers 200 with its error
+                    message = part.read_text()[:200]
+                    part.unlink()
+                    raise SystemExit(f"snpdata: {layer['url']} answered: {message}")
             part.rename(target)
 
 
@@ -388,9 +410,45 @@ def fetch_mirror(sources_, data, mirror):
 
 def download(url, target):
     # Some hosts (bioRxiv) refuse urllib's default User-Agent.
-    request = urllib.request.Request(url, headers={"User-Agent": "snpdata (salmobase SNP portal build)"})
-    with urllib.request.urlopen(request, timeout=120) as r, open(target, "wb") as out:
+    with Resuming(url) as r, open(target, "wb") as out:
         shutil.copyfileobj(r, out, 1 << 20)
+
+
+class Resuming:
+    """A URL as a readable stream that asks again from where it stopped when the connection drops (some hosts reset
+    long downloads); a file:// URL or a path is opened as it is."""
+    def __init__(self, url, tries=30):
+        self.url, self.tries, self.at, self.r = str(url), tries, 0, None
+        self.local = None if "://" in self.url and not self.url.startswith("file://") else open(self.url.replace("file://", ""), "rb")
+
+    def _open(self):
+        headers = {"User-Agent": "snpdata (salmobase SNP portal build)", **({"Range": f"bytes={self.at}-"} if self.at else {})}
+        self.r = urllib.request.urlopen(urllib.request.Request(self.url, headers=headers), timeout=120)
+        if self.at and self.r.status != 206:
+            raise OSError(f"{self.url} can't be resumed (no byte ranges)")
+
+    def read(self, n=-1):
+        if self.local:
+            return self.local.read(n)
+        for attempt in range(self.tries):
+            try:
+                if self.r is None:
+                    self._open()
+                data = self.r.read(n)
+                self.at += len(data)
+                return data
+            except (OSError, http.client.HTTPException) as e:
+                if isinstance(e, urllib.error.HTTPError) and e.code in (404, 410, 416):
+                    raise
+                self.r = None
+                time.sleep(min(30, 2 + attempt * 2))
+        raise OSError(f"{self.url}: gave up after {self.tries} dropped connections")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        (self.local or self.r) and (self.local or self.r).close()
 
 
 GT_INFO = {b"AC": b"Integer", b"AN": b"Integer", b"NS": b"Integer", b"AF": b"Float", b"MAF": b"Float"}
@@ -406,16 +464,15 @@ def gt_counts(fmt, samples):
             b"AF": None if af is None else round(af, 6), b"MAF": None if af is None else round(min(af, 1 - af), 6)}
 
 
-def sites_only(url, target, keys, count_gt=False):
+def sites_only(url, target, keys, count_gt=False, snps_only=False):
     """Stream a gzipped VCF from `url` into a gzipped sites-only VCF at `target`: the first 8 columns, with only the INFO
     `keys`, and no sample names. The genotype columns are dropped as the file streams in, so they never reach the disk.
     With count_gt, the AC, AN, NS, AF and MAF among `keys` are counted from the genotypes first (gt_counts), replacing
-    any the file has: only these per-site numbers are kept."""
+    any the file has: only these per-site numbers are kept. With snps_only, lines whose REF and ALT are not one base
+    each (indels) are left out."""
     keys = {k.encode() for k in keys}
     counted = {k for k in GT_INFO if k in keys} if count_gt else set()
-    request = urllib.request.Request(url, headers={"User-Agent": "snpdata (salmobase SNP portal build)"})
-    with urllib.request.urlopen(request, timeout=120) as r, gzip.GzipFile(fileobj=r) as vcf, \
-            gzip.open(target, "wb", compresslevel=6) as out:
+    with Resuming(url) as r, gzip.GzipFile(fileobj=r) as vcf, gzip.open(target, "wb", compresslevel=6) as out:
         out.write(b"##fileformat=VCFv4.2\n##snpdata=sites only (genotypes dropped) from " + url.encode() + b"\n")
         rest, n = b"", 0
         while True:
@@ -434,6 +491,8 @@ def sites_only(url, target, keys, count_gt=False):
                     kept.append(b"\t".join(line.split(b"\t", 8)[:8]))
                 elif line:
                     f = line.split(b"\t", 9)
+                    if snps_only and not (len(f[3]) == 1 and len(f[4]) == 1):
+                        continue
                     info = [kv for kv in f[7].split(b";") if kv.split(b"=")[0] in keys - counted]
                     if counted and len(f) > 9:
                         info += [b"%s=%s" % (k, str(v).encode()) for k, v in gt_counts(f[8], f[9]).items()
@@ -475,6 +534,7 @@ def build(layers_yaml, data_dir, out_dir):
     manifest = {
         "version": out.name,
         "assembly": cfg["assembly"],
+        "species": cfg.get("species") or SALMON,
         "chromosomes": cfg["chromosomes"],
         "created": datetime.date.today().isoformat(),
         "snpscore_version": snpscore_version,
@@ -482,6 +542,7 @@ def build(layers_yaml, data_dir, out_dir):
         "provisional": cfg.get("provisional", []),
         "layers": [],
     }
+    prefix = manifest["species"].get("prefix", "ssa")  # ssa25, omy25: accepted as chromosome names
     genome = cfg.get("genome")
     if genome:
         local = (data / genome["file"]).resolve()
@@ -491,7 +552,7 @@ def build(layers_yaml, data_dir, out_dir):
                                             for ext in ("", ".fai", ".gzi") if Path(str(local) + ext).exists()}
     aliases = cfg.get("aliases")
     if aliases and (data / aliases["file"]).exists():  # for layers with rename_chrom
-        con.execute(f"CREATE TABLE chrom_alias AS {alias_sql(data / aliases['file'], aliases.get('extra', []))}")
+        con.execute(f"CREATE TABLE chrom_alias AS {alias_sql(data / aliases['file'], aliases.get('extra', []), prefix)}")
     ends = {}  # chrom -> largest end over the positional layers
     for layer in cfg["layers"]:
         paths = [data / s["file"] for s in sources(layer)]
@@ -530,17 +591,18 @@ def build(layers_yaml, data_dir, out_dir):
         })
         print(f"{layer['name']}: {manifest['layers'][-1]['rows']} rows", flush=True)
     fai = data / (genome["file"] + ".fai") if genome else None
-    manifest["chrom_sizes"] = chrom_sizes(fai, ends)
+    manifest["chrom_sizes"] = chrom_sizes(fai, ends, cfg.get("chromosome_names"))
 
     aliases = cfg.get("aliases")
     if aliases and (data / aliases["file"]).exists():
-        rows = build_aliases(con, data / aliases["file"], out / "alias.parquet", aliases.get("extra", []))
+        rows = build_aliases(con, data / aliases["file"], out / "alias.parquet", aliases.get("extra", []), prefix)
         manifest["alias"] = {"file": "alias.parquet", "rows": rows, "source_file": aliases["file"],
                              "url": aliases.get("url"), "sha256": hashes([out / "alias.parquet"])[1]}
     rsid = cfg.get("rsid")
     if rsid and all((data / s["file"]).exists() for s in rsid["files"]):
         paths = [data / s["file"] for s in rsid["files"]]
-        manifest["rsid"] = {"file": "rsid.parquet", **build_rsid(con, *paths, out / "rsid.parquet"),
+        manifest["rsid"] = {"file": "rsid.parquet", **build_rsid(con, *paths, out / "rsid.parquet", list(manifest["chrom_sizes"])),
+                            **({"older": rsid["older"]} if rsid.get("older") else {}),
                             "source_file": ", ".join(s["file"] for s in rsid["files"]),
                             "urls": [s.get("url") for s in rsid["files"]], "citation": rsid.get("citation"),
                             "source_sha256": hashes(paths)[1], "sha256": hashes([out / "rsid.parquet"])[1]}
@@ -623,14 +685,17 @@ def write_sums(out):
     Path(out, "SHA256SUMS").write_text("".join(f"{hashes([p])[1]}  {p.relative_to(out).as_posix()}\n" for p in files))
 
 
-def chrom_sizes(fai, ends):
-    """Length of each numbered chromosome (Ssal_v3.1 1-29; scaffolds have accession names): from the genome .fai,
+def chrom_sizes(fai, ends, names=None):
+    """Length of each chromosome: the numbered ones (Ssal_v3.1 1-29; scaffolds have accession names), or those
+    layers.yaml `chromosome_names` lists (USDA_OmykA_1.1: 1-28, 30-32 and Y), in that order: from the genome .fai,
     or the layers' largest end where that is larger or the .fai lacks the chromosome (as in the test fixture)."""
     sizes = dict(ends)
     if fai and fai.exists():
         for line in fai.read_text().splitlines():
             name, length = line.split("\t")[:2]
             sizes[name] = max(int(length), sizes.get(name, 0))
+    if names:
+        return {str(c): sizes[str(c)] for c in names if str(c) in sizes}
     return {c: sizes[c] for c in sorted(sizes, key=lambda c: int(c) if c.isdigit() else 0) if c.isdigit()}
 
 
@@ -714,16 +779,17 @@ def build_flank_keys(con, cfg, out, genome):
             "ambiguous": written - rows, "sha256": hashes([target])[1]}
 
 
-def build_aliases(con, path, target, extra=()):
+def build_aliases(con, path, target, extra=(), prefix="ssa"):
     """alias.parquet (alias, chrom, warning): alias_sql written out."""
-    con.execute(f"COPY ({alias_sql(path, extra)}) TO {lit(target)} (FORMAT parquet)")
+    con.execute(f"COPY ({alias_sql(path, extra, prefix)}) TO {lit(target)} (FORMAT parquet)")
     return con.execute(f"SELECT count(*) FROM read_parquet({lit(target)})").fetchone()[0]
 
 
-def alias_sql(path, extra=()):
+def alias_sql(path, extra=(), prefix="ssa"):
     """(alias, chrom, warning) from salmobase alias_filtered.txt (chrom, RefSeq, GenBank, ssaNN; no header), plus the
-    accessions without version, chrN, chrNN and ssaN for the numbered chromosomes, and the `extra` names ({alias, chrom,
-    warning}) that annotate accepts with a warning. Aliases are lower case."""
+    accessions without version, chrN, chrNN, ssaN and ssaNN (`prefix`: omy for rainbow trout) for the numbered
+    chromosomes, chrY for a Y, and the `extra` names ({alias, chrom, warning}) that annotate accepts with a warning.
+    Aliases are lower case."""
     more = " ".join(f"UNION ALL SELECT lower({lit(e['alias'])}), {lit(e['chrom'])}, {lit(e['warning'])}" for e in extra)
     return f"""
         WITH a AS (SELECT * FROM read_csv({lit(path)}, header=false, delim='\t', all_varchar=true,
@@ -732,26 +798,32 @@ def alias_sql(path, extra=()):
         SELECT DISTINCT ON (alias) alias, chrom, warning FROM (
             SELECT lower(unnest([chrom, refseq, genbank, name, regexp_replace(refseq, '\\.[0-9]+$', ''),
                                  regexp_replace(genbank, '\\.[0-9]+$', '')])) AS alias, chrom, NULL::VARCHAR AS warning FROM a
-            UNION ALL SELECT unnest(['chr' || chrom, 'chr' || lpad(chrom, 2, '0'), 'ssa' || chrom]), chrom, NULL FROM n
+            UNION ALL SELECT unnest(['chr' || chrom, 'chr' || lpad(chrom, 2, '0'), {lit(prefix)} || chrom,
+                                     {lit(prefix)} || lpad(chrom, 2, '0')]), chrom, NULL FROM n
+            UNION ALL SELECT 'chr' || lower(chrom), chrom, NULL FROM a WHERE regexp_matches(chrom, '^[A-Z]$')
             {more})
         WHERE alias IS NOT NULL ORDER BY alias, warning NULLS FIRST, chrom"""
 
 
-def build_rsid(con, v31, v2, target):
-    """rsid.parquet from the EVA rs release VCFs on Ssal_v3.1 and ICSASG_v2 (CHROM ssa01-ssa29; other sequences left
-    out): rs (the number), chrom, pos, ref, alt on Ssal_v3.1 and v2_chrom, v2_pos, v2_ref, v2_alt (NULL when the rs is
-    not on exactly one ICSASG_v2 line), sorted by rs. rs IDs on more than one Ssal_v3.1 line are left out.
-    Returns {rows, left_out}."""
+def build_rsid(con, v31, v2, target, chroms=None):
+    """rsid.parquet from the EVA rs release VCFs on the release's assembly and an older one (Ssal_v3.1 and ICSASG_v2,
+    CHROM ssa01-ssa29; USDA_OmykA_1.1 and Omyk_1.0, CHROM 1, 2, ...; sequences that are not chromosomes left out): rs
+    (the number), chrom, pos, ref, alt on the release's assembly (the chromosomes `chroms` when given) and v2_chrom,
+    v2_pos, v2_ref, v2_alt (NULL when the rs is not on exactly one line of the older assembly), sorted by rs. rs IDs on
+    more than one line of the release's assembly are left out. Returns {rows, left_out}."""
+    name_sql = "CASE WHEN regexp_full_match(chrom, '[A-Za-z]{3}[0-9]+') THEN ltrim(substr(chrom, 4), '0') ELSE chrom END"
+    keep = {"v31": f"{name_sql} IN ({', '.join(lit(c) for c in chroms)})" if chroms else "regexp_full_match(chrom, 'ssa[0-9]+')",
+            "v2": f"regexp_full_match({name_sql}, '[0-9]+|[A-Z]')"}
     for name, path in (("v31", v31), ("v2", v2)):
         with gzip.open(path, "rt") as f:  # the ICSASG_v2 header (115k contig lines) is too long for comment='#'
             skip = sum(1 for _ in itertools.takewhile(lambda line: line.startswith("#"), f))
         con.execute(f"""CREATE OR REPLACE TEMP TABLE {name} AS
-            SELECT try_cast(substr(id, 3) AS BIGINT) AS rs, any_value(ltrim(substr(chrom, 4), '0')) AS chrom,
+            SELECT try_cast(substr(id, 3) AS BIGINT) AS rs, any_value({name_sql}) AS chrom,
                    any_value(pos) AS pos, any_value(ref) AS ref, any_value(alt) AS alt, count(*) AS lines
             FROM read_csv({lit(path)}, header=false, delim='\t', skip={skip}, quote='', auto_detect=false,
                           columns={{'chrom': 'VARCHAR', 'pos': 'BIGINT', 'id': 'VARCHAR', 'ref': 'VARCHAR',
                                    'alt': 'VARCHAR', 'qual': 'VARCHAR', 'filter': 'VARCHAR', 'info': 'VARCHAR'}})
-            WHERE regexp_full_match(chrom, 'ssa[0-9]+') AND regexp_full_match(id, 'rs[0-9]+') GROUP BY 1""")
+            WHERE {keep[name]} AND regexp_full_match(id, 'rs[0-9]+') GROUP BY 1""")
     con.execute(f"""COPY (SELECT a.rs, a.chrom, a.pos, a.ref, a.alt, b.chrom AS v2_chrom, b.pos AS v2_pos, b.ref AS v2_ref,
                                  b.alt AS v2_alt
                           FROM v31 a LEFT JOIN v2 b ON a.rs = b.rs AND b.lines = 1

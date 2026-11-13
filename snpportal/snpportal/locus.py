@@ -140,7 +140,7 @@ def view_state(request):
             chrom, start, end = hit[0], hit[1] - 1, hit[1]
             s["mark"] = hit[1]
         else:
-            chrom, start, end = sl.parse_region(DEFAULT_REGION, jobs.release())
+            chrom, start, end = sl.parse_region(jobs.species()["example"].get("region") or DEFAULT_REGION, jobs.release())
     except ValueError as e:
         s["error"] = str(e)
         return s
@@ -730,7 +730,7 @@ def molqtl(snp):
         if not m:
             continue
         tissue, kind, feature, bf, pi = m.groups()
-        url = reverse("snpportal:gene", args=[feature]) if feature.startswith("ENSSSAG") else None
+        url = reverse("snpportal:gene", args=[feature]) if re.fullmatch(r"ENS[A-Z]{3}G\d+", feature) else None
         if re.fullmatch(r"\w+:\d+-\d+", feature):  # a peak in BED coordinates: show it 1-based, link it +- 2 kb
             chrom, span = feature.split(":", 1)
             a, b = span.split("-")

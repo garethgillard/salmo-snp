@@ -1,0 +1,263 @@
+# Layer registry of the rainbow trout release (USDA_OmykA_1.1, the assembly of the AQUA-FAANG rainbow trout data): the
+# same layer types and formats as ../layers.yaml (Atlantic salmon), which explains them. Run from snpdata/:
+#   snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw
+#   snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out release/trout-<date>
+# A release is for one species: its version carries the species (trout-2026-11-12), so the releases of two species never
+# share a version, and the portal's species bar picks the newest release of the species chosen.
+
+assembly: USDA_OmykA_1.1
+chromosomes: "1-28, 30-32 and Y (Ensembl/AQUA-FAANG naming; the Arlee line has no chromosome 29)"
+# The chromosomes annotate accepts, in genome order (the numbered ones only when this is left out, as for salmon).
+chromosome_names: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+                   30, 31, 32, Y]
+
+# The species of this release: `key` and `name` are what the portal's species bar shows and remembers, `prefix` the
+# chromosome prefix users may write (omy25), `example` the locus the Locus browser opens with.
+species:
+  key: rainbow_trout
+  name: Rainbow trout
+  latin: Oncorhynchus mykiss
+  prefix: omy
+  example: {region: "28:12020000-12210000", label: greb1l and rock1, why: "the chromosome 28 region associated with
+    migration timing in steelhead (Prince et al. 2017; Hess et al. 2016)"}
+  # What the portal's pages say differently for this release (they are written for Atlantic salmon): [salmon wording,
+  # this release's]. The assembly, the number of conditions and the chromosome names follow from the release itself.
+  wording:
+    - ["504-fish panel: mostly wild and farmed fish from Bertolotti et al. 2020 plus the 12 AQUA-FAANG fish",
+       "462 farmed rainbow trout sequenced at low coverage and imputed (University of Maryland, ENA PRJEB109732)"]
+    - ["504-fish panel", "462-fish low-pass set"]
+    - ["504 fish", "462 fish"]
+    - ["wild and farmed, pooled", "farmed, imputed from 1x"]
+    - ["brain, gonad, liver and muscle of 12 AquaGen fish (BodyMap); 5 embryo stages from embryo pools (DevMap)",
+       "brain, liver and muscle of the AQUA-FAANG BodyMap fish; 5 embryo stages from embryo pools (DevMap)"]
+    - ["No immune tissue, gill or skin.", "No gonad, immune tissue, gill or skin."]
+    - ["brain, gonad, liver, muscle", "brain, liver, muscle"]
+    - ["Brain, Gonad, Liver, Muscle", "Brain, Liver, Muscle"]
+    - ["NC_059466.1", "NC_048589.1"]
+    - ["vgll3&#10;ENSSSAG00000053708&#10;26:14.5-15Mb", "ENSOMYG00000036625&#10;28:12.0-12.2Mb"]
+    - ["ENSSSAG00000053708 or 26:14.5-15Mb", "ENSOMYG00000036625 or 28:12.0-12.2Mb"]
+    - ["vgll3, rs863754587, LOC106600468, 25:28996360, 25:28.95-29.05 Mb", "greb1l, sdy, 28:12029722, 28:12.02-12.21 Mb"]
+  # The Data page's "Samples and population scope" lines (the public frequencies' `population` follows them).
+  samples:
+    - "Chromatin states, ATAC peaks and signal: the AQUA-FAANG rainbow trout BodyMap (brain, liver and muscle of immature
+      and mature females and males; gill, gonad, head kidney and distal intestine have signal tracks but no chromatin
+      states) and embryo pools at five stages (DevMap)."
+    - "No molQTL, expression table or genetic map in this release."
+  # Things to try on the Search page.
+  searches: ["greb1l", "rock1", "sdy", "28:12,020,000-12,210,000", "28:12.02-12.21Mb", "Y:6001303"]
+
+genome:
+  file: Oncorhynchus_mykiss.USDA_OmykA_1.1.dna_sm.toplevel.fa.gz
+  url: https://salmobase.org/datafiles/genomes/RainbowTrout/USDA_OmykA_1.1/sequence_Ensembl/Oncorhynchus_mykiss.USDA_OmykA_1.1.dna_sm.toplevel.fa.gz
+
+# chrom, RefSeq (NC_048565.1), GenBank (CM023219.2) and the assembly's own name (OmyA01; OmyA04_Omy04q, OmyA30_Omy04p).
+aliases:
+  file: alias_filtered.txt
+  url: https://salmobase.org/datafiles/genomes/RainbowTrout/USDA_OmykA_1.1/alias_filtered.txt
+
+# rs IDs from EVA release 9: on USDA_OmykA_1.1 (GCA_013265735.3; 37.7M) and on Omyk_1.0 (GCA_002163495.1, the Swanson
+# assembly; 34,776, mostly array SNPs). As for salmon, rsid.parquet's v2_* columns hold the older assembly's position.
+rsid:
+  older: Omyk_1.0
+  files:
+    - file: 8022_GCA_013265735.3_current_ids.vcf.gz
+      url: https://ftp.ebi.ac.uk/pub/databases/eva/rs_releases/release_9/by_species/oncorhynchus_mykiss/GCA_013265735.3/8022_GCA_013265735.3_current_ids.vcf.gz
+    - file: 8022_GCA_002163495.1_current_ids.vcf.gz
+      url: https://ftp.ebi.ac.uk/pub/databases/eva/rs_releases/release_9/by_species/oncorhynchus_mykiss/GCA_002163495.1/8022_GCA_002163495.1_current_ids.vcf.gz
+  citation: European Variation Archive (EVA) release 9, Oncorhynchus mykiss rs IDs on USDA_OmykA_1.1 (GCA_013265735.3) and Omyk_1.0 (GCA_002163495.1) (ebi.ac.uk/eva)
+
+flank_keys:
+  sites: [public_af]
+  k: 16
+
+# Ss4R homeologous blocks for the locus browser (not annotated).
+synteny:
+  file: RainbowTrout_synteny.tsv
+  url: https://salmobase.org/datafiles/TSV/synteny/2021-11/RainbowTrout/synteny.tsv
+  citation: Ss4R homeologous blocks, salmobase synteny 2021-11 (salmon-trout orthology pipeline)
+
+# No known-loci catalogue yet: which published rainbow trout loci belong in it, and their positions on USDA_OmykA_1.1,
+# are G's to decide (docs/DECISIONS.md #38). Example inputs: a sample of the public sites (prep/make_demo.sh).
+demo: [../demo/public_50k.vcf]
+
+provisional: [public_af.min_maf, public_af.min_an]
+
+layers:
+  - name: chromatin
+    type: interval
+    format: aquafaang_peaks
+    file: RainbowTrout_unified_peaks.bed
+    url: https://salmobase.org/datafiles/datasets/Aqua-Faang/robust_ATAC_peaks/unified_annotated_peaks/RainbowTrout_unified_peaks.bed
+    id: true
+    description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 17 conditions (brain, liver and muscle by maturity and sex, and five embryo stages; empty = no peak there)
+    citation: AQUA-FAANG consortium, rainbow trout unified ATAC peaks and ChromHMM states (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
+
+  - name: region
+    type: interval
+    format: gff3_regions
+    file: Oncorhynchus_mykiss.USDA_OmykA_1.1.116.chr.gff3.gz
+    url: https://ftp.ensembl.org/pub/release-116/gff3/oncorhynchus_mykiss/Oncorhynchus_mykiss.USDA_OmykA_1.1.116.chr.gff3.gz
+    classes: [CDS, splice_region, five_prime_UTR, three_prime_UTR, exon, intron]
+    description: Genic region class from Ensembl 116 transcripts (CDS, splice region, UTR, non-coding exon, intron; empty = intergenic)
+    citation: Ensembl release 116 gene annotation, USDA_OmykA_1.1 (ensembl.org)
+
+  - name: regbuild
+    type: interval
+    format: gff3
+    file: Oncorhynchus_mykiss.USDA_OmykA_1.1.regulatory_features.v116.gff3.gz
+    url: https://ftp.ensembl.org/pub/release-116/regulation/oncorhynchus_mykiss/USDA_OmykA_1.1/annotation/Oncorhynchus_mykiss.USDA_OmykA_1.1.regulatory_features.v116.gff3.gz
+    feature_types: [promoter, enhancer, open_chromatin_region]
+    fields: [type]
+    attributes: {id: ID, gene_id: gene_id}
+    description: Ensembl 116 regulatory build (promoter, enhancer, open chromatin; promoters name their gene)
+    citation: Ensembl release 116 regulatory build (ensembl.org)
+
+  - name: gerp
+    type: interval
+    format: bed
+    file: gerp_constrained_elements.oncorhynchus_mykiss.bed
+    url: https://ftp.ensembl.org/pub/release-116/bed/ensembl-compara/65_fish.gerp_constrained_element/gerp_constrained_elements.oncorhynchus_mykiss.bb
+    columns: [name, score, pvalue]
+    keep: [score]
+    description: GERP constrained elements from the Ensembl 116 65-fish alignment (fetch converts the bigBed to BED)
+    citation: Ensembl Compara release 116, 65 fish GERP constrained elements (ensembl.org)
+
+  - name: blacklist
+    type: interval
+    format: bed
+    file: RainbowTrout_blacklist.bed
+    url: https://salmobase.org/datafiles/datasets/Aqua-Faang/blacklist/RainbowTrout_blacklist.bed
+    description: AQUA-FAANG blacklist; no peak here means "can't tell", not "no function"
+    citation: AQUA-FAANG consortium, rainbow trout blacklist (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
+
+  - name: lore
+    type: interval
+    format: tsv
+    file: Omyk_late_rediploidized_regions.tsv
+    url: https://salmobase.org/datafiles/datasets/Aqua-Faang/tables/Omyk_late_rediploidized_regions.tsv
+    columns: [label]
+    description: Late-rediploidized (LORe) regions, where the two Ss4R copies are near-identical
+    citation: AQUA-FAANG tables, Omyk_late_rediploidized_regions.tsv (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
+
+  - name: gene
+    type: nearest
+    format: gff3
+    file: Oncorhynchus_mykiss.USDA_OmykA_1.1.116.chr.gff3.gz
+    url: https://ftp.ensembl.org/pub/release-116/gff3/oncorhynchus_mykiss/Oncorhynchus_mykiss.USDA_OmykA_1.1.116.chr.gff3.gz
+    feature_types: [gene, ncRNA_gene, pseudogene]
+    attributes: {id: gene_id, name: Name, biotype: biotype, description: description}
+    fields: [strand]
+    max_distance: 1000000
+    description: Nearest Ensembl 116 gene (distance 0 = inside the gene); description is empty for many genes
+    citation: Ensembl release 116 gene annotation, USDA_OmykA_1.1 (ensembl.org)
+
+  - name: transcripts
+    type: features
+    format: gff3_transcripts
+    file: Oncorhynchus_mykiss.USDA_OmykA_1.1.116.chr.gff3.gz
+    url: https://ftp.ensembl.org/pub/release-116/gff3/oncorhynchus_mykiss/Oncorhynchus_mykiss.USDA_OmykA_1.1.116.chr.gff3.gz
+    description: Ensembl 116 transcript models (exon, CDS and UTR parts, canonical tag) for drawing genes; not annotated
+    citation: Ensembl release 116 gene annotation, USDA_OmykA_1.1 (ensembl.org)
+
+  - name: transcripts_ncbi
+    type: features
+    format: gff3_ncbi_transcripts
+    file: GCF_013265735.2_USDA_OmykA_1.1_genomic.gff.gz
+    url: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/013/265/735/GCF_013265735.2_USDA_OmykA_1.1/GCF_013265735.2_USDA_OmykA_1.1_genomic.gff.gz
+    description: NCBI RefSeq transcript models (annotation release 101 of GCF_013265735.2; exon and CDS parts, RefSeq
+      Select as canonical) for drawing isoforms beside Ensembl's; not annotated
+    citation: NCBI RefSeq annotation release 101, GCF_013265735.2 USDA_OmykA_1.1 (ncbi.nlm.nih.gov)
+    licence: NCBI data, no use restrictions (ncbi.nlm.nih.gov/home/about/policies)
+
+  - name: gene_ortholog
+    type: gene
+    format: gene_tsv
+    file: gene_orthologs.tsv
+    url: https://jun2026.archive.ensembl.org/biomart/martservice
+    query: >-
+      <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE Query><Query virtualSchemaName="default" formatter="TSV"
+      header="1" uniqueRows="1"><Dataset name="omykiss_gene_ensembl" interface="default"><Attribute name="ensembl_gene_id"/>
+      <Attribute name="hsapiens_homolog_associated_gene_name"/><Attribute name="drerio_homolog_associated_gene_name"/>
+      </Dataset></Query>
+    key: Gene stable ID
+    columns: {human: Human gene name, zebrafish: Zebrafish gene name}
+    description: Human and zebrafish ortholog gene names of the nearest gene (comma-separated when several)
+    citation: Ensembl Compara release 116 orthologues, via BioMart (ensembl.org)
+
+  - name: ss4r
+    type: gene
+    format: ss4r
+    species: Omyk
+    file: SalmonTroutOrthologs.tsv
+    url: https://salmobase.org/datafiles/datasets/Aqua-Faang/salmon-trout-orthologs/SalmonTroutOrthologs.tsv
+    description: Ss4R duplicate (ohnolog) of the nearest gene, its chromosome and rediploidisation class (AORe or LORe)
+    citation: AQUA-FAANG salmon-trout orthologs (Ss4R quartets from Ensembl 106 gene trees), salmobase.org
+
+  - name: flank_variants
+    type: count
+    format: vcf
+    file: umd_trout_G1023-03.sites.vcf.gz
+    window: 35
+    description: Known SNPs within 35 bp either side (Axiom probe flank), from the sites of the Gencove rainbow trout imputation panel as the UMD low-pass study lists them (ENA PRJEB109732; every SNP site, whatever its frequency)
+    citation: University of Maryland rainbow trout low-pass sequencing, ENA PRJEB109732 (sites of the Gencove rainbow trout reference panel gncv_v2)
+
+  # Public allele frequencies. The only public genome-wide variant set found on USDA_OmykA_1.1 (2026-11-12): low-pass
+  # (about 1x) sequencing of 462 farmed rainbow trout in three cohorts (35, 92 and 335 fish), imputed by Gencove against
+  # its rainbow trout panel; genotypes with a posterior below 0.9 are missing. fetch streams the three VCFs (7, 16 and
+  # 55 GB), counts AC, AN and NS from the genotypes and keeps only those, for SNPs; build sums the cohorts.
+  - name: public_af
+    type: point
+    format: vcf_info
+    pool: true
+    min_maf: 0.01   # PROVISIONAL: as the salmon panel's own filter (MAF > 0.01)
+    min_an: 462     # PROVISIONAL: a confident genotype in at least half of the 462 fish
+    info: {ac: AC, an: AN, ns: NS}
+    files:
+      - file: umd_trout_G1023-03.sites.vcf.gz
+        url: https://ftp.sra.ebi.ac.uk/vol1/analysis/ERZ292/ERZ29229760/G1023-03-UMD_Trout_GP90.vcf.gz
+        sites_only: [AC, AN, NS]
+        count_gt: true
+        snps_only: true
+      - file: umd_trout_G0424-02.sites.vcf.gz
+        url: https://ftp.sra.ebi.ac.uk/vol1/analysis/ERZ292/ERZ29229758/G0424-02-UMD_Trout_GT90.vcf.gz
+        sites_only: [AC, AN, NS]
+        count_gt: true
+        snps_only: true
+      - file: umd_trout_G0824-027.sites.vcf.gz
+        url: https://ftp.sra.ebi.ac.uk/vol1/analysis/ERZ292/ERZ29229759/G0824-027-UMD_Trout_GP90.vcf.gz
+        sites_only: [AC, AN, NS]
+        count_gt: true
+        snps_only: true
+    description: >-
+      Public SNP at this exact position among 462 farmed rainbow trout sequenced at low coverage and imputed: ALT
+      allele frequency (af), minor allele frequency (maf), ALT allele count (ac), alleles (an) and fish (ns) with a
+      confident genotype (posterior of at least 0.9); biallelic SNPs with MAF of at least 0.01 and a genotype in at
+      least half of the fish
+    population: >-
+      462 farmed rainbow trout (three cohorts of the University of Maryland fillet-yield and gut-microbiota project),
+      sequenced at about 1x and imputed by Gencove against its rainbow trout reference panel; imputed genotypes lean
+      towards the panel's frequencies, rare alleles are under-called, and one farmed population says little about
+      others or about wild fish
+    citation: >-
+      University of Maryland, Department of Animal and Avian Sciences: Integrated genomics and metagenomics predictions
+      and modulation of the gut microbiota-muscle axis to improve fillet yield in rainbow trout, ENA/EVA PRJEB109732
+      (analyses ERZ29229758, ERZ29229759, ERZ29229760)
+    licence: ENA open data (EMBL-EBI terms of use); frequencies only, genotypes are never kept
+
+  - name: motif
+    type: point
+    format: motif_effects
+    file: JASPAR2024_CORE_vertebrates_non-redundant_pfms_meme.txt
+    url: https://jaspar.elixir.no/download/data/2024/CORE/JASPAR2024_CORE_vertebrates_non-redundant_pfms_meme.txt
+    sites: public_af
+    within: chromatin
+    p_value: 1.0e-5    # G (2026-10-19, for salmon): a window matches below this FIMO-style p-value
+    min_delta: 4       # G (2026-10-19, for salmon): bits between the two alleles' scores
+    description: >-
+      TF motif changes at this site (inside a robust ATAC peak): changed (one allele matches a JASPAR 2024 vertebrate
+      motif at p < 1e-5 and the other doesn't, at least 4 bits apart), n (motifs changed), tfs ('CTCF (G), FOXO3 (A)':
+      the TF and the allele that matches, largest change first) and delta (the largest score difference, bits)
+    citation: >-
+      JASPAR 2024 CORE vertebrates, non-redundant (879 motifs); Rauluseviciute I et al. 2024, Nucleic Acids Research
+      52:D174, doi:10.1093/nar/gkad1059
+    licence: CC BY 4.0 (JASPAR)

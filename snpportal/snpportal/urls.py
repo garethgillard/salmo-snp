@@ -34,6 +34,7 @@ urlpatterns = [
     path("help/", about.help_page, name="help"),
     path("run-locally/", about.run_locally, name="run_locally"),
     path("releases/", about.releases, name="releases"),
+    path("species/", about.choose_species, name="species"),
     path("health/", health.health, name="health"),
     path("colours/", about.state_palette, name="state_palette"),
     path("results/<uuid:key>/", views.results, name="results"),

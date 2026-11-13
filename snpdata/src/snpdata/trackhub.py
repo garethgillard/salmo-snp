@@ -16,8 +16,14 @@ from snpscore.score import CHROMATIN_CONDITIONS
 
 HUB = "https://salmobase.org/datafiles/datasets/Aqua-Faang/trackhub/AtlanticSalmon/"
 SOURCES = ("BodyMap", "DevMap")
-CHROMHMM_LIST = "../../chromatin_states/chromhmm_salmon_files.txt"  # relative to HUB; its paths are relative to its parent
-PEAKS_LIST = "../../robust_ATAC_peaks/salmon_files.txt"  # the same for the robust ATAC peaks
+# Per species (the hub's folder name, which also starts every file name): the ChromHMM and robust ATAC peak file lists,
+# relative to the hub (their paths are relative to their parent), and the default rows of the 'all' preset.
+SPECIES = {
+    "AtlanticSalmon": {"chromhmm": "../../chromatin_states/chromhmm_salmon_files.txt", "peaks": "../../robust_ATAC_peaks/salmon_files.txt"},
+    "RainbowTrout": {"chromhmm": "../../chromatin_states/chromhmm_trout_files.txt", "peaks": "../../robust_ATAC_peaks/trout_files.txt",
+                     "all": ["Brain_Immature_Female", "Gill_Immature_Female", "Gonad_Immature_Female", "Liver_Immature_Female",
+                             "Muscle_Immature_Female", "LateBlastulation"]},
+}
 DEFAULT = Path("tracks.yaml")  # where `snpdata tracks` writes: next to layers.yaml, as the other commands assume
 DEFAULTS = {  # PROVISIONAL (G to confirm): the signal rows a view shows before the user picks others
     "assay": "ATAC",
@@ -31,15 +37,16 @@ DEFAULTS = {  # PROVISIONAL (G to confirm): the signal rows a view shows before 
 
 
 
-def _condition(cond):
-    """Fields of a file-name condition: [tissue, maturity, sex] (BodyMap) or [stage] (DevMap)."""
+def _condition(cond, with_states=CHROMATIN_CONDITIONS):
+    """Fields of a file-name condition: [tissue, maturity, sex] (BodyMap) or [stage] (DevMap). `with_states`: the
+    conditions that have ChromHMM states (a chromatin_<condition> column in the release)."""
     tissue, maturity, sex, stage = cond + [None] if len(cond) == 3 else ["Embryo", None, None, cond[0]]
     condition = "_".join(cond)
     return {"tissue": tissue, "sex": sex, "maturity": maturity, "stage": stage, "condition": condition,
-            "chromatin_condition": f"chromatin_{condition}" if condition in CHROMATIN_CONDITIONS else None}
+            "chromatin_condition": f"chromatin_{condition}" if condition in with_states else None}
 
 
-def parse_trackdb(text, base, source):
+def parse_trackdb(text, base, source, species="AtlanticSalmon", with_states=CHROMATIN_CONDITIONS):
     """bigWig tracks of one trackDb.txt; bigDataUrl paths are relative to `base` (the trackDb folder).
     File names look like AtlanticSalmon_<assay>_<tissue>_<maturity>_<sex>_R1[.forward].bigWig (BodyMap)
     or AtlanticSalmon_<assay>_<stage>_R1....bigWig (DevMap)."""
@@ -51,11 +58,11 @@ def parse_trackdb(text, base, source):
         name = f["bigDataUrl"].rsplit("/", 1)[-1]
         stem, *ext = name.split(".")
         _, assay, *cond, rep = stem.split("_")
-        if not stem.startswith("AtlanticSalmon_") or len(cond) not in (1, 3) or not re.fullmatch(r"R\d+", rep):
+        if not stem.startswith(species + "_") or len(cond) not in (1, 3) or not re.fullmatch(r"R\d+", rep):
             raise ValueError(f"unexpected trackhub file name {name}")
         assay = assay.replace("ChIP-", "").replace("input", "Input")
         strand = "+" if "forward" in ext else "-" if "reverse" in ext else None  # nf-core/rnaseq .forward/.reverse
-        fields = _condition(cond)
+        fields = _condition(cond, with_states)
         tracks.append({
             "id": "_".join([assay, fields["condition"], rep] + (["forward" if strand == "+" else "reverse"] if strand else [])),
             "source": source, "assay": assay, **fields,
@@ -64,19 +71,19 @@ def parse_trackdb(text, base, source):
     return tracks
 
 
-def parse_bigbeds(text, base, assay="ChromHMM"):
+def parse_bigbeds(text, base, assay="ChromHMM", species="AtlanticSalmon"):
     """One bigBed per condition from a salmobase file list, paths relative to `base`: ChromHMM segmentations
     (chromhmm_salmon_files.txt: chromatin_states/AtlanticSalmon/<BodyMap|DevMap>/AtlanticSalmon_<condition>.bb) or,
     with assay 'Peaks', the robust ATAC peaks (robust_ATAC_peaks/salmon_files.txt: .../AtlanticSalmon_ATAC_<condition>.bb).
     Either way the bigBed name field is the ChromHMM state (e.g. 'Accessible chromatin'), read by locus.segments()."""
-    prefix = "AtlanticSalmon_ATAC_" if assay == "Peaks" else "AtlanticSalmon_"
+    prefix = f"{species}_ATAC_" if assay == "Peaks" else f"{species}_"
     out = []
     for line in text.split():
         *_, source, name = line.split("/")
         cond = name[len(prefix):-len(".bb")].split("_")
         if not (name.startswith(prefix) and name.endswith(".bb") and len(cond) in (1, 3)):
             raise ValueError(f"unexpected {assay} file name {name}")
-        fields = _condition(cond)
+        fields = _condition(cond, ["_".join(cond)])  # a ChromHMM or peak file: the condition has states
         out.append({"id": f"{assay}_{fields['condition']}", "source": source, "assay": assay, **fields,
                     "replicate": None, "strand": None, "kind": "bigBed", "url": urljoin(base, line)})
     return out
@@ -86,14 +93,19 @@ def from_trackhub(hub=HUB, defaults=None):
     """The tracks.yaml content, read from the trackhub's BodyMap and DevMap trackDb.txt and the ChromHMM and robust
     ATAC peak file lists."""
     hub = hub.rstrip("/") + "/"
+    species = hub.rstrip("/").rsplit("/", 1)[-1]  # AtlanticSalmon, RainbowTrout
+    lists = SPECIES[species]
+    beds = {}
+    for key, assay in (("chromhmm", "ChromHMM"), ("peaks", "Peaks")):
+        listing = urljoin(hub, lists[key])
+        beds[key] = parse_bigbeds(bbi.read_all(listing).decode(), urljoin(listing, "../"), assay, species)
+    with_states = {t["condition"] for t in beds["chromhmm"]}  # the release's chromatin_<condition> columns
     tracks = []
     for source in SOURCES:
         base = f"{hub}{source}/"
-        tracks += parse_trackdb(bbi.read_all(base + "trackDb.txt").decode(), base, source)
-    beds = {}
-    for key, listing, assay in (("chromhmm", CHROMHMM_LIST, "ChromHMM"), ("peaks", PEAKS_LIST, "Peaks")):
-        listing = urljoin(hub, listing)
-        beds[key] = parse_bigbeds(bbi.read_all(listing).decode(), urljoin(listing, "../"), assay)
+        tracks += parse_trackdb(bbi.read_all(base + "trackDb.txt").decode(), base, source, species, with_states)
+    if not defaults and lists.get("all"):
+        defaults = {**DEFAULTS, "presets": {"all": lists["all"]}}
     every = tracks + beds["chromhmm"] + beds["peaks"]
     ids = [t["id"] for t in every]
     if len(set(ids)) != len(ids):
@@ -112,7 +124,7 @@ def write_tracks(cfg, path):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="snpdata tracks", description="Regenerate tracks.yaml from the AQUA-FAANG trackhub")
     p.add_argument("-o", "--out", default=str(DEFAULT), help="default: tracks.yaml (run it next to layers.yaml)")
-    p.add_argument("--hub", default=HUB)
+    p.add_argument("--hub", default=HUB, help="the species' trackhub folder (.../trackhub/RainbowTrout/ for rainbow trout)")
     args = p.parse_args(argv)
     old = (yaml.safe_load(Path(args.out).read_text()) or {}) if Path(args.out).exists() else {}
     cfg = from_trackhub(args.hub, old.get("defaults"))

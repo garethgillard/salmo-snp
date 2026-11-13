@@ -79,15 +79,46 @@ def release():
 # ---- several releases (ROADMAP I17; local installs) ----
 
 def installed():
-    """{version: folder} of the releases this install holds: settings.SNPSCORE_RELEASE and, on a local install, every
-    release under SNPPORTAL_RELEASES_DIR (salmo-snp's data folder releases/)."""
+    """{version: folder} of the releases this install holds: settings.SNPSCORE_RELEASE and every release under
+    SNPPORTAL_RELEASES_DIR (salmo-snp's data folder releases/; on a server, the folder holding one release per species)."""
     base = Path(settings.SNPSCORE_RELEASE).resolve()
     out = {manifest(base).get("version") or base.name: base}
     where = setting("SNPPORTAL_RELEASES_DIR", None)
-    if where and local():
+    if where:
         for m in sorted(Path(where).glob("*/manifest.json")):
             out.setdefault(manifest(m.parent).get("version") or m.parent.name, m.parent.resolve())
     return out
+
+
+# ---- species (one release is for one species; the species bar picks which the pages read) ----
+
+SALMON = {"key": "atlantic_salmon", "name": "Atlantic salmon", "latin": "Salmo salar", "prefix": "ssa",
+          "example": {"region": "25:28985000-29010000", "label": "vgll3"}}  # releases from before manifest `species`
+SPECIES_COOKIE = "snp_species"
+
+
+def species(where=None):
+    """The species of a release (default: the current one): {key, name, latin, prefix, example: {region, label}}."""
+    own = manifest(where).get("species") or {}
+    return {**SALMON, **own} if own.get("key", SALMON["key"]) == SALMON["key"] else {"prefix": "chr", **own}
+
+
+def species_releases():
+    """{species key: release folder} for the species bar: per species the default release (SNPSCORE_RELEASE) when it
+    is that species', else the newest installed one (by build date, then version)."""
+    out, found = {}, installed()
+    default = next(iter(found.values()))
+    for folder in [default] + sorted((f for f in found.values() if f != default),
+                                     key=lambda f: (manifest(f).get("created") or "", f.name), reverse=True):
+        out.setdefault(species(folder)["key"], folder)
+    return out
+
+
+def species_choices():
+    """[{key, name, latin, current}] for the species bar; [] when the install holds one species only."""
+    here = species()["key"]
+    found = species_releases()
+    return [{**species(folder), "current": key == here} for key, folder in found.items()] if len(found) > 1 else []
 
 
 def _choice():
@@ -119,8 +150,10 @@ JOB_URL = re.compile(r"/results/([0-9a-f-]{36})/")
 
 def for_request(request):
     """The release a request reads (I17): a job's pages read the job's own release (job.json), the Design panel its
-    own (panel.json), a saved project version its own (meta.json); other pages the one chosen. None: the default."""
-    if not local() or len(installed()) < 2:
+    own (panel.json), a saved project version its own (meta.json); other pages the release of the species chosen on
+    the species bar (a cookie), which on a local install is the one picked on the Releases page when that is the same
+    species'. None: the default."""
+    if len(installed()) < 2:
         return None
     m = JOB_URL.search(request.path)
     if m:
@@ -145,15 +178,51 @@ def for_request(request):
             own = None
         if own:
             return own
-    return chosen()
+    picked, wanted = chosen(), request.COOKIES.get(SPECIES_COOKIE)
+    by_species = species_releases()
+    if wanted in by_species and not (picked and species(picked)["key"] == wanted):
+        return by_species[wanted]
+    return picked
+
+
+def wording(where=None):
+    """[(pattern, replacement)] that turn the pages' Atlantic salmon wording into that of another species' release:
+    the assembly and the older one, the number of chromatin conditions, the chromosome names, the species' names and
+    the release's own pairs (layers.yaml species.wording, e.g. the samples and the public SNP set). The pages are
+    written for salmon, the first species; this is the one place that says what differs. [] for a salmon release."""
+    m, sp = manifest(where), species(where)
+    if sp["key"] == SALMON["key"]:
+        return []
+    chromatin = next((layer for layer in m.get("layers", []) if layer["name"] == "chromatin"), {})
+    n = sum(1 for c in chromatin.get("columns", []) if c not in ("summary", "id"))
+    older = (m.get("rsid") or {}).get("older") or "an older assembly"
+    span = str(m.get("chromosomes", "")).split(" (")[0]
+    latin, prefix = sp.get("latin", ""), sp.get("prefix", "chr")
+    pairs = [(re.escape(a), b) for a, b in sp.get("wording") or []]
+    pairs += [(r"Ssal_v3\.1", m.get("assembly", "")), (r"ICSASG_v2", older), (r"Salmo_salar", latin.replace(" ", "_")),
+              (r"Salmo salar", latin), (r"(?<!>)Atlantic salmon", sp["name"].lower()), (r"\bssa(?=\d)", prefix),
+              (r"(?<=[Cc]hromosomes )1[-–]29", span), (r"\b1[-–]29(?= \(Ensembl)", span)]
+    if n:
+        pairs.append((r"\b21(?= (?:chromatin |sample |AQUA-FAANG )?(?:conditions|tissues and stages))", str(n)))
+    return [(re.compile(a), b) for a, b in pairs]
 
 
 def middleware(get_response):
-    """settings.MIDDLEWARE 'snpportal.jobs.middleware': each request reads its own release (for_request)."""
+    """settings.MIDDLEWARE 'snpportal.jobs.middleware': each request reads its own release (for_request), and a page
+    of another species than salmon gets that release's wording (wording)."""
     def with_release(request):
         token = _current.set(for_request(request))
         try:
-            return get_response(request)
+            response = get_response(request)
+            kind = response.get("Content-Type", "")
+            if not response.streaming and kind.startswith(("text/html", "image/svg")):
+                pairs = wording()
+                if pairs:
+                    text = response.content.decode(response.charset or "utf-8")
+                    for pattern, replacement in pairs:
+                        text = pattern.sub(lambda _m, r=replacement: r, text)
+                    response.content = text.encode(response.charset or "utf-8")
+            return response
         finally:
             _current.reset(token)
     return with_release
@@ -246,6 +315,7 @@ def release_info():
     m = manifest()
     return {"version": m.get("version", "none"), "assembly": m.get("assembly", "Ssal_v3.1"), "created": m.get("created"),
             "sha256": _file("sha256", release() / "manifest.json"), "layers": m.get("layers", []),
+            "known_loci": (release() / "catalog" / "known_loci.tsv").exists(),
             "synthetic": [layer["name"] for layer in m.get("layers", []) if layer.get("synthetic")]}
 
 

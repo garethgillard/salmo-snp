@@ -17,8 +17,8 @@
       <ul>
         <li><a href="{% url 'snpportal:upload' %}"{% if nav == 'score' %} aria-current="page"{% endif %}>Score</a></li>
         <li><a href="{% url 'snpportal:design_panel' %}"{% if nav == 'panel' %} aria-current="page"{% endif %}>Design panel<span hx-get="{% url 'snpportal:panel_count' %}" hx-trigger="load" hx-swap="innerHTML"></span></a></li>
-        <li><a href="{% url 'snpportal:known_loci' %}"{% if nav == 'known' %} aria-current="page"{% endif %}>Known loci</a></li>
-        <li><a href="{% url 'snpportal:locus' %}?r=25:28985000-29010000"{% if nav == 'explore' %} aria-current="page"{% endif %}>Locus browser</a></li>
+        {% if rel.known_loci %}<li><a href="{% url 'snpportal:known_loci' %}"{% if nav == 'known' %} aria-current="page"{% endif %}>Known loci</a></li>{% endif %}
+        <li><a href="{% url 'snpportal:locus' %}?r={{ rel.species.example.region }}"{% if nav == 'explore' %} aria-current="page"{% endif %}>Locus browser</a></li>
         <li><details class="sp-menu"><summary{% if nav == 'help' or nav == 'about' %} aria-current="page"{% endif %}>Help</summary>
           <ul>
             <li><a href="{% url 'snpportal:help' %}">Help</a></li>
@@ -30,6 +30,10 @@
             <li><a href="{% url 'snpportal:about_data' %}#cite">How to cite</a></li>
           </ul></details></li>
       </ul>
+      {% if rel.species_choices %}<form class="sp-species" method="post" action="{% url 'snpportal:species' %}" aria-label="Species">{% csrf_token %}
+        <span class="sp-species-label">Species</span>
+        {% for s in rel.species_choices %}<button type="submit" name="species" value="{{ s.key }}"{% if s.current %} aria-pressed="true"{% endif %} title="{{ s.latin }}{% if s.current %}: the species of this page{% else %}: score SNPs against the {{ s.name|lower }} data{% endif %}">{{ s.name }}</button>{% endfor %}
+      </form>{% endif %}
       {% if rel.several %}<a class="sp-release" href="{% url 'snpportal:releases' %}" title="Annotation release and genome assembly of this page: switch the release new work uses">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</a>
       {% else %}<span class="sp-release" title="Annotation release and genome assembly">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</span>{% endif %}
     </div>

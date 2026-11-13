@@ -32,6 +32,16 @@ gh repo deploy-key list --repo "$REPO" --json key -q '.[].key' | grep -qF "$(ech
 snpscore pool --release "$RELEASE" --if-stale
 rsync -az --delete "$RELEASE/" "$HOST:/srv/snpportal/release/"
 rsync -az "$GENOME" "$GENOME.fai" "$GENOME.gzi" "$HOST:/srv/snpportal/genome/"
+# The other species' releases this code names (serve.py RELEASES: rainbow trout), when they are built here: each goes to
+# /srv/snpportal/releases/<version>/ with its pool, its genome beside salmon's; the species bar then offers them.
+ssh "$HOST" 'mkdir -p /srv/snpportal/releases'
+for v in $(sed -n 's/^RELEASES = {\(.*\)}.*/\1/p' "$ROOT/snpportal/snpportal/serve.py" | grep -o ': "[^"]*"' | tr -d ':" '); do
+  [ -f "$ROOT/snpdata/release/$v/manifest.json" ] || { echo "release $v is not built here: not sent" >&2; continue; }
+  snpscore pool --release "$ROOT/snpdata/release/$v" --if-stale
+  rsync -az --delete "$ROOT/snpdata/release/$v/" "$HOST:/srv/snpportal/releases/$v/"
+  g=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['genome']['path'])" "$ROOT/snpdata/release/$v/manifest.json")
+  rsync -az "$g" "$g.fai" "$g.gzi" "$HOST:/srv/snpportal/genome/"
+done
 
 ssh "$HOST" "NAMES='$NAMES' NAME=$NAME GENOME=$(basename "$GENOME") bash -s" <<'REMOTE'
 set -euo pipefail
@@ -65,7 +75,8 @@ DJANGO_SECRET_KEY=$(cat secret_key)
 DJANGO_ALLOWED_HOSTS=${NAMES// /,}
 DJANGO_STATIC_ROOT=/srv/snpportal/static
 SNPSCORE_RELEASE=/srv/snpportal/release
-SNPSCORE_GENOME=/srv/snpportal/genome/$GENOME
+SNPSCORE_GENOME_DIR=/srv/snpportal/genome
+SNPPORTAL_RELEASES_DIR=/srv/snpportal/releases
 SNPPORTAL_RESULTS_DIR=/srv/snpportal/results
 SNPPORTAL_DUCKDB_THREADS=$(nproc)
 SNPPORTAL_DUCKDB_MEMORY=$(( $(free -m | awk '/^Mem:/ {print $2}') / 2 ))MB

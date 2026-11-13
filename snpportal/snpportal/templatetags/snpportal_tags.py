@@ -35,9 +35,10 @@ def state_palettes():
 def portal_release():
     """Version, assembly, build date and manifest sha256 of the current release (for the badge and footer)."""
     try:
-        return {**jobs.release_info(), "several": jobs.local() and len(jobs.installed()) > 1}  # I17: the badge links the switch
+        return {**jobs.release_info(), "several": jobs.local() and len(jobs.installed()) > 1,  # I17: the badge links the switch
+                "species": jobs.species(), "species_choices": jobs.species_choices()}
     except (AttributeError, OSError, ValueError):  # no or unreadable release configured
-        return {"version": "none", "assembly": "Ssal_v3.1"}
+        return {"version": "none", "assembly": "Ssal_v3.1", "species": jobs.SALMON}
 
 
 @register.filter

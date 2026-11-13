@@ -34,6 +34,16 @@
   background: var(--sp-white); border: 1px solid var(--sp-grey-300); border-radius: .25rem; box-shadow: 0 2px 8px var(--sp-grey-300); }
 .sp-nav .sp-menu ul a { padding: .35rem .9rem; border-bottom: 0; }
 .sp-nav .sp-menu ul a:hover { background: var(--sp-grey-100); }
+.sp-species { margin-left: auto; display: flex; align-items: center; gap: 0; }
+.sp-species-label { font-size: .75rem; color: var(--sp-grey-700); margin-right: .5rem; }
+.sp-species button { font-size: .9rem; font-weight: 600; padding: .3rem .85rem; color: var(--sp-grey-700); background: var(--sp-white);
+  border: 1px solid var(--sp-grey-300); cursor: pointer; }
+.sp-species button + button { border-left: 0; }
+.sp-species button:first-of-type { border-radius: .4rem 0 0 .4rem; }
+.sp-species button:last-of-type { border-radius: 0 .4rem .4rem 0; }
+.sp-species button:hover { background: var(--sp-grey-100); }
+.sp-species button[aria-pressed="true"] { color: var(--sp-white); background: var(--sp-accent); border-color: var(--sp-accent); }
+.sp-species + .sp-release { margin-left: 0; }
 .sp-release { margin-left: auto; font-size: .75rem; color: var(--sp-grey-700); border: 1px solid var(--sp-grey-300);
   border-radius: 1rem; padding: .1rem .6rem; white-space: nowrap; background: var(--sp-white); }
 

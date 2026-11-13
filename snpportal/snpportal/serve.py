@@ -1,6 +1,7 @@
 """The salmo-snp command: the portal on your own computer, so a SNP list never leaves it.
 
     salmo-snp download [VERSION] [--from URL|FOLDER]   the data: a release snapshot and the genome, each file checked
+                       [--species rainbow_trout|all]   (a release is for one species; default: Atlantic salmon)
     salmo-snp serve [--release FOLDER] [--port N]      the portal on http://127.0.0.1:8000/snp/ (this computer only)
     salmo-snp info                                     where the data and your results are, and how big
 
@@ -19,7 +20,8 @@ import sys
 import urllib.request
 from pathlib import Path
 
-RELEASE = "2026-11-05"  # the data release this version of the code expects
+RELEASE = "2026-11-05"  # the data release this version of the code expects (Atlantic salmon, the default species)
+RELEASES = {"atlantic_salmon": RELEASE, "rainbow_trout": "trout-2026-11-12"}  # ... and per species: the species bar's
 DATA_URL = os.environ.get("SALMO_SNP_DATA_URL")  # where the data is published (set once it is hosted, e.g. on salmobase)
 
 
@@ -168,7 +170,6 @@ def serve(release=None, port=8000):
     if problems:
         sys.exit(f"salmo-snp: {release} can't be used:\n  " + "\n  ".join(problems))
     genome = local_genome(release)
-    ensure_pool(release)
     os.environ.update({
         "DJANGO_SETTINGS_MODULE": "snpsite.settings", "DJANGO_DEBUG": "0",
         "SNPSCORE_RELEASE": str(release.resolve()), "SNPPORTAL_RESULTS_DIR": str(HOME / "results"), "SNPPORTAL_LOCAL": "1",
@@ -181,7 +182,14 @@ def serve(release=None, port=8000):
     import django
     from django.core.management import call_command
     django.setup()
+    from snpportal import jobs
+    by_species = jobs.species_releases()  # the default release, and the newest one of each other species downloaded
+    for folder in by_species.values():
+        ensure_pool(folder)
     print(f"salmo-snp: release {release.name}, results in {HOME / 'results'}")
+    if len(by_species) > 1:
+        print("salmo-snp: species " + ", ".join(f"{jobs.species(f)['name']} ({f.name})" for f in by_species.values())
+              + ": the species bar at the top right switches")
     if not given and release.name != RELEASE:
         print(f"salmo-snp: this version expects release {RELEASE}, which isn't downloaded: using {release.name} until "
               f"you download {RELEASE}")
@@ -213,7 +221,9 @@ def info():
     print("versions      " + ", ".join(f"{k} {v}" for k, v in installed().items()) + f", Python {sys.version.split()[0]}")
     print(f"data folder   {HOME}")
     for r in releases():
-        print(f"release       {r.name} ({gb(size(r))})" + ("  <- this version's" if r.name == RELEASE else ""))
+        m = json.loads((r / "manifest.json").read_text())
+        what = f"{(m.get('species') or {}).get('name', 'Atlantic salmon')}, {m.get('assembly', '?')}"
+        print(f"release       {r.name} ({what}; {gb(size(r))})" + ("  <- this version's" if r.name in RELEASES.values() else ""))
     if not releases():
         print(f"release       none: `salmo-snp download` fetches {RELEASE}")
     print(f"genome        {gb(size(HOME / 'genome')) if size(HOME / 'genome') else 'not downloaded'}")
@@ -230,6 +240,8 @@ def main(argv=None):
     d = sub.add_parser("download", help="fetch a release and the genome, every file checked against its sha256")
     d.add_argument("version", nargs="?", help=f"release version (default {RELEASE}, this code's; 'latest' for the newest)")
     d.add_argument("--from", dest="source", help="the published data: a URL or a folder (default: SALMO_SNP_DATA_URL)")
+    d.add_argument("--species", choices=[*RELEASES, "all"], help="this version's release of a species (default: "
+                   "atlantic_salmon), or of every species; the portal's species bar switches between those downloaded")
     d.add_argument("--no-genome", action="store_true", help="skip the genome (~1 GB); sequence checks then read it remotely")
     s = sub.add_parser("serve", help="run the portal on http://127.0.0.1:<port>/snp/, for this computer only")
     s.add_argument("--release", help="a release folder (default: this code's release, else the newest downloaded)")
@@ -237,7 +249,10 @@ def main(argv=None):
     sub.add_parser("info", help="where the data and results are, and their sizes")
     args = p.parse_args(argv)
     if args.cmd == "download":
-        download(args.version, args.source, not args.no_genome)
+        versions = [args.version] if args.version or not args.species else (
+            list(RELEASES.values()) if args.species == "all" else [RELEASES[args.species]])
+        for version in versions:
+            download(version, args.source, not args.no_genome)
     elif args.cmd == "serve":
         serve(args.release, args.port)
     else:

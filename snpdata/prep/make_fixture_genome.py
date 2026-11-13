@@ -21,18 +21,18 @@ def bgzf_block(data):
     return header + body + struct.pack("<II", zlib.crc32(data) & 0xFFFFFFFF, len(data))
 
 
-def main():
+def main(name=NAME, windows=WINDOWS, raw="data/raw", fixture="tests/fixture"):
     sys.path.insert(0, "src")
     from snpscore.fasta import Fasta
 
-    genome = Fasta(f"data/raw/{NAME}")
+    genome = Fasta(f"{raw}/{name}")
     text, fai = b"", []
-    for chrom, start, end in WINDOWS:
+    for chrom, start, end in windows:
         seq = "N" * start + genome.fetch(chrom, start, end)
         header = f">{chrom}\n"
         fai.append(f"{chrom}\t{len(seq)}\t{len(text) + len(header)}\t{LINE}\t{LINE + 1}\n")
         text += (header + "\n".join(seq[i:i + LINE] for i in range(0, len(seq), LINE)) + "\n").encode()
-    out, gzi, compressed = Path("tests/fixture") / NAME, [], 0
+    out, gzi, compressed = Path(fixture) / name, [], 0
     with open(out, "wb") as f:
         for i in range(0, len(text), 65280):
             if i:
