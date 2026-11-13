@@ -3,7 +3,8 @@ name: species-data
 # VM through the deploy key (snpportal/deploy/update.sh `release <version>`, which checks every file before it puts
 # the release in place). Run it on main when G asks (Actions > species-data > Run workflow), after a deploy has
 # installed the code that names the release (serve.py RELEASES). Rainbow trout: the three cohorts of the public
-# frequencies stream from ENA in parallel jobs (7, 16 and 55 GB; frequencies kept, genotypes never written), then one
+# frequencies are read from ENA in parallel jobs (7, 16 and 55 GB, as byte ranges: one stream is too slow; frequencies
+# kept, genotypes never written), then one
 # job fetches the rest, builds the release (the motif layer takes most of the time) and its public pool, and sends them.
 on:
   workflow_dispatch:
@@ -23,18 +24,12 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -q -e snpscore -e snpdata
-      - name: Stream one cohort (sites and counts only)
+      - name: One cohort's sites and counts, over parallel byte ranges
         working-directory: snpdata
         run: |
-          python - <<'EOF'
-          import yaml
-          from snpdata.build import fetch
-          cfg = yaml.safe_load(open("rainbow_trout/layers.yaml"))
-          layer = next(x for x in cfg["layers"] if x["name"] == "public_af")
-          one = {"layers": [{"name": "public_af", "files": [layer["files"][${{ matrix.cohort }}]]}]}
-          open("one.yaml", "w").write(yaml.safe_dump(one))
-          fetch("one.yaml", "data/rainbow_trout/raw")
-          EOF
+          read -r file url < <(python -c "import yaml; f = next(x for x in yaml.safe_load(open('rainbow_trout/layers.yaml'))['layers'] if x['name'] == 'public_af')['files'][${{ matrix.cohort }}]; print(f['file'], f['url'])")
+          mkdir -p data/rainbow_trout/raw
+          python prep/remote_sites.py "$url" "data/rainbow_trout/raw/$file" 48 8
       - uses: actions/upload-artifact@v7
         with:
           name: cohort-${{ matrix.cohort }}
