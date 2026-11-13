@@ -519,13 +519,17 @@ def hashes(paths):
     return md5.hexdigest(), sha.hexdigest()
 
 
-def build(layers_yaml, data_dir, out_dir):
+def build(layers_yaml, data_dir, out_dir, reuse=None):
     """Write every layer as Parquet, plus alias.parquet, rsid.parquet, catalog/known_loci.tsv, the track registry
     (tracks.yaml next to layers.yaml) and manifest.json, which records versions, hashes,
     chromosome sizes, provisional rules and where the genome is (local path if present, else its URL) for sequence
-    checks."""
+    checks. With `reuse` (an earlier release folder), a layer whose settings and input files are the same as that
+    release's is copied from it instead of computed again (the motif layer only when the layers it is computed from
+    were copied too, by the same snpscore): for a rebuild that changes the catalogue or one layer."""
     cfg = load_yaml(layers_yaml)
     here, data, out = Path(layers_yaml).parent, Path(data_dir), Path(out_dir)
+    old = json.loads((Path(reuse) / "manifest.json").read_text()) if reuse else {}
+    old_layers, copied = {x["name"]: x for x in old.get("layers", [])}, set()
     out.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
     try:
@@ -558,6 +562,23 @@ def build(layers_yaml, data_dir, out_dir):
     ends = {}  # chrom -> largest end over the positional layers
     for layer in cfg["layers"]:
         paths = [data / s["file"] for s in sources(layer)]
+        settings = {k: v for k, v in (dict(layer, meme="motif.meme") if layer["format"] == "motif_effects" else layer).items()
+                    if k not in ("file", "files", "columns", "query", "info")}
+        was = old_layers.get(layer["name"])
+        if (was and all(was.get(k) == v for k, v in settings.items()) and was.get("source_sha256") == hashes(paths)[1]
+                and was.get("info_settings", "") in ("", [s.get("info", layer.get("info")) for s in sources(layer)])
+                and (layer["format"] != "motif_effects" or ({layer["sites"], layer["within"]} <= copied
+                                                            and old.get("snpscore_version") == snpscore_version))):
+            shutil.copyfile(Path(reuse) / was["file"], out / was["file"])
+            if layer["format"] == "motif_effects":
+                shutil.copyfile(Path(reuse) / "motif.meme", out / "motif.meme")
+            if layer["type"] in POSITIONAL:
+                for chrom, end in con.execute(f'SELECT chrom, max("end") FROM read_parquet({lit(out / was["file"])}) GROUP BY chrom').fetchall():
+                    ends[chrom] = max(end, ends.get(chrom, 0))
+            manifest["layers"].append(was)
+            copied.add(layer["name"])
+            print(f"{layer['name']}: {was['rows']} rows (reused)", flush=True)
+            continue
         if layer["format"] == "motif_effects":  # computed from built layers and the genome; annotate reads the motifs
             shutil.copyfile(paths[0], out / "motif.meme")
             layer = dict(layer, meme="motif.meme")
@@ -586,6 +607,7 @@ def build(layers_yaml, data_dir, out_dir):
             "source_file": ", ".join(s["file"] for s in sources(layer)),
             "md5": md5,
             "source_sha256": sha256,
+            "info_settings": [s.get("info", layer.get("info")) for s in sources(layer)],  # with the settings: what `reuse` compares
             "file": parquet.name,
             "sha256": hashes([parquet])[1],
             "rows": con.execute("SELECT count(*) FROM layer").fetchone()[0],

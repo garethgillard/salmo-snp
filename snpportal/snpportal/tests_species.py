@@ -47,7 +47,10 @@ class SpeciesTest(SimpleTestCase):
         self.assertRegex(home, r"1\d AQUA-FAANG tissues and stages")  # 17 genome-wide; the fixture's regions have fewer
         self.assertNotIn("21 AQUA-FAANG", home)
         self.assertNotIn("Ssal_v3.1", home)
-        self.assertNotIn("Known loci", home)  # this release has no catalogue
+        known = self.page("snpportal:known_loci")  # the trout catalogue: gene regions and published QTL windows
+        for text in ("Migration timing", "greb1l", "BCWD resistance", "sdY", "10.1016/j.cub.2012.05.045"):
+            self.assertIn(text, known)
+        self.assertNotIn("akap11", known)
         self.assertIn(">Atlantic salmon</button>", home)  # the other species keeps its name
         self.assertIn("28:12020000-12210000", home)  # the Locus browser opens at the species' example
         url = self.client.post(reverse("snpportal:upload"), {"paste": "omy28 12029722 T C\nY 6002000 G A\n"}).url.split("?")[0]

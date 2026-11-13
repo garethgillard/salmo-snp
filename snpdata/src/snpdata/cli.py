@@ -17,6 +17,7 @@ def main():
     b.add_argument("--layers", default="layers.yaml")
     b.add_argument("--data", default="data/raw")
     b.add_argument("--out", required=True, help="release folder, named by the date, e.g. release/2026-11-03")
+    b.add_argument("--reuse", help="an earlier release folder: layers with the same settings and inputs are copied from it")
 
     u = sub.add_parser("publish", help="lay out a release (and with --raw the input files) as the folder that goes online")
     u.add_argument("release", help="release folder, e.g. release/2026-11-03")
@@ -37,7 +38,7 @@ def main():
     elif args.cmd == "publish":
         print(publish(args.release, args.to, *((args.layers, args.data) if args.raw else ())))
     else:
-        build(args.layers, args.data, args.out)
+        build(args.layers, args.data, args.out, args.reuse)
 
 
 if __name__ == "__main__":

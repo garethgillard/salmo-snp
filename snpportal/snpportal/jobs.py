@@ -200,7 +200,7 @@ def wording(where=None):
     latin, prefix = sp.get("latin", ""), sp.get("prefix", "chr")
     pairs = [(re.escape(a), b) for a, b in sp.get("wording") or []]
     pairs += [(r"Ssal_v3\.1", m.get("assembly", "")), (r"ICSASG_v2", older), (r"Salmo_salar", latin.replace(" ", "_")),
-              (r"Salmo salar", latin), (r"(?<!>)Atlantic salmon", sp["name"].lower()), (r"\bssa(?=\d)", prefix), (r"\bSsa(?=\d+p|&lt;chromosome|<chromosome)", prefix.capitalize()),
+              (r"(?<!title=\")Salmo salar", latin), (r"(?<!>)Atlantic salmon", sp["name"].lower()), (r"\bssa(?=\d)", prefix), (r"\bSsa(?=\d+p|&lt;chromosome|<chromosome)", prefix.capitalize()),
               (r"(?<=[Cc]hromosomes )1[-–]29", span), (r"\b1[-–]29(?= \(Ensembl)", span)]
     if n:
         pairs.append((r"\b21(?=\s+(?:chromatin\s+|sample\s+|AQUA-FAANG\s+)?(?:conditions|tissues and stages))", str(n)))

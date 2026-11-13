@@ -46,7 +46,10 @@ browser's `example`, the pages' `wording`, `samples` and `searches`: the manifes
 and `demo_sample` (an example list cut from a built layer). The layers are the salmon ones where the same source
 exists for trout: AQUA-FAANG peaks and states (17 conditions), blacklist, LORe, Ss4R (`species: Omyk` rows of the
 salmon-trout table) and synteny; Ensembl 116 genes, regulatory build and GERP; NCBI models; orthologs; JASPAR motifs;
-EVA rs IDs. No molQTL, expression, Bgee, genetic map, liftover or known-loci catalogue.
+EVA rs IDs, and a known-loci catalogue (`rainbow_trout/catalog/known_loci.tsv`: gene regions and published QTL
+windows, the latter as `type` qtl_interval with `start` and `end`). No molQTL, expression, Bgee, genetic map or
+liftover. `snpdata build --reuse <release>` copies the layers whose settings and inputs are unchanged, so a rebuild
+for the catalogue takes minutes, not the motif layer's hour and a half.
 
 `public_af` and `flank_variants` come from the one public genome-wide variant set on this assembly, ENA PRJEB109732
 (University of Maryland): 462 farmed fish in three cohorts (35, 92 and 335 fish; 7, 16 and 55 GB), sequenced at about

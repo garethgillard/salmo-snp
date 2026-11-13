@@ -502,6 +502,9 @@ def test_genome_location_by_file_name(tmp_path, monkeypatch):  # I17: a data fol
     assert genome_location({"genome": {**m["genome"], "file": "other.fa.gz"}}) == "https://example.org/g.fa.gz"  # another release's
     monkeypatch.setenv("SNPSCORE_GENOME", "/srv/genome.fa.gz")  # a server's own copy comes first
     assert genome_location(m) == "/srv/genome.fa.gz"
+    monkeypatch.delenv("SNPSCORE_GENOME_DIR")
+    monkeypatch.setenv("SNPSCORE_GENOME", str(tmp_path / "salmon.fa.gz"))  # ... but another species' release takes its own
+    assert genome_location(m) == str(tmp_path / "g.fa.gz")                 # genome beside it, by its file name
 
 
 def test_place_by_flank(release, tmp_path):  # I18: a SYNTHETIC Axiom manifest on 'another assembly', placed by its flanks

@@ -81,11 +81,17 @@ synteny:
   url: https://salmobase.org/datafiles/TSV/synteny/2021-11/RainbowTrout/synteny.tsv
   citation: Ss4R homeologous blocks, salmobase synteny 2021-11 (salmon-trout orthology pipeline)
 
-# No known-loci catalogue yet: which published rainbow trout loci belong in it, and their positions on USDA_OmykA_1.1,
-# are G's to decide (docs/DECISIONS.md #38). The one example input is an even sample of the public sites.
+# Published loci (G asked for them, 2026-11-13; DECISIONS #38): gene regions for loci whose published markers are not
+# placed on USDA_OmykA_1.1 (greb1l and rock1, six6, sdY) and QTL windows published on this assembly (BCWD and IHNV
+# resistance). build copies the file to catalog/; annotate badges uploads within `window` bp of a row with a position.
+catalog:
+  file: catalog/known_loci.tsv
+  window: 50000
+
+# An example input beside the catalogue: an even sample of the public sites.
 demo_sample: {layer: public_af, n: 50000, file: public_50k.vcf}  # build cuts it from the built layer
 
-provisional: [public_af.min_maf, public_af.min_an]
+provisional: [catalog.window, public_af.min_maf, public_af.min_an]
 
 layers:
   - name: chromatin

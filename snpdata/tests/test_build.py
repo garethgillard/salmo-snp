@@ -151,14 +151,18 @@ def test_sha256sums(release):
 
 def test_rainbow_trout_release(tmp_path):
     """The second species (rainbow_trout/layers.yaml on tests/fixture/rainbow_trout): its own assembly, chromosomes (Y among
-    them), conditions and example list; frequencies pooled over the cohorts' site files; no known-loci catalogue."""
+    them), conditions, catalogue and example list; frequencies pooled over the cohorts' site files; build --reuse."""
     out = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "trout-test")
     m = json.loads((out / "manifest.json").read_text())
     assert (m["species"]["key"], m["assembly"], list(m["chrom_sizes"])) == ("rainbow_trout", "USDA_OmykA_1.1", ["28", "Y"])
     layers = {l["name"]: l for l in m["layers"]}
     conditions = [c for c in layers["chromatin"]["columns"] if c not in ("summary", "id")]  # 17 genome-wide; those with a peak here
     assert {"Brain_Mature_Male", "Liver_Immature_Female", "LateBlastulation"} <= set(conditions) and not any("Gonad" in c for c in conditions)
-    assert "catalog" not in m and [d["file"] for d in m["demo"]] == ["demo/public_50k.vcf"]
+    assert m["catalog"]["rows"] == 11 and [d["file"] for d in m["demo"]] == ["demo/known_loci.tsv", "demo/public_50k.vcf"]
+    again = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "again", reuse=out)
+    reused = json.loads((again / "manifest.json").read_text())  # a rebuild that copies every unchanged layer
+    assert [(l["name"], l["sha256"], l["rows"]) for l in reused["layers"]] == [(l["name"], l["sha256"], l["rows"]) for l in m["layers"]]
+    assert reused["chrom_sizes"] == m["chrom_sizes"] and (again / "motif.meme").read_bytes() == (out / "motif.meme").read_bytes()
     assert m["rsid"]["older"] == "Omyk_1.0" and m["rsid"]["rows"] > 0 and m["flank_keys"]["rows"] > 0
     con = duckdb.connect()
     files = [str(DATA / "tests" / "fixture" / "rainbow_trout" / s) for s in layers["public_af"]["source_file"].split(", ")]

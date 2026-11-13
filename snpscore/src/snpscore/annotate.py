@@ -380,16 +380,20 @@ def conversions(manifest):
 
 
 def genome_location(manifest):
-    """$SNPSCORE_GENOME (a server's own copy of the release's genome) if set, else the release's genome file in
+    """$SNPSCORE_GENOME (a server's own copy of the release's genome) if set, unless the release's own genome file
+    lies beside it under another name (another species' release on that server), else the release's genome file in
     $SNPSCORE_GENOME_DIR (salmo-snp's data folder, which may hold the genomes of several releases) when it is there,
     else the local path if the release's build machine had it and it is still there, else its URL (or None)."""
     genome = manifest.get("genome")
     if not genome:
         return None
-    if os.environ.get("SNPSCORE_GENOME"):
-        return os.environ["SNPSCORE_GENOME"]
     name = genome.get("file") or (genome.get("url") or "").rsplit("/", 1)[-1]
-    here = Path(os.environ["SNPSCORE_GENOME_DIR"]) / name if os.environ.get("SNPSCORE_GENOME_DIR") and name else None
+    own = os.environ.get("SNPSCORE_GENOME")
+    beside = Path(own).parent / name if own and name and Path(own).name != name else None  # another species' release
+    if own and not (beside and all(Path(f"{beside}{ext}").exists() for ext in ("", ".fai", ".gzi"))):
+        return own
+    folder = str(beside.parent) if beside else os.environ.get("SNPSCORE_GENOME_DIR")
+    here = Path(folder) / name if folder and name else None
     if here and all(Path(f"{here}{ext}").exists() for ext in ("", ".fai", ".gzi")):
         return str(here)
     return genome["path"] if genome.get("path") and Path(genome["path"]).exists() else genome["url"]

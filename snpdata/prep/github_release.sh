@@ -5,6 +5,7 @@
 #   bash prep/github_release.sh release/trout-2026-11-13  (another species: its genome comes from the manifest's path)
 # salmo-snp-data-<version>.tar     site/releases/<version>/ (with SHA256SUMS) and site/releases/latest.json
 # salmo-snp-genome-<assembly>.tar  site/raw/: the bgzipped genome, .fai and .gzi (checked against the manifest)
+# salmo-snp-pool-<version>.tar     with POOL=1: pool/, for the NREC demo's deploy/species.sh (the VM can't build a pool)
 # Users: curl -LO both files from the release (README), untar both, salmo-snp download --from site.
 # Not a vX.Y.Z tag, so the wheel workflow doesn't run. Delete the GitHub Release once the data is on salmobase.
 set -euo pipefail
@@ -20,6 +21,11 @@ for ext in "" .fai .gzi; do cp "$GENOME$ext" "$T/site/raw/"; done
 python3 -c "from snpdata.build import write_sums; write_sums('$T/site/raw')"
 tar -C "$T" -cf "$T/salmo-snp-data-$VERSION.tar" site/releases
 tar -C "$T" -cf "$T/salmo-snp-genome-$ASSEMBLY.tar" site/raw
+FILES=("$T/salmo-snp-data-$VERSION.tar" "$T/salmo-snp-genome-$ASSEMBLY.tar")
+if [ -n "${POOL:-}" ]; then  # POOL=1: also the public pool (a cache of the current weights), for a server that can't build it
+  snpscore pool --release "$RELEASE" --if-stale
+  tar -C "$RELEASE" -cf "$T/salmo-snp-pool-$VERSION.tar" pool && FILES+=("$T/salmo-snp-pool-$VERSION.tar")
+fi
 cat > "$T/notes.md" <<EOF
 The data for a local install, until it is hosted on salmobase: release $VERSION (the snapshot \`salmo-snp download\`
 needs) and the $ASSEMBLY genome. Each layer keeps its source's licence (docs/LICENSING.md).
@@ -35,7 +41,7 @@ EOF
 gh release view "data-$VERSION" --repo garethgillard/salmo-snp > /dev/null 2>&1 ||
   gh release create "data-$VERSION" --repo garethgillard/salmo-snp --prerelease \
     --title "Data release $VERSION (temporary hosting)" --notes-file "$T/notes.md"
-for f in "$T/salmo-snp-data-$VERSION.tar" "$T/salmo-snp-genome-$ASSEMBLY.tar"; do  # big uploads can drop: retry
+for f in "${FILES[@]}"; do  # big uploads can drop: retry
   for try in 1 2 3; do
     gh release upload "data-$VERSION" "$f" --repo garethgillard/salmo-snp --clobber && break
     [ "$try" = 3 ] && exit 1

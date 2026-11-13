@@ -38,7 +38,8 @@ ENSEMBL_GENE = "https://www.ensembl.org/Salmo_salar/Gene/Summary?g={}"
 SALMOBASE_GENE = "https://salmobase.org/genes/id/{}?assembly=Ssal_v3.1"
 TRAITS = {"age_at_maturity": "Age at maturity", "flesh_colour": "Flesh colour", "ipn_resistance": "IPN resistance",
           "pd_resistance": "PD resistance", "cms_resistance": "CMS resistance", "sea_lice_resistance": "Sea lice resistance",
-          "smoltification": "Smoltification", "sex_determination": "Sex determination"}  # catalogue trait -> heading, in page order
+          "smoltification": "Smoltification", "migration_timing": "Migration timing", "bcwd_resistance": "BCWD resistance",
+          "ihn_resistance": "IHNV resistance", "sex_determination": "Sex determination"}  # catalogue trait -> heading, in page order
 CAVEATS = [  # (word in the catalogue's evidence or caveat, badge): why a row needs care
     ("suggestive", "suggestive"), ("not genome-wide", "suggestive"), ("strain", "strain-specific"),
     ("disputed", "disputed"), ("position", "position inferred"), ("A/B alleles", "A/B alleles only"),

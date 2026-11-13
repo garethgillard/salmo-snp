@@ -182,8 +182,11 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     Counted from the genotypes of its three cohorts (all 462 fish), biallelic SNPs on chromosomes with MAF
     >= 0.01 and a genotype in at least half of the fish. ENA open data; frequencies only.
   - Chromosome Y is kept (sdY and 3,928 peaks are on it); unplaced scaffolds are not, as for salmon.
-  - No known-loci catalogue: which loci and their USDA_OmykA_1.1 positions are G's (#38). The Locus browser opens at
-    greb1l and rock1 (28:12.02-12.21 Mb, the steelhead migration-timing region), chosen as a familiar locus only.
+  - Known loci (G asked for a catalogue from the publications, 2026-11-13; `rainbow_trout/catalog/known_loci.tsv`, 11
+    rows, to vet: #38): gene regions where the published markers are not placed on USDA_OmykA_1.1 (greb1l and rock1,
+    migration timing; six6, age at maturity; sdY) and QTL windows published on this assembly (BCWD resistance, 3; IHNV
+    resistance, 4: those with a false-positive probability under 0.1). No SNP rows and no effect alleles yet, so
+    uploads get a badge only near the four gene-region rows. The Locus browser opens at greb1l and rock1.
   - The public pool: an even sample of at most 2,000,000 of the release's public sites (snpscore.pool.MAX_SITES).
 - Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
   counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
@@ -285,6 +288,12 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   files (the biology) and wait for G's OK. main's protection asks for a PR and the `tests` check, not approvals (the
   PRs are under G's account, and GitHub doesn't let an author approve). After a merge, the branch restarts from main
   for the next PR. `deploy/nrec.sh` and new data releases need G's Mac (SSH key, data/raw).
+- Other species on the NREC demo (2026-11-13): `deploy/update.sh` ends with `deploy/species.sh`, which fetches a
+  release named in serve.py RELEASES that the VM lacks from the GitHub data release data-<version> (the release, its
+  genome and, built with `POOL=1 bash prep/github_release.sh`, its pool), checks it and puts it in
+  /srv/snpportal/releases/; settings.py finds that folder beside the default release. A deploy runs the update.sh
+  already on the VM, so a change to these scripts takes effect on the deploy after the one that installs it. Cloud
+  sessions may not create GitHub Releases (the API refuses): G creates data-<version>, or runs the script on a Mac.
 - Deploying the NREC demo (G, 2026-11-06): only when G asks in the chat ("deploy to NREC"), usually after several
   merged pull requests; never on your own initiative, and never a branch. Run the `deploy` workflow on main:
   `gh workflow run deploy.yml --ref main` (cloud sessions, REST only: `gh api -X POST
