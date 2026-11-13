@@ -294,6 +294,9 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   /srv/snpportal/releases/; settings.py finds that folder beside the default release. A deploy runs the update.sh
   already on the VM, so a change to these scripts takes effect on the deploy after the one that installs it. Cloud
   sessions may not create GitHub Releases (the API refuses): G creates data-<version>, or runs the script on a Mac.
+  Without either, the `species-data` workflow (run on main when G asks) builds the trout release from the public
+  sources on GitHub's runners (hours: three cohort jobs, then the build) and sends it with its pool to the VM
+  (`update.sh` `release <version>` -> `species.sh stdin`, checked before it is put in place).
 - Deploying the NREC demo (G, 2026-11-06): only when G asks in the chat ("deploy to NREC"), usually after several
   merged pull requests; never on your own initiative, and never a branch. Run the `deploy` workflow on main:
   `gh workflow run deploy.yml --ref main` (cloud sessions, REST only: `gh api -X POST
