@@ -1,0 +1,90 @@
+name: species-data
+# Another species' data release on the NREC demo, without G's Mac: built here from the public sources and sent to the
+# VM through the deploy key (snpportal/deploy/update.sh `release <version>`, which checks every file before it puts
+# the release in place). Run it on main when G asks (Actions > species-data > Run workflow), after a deploy has
+# installed the code that names the release (serve.py RELEASES). Rainbow trout: the three cohorts of the public
+# frequencies stream from ENA in parallel jobs (7, 16 and 55 GB; frequencies kept, genotypes never written), then one
+# job fetches the rest, builds the release (the motif layer takes most of the time) and its public pool, and sends them.
+on:
+  workflow_dispatch:
+
+jobs:
+  cohorts:
+    if: github.ref == 'refs/heads/main' && vars.NREC_HOST != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        cohort: [0, 1, 2]  # the files of rainbow_trout/layers.yaml public_af, in order
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -q -e snpscore -e snpdata
+      - name: Stream one cohort (sites and counts only)
+        working-directory: snpdata
+        run: |
+          python - <<'EOF'
+          import yaml
+          from snpdata.build import fetch
+          cfg = yaml.safe_load(open("rainbow_trout/layers.yaml"))
+          layer = next(x for x in cfg["layers"] if x["name"] == "public_af")
+          one = {"layers": [{"name": "public_af", "files": [layer["files"][${{ matrix.cohort }}]]}]}
+          open("one.yaml", "w").write(yaml.safe_dump(one))
+          fetch("one.yaml", "data/rainbow_trout/raw")
+          EOF
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cohort-${{ matrix.cohort }}
+          path: snpdata/data/rainbow_trout/raw/*.sites.vcf.gz
+          retention-days: 3
+          compression-level: 0
+
+  release:
+    needs: cohorts
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      HOST: ${{ vars.NREC_HOST }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -q -e snpscore -e snpdata
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: cohort-*
+          merge-multiple: true
+          path: snpdata/data/rainbow_trout/raw
+      - name: Fetch the other sources, build the release and its pool
+        working-directory: snpdata
+        run: |
+          version=$(sed -n 's/^RELEASES = {.*"rainbow_trout": "\([^"]*\)".*/\1/p' ../snpportal/snpportal/serve.py)
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          for try in 1 2 3 4 5; do  # Ensembl BioMart and EBI drop requests now and then: fetch keeps what it has
+            snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw && break
+            [ "$try" = 5 ] && exit 1
+            sleep 60
+          done
+          snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out "release/$version"
+          snpscore pool --release "release/$version" --memory 8GB
+          snpdata publish "release/$version" --to out/site > /dev/null
+          mkdir -p out/site/raw
+          genome=$(python -c "import json, sys; print(json.load(open(sys.argv[1]))['genome']['path'])" "release/$version/manifest.json")
+          cp "$genome" "$genome.fai" "$genome.gzi" out/site/raw/
+          cp -r "release/$version/pool" out/pool
+      - name: Send it to the demo
+        shell: bash
+        working-directory: snpdata
+        env:
+          KEY: ${{ secrets.NREC_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.NREC_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          tar -C out -cf - site pool |
+            ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes -o ServerAliveInterval=30 ubuntu@"$HOST" "release $VERSION"

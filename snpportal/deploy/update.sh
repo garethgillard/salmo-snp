@@ -4,6 +4,7 @@
 # nrec.sh runs it too.
 # After installing, deploy/species.sh fetches the releases of the other species this code names (rainbow trout) that
 # the VM doesn't hold yet, from the GitHub data release: the portal's species bar then offers them.
+# `release <version>` takes such a release as a tar on stdin instead (the species-data workflow builds and sends it).
 # The commit comes in SSH_ORIGINAL_COMMAND (or $1); anything that is not a commit on origin/main means origin/main.
 # If the portal doesn't answer after the restart, it goes back to the previous commit and fails.
 # `pool` instead takes a public pool (pool.parquet and background.json, a .tar.gz on stdin) that the deploy workflow
@@ -30,6 +31,12 @@ answers() {  # restart the portal; succeed when it answers
   done
   return 1
 }
+
+if [[ $want == release\ * ]]; then  # `release <version>`: another species' release as a tar on stdin (species.sh)
+  bash snpportal/deploy/species.sh stdin "${want#release }" || exit 1
+  answers || { echo "the portal did not answer after the new release" >&2; exit 1; }
+  exit 0
+fi
 
 if [ "$want" = pool ]; then
   new=$(mktemp -d "$release/.pool-XXXXXX")
