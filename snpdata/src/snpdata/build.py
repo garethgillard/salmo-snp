@@ -149,7 +149,8 @@ def read_vcf_info(path, layer):
     # `info` columns where chrom, pos, ref and alt match. rename_chrom: true maps other chromosome names (ssa01,
     # HG993260.1, ...) to 1-29 through the alias table; id_as: <column> keeps the VCF ID (e.g. an array probe name).
     # pool: true (cohorts of one study, each with AC, AN and NS): the counts are summed per site and af and maf come
-    # from the sums; biallelic SNPs only (a position with several alternative alleles is left out), with at least
+    # from the sums; biallelic SNPs on chromosomes only (a position with several alternative alleles is left out, and
+    # so are unplaced scaffolds), with at least
     # min_an called alleles and a minor allele frequency of at least min_maf.
     def one(p, info):
         types = info_types(p)
@@ -167,7 +168,8 @@ def read_vcf_info(path, layer):
         both = " UNION ALL ".join(f"SELECT chrom, start, \"end\", ref, alt, ac, an, ns FROM ({one(p, layer['info'])})" for p in paths)
         return f"""SELECT chrom, start, "end", ref, alt, round(ac / an, 6) AS af, round(least(ac, an - ac) / an, 6) AS maf, ac, an, ns
                    FROM (SELECT chrom, start, "end", ref, alt, sum(ac)::BIGINT AS ac, sum(an)::BIGINT AS an, sum(ns)::BIGINT AS ns
-                         FROM ({both}) WHERE regexp_full_match(ref || alt, '[ACGT]{{2}}') GROUP BY ALL)
+                         FROM ({both}) WHERE regexp_full_match(ref || alt, '[ACGT]{{2}}')
+                               AND regexp_full_match(chrom, '[0-9]+|[A-Z]') GROUP BY ALL)
                    WHERE an >= {int(layer.get('min_an', 1))} AND least(ac, an - ac) / an >= {float(layer.get('min_maf', 0))}
                    QUALIFY count(*) OVER (PARTITION BY chrom, "end") = 1"""
     first, *others = [one(p, src.get("info", layer.get("info"))) for p, src in zip(paths, sources(layer))]
@@ -635,6 +637,17 @@ def build(layers_yaml, data_dir, out_dir):
                                "rows": sum(1 for line in target.read_text().splitlines()[1:] if line.strip())}
     demo = [here / catalog["file"]] if catalog and (here / catalog["file"]).exists() else []
     demo += [data / f for f in cfg.get("demo", []) if (data / f).is_file()]
+    sample = cfg.get("demo_sample")  # an example cut from a built point layer: an even sample of its sites, as a VCF
+    if sample and (out / f"{sample['layer']}.parquet").exists():
+        table = f"read_parquet({lit(out / (sample['layer'] + '.parquet'))})"
+        every = max(1, con.execute(f"SELECT count(*) FROM {table}").fetchone()[0] // int(sample["n"]))
+        target = Path(tempfile.mkdtemp()) / sample["file"]
+        target.write_text("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")
+        with open(target, "a") as f:
+            f.writelines(f"{c}\t{p}\t.\t{r}\t{a}\t.\t.\tAF={af}\n" for c, p, r, a, af in con.execute(
+                f"""SELECT chrom, "end", ref, alt, af FROM {table} WHERE hash(chrom, "end") % {every} = 0
+                    ORDER BY try_cast(chrom AS INTEGER), chrom, "end" """).fetchall())
+        demo.append(target)
     if demo:  # example inputs for the portal (SYNTHETIC ones say so in their name)
         (out / "demo").mkdir(exist_ok=True)
         for src in demo:

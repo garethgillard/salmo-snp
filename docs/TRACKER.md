@@ -21,6 +21,21 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
   lists score the same tiers.
 - Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
 
+## Rainbow trout (2026-11-12, G: a second species, with a species bar)
+Built on the session branch, for G to inspect before anything is deployed (AGENTS.md Plan 7, DECISIONS #38-#45):
+- [x] `snpdata/rainbow_trout/layers.yaml` and `tracks.yaml`: USDA_OmykA_1.1; AQUA-FAANG peaks and states (17
+  conditions), blacklist, LORe, Ss4R, synteny, 603 signal tracks; Ensembl 116 genes, regulatory build, GERP, orthologs;
+  NCBI models; JASPAR motifs; EVA rs IDs; public frequencies from the Maryland low-pass study (ENA PRJEB109732)
+- [x] snpdata: manifest `species`, named chromosomes (Y), pooled cohort frequencies, downloads that resume, a
+  build-time example list; snpscore: assembly names and the pool's sites from the release
+- [x] Portal: species bar (cookie), one release per species (also on a server: `SNPPORTAL_RELEASES_DIR`), wording per
+  release, the Data page from the release, `salmo-snp download --species`, vendor names Omy<chr>p<pos>
+- [x] Tests: `tests/fixture_trout`, snpdata, snpscore and portal tests for the second species
+- [ ] G: look at it (the pull request's screenshots, or the session's preview), then publish the release
+  (`bash prep/github_release.sh release/trout-<date>` after a build on G's Mac, or from a cloud session) and deploy
+  (`deploy/nrec.sh` sends both releases; the deploy workflow's pool step still knows the salmon release only)
+- [ ] The 335-fish cohort of the frequencies, a known-loci catalogue (#38), expression (#44), a guided tour for trout
+
 ## Next
 Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged: I1-I5, I7-I12, I15,
 I17, I18 (PR #2, 2026-11-05); mixed purposes (I8), Primer3 and Agena files (I14), the ICSASG_v2 conversion (I19), the

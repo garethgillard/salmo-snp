@@ -200,10 +200,10 @@ def wording(where=None):
     latin, prefix = sp.get("latin", ""), sp.get("prefix", "chr")
     pairs = [(re.escape(a), b) for a, b in sp.get("wording") or []]
     pairs += [(r"Ssal_v3\.1", m.get("assembly", "")), (r"ICSASG_v2", older), (r"Salmo_salar", latin.replace(" ", "_")),
-              (r"Salmo salar", latin), (r"(?<!>)Atlantic salmon", sp["name"].lower()), (r"\bssa(?=\d)", prefix),
+              (r"Salmo salar", latin), (r"(?<!>)Atlantic salmon", sp["name"].lower()), (r"\bssa(?=\d)", prefix), (r"\bSsa(?=\d+p|&lt;chromosome|<chromosome)", prefix.capitalize()),
               (r"(?<=[Cc]hromosomes )1[-–]29", span), (r"\b1[-–]29(?= \(Ensembl)", span)]
     if n:
-        pairs.append((r"\b21(?= (?:chromatin |sample |AQUA-FAANG )?(?:conditions|tissues and stages))", str(n)))
+        pairs.append((r"\b21(?=\s+(?:chromatin\s+|sample\s+|AQUA-FAANG\s+)?(?:conditions|tissues and stages))", str(n)))
     return [(re.compile(a), b) for a, b in pairs]
 
 
@@ -215,7 +215,7 @@ def middleware(get_response):
         try:
             response = get_response(request)
             kind = response.get("Content-Type", "")
-            if not response.streaming and kind.startswith(("text/html", "image/svg")):
+            if not response.streaming and kind.startswith(("text/html", "image/svg")) and not request.path.endswith("/releases/"):
                 pairs = wording()
                 if pairs:
                     text = response.content.decode(response.charset or "utf-8")
