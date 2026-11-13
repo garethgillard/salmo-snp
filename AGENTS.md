@@ -179,7 +179,7 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     genetic map or position conversion (EVA has too few rs IDs on Omyk_1.0 for blocks).
   - Public allele frequencies: the only public genome-wide set found on USDA_OmykA_1.1, the University of Maryland
     low-pass study (ENA PRJEB109732: 462 farmed fish at about 1x, imputed by Gencove, genotypes with posterior >= 0.9).
-    Counted from the genotypes of the cohorts fetched (layers.yaml says which), biallelic SNPs on chromosomes with MAF
+    Counted from the genotypes of its three cohorts (all 462 fish), biallelic SNPs on chromosomes with MAF
     >= 0.01 and a genotype in at least half of the fish. ENA open data; frequencies only.
   - Chromosome Y is kept (sdY and 3,928 peaks are on it); unplaced scaffolds are not, as for salmon.
   - No known-loci catalogue: which loci and their USDA_OmykA_1.1 positions are G's (#38). The Locus browser opens at
@@ -225,7 +225,7 @@ salmo-snp serve --release snpdata/release/dev          # or a release you built
 Rainbow trout (not needed for the tests: `snpdata/tests/fixture/rainbow_trout` is its fixture; `python
 prep/make_fixture_trout.py` in snpdata/ re-cuts it):
 ```bash
-cd snpdata && snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw   # ~25 GB streamed, 1.6 GB kept
+cd snpdata && snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw   # ~80 GB streamed, 2 GB kept
 snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out release/trout-2026-11-13   # ~1.5 h (motifs)
 salmo-snp download trout-2026-11-13 --from <the published folder>   # or: cp -r release/trout-... into the data folder's releases/
 ```
@@ -262,8 +262,9 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   proxy on 2026-11-04).
 - EBI's FTP hosts (ftp.ebi.ac.uk, ftp.sra.ebi.ac.uk) reset about half of the connections through the session's proxy
   and serve about 1.5 MB/s per connection (2026-11-12): `snpdata fetch` asks again from where a download stopped
-  (build.Resuming), but the trout cohort VCFs (7, 16 and 55 GB) took parallel ranged downloads to fetch here, and a
-  session's background processes die when its worker restarts: run long steps with `setsid nohup`, and push often.
+  (build.Resuming), but the trout cohort VCFs (7, 16 and 55 GB) took parallel ranged downloads here, processed in
+  parts that are kept when done: a session's background processes die when its worker restarts or the session is
+  paused, so make long steps resumable, run them with `setsid nohup`, and push often.
 - Building and showing a feature (G, 2026-11-04: G sees changes before they are merged):
   1. Work on the session's branch, one feature at a time, with a test in the right suite (pytest for snpscore,
      snpdata and snpportal/lib; `snpportal/snpportal/tests*.py` for pages); `bash tools/check.sh` before each push.

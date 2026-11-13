@@ -24,14 +24,14 @@ species:
   # this release's]. The assembly, the number of conditions and the chromosome names follow from the release itself.
   wording:
     - ["504-fish panel: mostly wild and farmed fish from Bertolotti et al. 2020 plus the 12 AQUA-FAANG fish",
-       "127 farmed rainbow trout sequenced at low coverage and imputed (University of Maryland, ENA PRJEB109732)"]
-    - ["504-fish panel", "127-fish low-pass set"]
-    - ["504 public fish, wild and farmed, of European and North American descent, pooled", "127 farmed fish, sequenced at low coverage and imputed"]
-    - ["504 public fish (wild and farmed, pooled;", "127 public fish (farmed, sequenced at low coverage and imputed;"]
-    - ["504 public fish, wild and farmed, pooled", "127 public fish, farmed, sequenced at low coverage and imputed"]
-    - ["504 public fish, pooled", "127 public fish, imputed"]
-    - ["504 public fish", "127 public fish"]
-    - ["504 fish", "127 fish"]
+       "462 farmed rainbow trout sequenced at low coverage and imputed (University of Maryland, ENA PRJEB109732)"]
+    - ["504-fish panel", "462-fish low-pass set"]
+    - ["504 public fish, wild and farmed, of European and North American descent, pooled", "462 farmed fish, sequenced at low coverage and imputed"]
+    - ["504 public fish (wild and farmed, pooled;", "462 public fish (farmed, sequenced at low coverage and imputed;"]
+    - ["504 public fish, wild and farmed, pooled", "462 public fish, farmed, sequenced at low coverage and imputed"]
+    - ["504 public fish, pooled", "462 public fish, imputed"]
+    - ["504 public fish", "462 public fish"]
+    - ["504 fish", "462 fish"]
     - ["wild and farmed, pooled", "farmed, imputed from 1x"]
     - ["brain, gonad, liver and muscle of 12 AquaGen fish (BodyMap); 5 embryo stages from embryo pools (DevMap)",
        "brain, liver and muscle of the AQUA-FAANG BodyMap fish; 5 embryo stages from embryo pools (DevMap)"]
@@ -208,21 +208,14 @@ layers:
 
   # Public allele frequencies. The only public genome-wide variant set found on USDA_OmykA_1.1 (2026-11-12): low-pass
   # (about 1x) sequencing of 462 farmed rainbow trout in three cohorts (35, 92 and 335 fish), imputed by Gencove against
-  # its rainbow trout panel; genotypes with a posterior below 0.9 are missing. fetch streams the VCFs (7 and 16 GB),
-  # counts AC, AN and NS from the genotypes and keeps only those, for SNPs; build sums the cohorts.
-  # This release uses the first two cohorts (127 fish). The third (335 fish, 55 GB: hours through a cloud session's
-  # proxy, which drops long downloads) is one more entry under `files`, with the numbers below changed to 462 fish:
-  #   - file: umd_trout_G0824-027.sites.vcf.gz
-  #     url: https://ftp.sra.ebi.ac.uk/vol1/analysis/ERZ292/ERZ29229759/G0824-027-UMD_Trout_GP90.vcf.gz
-  #     sites_only: [AC, AN, NS]
-  #     count_gt: true
-  #     snps_only: true
+  # its rainbow trout panel; genotypes with a posterior below 0.9 are missing. fetch streams the three VCFs (7, 16 and
+  # 55 GB), counts AC, AN and NS from the genotypes and keeps only those, for SNPs; build sums the cohorts.
   - name: public_af
     type: point
     format: vcf_info
     pool: true
     min_maf: 0.01   # PROVISIONAL: as the salmon panel's own filter (MAF > 0.01)
-    min_an: 128     # PROVISIONAL: a confident genotype in at least half of the 127 fish
+    min_an: 462     # PROVISIONAL: a confident genotype in at least half of the 462 fish
     info: {ac: AC, an: AN, ns: NS}
     files:
       - file: umd_trout_G1023-03.sites.vcf.gz
@@ -235,20 +228,25 @@ layers:
         sites_only: [AC, AN, NS]
         count_gt: true
         snps_only: true
+      - file: umd_trout_G0824-027.sites.vcf.gz
+        url: https://ftp.sra.ebi.ac.uk/vol1/analysis/ERZ292/ERZ29229759/G0824-027-UMD_Trout_GP90.vcf.gz
+        sites_only: [AC, AN, NS]
+        count_gt: true
+        snps_only: true
     description: >-
-      Public SNP at this exact position among 127 farmed rainbow trout sequenced at low coverage and imputed: ALT
+      Public SNP at this exact position among 462 farmed rainbow trout sequenced at low coverage and imputed: ALT
       allele frequency (af), minor allele frequency (maf), ALT allele count (ac), alleles (an) and fish (ns) with a
       confident genotype (posterior of at least 0.9); biallelic SNPs with MAF of at least 0.01 and a genotype in at
       least half of the fish
     population: >-
-      127 farmed rainbow trout (two of the three cohorts, 35 and 92 fish, of the University of Maryland fillet-yield and gut-microbiota project),
+      462 farmed rainbow trout (the three cohorts, 35, 92 and 335 fish, of the University of Maryland fillet-yield and gut-microbiota project),
       sequenced at about 1x and imputed by Gencove against its rainbow trout reference panel; imputed genotypes lean
       towards the panel's frequencies, rare alleles are under-called, and one farmed population says little about
       others or about wild fish
     citation: >-
       University of Maryland, Department of Animal and Avian Sciences: Integrated genomics and metagenomics predictions
       and modulation of the gut microbiota-muscle axis to improve fillet yield in rainbow trout, ENA/EVA PRJEB109732
-      (analyses ERZ29229758, ERZ29229760)
+      (analyses ERZ29229758, ERZ29229759, ERZ29229760)
     licence: ENA open data (EMBL-EBI terms of use); frequencies only, genotypes are never kept
 
   - name: motif

@@ -34,7 +34,7 @@ Built on the session branch, for G to inspect before anything is deployed (AGENT
 - [ ] G: look at it (the pull request's screenshots, or the session's preview), then publish the release
   (`bash prep/github_release.sh release/trout-<date>` after a build on G's Mac, or from a cloud session) and deploy
   (`deploy/nrec.sh` sends both releases; the deploy workflow's pool step still knows the salmon release only)
-- [ ] The 335-fish cohort of the frequencies, a known-loci catalogue (#38), expression (#44), a guided tour for trout
+- [ ] A known-loci catalogue (#38), expression (#44), a guided tour for trout
 
 ## Next
 Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged: I1-I5, I7-I12, I15,
