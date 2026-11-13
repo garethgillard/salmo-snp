@@ -30,7 +30,7 @@ Built on the session branch, for G to inspect before anything is deployed (AGENT
   build-time example list; snpscore: assembly names and the pool's sites from the release
 - [x] Portal: species bar (cookie), one release per species (also on a server: `SNPPORTAL_RELEASES_DIR`), wording per
   release, the Data page from the release, `salmo-snp download --species`, vendor names Omy<chr>p<pos>
-- [x] Tests: `tests/fixture_trout`, snpdata, snpscore and portal tests for the second species
+- [x] Tests: `tests/fixture/rainbow_trout`, snpdata, snpscore and portal tests for the second species
 - [ ] G: look at it (the pull request's screenshots, or the session's preview), then publish the release
   (`bash prep/github_release.sh release/trout-<date>` after a build on G's Mac, or from a cloud session) and deploy
   (`deploy/nrec.sh` sends both releases; the deploy workflow's pool step still knows the salmon release only)

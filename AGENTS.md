@@ -222,7 +222,7 @@ bash tools/check.sh                                    # what CI runs: pyflakes,
 salmo-snp serve                                        # the portal on http://127.0.0.1:8000/snp/, with the data below
 salmo-snp serve --release snpdata/release/dev          # or a release you built
 ```
-Rainbow trout (not needed for the tests: `snpdata/tests/fixture_trout` is its fixture; `python
+Rainbow trout (not needed for the tests: `snpdata/tests/fixture/rainbow_trout` is its fixture; `python
 prep/make_fixture_trout.py` in snpdata/ re-cuts it):
 ```bash
 cd snpdata && snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw   # ~25 GB streamed, 1.6 GB kept

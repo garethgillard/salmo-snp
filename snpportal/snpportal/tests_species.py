@@ -13,7 +13,7 @@ import snpdata
 from . import jobs
 
 DATA = Path(__file__).resolve().parents[2] / "snpdata"
-TROUT = DATA / "tests" / "fixture_trout"
+TROUT = DATA / "tests" / "fixture" / "rainbow_trout"
 
 
 @skipUnless(TROUT.exists(), "needs snpdata/ next to snpportal/")

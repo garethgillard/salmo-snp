@@ -150,9 +150,9 @@ def test_sha256sums(release):
 
 
 def test_rainbow_trout_release(tmp_path):
-    """The second species (rainbow_trout/layers.yaml on tests/fixture_trout): its own assembly, chromosomes (Y among
+    """The second species (rainbow_trout/layers.yaml on tests/fixture/rainbow_trout): its own assembly, chromosomes (Y among
     them), conditions and example list; frequencies pooled over the cohorts' site files; no known-loci catalogue."""
-    out = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture_trout", tmp_path / "trout-test")
+    out = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "trout-test")
     m = json.loads((out / "manifest.json").read_text())
     assert (m["species"]["key"], m["assembly"], list(m["chrom_sizes"])) == ("rainbow_trout", "USDA_OmykA_1.1", ["28", "Y"])
     layers = {l["name"]: l for l in m["layers"]}
@@ -161,7 +161,7 @@ def test_rainbow_trout_release(tmp_path):
     assert "catalog" not in m and [d["file"] for d in m["demo"]] == ["demo/public_50k.vcf"]
     assert m["rsid"]["older"] == "Omyk_1.0" and m["rsid"]["rows"] > 0 and m["flank_keys"]["rows"] > 0
     con = duckdb.connect()
-    files = [str(DATA / "tests" / "fixture_trout" / s) for s in layers["public_af"]["source_file"].split(", ")]
+    files = [str(DATA / "tests" / "fixture" / "rainbow_trout" / s) for s in layers["public_af"]["source_file"].split(", ")]
     assert len(files) >= 2
     chrom, pos, ac, an, af, maf = con.execute(f"""SELECT chrom, "end", ac, an, af, maf FROM read_parquet('{out / 'public_af.parquet'}')
                                                   ORDER BY an DESC, "end" LIMIT 1""").fetchone()

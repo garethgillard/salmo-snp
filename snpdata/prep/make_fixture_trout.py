@@ -1,4 +1,4 @@
-"""Cut the rainbow trout test fixture out of data/rainbow_trout/raw into tests/fixture_trout: two small regions of
+"""Cut the rainbow trout test fixture out of data/rainbow_trout/raw into tests/fixture/rainbow_trout: two small regions of
 USDA_OmykA_1.1, chromosome 28 12.00-12.22 Mb (greb1l and rock1) and Y 5.95-6.05 Mb (sdY). Run in snpdata/ after
 `snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw`. Sites and frequencies only: the
 fetched files hold no genotypes."""
@@ -8,7 +8,7 @@ from pathlib import Path
 
 from make_fixture_genome import main as genome
 
-RAW, OUT = Path("data/rainbow_trout/raw"), Path("tests/fixture_trout")
+RAW, OUT = Path("data/rainbow_trout/raw"), Path("tests/fixture/rainbow_trout")
 REGIONS = {"28": (12_000_000, 12_220_000), "Y": (5_950_000, 6_050_000)}
 GENOME = "Oncorhynchus_mykiss.USDA_OmykA_1.1.dna_sm.toplevel.fa.gz"
 GFF = "Oncorhynchus_mykiss.USDA_OmykA_1.1.116.chr.gff3.gz"

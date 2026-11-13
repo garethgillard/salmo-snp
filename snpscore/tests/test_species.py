@@ -15,7 +15,7 @@ DATA = Path(__file__).resolve().parent.parent.parent / "snpdata"
 
 @pytest.fixture(scope="module")
 def trout(tmp_path_factory):
-    return build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture_trout", tmp_path_factory.mktemp("release") / "trout-test")
+    return build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path_factory.mktemp("release") / "trout-test")
 
 
 def test_annotate_trout(trout, tmp_path):
