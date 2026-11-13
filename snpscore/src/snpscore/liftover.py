@@ -19,13 +19,13 @@ V2_ALIASES = {**{f"CM00{3279 + i}.1": str(i + 1) for i in range(29)}, **{f"NC_0{
 
 def chrom_sql(expr, aliases=None):
     """SQL for a chromosome name of the assembly converted from as '1'-'29': an accession of `aliases` ({name:
-    chrom}, with or without its version), else 25, 025, chr25 or ssa25; NULL for anything else."""
+    chrom}, with or without its version), else 25, 025, chr25, ssa25 or omy25; NULL for anything else."""
     e = f"lower(trim({expr}))"
     pairs = {}
     for name, chrom in (aliases or {}).items():
         pairs[name.lower()] = pairs[name.lower().split(".")[0]] = str(chrom)
-    number = f"try_cast(regexp_replace({e}, '^(chr|ssa)', '') AS INTEGER)"
-    numbered = f"CASE WHEN ({number}) BETWEEN 1 AND 29 THEN ({number})::VARCHAR END"
+    number = f"try_cast(regexp_replace({e}, '^(chr|ssa|omy)', '') AS INTEGER)"
+    numbered = f"CASE WHEN ({number}) BETWEEN 1 AND 99 THEN ({number})::VARCHAR END"
     if not pairs:
         return f"({numbered})"
     named = "".join(f" WHEN {lit(k)} THEN {lit(v)}" for k, v in sorted(pairs.items()))

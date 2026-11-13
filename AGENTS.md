@@ -1,6 +1,7 @@
 # salmo-snp: notes for people and their AI assistants
 
-Functional SNP scoring for Atlantic salmon (Ssal_v3.1): public annotation data, a scoring engine and a web portal.
+Functional SNP scoring for Atlantic salmon (Ssal_v3.1) and rainbow trout (USDA_OmykA_1.1; G, 2026-11-12): public
+annotation data, a scoring engine and a web portal.
 Owner: NMBU; maintainer Gareth Gillard (G). The repository is public on GitHub (G, 2026-11-10); licence: PolyForm Noncommercial
 1.0.0 (LICENSE); contributors accept CLA.md (CONTRIBUTING.md).
 Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says what's next.
@@ -8,7 +9,7 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 ## Layout
 - `snpdata/`: collects the public sources and builds a versioned release (Parquet tables, manifest.json, tracks.yaml,
   the known-loci catalogue): `snpdata fetch`, `snpdata build`, `snpdata tracks`. Its README's "Release format" is the
-  contract with the other two.
+  contract with the other two. One layer registry per species: `layers.yaml` (salmon), `rainbow_trout/layers.yaml`.
 - `snpscore/`: scores a SNP list against a release (`snpscore annotate`), plus `rsid`, `pool`, `benchmark` and `gwas`.
   The tier rules (weights.yaml) live here, not in the release.
 - `snpportal/`: the Django web portal; reads a release and calls snpscore. `snpportal/lib/` holds its plain-Python
@@ -52,6 +53,15 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
    (CODEOWNERS); a merge to main deploys nothing: the NREC demo is updated when G asks (the `deploy` workflow);
    a vX.Y.Z tag builds the wheels (and later the image) as a GitHub Release.
 
+7. Species (G, 2026-11-12): a release is for one species and assembly. Salmon releases are named by their date
+   (2026-11-05), another species' with the species first (trout-2026-11-13), and the manifest's `species` block
+   (layers.yaml: key, name, latin, prefix, the browser's example locus, the pages' wording, samples, searches) says
+   which. The portal's species bar (top right; a cookie, so it works on a server too) picks the species: new lists are
+   scored against that species' release (serve.py RELEASES names one per species), while results, panels and saved
+   projects keep the release they were made with. The pages are written for salmon; `jobs.wording` is the one place
+   that turns them into another release's (assembly, older assembly, number of conditions, chromosome names, and the
+   release's own pairs). Adding a species: a folder with layers.yaml and tracks.yaml, a fixture, an entry in RELEASES.
+
 ## Rules
 - Never commit breeder data (genotypes, GWAS results, array manifests): not in fixtures, tests or docs either.
   `data/`, `release/` and results folders are never committed. Never edit files in snpdata/data/raw by hand.
@@ -63,7 +73,8 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
   and cloud sessions install the newest versions those allow. DuckDB 2: SQL list lambdas are `lambda x: ...` (not
   `x -> ...`), and a half-read result blocks its connection: on a shared connection (`duckdb.sql`, `duckdb.execute`)
   use `fetchall()`, not `fetchone()`.
-- Assembly Ssal_v3.1, chromosomes named "1"-"29" (as AQUA-FAANG and Ensembl). Layers use BED coordinates; SNPs use
+- Assembly Ssal_v3.1, chromosomes named "1"-"29" (as AQUA-FAANG and Ensembl); rainbow trout USDA_OmykA_1.1, "1"-"28",
+  "30"-"32" and "Y" (the Arlee line has no 29; layers.yaml `chromosome_names`). Layers use BED coordinates; SNPs use
   1-based `pos`; a SNP is inside an interval when start < pos <= end.
 - Changes go through pull requests. Anything touching the biology files (CODEOWNERS lists them) needs G's OK in the
   chat before it is merged.
@@ -119,6 +130,11 @@ Decided:
   disagree, the flank's position is kept (the only one checked against the genome), and the rs ID's is named
   (position_source) and counted.
 
+- Rainbow trout (G, 2026-11-12: add it as a second species, on the assembly of the AQUA-FAANG trout data, with the
+  AQUA-FAANG data as the highlight and whatever public data of the salmon kinds exists; a species-specific release,
+  and a species bar at the top right that picks the release). How it was done: Plan 7; what Claude chose on the way
+  is under Provisional below and in docs/DECISIONS.md #38-#45.
+
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.
   Not counted: repressed polycomb, quiescent, ZNF genes and repeats, Unknown_1.
@@ -155,6 +171,23 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   IDs with one offset (layers.yaml liftover); fSalSal1 from same-chromosome minimap2 asm5 alignments, mapq >= 5,
   overlapping blocks dropped (DECISIONS #37; the alignment postponed, G 2026-11-06: no fSalSal1
   tables in a release until I20).
+- Rainbow trout release (2026-11-12, DECISIONS #38-#45; the tier rules are salmon's weights.yaml, unchanged):
+  - Layers: AQUA-FAANG unified peaks and ChromHMM states (17 conditions: brain, liver, muscle by maturity and sex, five
+    embryo stages; no gonad states), blacklist, LORe regions, Ss4R duplicates (the same salmon-trout table, its Omyk
+    rows) and synteny; Ensembl 116 genes, regulatory build and GERP; NCBI RefSeq models; JASPAR motifs (G's salmon
+    rule); EVA release 9 rs IDs (USDA_OmykA_1.1, and Omyk_1.0 as the older assembly). No molQTL, expression, Bgee,
+    genetic map or position conversion (EVA has too few rs IDs on Omyk_1.0 for blocks).
+  - Public allele frequencies: the only public genome-wide set found on USDA_OmykA_1.1, the University of Maryland
+    low-pass study (ENA PRJEB109732: 462 farmed fish at about 1x, imputed by Gencove, genotypes with posterior >= 0.9).
+    Counted from the genotypes of its three cohorts (all 462 fish), biallelic SNPs on chromosomes with MAF
+    >= 0.01 and a genotype in at least half of the fish. ENA open data; frequencies only.
+  - Chromosome Y is kept (sdY and 3,928 peaks are on it); unplaced scaffolds are not, as for salmon.
+  - Known loci (G asked for a catalogue from the publications, 2026-11-13; `rainbow_trout/catalog/known_loci.tsv`, 11
+    rows, to vet: #38): gene regions where the published markers are not placed on USDA_OmykA_1.1 (greb1l and rock1,
+    migration timing; six6, age at maturity; sdY) and QTL windows published on this assembly (BCWD resistance, 3; IHNV
+    resistance, 4: those with a false-positive probability under 0.1). No SNP rows and no effect alleles yet, so
+    uploads get a badge only near the four gene-region rows. The Locus browser opens at greb1l and rock1.
+  - The public pool: an even sample of at most 2,000,000 of the release's public sites (snpscore.pool.MAX_SITES).
 - Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
   counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
   priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).
@@ -192,6 +225,13 @@ bash tools/check.sh                                    # what CI runs: pyflakes,
 salmo-snp serve                                        # the portal on http://127.0.0.1:8000/snp/, with the data below
 salmo-snp serve --release snpdata/release/dev          # or a release you built
 ```
+Rainbow trout (not needed for the tests: `snpdata/tests/fixture/rainbow_trout` is its fixture; `python
+prep/make_fixture_trout.py` in snpdata/ re-cuts it):
+```bash
+cd snpdata && snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw   # ~80 GB streamed, 2 GB kept
+snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out release/trout-2026-11-13   # ~1.5 h (motifs)
+salmo-snp download trout-2026-11-13 --from <the published folder>   # or: cp -r release/trout-... into the data folder's releases/
+```
 Without conda: a Python 3.12 venv and `pip install -e "snpscore[test]" -e snpdata -e snpportal`, as CI. `bash tools/user_install_test.sh [python]` checks a new user's install (wheels, the
 newest dependencies allowed, publish -> download -> annotate -> serve); run it after changing packaging,
 dependencies or serve.py.
@@ -223,6 +263,11 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
 - The NREC demo: https://test.salmobase.org/snp/ for people (salmobase's Apache redirects it to https://158.39.75.9/snp/;
   G, 2026-11-10); sessions use https://158-39-75-9.sslip.io/snp/ (the bare IP didn't connect through the session's
   proxy on 2026-11-04).
+- EBI's FTP hosts (ftp.ebi.ac.uk, ftp.sra.ebi.ac.uk) reset about half of the connections through the session's proxy
+  and serve about 1.5 MB/s per connection (2026-11-12): `snpdata fetch` asks again from where a download stopped
+  (build.Resuming), but the trout cohort VCFs (7, 16 and 55 GB) took parallel ranged downloads here, processed in
+  parts that are kept when done: a session's background processes die when its worker restarts or the session is
+  paused, so make long steps resumable, run them with `setsid nohup`, and push often.
 - Building and showing a feature (G, 2026-11-04: G sees changes before they are merged):
   1. Work on the session's branch, one feature at a time, with a test in the right suite (pytest for snpscore,
      snpdata and snpportal/lib; `snpportal/snpportal/tests*.py` for pages); `bash tools/check.sh` before each push.
@@ -243,6 +288,12 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   files (the biology) and wait for G's OK. main's protection asks for a PR and the `tests` check, not approvals (the
   PRs are under G's account, and GitHub doesn't let an author approve). After a merge, the branch restarts from main
   for the next PR. `deploy/nrec.sh` and new data releases need G's Mac (SSH key, data/raw).
+- Other species on the NREC demo (2026-11-13): `deploy/update.sh` ends with `deploy/species.sh`, which fetches a
+  release named in serve.py RELEASES that the VM lacks from the GitHub data release data-<version> (the release, its
+  genome and, built with `POOL=1 bash prep/github_release.sh`, its pool), checks it and puts it in
+  /srv/snpportal/releases/; settings.py finds that folder beside the default release. A deploy runs the update.sh
+  already on the VM, so a change to these scripts takes effect on the deploy after the one that installs it. Cloud
+  sessions may not create GitHub Releases (the API refuses): G creates data-<version>, or runs the script on a Mac.
 - Deploying the NREC demo (G, 2026-11-06): only when G asks in the chat ("deploy to NREC"), usually after several
   merged pull requests; never on your own initiative, and never a branch. Run the `deploy` workflow on main:
   `gh workflow run deploy.yml --ref main` (cloud sessions, REST only: `gh api -X POST

@@ -147,3 +147,37 @@ def test_sha256sums(release):
     files = {p.relative_to(release).as_posix() for p in release.rglob("*") if p.is_file() and p.name != "SHA256SUMS"}
     assert set(sums) == files and "manifest.json" in files and "catalog/known_loci.tsv" in files
     assert sums["manifest.json"] == hashlib.sha256((release / "manifest.json").read_bytes()).hexdigest()
+
+
+def test_rainbow_trout_release(tmp_path):
+    """The second species (rainbow_trout/layers.yaml on tests/fixture/rainbow_trout): its own assembly, chromosomes (Y among
+    them), conditions, catalogue and example list; frequencies pooled over the cohorts' site files; build --reuse."""
+    out = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "trout-test")
+    m = json.loads((out / "manifest.json").read_text())
+    assert (m["species"]["key"], m["assembly"], list(m["chrom_sizes"])) == ("rainbow_trout", "USDA_OmykA_1.1", ["28", "Y"])
+    layers = {l["name"]: l for l in m["layers"]}
+    conditions = [c for c in layers["chromatin"]["columns"] if c not in ("summary", "id")]  # 17 genome-wide; those with a peak here
+    assert {"Brain_Mature_Male", "Liver_Immature_Female", "LateBlastulation"} <= set(conditions) and not any("Gonad" in c for c in conditions)
+    assert m["catalog"]["rows"] == 11 and [d["file"] for d in m["demo"]] == ["demo/known_loci.tsv", "demo/public_50k.vcf"]
+    again = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "again", reuse=out)
+    reused = json.loads((again / "manifest.json").read_text())  # a rebuild that copies every unchanged layer
+    assert [(l["name"], l["sha256"], l["rows"]) for l in reused["layers"]] == [(l["name"], l["sha256"], l["rows"]) for l in m["layers"]]
+    assert reused["chrom_sizes"] == m["chrom_sizes"] and (again / "motif.meme").read_bytes() == (out / "motif.meme").read_bytes()
+    assert m["rsid"]["older"] == "Omyk_1.0" and m["rsid"]["rows"] > 0 and m["flank_keys"]["rows"] > 0
+    con = duckdb.connect()
+    files = [str(DATA / "tests" / "fixture" / "rainbow_trout" / s) for s in layers["public_af"]["source_file"].split(", ")]
+    assert len(files) >= 2
+    chrom, pos, ac, an, af, maf = con.execute(f"""SELECT chrom, "end", ac, an, af, maf FROM read_parquet('{out / 'public_af.parquet'}')
+                                                  ORDER BY an DESC, "end" LIMIT 1""").fetchone()
+    counts = [0, 0]
+    for path in files:  # the same site in each cohort's file: AC and AN add up
+        for line in gzip.open(path, "rt"):
+            f = line.split("\t")
+            if f[0] == chrom and not line.startswith("#") and int(f[1]) == pos:
+                info = dict(kv.split("=") for kv in f[7].strip().split(";"))
+                counts = [counts[0] + int(info["AC"]), counts[1] + int(info["AN"])]
+    assert counts == [ac, an] and af == round(ac / an, 6) and maf == round(min(ac, an - ac) / an, 6) and maf >= 0.01
+    assert con.execute(f"SELECT count(*) FROM read_parquet('{out / 'public_af.parquet'}') WHERE chrom NOT IN ('28', 'Y')").fetchone()[0] == 0
+    aliases = dict(con.execute(f"SELECT alias, chrom FROM read_parquet('{out / 'alias.parquet'}')").fetchall())
+    assert (aliases["omy28"], aliases["nc_048592.1"], aliases["chry"]) == ("28", "28", "Y")
+    assert con.execute(f"SELECT ohnolog_chrom FROM read_parquet('{out / 'ss4r.parquet'}') WHERE gene_id = 'ENSOMYG00000036625'").fetchone() == ("8",)

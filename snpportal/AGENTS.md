@@ -22,6 +22,17 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   args (HTTPS_PROXY), so pip trusts the session's proxy.
 - Health: `/snp/health/` (JSON, no content) and a Django system check (`manage.py check`: the release re-hashed).
 
+## Species
+- A release is for one species (manifest `species`). `jobs.species_releases()` gives one release per species: the
+  default (`SNPSCORE_RELEASE`), and the newest of each other species under `SNPPORTAL_RELEASES_DIR` (a local
+  install's releases/; a server's folder of extra releases, with `SNPSCORE_GENOME_DIR` holding every genome).
+- The species bar (base_portal.html, top right; POST /snp/species/ sets the `snp_species` cookie) picks the species
+  for new work; job, panel and project pages read their own release whatever the cookie says (`jobs.for_request`).
+- Pages and constants are written for salmon. `jobs.wording()` rewrites an HTML or SVG response of another species'
+  release in one place: assembly, older assembly, the number of conditions, chromosome names, and the pairs in the
+  release's `species.wording`. Write new salmon-specific text plainly, then add a pair there if trout needs another
+  wording; things that are data (examples, default locus, searches, samples, citations) come from the manifest.
+
 ## Look like salmobase
 - Pages extend `snpportal/base_portal.html` (which extends `salmobase/base.html` and fills its blocks `head`, `content`, `scripts`). Bootstrap 5.1.3 and jQuery are already loaded there.
 - Interactivity with htmx (one script tag, with SRI); no frontend build step, no chart libraries: figures are server-rendered SVG from `figures.py`.

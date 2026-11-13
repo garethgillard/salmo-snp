@@ -290,7 +290,8 @@ def prepare(path, release_dir, out_dir, threads=2, memory_limit="2GB", max_snps=
     (out / "gwas.json").write_text(json.dumps(report, indent=1))
     if not report["kept"]:
         names = ", ".join(f"'{u['name']}' ({u['rows']})" for u in report["unknown_chromosomes"][:3])
-        raise InputError("No rows have a Ssal_v3.1 chromosome (1-29 or an alias), a whole-number position and a usable p."
+        raise InputError(f"No rows have a {manifest.get('assembly') or 'Ssal_v3.1'} chromosome (or an alias of one), a "
+                         "whole-number position and a usable p."
                          + (f" Most common chromosome names in the file: {names}." if names else ""))
     return snps
 

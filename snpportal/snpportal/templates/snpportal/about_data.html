@@ -55,6 +55,10 @@
 
 <section class="sp-card mb-3" id="samples" aria-labelledby="samples-h">
   <h2 id="samples-h">Samples and population scope</h2>
+  {% if not salmon %}<ul class="sp-small mt-2 mb-1 ps-3">
+    {% for line in samples %}<li>{{ line }}</li>{% endfor %}
+    {% if population %}<li>Public allele frequencies (MAF): {{ population }}; your strain can differ.</li>{% endif %}
+  </ul>{% else %}
   <ul class="sp-small mt-2 mb-1 ps-3">
     <li>Chromatin states, ATAC peaks, signal, molQTL and expression: 12 AquaGen commercial fish (AQUA-FAANG BodyMap: brain, gonad,
       liver, muscle) and embryo pools at five stages (DevMap).</li>
@@ -80,13 +84,13 @@
       </table></div>
     </div>
     <p class="sp-small sp-muted mt-2 mb-0">Sample metadata with UBERON terms: <a href="https://data.faang.org/" rel="noreferrer noopener" target="_blank">FAANG data portal</a>.</p>
-  </details>
+  </details>{% endif %}
 </section>
 
 <details class="sp-card sp-more" id="cite"><summary>How to cite the data</summary>
   <p class="sp-small mt-2">Please cite the sources of the layers you used, and give the release and the checksums from your download.</p>
   <dl class="sp-dl sp-small mb-0">{% for what, ref, url in citations %}<dt>{{ what }}</dt>
-    <dd>{{ ref }} <a href="{{ url }}" rel="noreferrer noopener" target="_blank">{{ url|cut:"https://" }}</a></dd>{% endfor %}</dl>
-  <p class="sp-small sp-muted mt-2 mb-0">The known-loci papers are on the <a href="{% url 'snpportal:known_loci' %}">Known loci</a> page.</p>
+    <dd>{{ ref }}{% if url %} <a href="{{ url }}" rel="noreferrer noopener" target="_blank">{{ url|cut:"https://" }}</a>{% endif %}</dd>{% endfor %}</dl>
+  {% if known_loci %}<p class="sp-small sp-muted mt-2 mb-0">The known-loci papers are on the <a href="{% url 'snpportal:known_loci' %}">Known loci</a> page.</p>{% endif %}
 </details>
 {% endblock main %}

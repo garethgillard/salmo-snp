@@ -36,7 +36,7 @@ EXAMPLES = {  # the release's demo/ files (name without extension) -> (title, wh
     "known_loci": ("Known loci", "{n:,} from published studies"),
     "chip_demo_SYNTHETIC": ("SNP chip", "synthetic, {n:,} SNPs"),
     "gwas_maturation_SYNTHETIC": ("GWAS", "synthetic, maturation"),  # posted to association.score with trait=maturation
-    "public_50k": ("50,000 public sites", ""),  # not on the Score page, but still an example
+    "public_50k": ("Public SNPs", "{n:,} sites, an even sample"),  # on the Score page only when a release has no other example
 }
 TRY = ("known_loci", "chip_demo_SYNTHETIC", "gwas_maturation_SYNTHETIC")  # the Score page's 'Try it' box, in this order
 INPUTS = {"file": "Upload SNPs", "paste": "Paste positions", "regions": "Genes or regions", "gwas": "GWAS"}  # Score tabs
@@ -142,7 +142,8 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
     found, listed = examples(), mine(request)
     return no_store(listed, render(request, "snpportal/score.html", {
         "nav": "score", "title": "Score SNPs by functional evidence", "error": error, "tabs": INPUTS.items(), "tab": tab, "mine": listed,
-        "tries": [dict(found[name], name=name, gwas=name.startswith("gwas_")) for name in TRY if name in found],
+        "tries": [dict(found[name], name=name, gwas=name.startswith("gwas_"))  # a release without them: its public sample
+                  for name in (TRY if any(n in found for n in TRY) else ("public_50k",)) if name in found],
         "targets": targets, "flanks": FLANKS, "flank": FLANK, "paste_lines": PASTE_LINES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}",
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(),

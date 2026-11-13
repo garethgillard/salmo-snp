@@ -2,6 +2,8 @@
 # Update the NREC demo to a commit of origin/main. GitHub Actions' deploy workflow (run when G asks) runs it over SSH
 # after the tests pass (the deploy key's authorized_keys line forces this script, so that key can do nothing else);
 # nrec.sh runs it too.
+# After installing, deploy/species.sh fetches the releases of the other species this code names (rainbow trout) that
+# the VM doesn't hold yet, from the GitHub data release: the portal's species bar then offers them.
 # The commit comes in SSH_ORIGINAL_COMMAND (or $1); anything that is not a commit on origin/main means origin/main.
 # If the portal doesn't answer after the restart, it goes back to the previous commit and fails.
 # `pool` instead takes a public pool (pool.parquet and background.json, a .tar.gz on stdin) that the deploy workflow
@@ -59,6 +61,7 @@ install() {  # check out $1, install its packages, say if the pool is stale, col
   # The public pool is never built here: the VM's 2 GB RAM can't, and trying swapped for 17 min until the SSH session
   # dropped (2026-11-06). The deploy workflow builds it and sends it (`pool` above) when this line says so.
   if stale; then echo "the public pool is stale (new weights.yaml or snpscore)" >&2; fi
+  bash snpportal/deploy/species.sh || true  # the other species' releases, fetched once from the GitHub data release
   (set -a && . /srv/snpportal/env && cd snpportal && /srv/snpportal/venv/bin/python manage.py collectstatic --noinput -v 0)
   answers
 }

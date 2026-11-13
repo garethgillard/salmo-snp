@@ -23,8 +23,10 @@ from .score import WEIGHTS, load_weights, scored
 FLAGS = ("chromatin", "regbuild", "gerp", "blacklist", "lore", "public_af", "strand_ambiguous")  # boolean columns
 MAF_EDGES = tuple(i / 20 for i in range(1, 10))  # MAF histogram: [0, 0.05), [0.05, 0.1), ..., [0.45, 0.5]
 # The release's public sites in the pool (DECISIONS #15): 'aquafaang12', the 12 AQUA-FAANG fish's sites (as their VCF
-# gives them; 1.6M), or 'panel', every site of the 504-fish panel (7.6M)
+# gives them; 1.6M), or 'panel', every site of the 504-fish panel (7.6M). A release without the 12 fish's column (rainbow
+# trout) gives an even sample of at most MAX_SITES of its public sites, the same sites every time.
 SITES = "aquafaang12"
+MAX_SITES = 2_000_000
 
 
 def stamp():
@@ -54,8 +56,15 @@ def release_sites(release, work, sites=SITES):
     """The release's public sites (public_af.parquet) as a chrom, pos, ref, alt table in genome order, for annotate."""
     con = connect([release], work)
     target = work / "sites.tsv"
-    keep = "aquafaang12_af IS NOT NULL" if sites == "aquafaang12" else "true"
-    con.execute(f"""COPY (SELECT chrom, "end" AS pos, ref, alt FROM read_parquet({lit(release / 'public_af.parquet')})
+    table = f"read_parquet({lit(release / 'public_af.parquet')})"
+    columns = [r[0] for r in con.execute(f"DESCRIBE SELECT * FROM {table}").fetchall()]
+    rows = con.execute(f"SELECT count(*) FROM {table}").fetchall()[0][0]
+    keep = "true"
+    if sites == "aquafaang12" and "aquafaang12_af" in columns:
+        keep = "aquafaang12_af IS NOT NULL"
+    elif sites == "aquafaang12" and rows > MAX_SITES:
+        keep = f"hash(chrom, \"end\") % {-(-rows // MAX_SITES)} = 0"
+    con.execute(f"""COPY (SELECT chrom, "end" AS pos, ref, alt FROM {table}
                     WHERE {keep} ORDER BY TRY_CAST(chrom AS INTEGER), chrom, pos, ref, alt)
                     TO {lit(target)} (HEADER, DELIMITER '\t')""")
     con.close()

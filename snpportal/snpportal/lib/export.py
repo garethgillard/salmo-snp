@@ -54,7 +54,8 @@ VENDORS = {  # flank: default bases either side of the SNP and the allowed range
 PRIMER3 = {"PRIMER_TASK": "generic", "PRIMER_PICK_LEFT_PRIMER": 1, "PRIMER_PICK_RIGHT_PRIMER": 1,
            "PRIMER_PICK_INTERNAL_OLIGO": 0, "PRIMER_PRODUCT_SIZE_RANGE": "70-120", "PRIMER_NUM_RETURN": 1,
            "PRIMER_MAX_NS_ACCEPTED": 0}
-ACCESSIONS = {"Ssal_v3.1": "GenBank GCA_905237065.2, RefSeq GCF_905237065.1"}
+ACCESSIONS = {"Ssal_v3.1": "GenBank GCA_905237065.2, RefSeq GCF_905237065.1",
+              "USDA_OmykA_1.1": "GenBank GCA_013265735.3, RefSeq GCF_013265735.2"}
 LOOKUP = ["locus_name", "id", "chrom", "pos", "ref", "alt", "topbot", "allele_a", "allele_b", "two_probes",
           "assay_status", "assay_reasons", "export_notes"]
 FORMATS = ("tsv", "parquet", "bed", *VENDORS, "priors")
@@ -239,10 +240,24 @@ def top_bot(a1, a2, left, right):
     return strand, a, (pair - {a}).pop()
 
 
-def locus_name(chrom, pos, placed):
-    """Vendor-safe marker name Ssa<chromosome>p<position>, e.g. Ssa25p28996360: letters and digits only, at most 15
-    characters, never starting with rs or cg (Illumina, Axiom and KASP all accept it). Chromosome 0 = unplaced."""
-    return f"Ssa{chrom if chrom in placed else 0}p{int(pos)}"
+def locus_name(chrom, pos, placed, prefix="Ssa"):
+    """Vendor-safe marker name Ssa<chromosome>p<position>, e.g. Ssa25p28996360 (`prefix`: Omy for rainbow trout):
+    letters and digits only, at most 15 characters, never starting with rs or cg (Illumina, Axiom and KASP all accept
+    it). Chromosome 0 = unplaced."""
+    return f"{prefix}{chrom if chrom in placed else 0}p{int(pos)}"
+
+
+def _prefix(manifest):
+    """Ssa, or the release's species prefix (Omy), as locus names start."""
+    return ((manifest.get("species") or {}).get("prefix") or "ssa").capitalize()
+
+
+def _species_text(text, manifest):
+    """The files' explanations, written for Atlantic salmon, for a release of another species."""
+    if _prefix(manifest) == "Ssa":
+        return text
+    return (text.replace("Ssa<chromosome>", f"{_prefix(manifest)}<chromosome>").replace("(504-fish panel)", "(the release's public SNP set)")
+            .replace("not on chromosomes 1-29", "not on a chromosome of the release").replace("not on 1-29", "not on a chromosome of the release"))
 
 
 def _placed(manifest):
@@ -293,7 +308,7 @@ def records(con, rel, columns, fmt, release, manifest, include_failed=False, fla
     out, skipped, seen, placed = [], {}, {}, _placed(manifest)
     for idx, chrom, pos, ident, ref, alt, check, status, reasons in con.execute(
             "SELECT * FROM _export ORDER BY idx").fetchall():
-        name = locus_name(chrom, pos, placed)
+        name = locus_name(chrom, pos, placed, _prefix(manifest))
         seen[name] = seen.get(name, 0) + 1
         name += f"v{seen[name]}" if seen[name] > 1 else ""
         why, notes = None, []
@@ -384,7 +399,7 @@ def vendor_notes(fmt, template, flank, manifest, written, skipped, warnings, nam
                      "whose amplicons may overlap in one multiplex")
     lines += [f"left out: {n} ({why})" for why, n in sorted(skipped.items())]
     lines += [f"warning: {w}" for w in warnings]
-    return lines
+    return [_species_text(line, manifest) for line in lines]
 
 
 def filename(fmt, release, preset="all", tag=None, synthetic=False):
@@ -533,7 +548,7 @@ def bundle_zip(out, source, release_dir, preset="all", meta=None, formats=("tsv"
                        else Path(weights).read_text())
             z.writestr("methods.txt", methods_text(m, w, preset, release, (meta or {}).get("finemap")))
             z.writestr("provenance.txt", "\n".join(header) + "\n")
-            z.writestr("README.txt", "\n".join(readme) + "\n")
+            z.writestr("README.txt", _species_text("\n".join(readme), m) + "\n")
             for name, svg in (svgs or {}).items():
                 z.writestr(f"figures/{re.sub(r'[^A-Za-z0-9_.-]', '_', name)}.svg", svg)
     return out
@@ -620,7 +635,7 @@ def priors(source, out, release_dir, preset="all", meta=None, categories=None, t
                CASE {' '.join(f'WHEN {q(c)} THEN {i + 1}' for i, c in enumerate(names))} END AS _class
         FROM (SELECT *, row_number() OVER (PARTITION BY _id IS NULL, _name ORDER BY _row) AS _k
               FROM (SELECT _row, chrom::VARCHAR AS chrom, pos, {col('ref')} AS ref, {col('alt')} AS alt, {ident} AS _id,
-                           'Ssa' || CASE WHEN chrom::VARCHAR IN ({placed}) THEN chrom::VARCHAR ELSE '0' END || 'p' || pos::VARCHAR AS _name,
+                           {lit(_prefix(m))} || CASE WHEN chrom::VARCHAR IN ({placed}) THEN chrom::VARCHAR ELSE '0' END || 'p' || pos::VARCHAR AS _name,
                            {', '.join(f'{sql} AS {q(c)}' for c, sql, _ in cats)}, {_tier_cols(columns, preset)[1]} AS tier_score{flags}
                     FROM {rel}))""")
     try:
@@ -704,4 +719,4 @@ def _priors_readme(m, w, preset, cats, counts, classes, n, made, header):
         "2016) feature sets were the SNPs of each category. These category definitions and their order are PROVISIONAL.",
         "", "References", *[f"- {r}" for r in PRIOR_REFERENCES],
     ]
-    return "\n".join(lines) + "\n"
+    return _species_text("\n".join(lines), m) + "\n"

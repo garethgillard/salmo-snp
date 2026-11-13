@@ -27,6 +27,37 @@ INFO with AF, MAF, AC, AN, NS; 88 MB): genotypes and sample names never reach th
 (the Synchrosmolt parents, whose VCF has no frequencies) gets AC, AN, NS, AF and MAF counted from its genotypes as it
 streams, and only those are kept.
 
+## Rainbow trout
+
+A release is for one species. `rainbow_trout/layers.yaml` is the registry of the rainbow trout release, on
+USDA_OmykA_1.1 (the assembly of the AQUA-FAANG trout data; chromosomes 1-28, 30-32 and Y), with its `tracks.yaml`
+beside it (`snpdata tracks --hub .../trackhub/RainbowTrout/ -o rainbow_trout/tracks.yaml`):
+
+```bash
+snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw
+snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out release/trout-2026-11-13
+python prep/make_fixture_trout.py       # re-cut tests/fixture/rainbow_trout (chromosome 28 12.00-12.22 Mb, Y 5.95-6.05 Mb)
+```
+
+Its version carries the species (`trout-<date>`), so two species' releases never share a version. What layers.yaml
+adds for a species other than salmon: `species` (key, name, latin, the chromosome `prefix` users may write, the Locus
+browser's `example`, the pages' `wording`, `samples` and `searches`: the manifest carries it and the portal reads it),
+`chromosome_names` (when the chromosomes are not all numbers), `rsid.older` (the older assembly of EVA's second file)
+and `demo_sample` (an example list cut from a built layer). The layers are the salmon ones where the same source
+exists for trout: AQUA-FAANG peaks and states (17 conditions), blacklist, LORe, Ss4R (`species: Omyk` rows of the
+salmon-trout table) and synteny; Ensembl 116 genes, regulatory build and GERP; NCBI models; orthologs; JASPAR motifs;
+EVA rs IDs, and a known-loci catalogue (`rainbow_trout/catalog/known_loci.tsv`: gene regions and published QTL
+windows, the latter as `type` qtl_interval with `start` and `end`). No molQTL, expression, Bgee, genetic map or
+liftover. `snpdata build --reuse <release>` copies the layers whose settings and inputs are unchanged, so a rebuild
+for the catalogue takes minutes, not the motif layer's hour and a half.
+
+`public_af` and `flank_variants` come from the one public genome-wide variant set on this assembly, ENA PRJEB109732
+(University of Maryland): 462 farmed fish in three cohorts (35, 92 and 335 fish; 7, 16 and 55 GB), sequenced at about
+1x and imputed by Gencove, genotypes with a posterior below 0.9 set to missing. `fetch` streams each cohort, counts AC,
+AN and NS from the genotypes and keeps those only, for SNPs (`count_gt`, `snps_only`); with `pool: true`, `build`
+sums the cohorts per site and keeps biallelic SNPs on chromosomes with `min_maf` and `min_an`. `flank_variants`
+counts every SNP site of the first cohort's file (the imputation panel's sites, whatever their frequency).
+
 ## The fSalSal1 conversion
 
 The conversion between Ssal_v3.1 and fSalSal1 (GCA_965601325.1, NCBI's RefSeq reference for Atlantic salmon) comes

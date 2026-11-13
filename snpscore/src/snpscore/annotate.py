@@ -56,7 +56,8 @@ def user_message(error):
     return next((m for cls, m in ERRORS if isinstance(error, cls)), "The file could not be annotated. " + ACCEPTED)
 
 
-def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys=None, lift=None, genome=None):
+def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys=None, lift=None, genome=None,
+              older="ICSASG_v2"):
     """Load a SNP file into table `snps` (idx = input row, chrom, pos, then the other columns) and the rows that can't
     be used into `rejects` (row, chrom, pos, ..., reason). Chromosome names go through `alias` (alias.parquet);
     `known` lists the release's chromosomes. With `rsid` (rsid.parquet), a row whose id is an rs ID is placed on
@@ -70,7 +71,8 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
     report's `flank` block counts the agreement. With `lift` (a conversion table, I19: its path, or {file, label,
     aliases} as the manifest's liftover entries), the positions are on that assembly (ICSASG_v2 by default): each is
     converted (liftover.lift; position_source '<label> <chrom>:<pos>'), else placed by its rs ID, else rejected
-    (liftover_unmapped). Returns the counts."""
+    (liftover_unmapped). `older` names the older assembly of the rs ID table's v2_* columns (ICSASG_v2; Omyk_1.0 for
+    rainbow trout), as position_source writes it. Returns the counts."""
     layout = detect(path)
     limit = int(max_snps) + 1 if max_snps else None
     con.execute(f"CREATE OR REPLACE TABLE raw AS SELECT row_number() OVER () AS idx, * FROM ({source(path, layout, limit)})")
@@ -124,13 +126,13 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
                           WHEN m_chrom IS NULL OR m_pos IS NULL THEN 'rsid'
                           WHEN m_pos = v2_pos AND NOT (m_chrom = x_chrom AND m_pos = x_pos)
                                AND (m_chrom = v2_chrom OR m_chrom NOT IN (SELECT chrom FROM known))
-                               THEN 'ICSASG_v2 ' || trim(input_chrom) || ':' || m_pos END AS position_source,
+                               THEN {lit(older + ' ')} || trim(input_chrom) || ':' || m_pos END AS position_source,
                      x_chrom, x_pos, coalesce(v2_ref <> x_ref AND translate(v2_ref, 'ACGT', 'TGCA') = x_ref, false) AS v2_flip
               FROM j),
         c AS (SELECT idx, CASE WHEN position_source IS NULL THEN m_chrom ELSE x_chrom END AS chrom,
                      CASE WHEN position_source IS NULL THEN m_pos ELSE x_pos END AS pos,
                      * EXCLUDE (idx, m_chrom, m_pos, x_chrom, x_pos, v2_flip), x_chrom AS rs_chrom, x_pos AS rs_pos,
-                     starts_with(position_source, 'ICSASG_v2') AND v2_flip AS flip FROM p),
+                     starts_with(position_source, {lit(older + ' ')}) AND v2_flip AS flip FROM p),
         d AS (SELECT * {f"REPLACE ({flip})" if flip else ""} FROM c)
         SELECT *,
                CASE WHEN chrom IS NULL AND is_rs AND position_source IS NULL THEN 'unknown_rsid'
@@ -198,8 +200,8 @@ def read_snps(con, path, known, alias=None, max_snps=None, rsid=None, flank_keys
         report["alias_warnings"] = [{"from": a[:40], "to": b, "rows": c, "message": m} for a, b, c, m in warnings]
     if use_rs:
         report["rsid"] = dict(zip(("placed", "moved_from_icsasg_v2", "alleles_complemented", "unknown"), fetch(
-            """SELECT count(*) FILTER (WHERE position_source = 'rsid' AND reason IS NULL),
-                      count(*) FILTER (WHERE starts_with(position_source, 'ICSASG_v2') AND reason IS NULL),
+            f"""SELECT count(*) FILTER (WHERE position_source = 'rsid' AND reason IS NULL),
+                      count(*) FILTER (WHERE starts_with(position_source, {lit(older + ' ')}) AND reason IS NULL),
                       count(*) FILTER (WHERE flip AND reason IS NULL), count(*) FILTER (WHERE reason = 'unknown_rsid')
                FROM checked""")[0]))
     if by_flank:
@@ -236,13 +238,25 @@ def rsid(release_dir, rs):
         con.close()
 
 
-def no_snps_message(report):
+def assembly_names(manifest):
+    """(assembly, older assembly of the rs ID table, an example of the chromosome names accepted) of a release."""
+    assembly = manifest.get("assembly") or "Ssal_v3.1"
+    older = (manifest.get("rsid") or {}).get("older") or "ICSASG_v2"
+    prefix = (manifest.get("species") or {}).get("prefix") or "ssa"
+    sizes = list(manifest.get("chrom_sizes") or [])
+    numbered = [c for c in sizes if c.isdigit()]
+    span = "of the release" if not numbered else numbered[0] if len(numbered) == 1 else f"{numbered[0]}-{numbered[-1]}"
+    last = numbered[-1] if numbered else "1"
+    return assembly, older, f"{assembly} chromosomes {span} or their aliases (e.g. {last}, chr{last}, {prefix}{last})"
+
+
+def no_snps_message(report, manifest=None):
     if report["rejected"].get("unknown_rsid") == report["rows_read"]:
         return ("None of the rs IDs are in this release's EVA release 9 table (or they are placed more than once). "
                 "Add chrom and pos columns, or check the IDs.")
     names = ", ".join(f"'{u['name']}' ({u['rows']})" for u in report["unknown_chromosomes"][:3])
     if names:
-        return (f"No SNPs are on Ssal_v3.1 chromosomes 1-29 or their aliases (e.g. 25, chr25, ssa25, NC_059466.1). "
+        return (f"No SNPs are on {assembly_names(manifest or {})[2]}. "
                 f"Most common chromosome names in the file: {names}.")
     return "No SNPs have a chromosome and a whole-number position. " + ACCEPTED
 
@@ -361,21 +375,25 @@ def conversions(manifest):
     out = {}
     for name, entry in (manifest.get("liftover") or {}).items():
         if entry and entry.get("file") and entry.get("direction", "from") == "from" and re.fullmatch(r"[a-z0-9_]+", name):
-            out[name] = {"label": "ICSASG_v2" if name == "icsasg_v2" else name, **entry}
+            out[name] = {"label": "ICSASG_v2" if name == "icsasg_v2" else name, **{k: v for k, v in entry.items() if v is not None}}
     return out
 
 
 def genome_location(manifest):
-    """$SNPSCORE_GENOME (a server's own copy of the release's genome) if set, else the release's genome file in
+    """$SNPSCORE_GENOME (a server's own copy of the release's genome) if set, unless the release's own genome file
+    lies beside it under another name (another species' release on that server), else the release's genome file in
     $SNPSCORE_GENOME_DIR (salmo-snp's data folder, which may hold the genomes of several releases) when it is there,
     else the local path if the release's build machine had it and it is still there, else its URL (or None)."""
     genome = manifest.get("genome")
     if not genome:
         return None
-    if os.environ.get("SNPSCORE_GENOME"):
-        return os.environ["SNPSCORE_GENOME"]
     name = genome.get("file") or (genome.get("url") or "").rsplit("/", 1)[-1]
-    here = Path(os.environ["SNPSCORE_GENOME_DIR"]) / name if os.environ.get("SNPSCORE_GENOME_DIR") and name else None
+    own = os.environ.get("SNPSCORE_GENOME")
+    beside = Path(own).parent / name if own and name and Path(own).name != name else None  # another species' release
+    if own and not (beside and all(Path(f"{beside}{ext}").exists() for ext in ("", ".fai", ".gzi"))):
+        return own
+    folder = str(beside.parent) if beside else os.environ.get("SNPSCORE_GENOME_DIR")
+    here = Path(folder) / name if folder and name else None
     if here and all(Path(f"{here}{ext}").exists() for ext in ("", ".fai", ".gzi")):
         return str(here)
     return genome["path"] if genome.get("path") and Path(genome["path"]).exists() else genome["url"]
@@ -456,7 +474,7 @@ def annotate(snps_path, release_dir, out_path, trait="all", sequence=True, progr
     finally:
         con.close()
     if not report["snps_kept"]:
-        raise InputError(no_snps_message(report))
+        raise InputError(no_snps_message(report, manifest))
     return Path(out_path)
 
 
@@ -479,7 +497,7 @@ def _annotate(con, path, release, out, manifest, weights, trait, sequence, step,
         lift = {**entry, "file": release / entry["file"]}
     report = read_snps(con, path, known, alias if alias.exists() else None, max_snps,
                        rsid_table if rsid_table.exists() else None, flank_keys if place_by_flank else None, lift,
-                       genome=genome_location(manifest) if place_by_flank else None)
+                       genome=genome_location(manifest) if place_by_flank else None, older=assembly_names(manifest)[1])
     stem = out.parent / out.stem
     if report["snps_kept"]:
         cols = [r[0] for r in con.execute("DESCRIBE snps").fetchall()]
@@ -520,7 +538,7 @@ def _annotate(con, path, release, out, manifest, weights, trait, sequence, step,
             try:
                 add_sequence_checks(con, location, out.parent, weights, point and release / point["file"])
                 report["ref_check"] = dict(con.execute("SELECT ref_check, count(*) FROM snps GROUP BY 1 ORDER BY 1").fetchall())
-                report["assembly"] = assembly_verdict(report["ref_check"])
+                report["assembly"] = assembly_verdict(report["ref_check"], manifest)
                 report["assay"] = dict(con.execute("SELECT assay_status, count(*) FROM snps GROUP BY 1 ORDER BY 1").fetchall())
                 report["assay_reasons"] = assay.breakdown(con, "(SELECT assay_reasons FROM snps WHERE assay_status IN ('warn', 'fail'))")
                 models = next((l for l in manifest["layers"] if l.get("format") == "gff3_transcripts"), None)
@@ -579,7 +597,7 @@ def write_in_order(con, out, table="snps", key="idx", drop="idx", options=None):
             part.unlink(missing_ok=True)
 
 
-def assembly_verdict(counts):
+def assembly_verdict(counts, manifest=None):
     """'ok', 'warning' (too many alleles disagree with the genome) or 'not_checked', with the shares behind it."""
     checked = sum(counts.get(k, 0) for k in ("ok", "swapped", "strand_flip", "mismatch"))
     if not checked:
@@ -588,6 +606,7 @@ def assembly_verdict(counts):
     verdict = {"verdict": "warning" if share > ASSEMBLY_WARNING else "ok", "checked": checked,
                "mismatch_or_flip_share": round(share, 3)}
     if share > ASSEMBLY_WARNING:
-        verdict["message"] = (f"{share:.0%} of the checked alleles don't match the Ssal_v3.1 reference base: these look "
-                              "like ICSASG_v2 coordinates or alleles on the other strand.")
+        assembly, older, _ = assembly_names(manifest or {})
+        verdict["message"] = (f"{share:.0%} of the checked alleles don't match the {assembly} reference base: these look "
+                              f"like {older} coordinates or alleles on the other strand.")
     return verdict

@@ -183,13 +183,29 @@ def data(request):
                       None, sha, None, None))
     if (jobs.release() / "pool" / "pool.parquet").exists():
         files.append(("pool/pool.parquet", "Public variants annotated with this release (gene pages, candidate lists)", None, None, None, None))
+    salmon = jobs.species()["key"] == jobs.SALMON["key"]
     return render(request, "snpportal/about_data.html", {
         "nav": "about", "title": "Data", "release": info, "layers": layers, "files": files, "facts": release_facts(m),
         "built": f"Release {info['version']} ({info['assembly']})" + (f", built {info['created']}" if info.get("created") else ""),
         "genome": m.get("genome", {}).get("url"), "chromosomes": len(m.get("chrom_sizes") or {}),
-        "tracks": track_summary(), "citations": CITATIONS,
+        "tracks": track_summary(), "citations": CITATIONS if salmon else release_citations(m),
+        "samples": None if salmon else jobs.species().get("samples") or [], "salmon": salmon, "known_loci": jobs.release_info()["known_loci"],
         "projects": [(atlas, assay, acc, ENA.format(acc)) for atlas, assay, acc in AQUAFAANG_PROJECTS], "fish": BODYMAP_FISH,
         "population": next((x.get("population") for x in m.get("layers", []) if x["name"] == "public_af"), None)})
+
+
+def release_citations(m):
+    """[(what, reference, URL or '')] from the release's own layers, each citation once: for a release whose sources
+    are not CITATIONS' (another species than Atlantic salmon)."""
+    out = {}
+    for layer in list(m.get("layers", [])) + [dict(m.get("rsid") or {}, name="rsid"), dict(m.get("synteny") or {}, name="synteny")]:
+        ref = layer.get("citation")
+        if ref:
+            what = LAYERS[layer["name"]][0] if layer["name"] in LAYERS else {
+                "rsid": "rs IDs", "synteny": "Ss4R blocks"}.get(layer["name"], layer["name"].replace("_", " "))
+            doi = re.search(r"doi:(\S+)", ref)
+            out.setdefault(ref, [[], ref, f"https://doi.org/{doi.group(1).rstrip('.,;)')}" if doi else ""])[0].append(what)
+    return [("; ".join(dict.fromkeys(whats)), ref, url) for whats, ref, url in out.values()]
 
 
 def track_summary():
@@ -418,7 +434,7 @@ def help_page(request):
         "nav": "help", "title": "Help", "formats": FORMATS,
         "aliases": [(name, ", ".join(names)) for name, names in formats.ALIASES.items()],
         "chrom_aliases": chrom_aliases("25"), "assembly_share": f"{ASSEMBLY_WARNING:.0%}",
-        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(), "searches": search.EXAMPLES,
+        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(), "searches": jobs.species().get("searches") or search.EXAMPLES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}", "max_snps": int(jobs.setting("SNPPORTAL_MAX_SNPS", 3_000_000)),
         "vendor_cap": int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000)), "locus_name": export.locus_name("25", 28996360, {"25"}),
         "bins": (panel.INFINIUM_I_MIN, panel.INFINIUM_I_POLYPLOID, panel.INFINIUM_II_MIN), "close_bp": panel.CLOSE_BP})
@@ -468,6 +484,16 @@ def state_palette(request):
     return response
 
 
+def choose_species(request):
+    """POST /snp/species/ (the species bar): remember the species in a cookie and open its Score page. New lists are
+    then scored against that species' release; results, panels and saved projects keep their own."""
+    key = request.POST.get("species") if request.method == "POST" else None
+    response = redirect(reverse("snpportal:upload"))
+    if key in jobs.species_releases():
+        response.set_cookie(jobs.SPECIES_COOKIE, key, max_age=365 * 86400, samesite="Lax", httponly=True)
+    return response
+
+
 def releases(request):
     """/snp/releases/ (I17, local installs): the releases this computer holds, which one new work uses, and a switch.
     Results, Design panels and saved versions keep reading the release they were made with."""
@@ -489,9 +515,9 @@ def releases(request):
     for version, folder in jobs.installed().items():
         m = jobs.manifest(folder)
         where = genome_location(m) or ""
-        rows.append({"version": version, "assembly": m.get("assembly", "Ssal_v3.1"), "created": m.get("created"),
+        rows.append({"version": version, "assembly": m.get("assembly") or "Ssal_v3.1", "created": m.get("created"),
                      "layers": len(m.get("layers") or []), "genome": "on this computer" if where and not where.startswith("http") else
                      "read from salmobase" if where else "none", "pool": not stale(folder), "using": folder == using,
-                     "expected": version == serve.RELEASE})
+                     "expected": version in serve.RELEASES.values(), "species": jobs.species(folder)["name"]})
     return render(request, "snpportal/releases.html", {"nav": "", "title": "Releases", "rows": rows,
                                                        "meta": "Data releases on this computer"})
