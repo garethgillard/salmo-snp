@@ -30,7 +30,7 @@ def test_annotate_trout(trout, tmp_path):
     assert report["rejected"] == {"unknown_chrom": 1}  # the Arlee assembly has no chromosome 29
     bad = tmp_path / "bad.tsv"
     bad.write_text("chrom\tpos\nssa25\t100\n")
-    with pytest.raises(InputError, match="USDA_OmykA_1.1 chromosomes 1-32 or their aliases .*omy32"):
+    with pytest.raises(InputError, match="USDA_OmykA_1.1 chromosomes 28 or their aliases .*omy28"):
         annotate(bad, trout, tmp_path / "bad.parquet")
 
 

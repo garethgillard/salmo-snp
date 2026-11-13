@@ -2,7 +2,7 @@
 # same layer types and formats as ../layers.yaml (Atlantic salmon), which explains them. Run from snpdata/:
 #   snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw
 #   snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out release/trout-<date>
-# A release is for one species: its version carries the species (trout-2026-11-12), so the releases of two species never
+# A release is for one species: its version carries the species (trout-2026-11-13), so the releases of two species never
 # share a version, and the portal's species bar picks the newest release of the species chosen.
 
 assembly: USDA_OmykA_1.1

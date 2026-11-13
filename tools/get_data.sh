@@ -2,7 +2,7 @@
 # The data for real use (the tests don't need it), while it is hosted on this repository's GitHub Releases: downloads
 # data-<RELEASE> (snpportal/snpportal/serve.py RELEASE) with gh's REST API, unpacks it and runs `salmo-snp download --from` on it,
 # which checks every file and copies it into the salmo-snp data folder. About 1 GB; then `salmo-snp serve`.
-#   bash tools/get_data.sh [VERSION] [--no-genome]     VERSION: another release, e.g. trout-2026-11-12 (rainbow trout)
+#   bash tools/get_data.sh [VERSION] [--no-genome]     VERSION: another release, e.g. trout-2026-11-13 (rainbow trout)
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 VERSION=$(sed -n 's/^RELEASE = "\([^"]*\)".*/\1/p' "$REPO/snpportal/snpportal/serve.py")

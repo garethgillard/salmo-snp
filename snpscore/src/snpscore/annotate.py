@@ -245,7 +245,7 @@ def assembly_names(manifest):
     prefix = (manifest.get("species") or {}).get("prefix") or "ssa"
     sizes = list(manifest.get("chrom_sizes") or [])
     numbered = [c for c in sizes if c.isdigit()]
-    span = f"{numbered[0]}-{numbered[-1]}" if numbered else "of the release"
+    span = "of the release" if not numbered else numbered[0] if len(numbered) == 1 else f"{numbered[0]}-{numbered[-1]}"
     last = numbered[-1] if numbered else "1"
     return assembly, older, f"{assembly} chromosomes {span} or their aliases (e.g. {last}, chr{last}, {prefix}{last})"
 

@@ -43,8 +43,8 @@ You need:
    In a clone of the repository, `bash tools/get_data.sh` does the same. Once the data is hosted online,
    `salmo-snp download` alone will do (or `--from <address>`; a copy of the published folder on a disk or a share
    works too, for computers without internet).
-   **Rainbow trout** (USDA_OmykA_1.1) is a second release, `trout-2026-11-12`: once it is published, fetch it the
-   same way (its two files, then `salmo-snp download trout-2026-11-12 --from site`, or `salmo-snp download --species
+   **Rainbow trout** (USDA_OmykA_1.1) is a second release, `trout-2026-11-13`: once it is published, fetch it the
+   same way (its two files, then `salmo-snp download trout-2026-11-13 --from site`, or `salmo-snp download --species
    rainbow_trout` when the data is hosted). With both installed, the species bar at the top right of every page
    picks the species new lists are scored against; results keep the species they were scored for.
 3. Start it, and open http://127.0.0.1:8000/snp/ (only this computer can reach it; Ctrl-C stops it):

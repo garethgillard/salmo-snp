@@ -156,7 +156,8 @@ def test_rainbow_trout_release(tmp_path):
     m = json.loads((out / "manifest.json").read_text())
     assert (m["species"]["key"], m["assembly"], list(m["chrom_sizes"])) == ("rainbow_trout", "USDA_OmykA_1.1", ["28", "Y"])
     layers = {l["name"]: l for l in m["layers"]}
-    assert len([c for c in layers["chromatin"]["columns"] if c not in ("summary", "id")]) == 17
+    conditions = [c for c in layers["chromatin"]["columns"] if c not in ("summary", "id")]  # 17 genome-wide; those with a peak here
+    assert {"Brain_Mature_Male", "Liver_Immature_Female", "LateBlastulation"} <= set(conditions) and not any("Gonad" in c for c in conditions)
     assert "catalog" not in m and [d["file"] for d in m["demo"]] == ["demo/public_50k.vcf"]
     assert m["rsid"]["older"] == "Omyk_1.0" and m["rsid"]["rows"] > 0 and m["flank_keys"]["rows"] > 0
     con = duckdb.connect()

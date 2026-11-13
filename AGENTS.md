@@ -54,7 +54,7 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
    a vX.Y.Z tag builds the wheels (and later the image) as a GitHub Release.
 
 7. Species (G, 2026-11-12): a release is for one species and assembly. Salmon releases are named by their date
-   (2026-11-05), another species' with the species first (trout-2026-11-12), and the manifest's `species` block
+   (2026-11-05), another species' with the species first (trout-2026-11-13), and the manifest's `species` block
    (layers.yaml: key, name, latin, prefix, the browser's example locus, the pages' wording, samples, searches) says
    which. The portal's species bar (top right; a cookie, so it works on a server too) picks the species: new lists are
    scored against that species' release (serve.py RELEASES names one per species), while results, panels and saved
@@ -226,8 +226,8 @@ Rainbow trout (not needed for the tests: `snpdata/tests/fixture_trout` is its fi
 prep/make_fixture_trout.py` in snpdata/ re-cuts it):
 ```bash
 cd snpdata && snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw   # ~25 GB streamed, 1.6 GB kept
-snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out release/trout-2026-11-12   # ~1.5 h (motifs)
-salmo-snp download trout-2026-11-12 --from <the published folder>   # or: cp -r release/trout-... into the data folder's releases/
+snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out release/trout-2026-11-13   # ~1.5 h (motifs)
+salmo-snp download trout-2026-11-13 --from <the published folder>   # or: cp -r release/trout-... into the data folder's releases/
 ```
 Without conda: a Python 3.12 venv and `pip install -e "snpscore[test]" -e snpdata -e snpportal`, as CI. `bash tools/user_install_test.sh [python]` checks a new user's install (wheels, the
 newest dependencies allowed, publish -> download -> annotate -> serve); run it after changing packaging,

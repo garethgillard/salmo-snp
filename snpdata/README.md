@@ -35,7 +35,7 @@ beside it (`snpdata tracks --hub .../trackhub/RainbowTrout/ -o rainbow_trout/tra
 
 ```bash
 snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw
-snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out release/trout-2026-11-12
+snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out release/trout-2026-11-13
 python prep/make_fixture_trout.py       # re-cut tests/fixture_trout (chromosome 28 12.00-12.22 Mb, Y 5.95-6.05 Mb)
 ```
 
