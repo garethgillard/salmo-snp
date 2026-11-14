@@ -629,7 +629,7 @@ def context(request, s, layout):
     a, b = s["start"] + 1, s["end"]
     ctx.update(
         chromosome=chromosome(s), ruler=ruler(ax, s), groups=[g for g in groups if g], other=other_group(s, ax, data), notes=notes,
-        synthetic=synthetic, moves=moves(s, open_), query=query(s, open_), assays=[(k, v[0]) for k, v in ASSAYS.items()],
+        synthetic=synthetic, moves=moves(s, open_), query=query(s, open_), limits=(sl.MIN_WINDOW, sl.MAX_WINDOW), assays=[(k, v[0]) for k, v in ASSAYS.items()],
         assays_open="assays" in open_, tissue_legend=tissue_legend(), size_text=locus_svg.fmt_bp(s.get("size") or 0),
         width_text=locus_svg.fmt_bp(s["end"] - s["start"]), truncated=data.get("truncated"),
         jbrowse=locus.JBROWSE.format(chrom=s["chrom"], start=a, end=b), ensembl=locus.ENSEMBL.format(chrom=s["chrom"], start=a, end=b),

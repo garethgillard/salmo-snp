@@ -443,6 +443,130 @@
   });
   document.addEventListener("htmx:afterSettle", buttons);
   buttons();
+  /* moving with the mouse: drag the tracks to move; drag along the ruler to zoom to that stretch; double-click to zoom
+     in 3x there; Ctrl (or Cmd) + wheel, or a pinch, zooms at the mouse; a sideways or Shift + wheel moves; arrows and
+     + - press the buttons. The tracks slide or stretch inside their boxes at once (each SVG's viewBox), then the new
+     window is fetched as the buttons fetch it, through the form's [data-nav]. A plain wheel still scrolls the page. */
+  var gesture = null, loading = false, dragged = false, timer = null;
+  function axes(box) { return Array.prototype.slice.call(box.querySelectorAll(".sp-trk:not(.sp-trk-chr) > .sp-ax")); }
+  function win(box) {
+    var n = function (k) { return +box.getAttribute("data-" + k); };
+    return {a: n("start"), b: n("end"), size: n("size"), min: n("min"), max: n("max")};
+  }
+  function fit(w, a, width) {  // the window of `width` bp starting at a, inside the chromosome and the limits
+    width = Math.round(Math.max(w.min, Math.min(w.max, w.size || Infinity, width)));
+    a = Math.max(0, Math.round(a));
+    if (w.size) a = Math.min(a, w.size - width);
+    return [a, a + width];
+  }
+  function preview(box, x, width) {  // show user units x to x + width of every track (1000 across: all of it)
+    box.classList.add("sp-moving");
+    axes(box).forEach(function (svg) {
+      var v = svg.getAttribute("data-vb") || svg.getAttribute("viewBox");
+      svg.setAttribute("data-vb", v);
+      v = v.split(" ");
+      svg.setAttribute("viewBox", [x, v[1], width, v[3]].join(" "));
+      svg.setAttribute("preserveAspectRatio", "none");
+    });
+  }
+  function restore(box) {
+    box.classList.remove("sp-moving");
+    axes(box).forEach(function (svg) {
+      if (svg.hasAttribute("data-vb")) svg.setAttribute("viewBox", svg.getAttribute("data-vb"));
+      svg.removeAttribute("data-vb");
+      svg.removeAttribute("preserveAspectRatio");
+    });
+    box.querySelectorAll(".sp-sel").forEach(function (r) { r.remove(); });
+  }
+  function go(box, a, b) {  // fetch the window a-b (BED); the preview stays until it is swapped in
+    var w = win(box), src = document.querySelector("#locus-view [data-nav]");
+    if (!src || !window.htmx || (a === w.a && b === w.b)) { restore(box); return; }
+    var q = new URLSearchParams(box.getAttribute("data-query")), list = opened();
+    q.set("r", box.getAttribute("data-chrom") + ":" + (a + 1) + "-" + b);
+    if (list) q.set("open", list); else q.delete("open");
+    src.setAttribute("hx-push-url", src.getAttribute("data-page") + "?" + q);
+    loading = true;
+    htmx.ajax("GET", src.getAttribute("data-svg") + "?" + q, {source: src});
+  }
+  function done() { loading = false; }
+  function failed() { loading = false; document.querySelectorAll("#locus-view .sp-tracks.sp-moving").forEach(restore); }
+  document.addEventListener("htmx:afterSettle", done);
+  ["htmx:responseError", "htmx:sendError", "htmx:timeout", "htmx:swapError"].forEach(function (n) { document.addEventListener(n, failed); });
+  document.addEventListener("pointerdown", function (e) {
+    var p = e.button === 0 && e.pointerType !== "touch" && !loading && !e.target.closest("button, input") && at(e);
+    if (!p) return;
+    dragged = false;
+    gesture = {box: p.box, r: p.r, x0: e.clientX, x: p.x, ruler: !!e.target.closest(".sp-trk-ruler"), svg: p.ax};
+    if (gesture.ruler) gesture.svg = e.target.closest(".sp-trk-ruler").querySelector(".sp-ax");
+  });
+  document.addEventListener("pointermove", function (e) {
+    var g = gesture, dx = g ? e.clientX - g.x0 : 0;
+    if (!g || g.wheel || (!dragged && Math.abs(dx) < 4)) return;
+    dragged = true;
+    if (!g.ruler) { preview(g.box, -dx / g.r.width * 1000, 1000); return; }
+    if (!g.rect) {
+      g.rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      g.rect.setAttribute("class", "sp-sel");
+      g.rect.setAttribute("y", 0);
+      g.rect.setAttribute("height", g.svg.getAttribute("height"));
+      g.svg.appendChild(g.rect);
+    }
+    g.x1 = Math.max(0, Math.min(g.r.width, g.x + dx));
+    g.rect.setAttribute("x", Math.min(g.x, g.x1) / g.r.width * 1000);
+    g.rect.setAttribute("width", Math.abs(g.x1 - g.x) / g.r.width * 1000);
+  });
+  function drop(e) {
+    var g = gesture;
+    gesture = null;
+    if (!g || !dragged) return;
+    if (e.type === "pointercancel") { restore(g.box); return; }
+    var w = win(g.box), bp = (w.b - w.a) / g.r.width, span;
+    if (g.ruler) span = fit(w, w.a + Math.min(g.x, g.x1) * bp, Math.abs(g.x1 - g.x) * bp);
+    else span = fit(w, w.a - (e.clientX - g.x0) * bp, w.b - w.a);
+    go(g.box, span[0], span[1]);
+  }
+  document.addEventListener("pointerup", drop);
+  document.addEventListener("pointercancel", drop);
+  document.addEventListener("click", function (e) {  // the click that ends a drag opens no gene and doesn't hold the line
+    if (!dragged) return;
+    dragged = false;
+    if (e.target.closest && e.target.closest("#locus-view .sp-tracks")) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  document.addEventListener("dragstart", function (e) {  // a gene's link is dragged as the track, not as a link
+    if (e.target.closest && e.target.closest("#locus-view .sp-tracks .sp-ax")) e.preventDefault();
+  });
+  document.addEventListener("dblclick", function (e) {
+    var p = !loading && !e.target.closest("a, button, input") && at(e);
+    if (!p) return;
+    var w = win(p.box), width = (w.b - w.a) / 3, span = fit(w, w.a + p.x / p.r.width * (w.b - w.a) - width / 2, width);
+    go(p.box, span[0], span[1]);
+  });
+  document.addEventListener("wheel", function (e) {
+    var zoom = e.ctrlKey || e.metaKey, side = !zoom && (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY));
+    var p = (zoom || side) && at(e);
+    if (!p) return;
+    e.preventDefault();  // not the browser's own zoom or Back swipe
+    if (loading) return;
+    var w = win(p.box), g = gesture && gesture.wheel ? gesture : (gesture = {wheel: true, box: p.box, scale: 1, shift: 0, f: p.x / p.r.width});
+    var d = (e.deltaMode ? 30 : 1) * (side && !e.deltaX ? e.deltaY : side ? e.deltaX : e.deltaY);
+    if (zoom) g.scale = Math.max(w.min / (w.b - w.a), Math.min(Math.min(w.max, w.size || Infinity) / (w.b - w.a), g.scale * Math.exp(d * 0.004)));
+    else g.shift += d / p.r.width;
+    preview(p.box, (g.f * (1 - g.scale) + g.shift) * 1000, g.scale * 1000);
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      gesture = null;
+      var width = (w.b - w.a) * g.scale, span = fit(w, w.a + (g.f * (1 - g.scale) + g.shift) * (w.b - w.a), width);
+      go(g.box, span[0], span[1]);
+    }, 250);
+  }, {passive: false});
+  document.addEventListener("keydown", function (e) {
+    var tip = {ArrowLeft: "Move left", ArrowRight: "Move right", "+": "Zoom in", "=": "Zoom in", "-": "Zoom out"}[e.key];
+    if (!tip || loading || e.ctrlKey || e.metaKey || e.altKey || (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]"))) return;
+    var b = document.querySelector('#locus-view .sp-bctl a[aria-label^="' + tip + '"]');
+    if (!document.querySelector("#locus-view .sp-tracks")) return;
+    e.preventDefault();
+    if (b) { loading = true; b.click(); }
+  });
 })();
 /* end browser */
 
