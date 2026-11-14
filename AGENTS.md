@@ -236,7 +236,7 @@ prep/make_fixture_trout.py` in snpdata/ re-cuts it):
 ```bash
 cd snpdata && snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw   # ~80 GB streamed, 2 GB kept
 snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out release/trout-2026-11-13   # ~1.5 h (motifs)
-salmo-snp download trout-2026-11-13 --from <the published folder>   # or: cp -r release/trout-... into the data folder's releases/
+bash tools/get_data.sh trout-2026-11-13   # or, for the build above: salmo-snp download trout-2026-11-13 --from <published folder>
 ```
 Without conda: a Python 3.12 venv and `pip install -e "snpscore[test]" -e snpdata -e snpportal`, as CI. `bash tools/user_install_test.sh [python]` checks a new user's install (wheels, the
 newest dependencies allowed, publish -> download -> annotate -> serve); run it after changing packaging,
@@ -305,7 +305,11 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   (`update.sh` `release <version>` -> `species.sh stdin`, checked before it is put in place). A stale pool of any
   species is the deploy workflow's (update.sh names each stale release; the job builds its pool from the GitHub data
   release data-<version> and sends it, `update.sh pool <version>`): so trout's needs data-trout-<date> published.
-  A release built elsewhere goes on GitHub from G's Mac with `GENOME=<its genome> POOL=1 bash prep/github_release.sh`.
+  A release that exists only on the VM (built by that workflow) goes on GitHub from G's Mac with
+  `bash snpdata/prep/release_from_demo.sh [version] [ssh host]` (copies it, its pool and genome from the VM, then
+  `GENOME=<its genome> POOL=1 bash prep/github_release.sh`); done for trout-2026-11-13 on 2026-11-14.
+  A new trout release, in short: bump serve.py RELEASES, merge, deploy, run `species-data` on main, then
+  `release_from_demo.sh` on the Mac.
 - Deploying the NREC demo (G, 2026-11-06): only when G asks in the chat ("deploy to NREC"), usually after several
   merged pull requests; never on your own initiative, and never a branch. Run the `deploy` workflow on main:
   `gh workflow run deploy.yml --ref main` (cloud sessions, REST only: `gh api -X POST
