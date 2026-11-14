@@ -40,7 +40,8 @@ for v in $(sed -n 's/^RELEASES = {\(.*\)}.*/\1/p' "$ROOT/snpportal/snpportal/ser
   snpscore pool --release "$ROOT/snpdata/release/$v" --if-stale
   rsync -az --delete "$ROOT/snpdata/release/$v/" "$HOST:/srv/snpportal/releases/$v/"
   g=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['genome']['path'])" "$ROOT/snpdata/release/$v/manifest.json")
-  rsync -az "$g" "$g.fai" "$g.gzi" "$HOST:/srv/snpportal/genome/"
+  if [ -f "$g" ]; then rsync -az "$g" "$g.fai" "$g.gzi" "$HOST:/srv/snpportal/genome/"
+  else echo "the genome of $v is not on this Mac ($g): the VM keeps the one it has" >&2; fi  # a release built elsewhere
 done
 
 ssh "$HOST" "NAMES='$NAMES' NAME=$NAME GENOME=$(basename "$GENOME") bash -s" <<'REMOTE'

@@ -86,8 +86,9 @@ rerun it to replace the key). Releases are not in git: a new release still goes 
 after a change to weights.yaml or snpscore is the workflow's: the VM (2 GB RAM) can't build it (it swapped for 17
 minutes until the SSH session dropped, 2026-11-06), so update.sh says it is stale, and the job then builds it on
 GitHub's runner (the data release through `tools/get_data.sh --no-genome`, whose `salmo-snp download` builds it, about
-3 minutes) and sends it with the same key (`update.sh pool`, a .tar.gz on stdin), which installs it only if it fits the
-deployed release, weights and snpscore.
+3 minutes) and sends it with the same key (`update.sh pool [version]`, a .tar.gz on stdin), which installs it only if
+it fits the deployed release, weights and snpscore. This covers every species' release on the VM: update.sh names
+each release whose pool is stale, and the job builds each from its GitHub data release (data-<version>).
 
 ## salmobase container
 
