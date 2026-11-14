@@ -535,6 +535,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-trk-sub { display: block; font-size: 10px; color: var(--sp-grey-700); }
 .sp-tbar { display: inline-block; width: 4px; height: 10px; margin-right: 5px; vertical-align: -1px; background: currentColor; }
 .sp-trk-svg { display: block; overflow: visible; }
+.sp-trk-svg.sp-ax { overflow: hidden; }  /* the tracks draw a margin either side (browser.drawn), shown when they are moved */
 .sp-trk-svg text { font-family: var(--sp-font); }
 .sp-grp { margin-top: 6px; padding-top: 4px; }
 .sp-grp-h { display: flex; align-items: baseline; gap: 10px; width: 1200px; background: var(--sp-grey-50); padding: 3px 6px;
@@ -565,10 +566,11 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 /* moving with the mouse (portal.js): the tracks slide or stretch inside their own boxes until the new window arrives */
 .sp-tracks .sp-trk:not(.sp-trk-chr) > .sp-ax { cursor: grab; user-select: none; -webkit-user-select: none; }
 .sp-tracks .sp-trk-ruler > .sp-ax { cursor: col-resize; }
-.sp-moving .sp-trk-svg { overflow: hidden; }
 .sp-moving .sp-trk:not(.sp-trk-chr) > .sp-ax { cursor: grabbing; }
 .sp-sel { fill: var(--sp-accent); fill-opacity: .18; stroke: var(--sp-accent); pointer-events: none; }
 @media (hover: none) { .sp-move-tip { display: none; } }
+.sp-held.sp-cur .sp-trk:has(> .sp-ax)::after { background: var(--sp-accent); width: 2px; margin-left: -.5px; }
+.sp-held.sp-cur .sp-trk-ruler::before { color: var(--sp-accent-text); background: var(--sp-accent); border-radius: 3px; }
 @media print { .sp-bctl { display: none; } .sp-more-rows { display: block !important; } .sp-cur .sp-trk::after, .sp-cur .sp-trk::before { content: none; } }
 /* end locus browser */
 

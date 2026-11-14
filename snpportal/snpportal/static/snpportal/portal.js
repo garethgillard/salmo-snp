@@ -403,43 +403,69 @@
     if (e.detail.elt.closest && e.detail.elt.closest("#locus-view .sp-bctl, #locus-view [data-retry]")) e.detail.parameters.open = opened();
   });
   document.addEventListener("htmx:pushedIntoHistory", function () { if (document.querySelector("#locus-view [data-group]")) sync(); });
-  /* the mouse line: follows the mouse over the track column (not the chromosome) and names the base under it on the
-     ruler; a click on the tracks holds it still and the next click lets it go; the [data-line] button turns it off */
-  var cur = null, held = false, off = false;
+  /* the marker line: follows the mouse over the track column (not the chromosome) and names the base under it on the
+     ruler. A click pins it to that base (blue): it then moves and zooms with the tracks, waits off-screen when its
+     base leaves the window and stays through every move; the next click lets it go. A drag never pins or frees it.
+     The [data-line] button turns the line off (and frees a pinned one). */
+  var cur = null, held = null, off = false, last = null;  // held: {chrom, base} of the pinned line
   try { off = localStorage.getItem("sp-line") === "off"; } catch (e) { /* storage blocked: the line starts on */ }
   function at(e) {  // the tracks under the mouse and its x on the axis, or null
-    var t = e.target.closest ? e.target : null, box = t && !t.closest(".sp-trk-chr") && t.closest("#locus-view .sp-tracks");
+    var t = e.target && e.target.closest ? e.target : null, box = t && !t.closest(".sp-trk-chr") && t.closest("#locus-view .sp-tracks");
     var ax = box && box.querySelector(".sp-ax"), r = ax && ax.getBoundingClientRect(), x = r ? e.clientX - r.left : -1;
     return r && x >= 0 && x <= r.width ? {box: box, ax: ax, r: r, x: x} : null;
   }
+  function seen(box) { return box.spView || {x: 0, w: 1000}; }  // the user units the tracks show now (preview)
+  function baseAt(p) {  // the 1-based base under x, wherever the tracks have been moved to
+    var a = +p.box.getAttribute("data-start"), b = +p.box.getAttribute("data-end"), v = seen(p.box);
+    return a + 1 + Math.floor((p.x / p.r.width * v.w + v.x) / 1000 * (b - a));
+  }
+  function hide() { if (cur) { cur.classList.remove("sp-cur", "sp-held"); cur = null; } }
+  function show(box, base) {  // the line at `base`, or none while that base is outside what the tracks show
+    var ax = box.querySelector(".sp-ax"), r = ax.getBoundingClientRect(), v = seen(box);
+    var a = +box.getAttribute("data-start"), b = +box.getAttribute("data-end");
+    var x = ((base - 0.5 - a) / (b - a) * 1000 - v.x) / v.w * r.width;
+    if (cur && cur !== box) hide();
+    if (x < 0 || x > r.width) { box.classList.remove("sp-cur"); return; }
+    box.style.setProperty("--sp-x", (r.left - ax.parentNode.getBoundingClientRect().left + x) + "px");
+    box.style.setProperty("--sp-pos", JSON.stringify(base.toLocaleString("en")));
+    box.classList.add("sp-cur");
+    box.classList.toggle("sp-held", !!held);
+    cur = box;
+  }
   function follow(e) {
     var p = at(e);
-    if (cur && (!p || cur !== p.box)) { cur.classList.remove("sp-cur"); cur = null; }
-    if (!p) return;
-    var a = +p.box.getAttribute("data-start"), b = +p.box.getAttribute("data-end"), base = Math.min(b, a + 1 + Math.floor(p.x / p.r.width * (b - a)));
-    p.box.style.setProperty("--sp-x", (p.r.left - p.ax.parentNode.getBoundingClientRect().left + p.x) + "px");
-    p.box.style.setProperty("--sp-pos", JSON.stringify(base.toLocaleString("en")));
-    p.box.classList.add("sp-cur");
-    cur = p.box;
+    if (p) show(p.box, baseAt(p)); else hide();
+  }
+  function line(box) {  // after the tracks moved: the pinned line at its base, else the line under the resting mouse
+    if (off) return;
+    if (held) { if (box.getAttribute("data-chrom") === held.chrom) show(box, held.base); else hide(); }
+    else if (last) follow({target: document.elementFromPoint(last.x, last.y), clientX: last.x});
   }
   function buttons() {
     document.querySelectorAll("#locus-view [data-line]").forEach(function (b) { b.classList.toggle("active", !off); b.setAttribute("aria-pressed", !off); });
   }
   document.addEventListener("mousemove", function (e) {
-    if (cur && !cur.isConnected) { cur = null; held = false; }  // a move swapped the view
+    last = {x: e.clientX, y: e.clientY};
+    if (cur && !cur.isConnected) cur = null;  // a move swapped the view
     if (!off && !held) follow(e);
   });
   document.addEventListener("click", function (e) {
     if (e.target.closest && e.target.closest("#locus-view [data-line]")) {
       off = !off;
-      held = false;
-      if (cur) { cur.classList.remove("sp-cur"); cur = null; }
+      held = null;
+      hide();
       try { localStorage.setItem("sp-line", off ? "off" : "on"); } catch (err) { /* not remembered */ }
       buttons();
     } else if (!off && at(e) && !e.target.closest("a, button, input")) {  // not a gene link or a group's toggle
+      var p = at(e);
+      held = held ? null : {chrom: p.box.getAttribute("data-chrom"), base: baseAt(p)};
       follow(e);
-      held = !held;
     }
+  });
+  document.addEventListener("htmx:afterSettle", function () {
+    var box = document.querySelector("#locus-view .sp-tracks");
+    if (cur && !cur.isConnected) cur = null;
+    if (box) line(box);
   });
   document.addEventListener("htmx:afterSettle", buttons);
   buttons();
@@ -468,6 +494,8 @@
       svg.setAttribute("viewBox", [x, v[1], width, v[3]].join(" "));
       svg.setAttribute("preserveAspectRatio", "none");
     });
+    box.spView = {x: x, w: width};
+    line(box);
   }
   function restore(box) {
     box.classList.remove("sp-moving");
@@ -477,6 +505,8 @@
       svg.removeAttribute("preserveAspectRatio");
     });
     box.querySelectorAll(".sp-sel").forEach(function (r) { r.remove(); });
+    box.spView = null;
+    line(box);
   }
   function go(box, a, b) {  // fetch the window a-b (BED); the preview stays until it is swapped in
     var w = win(box), src = document.querySelector("#locus-view [data-nav]");
