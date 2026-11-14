@@ -7,9 +7,10 @@
 # `release <version>` takes such a release as a tar on stdin instead (the species-data workflow builds and sends it).
 # The commit comes in SSH_ORIGINAL_COMMAND (or $1); anything that is not a commit on origin/main means origin/main.
 # If the portal doesn't answer after the restart, it goes back to the previous commit and fails.
-# `pool` instead takes a public pool (pool.parquet and background.json, a .tar.gz on stdin) that the deploy workflow
-# built for the code installed here: the VM's 2 GB RAM can't build one. It replaces the release's pool only if
-# snpscore.pool.stale says it fits this release, weights.yaml and snpscore.
+# `pool [version]` instead takes a public pool (pool.parquet and background.json, a .tar.gz on stdin) that the deploy
+# workflow built for the code installed here: the VM's 2 GB RAM can't build one. It replaces that release's pool (the
+# default release's without a version; another species' in /srv/snpportal/releases/<version>) only if
+# snpscore.pool.stale says it fits the release, weights.yaml and snpscore.
 set -euo pipefail
 cd /srv/snpportal/salmo-snp
 export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/salmo_snp_read -o IdentitiesOnly=yes"
@@ -17,8 +18,12 @@ want=${SSH_ORIGINAL_COMMAND:-${1:-}}
 before=$(git rev-parse HEAD 2>/dev/null || true)
 release=/srv/snpportal/release
 
-stale() {  # whether the release's pool is stale for the code installed here
-  ! /srv/snpportal/venv/bin/python -c 'import sys; from snpscore.pool import stale; sys.exit(stale(sys.argv[1]))' "$release"
+stale() {  # whether the pool of the release in folder $1 is stale for the code installed here
+  ! /srv/snpportal/venv/bin/python -c 'import sys; from snpscore.pool import stale; sys.exit(stale(sys.argv[1]))' "$1"
+}
+
+version() {  # the version of the release in folder $1
+  /srv/snpportal/venv/bin/python -c 'import json, sys; print(json.load(open(sys.argv[1] + "/manifest.json"))["version"])' "$1"
 }
 
 answers() {  # restart the portal; succeed when it answers
@@ -38,7 +43,15 @@ if [[ $want == release\ * ]]; then  # `release <version>`: another species' rele
   exit 0
 fi
 
-if [ "$want" = pool ]; then
+if [[ $want == pool || $want == pool\ * ]]; then
+  v=${want#pool}
+  v=${v# }
+  if [[ $v =~ ^[A-Za-z0-9._-]+$ ]] && [ -f "/srv/snpportal/releases/$v/manifest.json" ]; then
+    release=/srv/snpportal/releases/$v
+  elif [ -n "$v" ] && [ "$v" != "$(version "$release")" ]; then
+    echo "no release '$v' here: the pool was not installed" >&2
+    exit 1
+  fi
   new=$(mktemp -d "$release/.pool-XXXXXX")
   trap 'rm -rf "$new" "$release/pool.previous"' EXIT
   tar -xzf - -C "$new" --no-same-owner pool.parquet background.json
@@ -46,13 +59,13 @@ if [ "$want" = pool ]; then
   rm -rf "$release/pool.previous"
   [ -d "$release/pool" ] && mv "$release/pool" "$release/pool.previous"
   mv "$new" "$release/pool"
-  if stale; then
+  if stale "$release"; then
     rm -rf "$release/pool" && [ -d "$release/pool.previous" ] && mv "$release/pool.previous" "$release/pool"
     echo "the pool sent doesn't fit this release, weights.yaml and snpscore: the old one is kept" >&2
     exit 1
   fi
   answers || { echo "the portal did not answer after the new pool" >&2; exit 1; }
-  echo "public pool updated: $(sed -n 's/.*"created": "\([^"]*\)".*/\1/p' "$release/pool/background.json")"
+  echo "public pool of $(version "$release") updated: $(sed -n 's/.*"created": "\([^"]*\)".*/\1/p' "$release/pool/background.json")"
   exit 0
 fi
 
@@ -67,8 +80,11 @@ install() {  # check out $1, install its packages, say if the pool is stale, col
   /srv/snpportal/venv/bin/pip install -q --upgrade --upgrade-strategy eager gunicorn -e snpscore -e snpportal || return 1
   # The public pool is never built here: the VM's 2 GB RAM can't, and trying swapped for 17 min until the SSH session
   # dropped (2026-11-06). The deploy workflow builds it and sends it (`pool` above) when this line says so.
-  if stale; then echo "the public pool is stale (new weights.yaml or snpscore)" >&2; fi
   bash snpportal/deploy/species.sh || true  # the other species' releases, fetched once from the GitHub data release
+  for r in "$release" /srv/snpportal/releases/*; do  # every species' pool: the workflow reads these lines
+    [ -f "$r/manifest.json" ] || continue
+    if stale "$r"; then echo "the public pool is stale: $(version "$r") (new weights.yaml or snpscore)" >&2; fi
+  done
   (set -a && . /srv/snpportal/env && cd snpportal && /srv/snpportal/venv/bin/python manage.py collectstatic --noinput -v 0)
   answers
 }

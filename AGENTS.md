@@ -61,6 +61,9 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
    projects keep the release they were made with. The pages are written for salmon; `jobs.wording` is the one place
    that turns them into another release's (assembly, older assembly, number of conditions, chromosome names, and the
    release's own pairs). Adding a species: a folder with layers.yaml and tracks.yaml, a fixture, an entry in RELEASES.
+   The data build is per species, the serving is one thing (G, 2026-11-14): `snpdata fetch` and `build` run once for
+   each species and make that species' release files; one portal (one install, one NREC demo, one deploy) serves
+   every release it holds, and the species bar switches between them.
 
 ## Rules
 - Never commit breeder data (genotypes, GWAS results, array manifests): not in fixtures, tests or docs either.
@@ -135,6 +138,9 @@ Decided:
   and a species bar at the top right that picks the release). How it was done: Plan 7; what Claude chose on the way
   is under Provisional below and in docs/DECISIONS.md #38-#45.
 
+- Rainbow trout chromosome Y is kept (G, 2026-11-14): scored, shown and in the ideogram (sdY and 3,928 AQUA-FAANG
+  peaks are on it).
+
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.
   Not counted: repressed polycomb, quiescent, ZNF genes and repeats, Unknown_1.
@@ -181,7 +187,7 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     low-pass study (ENA PRJEB109732: 462 farmed fish at about 1x, imputed by Gencove, genotypes with posterior >= 0.9).
     Counted from the genotypes of its three cohorts (all 462 fish), biallelic SNPs on chromosomes with MAF
     >= 0.01 and a genotype in at least half of the fish. ENA open data; frequencies only.
-  - Chromosome Y is kept (sdY and 3,928 peaks are on it); unplaced scaffolds are not, as for salmon.
+  - Unplaced scaffolds are not kept, as for salmon (chromosome Y is: Decided).
   - Known loci (G asked for a catalogue from the publications, 2026-11-13; `rainbow_trout/catalog/known_loci.tsv`, 11
     rows, to vet: #38): gene regions where the published markers are not placed on USDA_OmykA_1.1 (greb1l and rock1,
     migration timing; six6, age at maturity; sdY) and QTL windows published on this assembly (BCWD resistance, 3; IHNV
@@ -296,7 +302,10 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   sessions may not create GitHub Releases (the API refuses): G creates data-<version>, or runs the script on a Mac.
   Without either, the `species-data` workflow (run on main when G asks) builds the trout release from the public
   sources on GitHub's runners (hours: three cohort jobs, then the build) and sends it with its pool to the VM
-  (`update.sh` `release <version>` -> `species.sh stdin`, checked before it is put in place).
+  (`update.sh` `release <version>` -> `species.sh stdin`, checked before it is put in place). A stale pool of any
+  species is the deploy workflow's (update.sh names each stale release; the job builds its pool from the GitHub data
+  release data-<version> and sends it, `update.sh pool <version>`): so trout's needs data-trout-<date> published.
+  A release built elsewhere goes on GitHub from G's Mac with `GENOME=<its genome> POOL=1 bash prep/github_release.sh`.
 - Deploying the NREC demo (G, 2026-11-06): only when G asks in the chat ("deploy to NREC"), usually after several
   merged pull requests; never on your own initiative, and never a branch. Run the `deploy` workflow on main:
   `gh workflow run deploy.yml --ref main` (cloud sessions, REST only: `gh api -X POST

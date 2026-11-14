@@ -11,7 +11,8 @@
 set -euo pipefail
 RELEASE=${1:?give the release folder, e.g. release/2026-11-03}
 VERSION=$(basename "$RELEASE")
-GENOME=$(python3 -c "import json; print(json.load(open('$RELEASE/manifest.json'))['genome']['path'])")  # where build read it
+# where build read the genome; GENOME=<path> for a release built elsewhere (the species-data workflow's, copied from the VM)
+GENOME=${GENOME:-$(python3 -c "import json; print(json.load(open('$RELEASE/manifest.json'))['genome']['path'])")}
 ASSEMBLY=$(python3 -c "import json; print(json.load(open('$RELEASE/manifest.json'))['assembly'])")
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT

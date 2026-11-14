@@ -31,12 +31,18 @@ Built on the session branch, for G to inspect before anything is deployed (AGENT
 - [x] Portal: species bar (cookie), one release per species (also on a server: `SNPPORTAL_RELEASES_DIR`), wording per
   release, the Data page from the release, `salmo-snp download --species`, vendor names Omy<chr>p<pos>
 - [x] Tests: `tests/fixture/rainbow_trout`, snpdata, snpscore and portal tests for the second species
-- [ ] G: look at it (the pull request's screenshots, or the session's preview), then publish the release
-  (`bash prep/github_release.sh release/trout-<date>` after a build on G's Mac, or from a cloud session) and deploy
-  (`deploy/nrec.sh` sends both releases; the deploy workflow's pool step still knows the salmon release only)
+- [x] On the NREC demo (2026-11-14; PRs #14-#16): the `species-data` workflow built trout-2026-11-13 and its pool on
+  GitHub's runners (about 4 h; the cohorts over parallel byte ranges, `prep/remote_sites.py`) and sent them to the VM
+- [ ] The GitHub data prerelease data-trout-2026-11-13 (`bash snpdata/prep/release_from_demo.sh` on G's Mac), for local installs (`tools/get_data.sh trout-2026-11-13`):
+  needs G's Mac (`POOL=1 bash prep/github_release.sh release/trout-2026-11-13`; cloud sessions may not create
+  Releases), with the release copied from the VM (the Mac has no trout build): `GENOME=<genome> POOL=1 bash ...`
+- [x] Deploy loose ends (2026-11-14): the deploy workflow rebuilds the stale pool of every species (`update.sh pool
+  <version>`, tested on a mock of the VM's folders; trout's needs the data prerelease above); `deploy/nrec.sh` with
+  two releases dry-run with stand-in ssh and rsync (a real run still needs G's Mac)
 - [x] Known loci from the publications (2026-11-13): 11 rows, gene regions and QTL windows; `snpdata build --reuse`
 - [x] `deploy/species.sh`: the demo fetches another species' release from the GitHub data release
-- [ ] Vetting the catalogue and SNP rows for it (#38), expression (#44), a guided tour for trout
+- [ ] Vetting the catalogue and SNP rows for it (#38; the example list scores its 4 gene-region rows, the 7 QTL
+  windows are rejected as rows without a position), expression (#44). The guided tour stays salmon only (G, 2026-11-14)
 
 ## Next
 Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged: I1-I5, I7-I12, I15,
