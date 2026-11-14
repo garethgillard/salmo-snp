@@ -145,6 +145,9 @@ class LocusTest(SimpleTestCase):
         fragment = self.get(url, HTTP_HX_REQUEST="true", HTTP_HX_TARGET="locus-view")
         self.assertIn('id="locus-view"', fragment)
         self.assertNotIn("sp-nav", fragment)  # only the swapped part
+        for hook in ('data-nav data-svg="/snp/locus/svg/" data-page="/snp/locus/"', 'data-chrom="25"', 'data-min="60" data-max="2000000"',
+                     'data-query="r=25%3A'):  # what portal.js needs to move the view with the mouse
+            self.assertIn(hook, fragment)
         moved = re.findall(r'hx-get="/snp/locus/svg/\?([^"]+)"', fragment)
         self.assertEqual(len(moved), 4)  # zoom out, zoom in, left, right
         self.assertTrue(all(m.startswith("r=25%3A") for m in moved))

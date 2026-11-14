@@ -403,46 +403,200 @@
     if (e.detail.elt.closest && e.detail.elt.closest("#locus-view .sp-bctl, #locus-view [data-retry]")) e.detail.parameters.open = opened();
   });
   document.addEventListener("htmx:pushedIntoHistory", function () { if (document.querySelector("#locus-view [data-group]")) sync(); });
-  /* the mouse line: follows the mouse over the track column (not the chromosome) and names the base under it on the
-     ruler; a click on the tracks holds it still and the next click lets it go; the [data-line] button turns it off */
-  var cur = null, held = false, off = false;
+  /* the marker line: follows the mouse over the track column (not the chromosome) and names the base under it on the
+     ruler. A click pins it to that base (blue): it then moves and zooms with the tracks, waits off-screen when its
+     base leaves the window and stays through every move; the next click lets it go. A drag never pins or frees it.
+     The [data-line] button turns the line off (and frees a pinned one). */
+  var cur = null, held = null, off = false, last = null;  // held: {chrom, base} of the pinned line
   try { off = localStorage.getItem("sp-line") === "off"; } catch (e) { /* storage blocked: the line starts on */ }
   function at(e) {  // the tracks under the mouse and its x on the axis, or null
-    var t = e.target.closest ? e.target : null, box = t && !t.closest(".sp-trk-chr") && t.closest("#locus-view .sp-tracks");
+    var t = e.target && e.target.closest ? e.target : null, box = t && !t.closest(".sp-trk-chr") && t.closest("#locus-view .sp-tracks");
     var ax = box && box.querySelector(".sp-ax"), r = ax && ax.getBoundingClientRect(), x = r ? e.clientX - r.left : -1;
     return r && x >= 0 && x <= r.width ? {box: box, ax: ax, r: r, x: x} : null;
   }
+  function seen(box) { return box.spView || {x: 0, w: 1000}; }  // the user units the tracks show now (preview)
+  function baseAt(p) {  // the 1-based base under x, wherever the tracks have been moved to
+    var a = +p.box.getAttribute("data-start"), b = +p.box.getAttribute("data-end"), v = seen(p.box);
+    return a + 1 + Math.floor((p.x / p.r.width * v.w + v.x) / 1000 * (b - a));
+  }
+  function hide() { if (cur) { cur.classList.remove("sp-cur", "sp-held"); cur = null; } }
+  function show(box, base) {  // the line at `base`, or none while that base is outside what the tracks show
+    var ax = box.querySelector(".sp-ax"), r = ax.getBoundingClientRect(), v = seen(box);
+    var a = +box.getAttribute("data-start"), b = +box.getAttribute("data-end");
+    var x = ((base - 0.5 - a) / (b - a) * 1000 - v.x) / v.w * r.width;
+    if (cur && cur !== box) hide();
+    if (x < 0 || x > r.width) { box.classList.remove("sp-cur"); return; }
+    box.style.setProperty("--sp-x", (r.left - ax.parentNode.getBoundingClientRect().left + x) + "px");
+    box.style.setProperty("--sp-pos", JSON.stringify(base.toLocaleString("en")));
+    box.classList.add("sp-cur");
+    box.classList.toggle("sp-held", !!held);
+    cur = box;
+  }
   function follow(e) {
     var p = at(e);
-    if (cur && (!p || cur !== p.box)) { cur.classList.remove("sp-cur"); cur = null; }
-    if (!p) return;
-    var a = +p.box.getAttribute("data-start"), b = +p.box.getAttribute("data-end"), base = Math.min(b, a + 1 + Math.floor(p.x / p.r.width * (b - a)));
-    p.box.style.setProperty("--sp-x", (p.r.left - p.ax.parentNode.getBoundingClientRect().left + p.x) + "px");
-    p.box.style.setProperty("--sp-pos", JSON.stringify(base.toLocaleString("en")));
-    p.box.classList.add("sp-cur");
-    cur = p.box;
+    if (p) show(p.box, baseAt(p)); else hide();
+  }
+  function line(box) {  // after the tracks moved: the pinned line at its base, else the line under the resting mouse
+    if (off) return;
+    if (held) { if (box.getAttribute("data-chrom") === held.chrom) show(box, held.base); else hide(); }
+    else if (last) follow({target: document.elementFromPoint(last.x, last.y), clientX: last.x});
   }
   function buttons() {
     document.querySelectorAll("#locus-view [data-line]").forEach(function (b) { b.classList.toggle("active", !off); b.setAttribute("aria-pressed", !off); });
   }
   document.addEventListener("mousemove", function (e) {
-    if (cur && !cur.isConnected) { cur = null; held = false; }  // a move swapped the view
+    last = {x: e.clientX, y: e.clientY};
+    if (cur && !cur.isConnected) cur = null;  // a move swapped the view
     if (!off && !held) follow(e);
   });
   document.addEventListener("click", function (e) {
     if (e.target.closest && e.target.closest("#locus-view [data-line]")) {
       off = !off;
-      held = false;
-      if (cur) { cur.classList.remove("sp-cur"); cur = null; }
+      held = null;
+      hide();
       try { localStorage.setItem("sp-line", off ? "off" : "on"); } catch (err) { /* not remembered */ }
       buttons();
     } else if (!off && at(e) && !e.target.closest("a, button, input")) {  // not a gene link or a group's toggle
+      var p = at(e);
+      held = held ? null : {chrom: p.box.getAttribute("data-chrom"), base: baseAt(p)};
       follow(e);
-      held = !held;
     }
+  });
+  document.addEventListener("htmx:afterSettle", function () {
+    var box = document.querySelector("#locus-view .sp-tracks");
+    if (cur && !cur.isConnected) cur = null;
+    if (box) line(box);
   });
   document.addEventListener("htmx:afterSettle", buttons);
   buttons();
+  /* moving with the mouse: drag the tracks to move; drag along the ruler to zoom to that stretch; double-click to zoom
+     in 3x there; Ctrl (or Cmd) + wheel, or a pinch, zooms at the mouse; a sideways or Shift + wheel moves; arrows and
+     + - press the buttons. The tracks slide or stretch inside their boxes at once (each SVG's viewBox), then the new
+     window is fetched as the buttons fetch it, through the form's [data-nav]. A plain wheel still scrolls the page. */
+  var gesture = null, loading = false, dragged = false, timer = null;
+  function axes(box) { return Array.prototype.slice.call(box.querySelectorAll(".sp-trk:not(.sp-trk-chr) > .sp-ax")); }
+  function win(box) {
+    var n = function (k) { return +box.getAttribute("data-" + k); };
+    return {a: n("start"), b: n("end"), size: n("size"), min: n("min"), max: n("max")};
+  }
+  function fit(w, a, width) {  // the window of `width` bp starting at a, inside the chromosome and the limits
+    width = Math.round(Math.max(w.min, Math.min(w.max, w.size || Infinity, width)));
+    a = Math.max(0, Math.round(a));
+    if (w.size) a = Math.min(a, w.size - width);
+    return [a, a + width];
+  }
+  function preview(box, x, width) {  // show user units x to x + width of every track (1000 across: all of it)
+    box.classList.add("sp-moving");
+    axes(box).forEach(function (svg) {
+      var v = svg.getAttribute("data-vb") || svg.getAttribute("viewBox");
+      svg.setAttribute("data-vb", v);
+      v = v.split(" ");
+      svg.setAttribute("viewBox", [x, v[1], width, v[3]].join(" "));
+      svg.setAttribute("preserveAspectRatio", "none");
+    });
+    box.spView = {x: x, w: width};
+    line(box);
+  }
+  function restore(box) {
+    box.classList.remove("sp-moving");
+    axes(box).forEach(function (svg) {
+      if (svg.hasAttribute("data-vb")) svg.setAttribute("viewBox", svg.getAttribute("data-vb"));
+      svg.removeAttribute("data-vb");
+      svg.removeAttribute("preserveAspectRatio");
+    });
+    box.querySelectorAll(".sp-sel").forEach(function (r) { r.remove(); });
+    box.spView = null;
+    line(box);
+  }
+  function go(box, a, b) {  // fetch the window a-b (BED); the preview stays until it is swapped in
+    var w = win(box), src = document.querySelector("#locus-view [data-nav]");
+    if (!src || !window.htmx || (a === w.a && b === w.b)) { restore(box); return; }
+    var q = new URLSearchParams(box.getAttribute("data-query")), list = opened();
+    q.set("r", box.getAttribute("data-chrom") + ":" + (a + 1) + "-" + b);
+    if (list) q.set("open", list); else q.delete("open");
+    src.setAttribute("hx-push-url", src.getAttribute("data-page") + "?" + q);
+    loading = true;
+    htmx.ajax("GET", src.getAttribute("data-svg") + "?" + q, {source: src});
+  }
+  function done() { loading = false; }
+  function failed() { loading = false; document.querySelectorAll("#locus-view .sp-tracks.sp-moving").forEach(restore); }
+  document.addEventListener("htmx:afterSettle", done);
+  ["htmx:responseError", "htmx:sendError", "htmx:timeout", "htmx:swapError"].forEach(function (n) { document.addEventListener(n, failed); });
+  document.addEventListener("pointerdown", function (e) {
+    var p = e.button === 0 && e.pointerType !== "touch" && !loading && !e.target.closest("button, input") && at(e);
+    if (!p) return;
+    dragged = false;
+    gesture = {box: p.box, r: p.r, x0: e.clientX, x: p.x, ruler: !!e.target.closest(".sp-trk-ruler"), svg: p.ax};
+    if (gesture.ruler) gesture.svg = e.target.closest(".sp-trk-ruler").querySelector(".sp-ax");
+  });
+  document.addEventListener("pointermove", function (e) {
+    var g = gesture, dx = g ? e.clientX - g.x0 : 0;
+    if (!g || g.wheel || (!dragged && Math.abs(dx) < 4)) return;
+    dragged = true;
+    if (!g.ruler) { preview(g.box, -dx / g.r.width * 1000, 1000); return; }
+    if (!g.rect) {
+      g.rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      g.rect.setAttribute("class", "sp-sel");
+      g.rect.setAttribute("y", 0);
+      g.rect.setAttribute("height", g.svg.getAttribute("height"));
+      g.svg.appendChild(g.rect);
+    }
+    g.x1 = Math.max(0, Math.min(g.r.width, g.x + dx));
+    g.rect.setAttribute("x", Math.min(g.x, g.x1) / g.r.width * 1000);
+    g.rect.setAttribute("width", Math.abs(g.x1 - g.x) / g.r.width * 1000);
+  });
+  function drop(e) {
+    var g = gesture;
+    gesture = null;
+    if (!g || !dragged) return;
+    if (e.type === "pointercancel") { restore(g.box); return; }
+    var w = win(g.box), bp = (w.b - w.a) / g.r.width, span;
+    if (g.ruler) span = fit(w, w.a + Math.min(g.x, g.x1) * bp, Math.abs(g.x1 - g.x) * bp);
+    else span = fit(w, w.a - (e.clientX - g.x0) * bp, w.b - w.a);
+    go(g.box, span[0], span[1]);
+  }
+  document.addEventListener("pointerup", drop);
+  document.addEventListener("pointercancel", drop);
+  document.addEventListener("click", function (e) {  // the click that ends a drag opens no gene and doesn't hold the line
+    if (!dragged) return;
+    dragged = false;
+    if (e.target.closest && e.target.closest("#locus-view .sp-tracks")) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  document.addEventListener("dragstart", function (e) {  // a gene's link is dragged as the track, not as a link
+    if (e.target.closest && e.target.closest("#locus-view .sp-tracks .sp-ax")) e.preventDefault();
+  });
+  document.addEventListener("dblclick", function (e) {
+    var p = !loading && !e.target.closest("a, button, input") && at(e);
+    if (!p) return;
+    var w = win(p.box), width = (w.b - w.a) / 3, span = fit(w, w.a + p.x / p.r.width * (w.b - w.a) - width / 2, width);
+    go(p.box, span[0], span[1]);
+  });
+  document.addEventListener("wheel", function (e) {
+    var zoom = e.ctrlKey || e.metaKey, side = !zoom && (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY));
+    var p = (zoom || side) && at(e);
+    if (!p) return;
+    e.preventDefault();  // not the browser's own zoom or Back swipe
+    if (loading) return;
+    var w = win(p.box), g = gesture && gesture.wheel ? gesture : (gesture = {wheel: true, box: p.box, scale: 1, shift: 0, f: p.x / p.r.width});
+    var d = (e.deltaMode ? 30 : 1) * (side && !e.deltaX ? e.deltaY : side ? e.deltaX : e.deltaY);
+    if (zoom) g.scale = Math.max(w.min / (w.b - w.a), Math.min(Math.min(w.max, w.size || Infinity) / (w.b - w.a), g.scale * Math.exp(d * 0.004)));
+    else g.shift += d / p.r.width;
+    preview(p.box, (g.f * (1 - g.scale) + g.shift) * 1000, g.scale * 1000);
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      gesture = null;
+      var width = (w.b - w.a) * g.scale, span = fit(w, w.a + (g.f * (1 - g.scale) + g.shift) * (w.b - w.a), width);
+      go(g.box, span[0], span[1]);
+    }, 250);
+  }, {passive: false});
+  document.addEventListener("keydown", function (e) {
+    var tip = {ArrowLeft: "Move left", ArrowRight: "Move right", "+": "Zoom in", "=": "Zoom in", "-": "Zoom out"}[e.key];
+    if (!tip || loading || e.ctrlKey || e.metaKey || e.altKey || (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]"))) return;
+    var b = document.querySelector('#locus-view .sp-bctl a[aria-label^="' + tip + '"]');
+    if (!document.querySelector("#locus-view .sp-tracks")) return;
+    e.preventDefault();
+    if (b) { loading = true; b.click(); }
+  });
 })();
 /* end browser */
 

@@ -72,6 +72,7 @@ class Axis:
 
     def __init__(self, start, end, x0, x1):
         self.start, self.end, self.x0, self.x1 = start, end, x0, x1
+        self.left = x0  # where a row's own note starts: the browser's axis begins left of what it shows (browser.drawn)
         self.scale = (x1 - x0) / max(1, end - start)
 
     def x(self, pos):
@@ -186,7 +187,7 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
                         f'<title>{escape(str(r.get("type", "")).replace("_", " "))} {escape(str(r.get("id") or ""))}'
                         f'{escape(" (" + r["gene_id"] + ")" if r.get("gene_id") else "")}</title></rect>')
         if not data.get("regbuild"):
-            body.append(_t(ax.x0, y + 11, "none in this window", 9, G[700]))
+            body.append(_t(ax.left, y + 11, "none in this window", 9, G[700]))
         types = sorted({r.get("type") for r in data.get("regbuild", [])} & set(REGBUILD))
         if types:
             legend["Regulatory build"] = [(_swatch(_colour(REGBUILD[t])), t.replace("_", " ")) for t in types]
@@ -200,7 +201,7 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
                         f'fill-opacity="{0.35 + 0.65 * (g.get("score") or 0) / top_gerp:.2f}">'
                         f'<title>GERP constrained element (65 fish), score {g.get("score")}</title></rect>')
         if not data.get("gerp"):
-            body.append(_t(ax.x0, y + 11, "none in this window", 9, G[700]))
+            body.append(_t(ax.left, y + 11, "none in this window", 9, G[700]))
         y += 16
 
     # public variants, tick height = minor allele frequency
@@ -208,7 +209,7 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
         lane_label("Public variants", y + 14, "504 fish, height = MAF")
         body.append(f'<line x1="{gutter}" x2="{width - RIGHT}" y1="{y + 30}" y2="{y + 30}" stroke="{G[300]}"/>')
         if not data.get("variants"):
-            body.append(_t(ax.x0, y + 26, "none in this window", 9, G[700]))
+            body.append(_t(ax.left, y + 26, "none in this window", 9, G[700]))
         for v in data.get("variants", []):
             x, h = ax.x(v["pos"] - 0.5), 3 + 24 * min(0.5, v.get("maf") or 0) / 0.5
             tip = (f"{data['chrom']}:{v['pos']:,} {v.get('ref')}>{v.get('alt')} · 504-fish panel: MAF {_num(v.get('maf'))}, alt AF {_num(v.get('af'))}"
@@ -327,15 +328,18 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label, source="Ensembl 1
     without UTR parts (NCBI's) draws its exons thin and its CDS thick."""
     if not genes:
         lane_label("Genes", y + 12)
-        body.append(_t(ax.x0, y + 12, f"no {source} {what[:-1]} in this window", 9.5, G[700]))
+        body.append(_t(ax.left, y + 12, f"no {source} {what[:-1]} in this window", 9.5, G[700]))
         return y + 20
+
+    def label_x(x0, x1):  # a label starts with its gene, or at the left edge when the gene comes in from beyond it
+        return ax.left if x0 < ax.left < x1 else max(ax.x0, x0)
 
     def pack(with_labels):
         rows, placed, hidden = [], [], 0
         for g in sorted(genes, key=lambda g: g["start"]):
             x0, x1 = ax.x(g["start"]), ax.x(g["end"])
             text = len(g["label"]) + 2 + (len(g["dup"]["text"]) + 1 if g.get("dup") else 0)
-            right = max(x1, x0 + 6.2 * text) if with_labels else x1
+            right = max(x1, label_x(x0, x1) + 6.2 * text) if with_labels else x1
             row = next((i for i, end in enumerate(rows) if end + 8 < x0), None)
             if row is None:
                 if len(rows) == max_rows:
@@ -380,19 +384,19 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label, source="Ensembl 1
             parts.append(f'<rect x="{px:.1f}" y="{yy + 6 - h / 2}" width="{pw:.1f}" height="{h}" fill="{colour}"/>')
         if labels:
             name = f"{g['label']} →" if arrow == 1 else f"← {g['label']}"
-            parts.append(_t(max(ax.x0, x0), yy - 3, name, 10, G[900], extra=' font-style="italic"' if g.get("name") else ""))
+            parts.append(_t(label_x(x0, x0 + w), yy - 3, name, 10, G[900], extra=' font-style="italic"' if g.get("name") else ""))
         group = "".join(parts)
         body.append(f'<a href="{escape(gene_url(g["id"]))}">{group}</a>' if gene_url else f"<g>{group}</g>")
         if labels and g.get("dup"):  # after the gene's own link, as links can't nest
-            dx = max(ax.x0, x0) + 6.3 * (len(g["label"]) + 2) + 6  # after the name and its strand arrow
+            dx = label_x(x0, x0 + w) + 6.3 * (len(g["label"]) + 2) + 6  # after the name and its strand arrow
             dup = _t(dx, yy - 3, g["dup"]["text"], 9.5, G[700]).replace("</text>", f'<title>{escape(g["dup"]["title"])}</title></text>')
             body.append(f'<a href="{escape(g["dup"]["url"])}">{dup}</a>' if g["dup"].get("url") else dup)
     y += n * 26 + (8 if labels else 4)
     if hidden:
-        body.append(_t(ax.x0, y + 8, f"+{hidden} more {what}: zoom in", 9.5, G[700]))
+        body.append(_t(ax.left, y + 8, f"+{hidden} more {what}: zoom in", 9.5, G[700]))
         y += 12
     elif not labels:
-        body.append(_t(ax.x0, y + 8, f"{what[:-1]} names hidden in this crowded view: zoom in or hover", 9.5, G[700]))
+        body.append(_t(ax.left, y + 8, f"{what[:-1]} names hidden in this crowded view: zoom in or hover", 9.5, G[700]))
         y += 12
     return y + 4
 
@@ -700,7 +704,7 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
     body, y = [], 14
 
     def lane(name, tip):
-        body.append(_t(ax.x0, y + 8, name, 9.5, G[900], weight="600").replace("</text>", f"<title>{escape(tip)}</title></text>"))
+        body.append(_t(ax.left, y + 8, name, 9.5, G[900], weight="600").replace("</text>", f"<title>{escape(tip)}</title></text>"))
         return y + 12
 
     if snps:
@@ -727,7 +731,7 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
         x, w = ax.span(g["start"], g["end"])
         body.append(f'<rect x="{x:.1f}" y="{y}" width="{w:.1f}" height="10" fill="{G[700]}" fill-opacity="{0.35 + 0.65 * (g.get("score") or 0) / top:.2f}"/>')
     if not data.get("gerp"):
-        body.append(_t(ax.x0, y + 9, "none here", 9, G[700]))
+        body.append(_t(ax.left, y + 9, "none here", 9, G[700]))
     y += 16
     y = lane("Regulatory elements", "AQUA-FAANG robust ATAC peaks, coloured by their strongest state")
     for p in data.get("peaks", []):
@@ -736,7 +740,7 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
         body.append(f'<rect x="{x0:.1f}" y="{y}" width="{max(2, x1 - x0):.1f}" height="12" fill="{palette.state(best)[0]}" stroke="{G[900]}" '
                     f'stroke-width="{2 if mine else 0.5}"><title>{best.replace("_", " ")}</title></rect>')
     if not data.get("peaks"):
-        body.append(_t(ax.x0, y + 9, "none here", 9, G[700]))
+        body.append(_t(ax.left, y + 9, "none here", 9, G[700]))
     y += 12
     x = ax.x(pos - 0.5)  # the SNP through every lane, labelled on top between the window's ends
     left, right = (pos - 1 - data["start"]) / 1000, (data["end"] - pos) / 1000

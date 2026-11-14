@@ -76,16 +76,38 @@ def moves(s, open_):
 
 def centre(s):
     """The 1-based position the view centres on: the SNP it was opened on, else the window's middle base."""
-    return s["mark"] or (s["start"] + s["end"] + 1) // 2
+    a, b = s.get("shown") or (s["start"], s["end"])
+    return s["mark"] or (a + b + 1) // 2
+
+
+MARGIN = 0.5  # of the window, drawn beyond each edge and hidden until the mouse moves the tracks (portal.js)
+
+
+def drawn(s):
+    """(the view widened by MARGIN each side, its axis): what the tracks draw, so that a drag shows what lies beyond
+    the edge at once. The window itself stays on 0-W; the margin stops at the chromosome's ends and at MAX_WINDOW
+    in all. `shown` keeps the window (width(), centre()); the functional assays' signal is read for the window only."""
+    w = s["end"] - s["start"]
+    m = max(0, min(int(w * MARGIN), (sl.MAX_WINDOW - w) // 2))
+    lo, hi = max(0, s["start"] - m), min(s.get("size") or s["end"] + m, s["end"] + m)
+    ax = locus_svg.Axis(lo, hi, (lo - s["start"]) / w * W, (hi - s["start"]) / w * W)
+    ax.left = 0
+    return {**s, "start": lo, "end": hi, "shown": (s["start"], s["end"])}, ax
+
+
+def width(s):
+    """The window's width in bp (not the margin's): what decides how much detail a track draws."""
+    a, b = s.get("shown") or (s["start"], s["end"])
+    return b - a
 
 
 def trk(h, body):
-    """One track: an SVG on the shared axis (class sp-ax: portal.js draws the mouse line through these)."""
+    """One track: an SVG on the shared axis (class sp-ax: portal.js draws the marker line through these and moves them with the mouse)."""
     return mark_safe(f'<svg class="sp-trk-svg sp-ax" viewBox="0 0 {W} {h}" width="{W}" height="{h}" role="img">{body}</svg>')
 
 
 def plain(h, body):
-    """A row that isn't on the axis (no mouse line)."""
+    """A row that isn't on the axis (no marker line)."""
     return mark_safe(f'<svg class="sp-trk-svg" viewBox="0 0 {W} {h}" width="{W}" height="{h}" role="img">{body}</svg>')
 
 
@@ -162,9 +184,9 @@ def chromosome(s):
 
 def ruler(ax, s):
     """Positions along the window, the centre's in red."""
-    body = [f'<line x1="0" x2="{W}" y1="30" y2="30" stroke="{G[500]}"/>',
+    body = [f'<line x1="{-W}" x2="{2 * W}" y1="30" y2="30" stroke="{G[500]}"/>',
             locus_svg._t(ax.x(centre(s) - 0.5), 9, f"{centre(s):,}", 10.5, palette.CENTRE, "middle", "600")]
-    for t in ax.ticks(8):
+    for t in ax.ticks(round(8 * (ax.x1 - ax.x0) / W)):
         x = ax.x(t)
         half = 3.3 * len(f"{t:,}")
         anchor = "start" if x - half < 0 else "end" if x + half > W else "middle"
@@ -194,11 +216,11 @@ def genes_group(request, s, ax, data, open_=()):
     gwas = None
     if s["key"]:
         from . import association  # a GWAS job draws its association lane; a SNP list its tier lollipops
-        gwas = association.browser_lane(request, s["key"], s["chrom"], s["start"], s["end"])
+        gwas = association.browser_lane(request, s["key"], s["chrom"], *s.get("shown", (s["start"], s["end"])))
     noop = lambda *a, **k: None  # noqa: E731 (labels live in the HTML column)
     if gwas:
         body = []
-        h = locus_svg.gwas_lane(body, ax, gwas, 0, None, height=120)
+        h = locus_svg.gwas_lane(body, locus_svg.Axis(*s.get("shown", (s["start"], s["end"])), 0, W), gwas, 0, None, height=120)  # its y axis: no margin
         rows.append(row("", trk(h, "".join(body))))
     snps = [] if gwas else locus.user_snps(request, s)
     if snps:
@@ -274,7 +296,7 @@ def public_group(s, ax, data, open_):
     for key, *_ in sets:
         for pos, _, tip in found[key]:
             at.setdefault(pos, []).append((key, tip))
-    body = [f'<line x1="0" x2="{W}" y1="{h}" y2="{h}" stroke="{G[300]}"/>']
+    body = [f'<line x1="{-W}" x2="{2 * W}" y1="{h}" y2="{h}" stroke="{G[300]}"/>']
     for pos, hits in sorted(at.items()):
         x = ax.x(pos - 0.5)
         bars = "".join(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{h - i * seg:.1f}" y2="{h - (i + 1) * seg + 1:.1f}" '
@@ -284,7 +306,7 @@ def public_group(s, ax, data, open_):
         body.append(locus_svg._t(4, h - 8, "no public SNP in this window", 9.5, G[700]))
     more = []
     for key, label, sub in sets:
-        rows = [f'<line x1="0" x2="{W}" y1="26" y2="26" stroke="{G[300]}"/>']
+        rows = [f'<line x1="{-W}" x2="{2 * W}" y1="26" y2="26" stroke="{G[300]}"/>']
         for pos, maf, tip in found[key]:
             x, t = ax.x(pos - 0.5), 3 + 22 * min(0.5, maf or 0) / 0.5
             rows.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="26" y2="{26 - t:.1f}" stroke="{palette.SNP_SETS[key]}">'
@@ -307,7 +329,7 @@ def state_rect(ax, a, e, y, h, state, label):
 
 def live_segments(s, entries, prefix, deadline):
     """{condition: segments or None} of tracks.yaml bigBed entries, on snpscore's tile grid (read-only tiles for jobs)."""
-    if not entries or s["end"] - s["start"] > sl.MAX_SIGNAL:
+    if not entries or width(s) > sl.MAX_SIGNAL:
         return {}
     found = sl.segments(entries, s["chrom"], s["start"], s["end"], locus.tile_cache(read_only=bool(s["key"])), prefix, deadline)
     return {t["condition"]: f for t, f in zip(entries, found)}
@@ -338,7 +360,7 @@ def peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes):
     for c in sorted(found, key=order):
         segs = found[c]
         parts = [state_rect(ax, a, e, 2, 9, st, short(c)) for a, e, st in segs or ()] if segs is not None else [
-            f'<rect x="0" y="2" width="{W}" height="9" fill="{G[200]}"><title>{escape(short(c))}: peaks unavailable</title></rect>']
+            f'<rect x="{-W}" y="2" width="{3 * W}" height="9" fill="{G[200]}"><title>{escape(short(c))}: peaks unavailable</title></rect>']
         more.append(row(short(c), trk(13, "".join(parts)), tissue=tissue_of(c), dense=True))
     if any(v is None for v in found.values()):
         notes.append("Some per-condition peak tracks did not load in time (grey rows); reload to try again.")
@@ -364,9 +386,9 @@ def motif_row(s, ax, data):
     the reference sequence under them; wider: a tick per SNP, height = the largest score change. Hover: the TFs and
     the allele that matches."""
     found = data.get("motif", [])
-    if found and s["end"] - s["start"] <= LOGO_BP:
+    if found and width(s) <= LOGO_BP:
         return motif_logo_row(s, ax, found)
-    body = [f'<line x1="0" x2="{W}" y1="20" y2="20" stroke="{G[300]}"/>']
+    body = [f'<line x1="{-W}" x2="{2 * W}" y1="20" y2="20" stroke="{G[300]}"/>']
     for v in found:
         x, h = ax.x(v["pos"] - 0.5), 4 + 14 * min(12, v.get("delta") or 0) / 12
         tip = (f"{s['chrom']}:{v['pos']:,} {v.get('ref')}>{v.get('alt')} · changes {v.get('n')} motif"
@@ -451,14 +473,14 @@ def hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes):
     else:
         segs = {c: [(p["start"], p["end"], p["states"][c]) for p in data.get("peaks", []) if p["states"].get(c)] for c in conditions}
         note = "AQUA-FAANG, inside robust peaks" + (f" (ChromHMM is read in windows up to {sl.MAX_SIGNAL // 1000} kb)"
-                                                    if s["end"] - s["start"] > sl.MAX_SIGNAL else "")
+                                                    if width(s) > sl.MAX_SIGNAL else "")
     h, total = 60, max(1, len(conditions))
-    body = [blacklist(ax, data, h), f'<line x1="0" x2="{W}" y1="{h}" y2="{h}" stroke="{G[300]}"/>']
+    body = [blacklist(ax, data, h), f'<line x1="{-W}" x2="{2 * W}" y1="{h}" y2="{h}" stroke="{G[300]}"/>']
     body += locus_svg.state_stack(ax, segs, 250, 0, h, total)
     more = []
     for c in conditions:
         if found and found.get(c) is None:
-            parts = [f'<rect x="0" y="1" width="{W}" height="11" fill="{G[200]}"><title>{escape(short(c))}: ChromHMM unavailable</title></rect>']
+            parts = [f'<rect x="{-W}" y="1" width="{3 * W}" height="11" fill="{G[200]}"><title>{escape(short(c))}: ChromHMM unavailable</title></rect>']
         else:
             parts = [state_rect(ax, a, e, 1, 11, st, short(c)) for a, e, st in segs.get(c) or ()]
         more.append(row(short(c), trk(13, "".join(parts)), tissue=tissue_of(c), dense=True))
@@ -530,11 +552,11 @@ def assay_group(s, assay, open_):
                         f'{sum(1 for c in conditions if tissue[c] == t)} conditions</title>{polygon(xs, ys, bs, palette.TISSUES.get(t, G[700]), 0.9)}</g>')
             base = top
     if rna:
-        body.append(f'<line x1="0" x2="{W}" y1="{half}" y2="{half}" stroke="{G[500]}"/>' + locus_svg._t(W - 2, 9, "+", 9.5, G[700], "end")
+        body.append(f'<line x1="{-W}" x2="{2 * W}" y1="{half}" y2="{half}" stroke="{G[500]}"/>' + locus_svg._t(W - 2, 9, "+", 9.5, G[700], "end")
                     + locus_svg._t(W - 2, 2 * half - 2, "−", 9.5, G[700], "end"))
         combined_h = 2 * half
     else:
-        body.append(f'<line x1="0" x2="{W}" y1="{half}" y2="{half}" stroke="{G[300]}"/>')
+        body.append(f'<line x1="{-W}" x2="{2 * W}" y1="{half}" y2="{half}" stroke="{G[300]}"/>')
         combined_h = half
     vmax = max([max(v) for v, _ in found.values() if v] + [1e-9])
     more = []
@@ -551,7 +573,7 @@ def assay_group(s, assay, open_):
                 parts.append(polygon(xs, ys, [mid] * len(xs), colour))
             else:
                 parts.append(polygon(xs, [22 - 21 * min(1, x / vmax) for x in v], [22] * len(xs), colour))
-        parts.append(f'<line x1="0" x2="{W}" y1="{12 if rna else 22}" y2="{12 if rna else 22}" stroke="{G[300]}" stroke-width="0.6"/>')
+        parts.append(f'<line x1="{-W}" x2="{2 * W}" y1="{12 if rna else 22}" y2="{12 if rna else 22}" stroke="{G[300]}" stroke-width="0.6"/>')
         reps = max(found[c, st][1] for st in strands if (c, st) in found)
         more.append(row(short(c), trk(24, "".join(parts)), tissue=tissue[c]))
         more[-1]["title"] = f"mean of {reps} replicate{'s' if reps > 1 else ''}"
@@ -614,22 +636,22 @@ def context(request, s, layout):
         ctx["centre_query"] = query(s, open_, start=mid - sl.MAX_WINDOW // 2, end=mid + sl.MAX_WINDOW // 2)
         return ctx
     info, cfg = jobs.release_info(), locus.registry()
-    data = locus.lanes(s["chrom"], s["start"], s["end"])
-    ax = locus_svg.Axis(s["start"], s["end"], 0, W)
+    v, ax = drawn(s)  # the tracks draw the window and its margin; the controls and links keep the window
+    data = locus.lanes(v["chrom"], v["start"], v["end"])
     prefix = f"snpportal:{(info.get('sha256') or 'release')[:12]}"
     deadline = float(jobs.setting("SNPPORTAL_SIGNAL_DEADLINE", 4.0))
     notes = []
-    groups = [genes_group(request, s, ax, data, open_), public_group(s, ax, data, open_), motifs_group(s, ax, data),
-              peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes),
-              hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes)]
+    groups = [genes_group(request, v, ax, data, open_), public_group(v, ax, data, open_), motifs_group(v, ax, data),
+              peaks_group(v, ax, data, cfg, prefix, deadline, open_, notes),
+              hmm_group(v, ax, data, cfg, prefix, deadline, open_, notes)]
     synthetic = bool(info.get("synthetic")) or any(locus.synthetic_track(t) for t in (cfg or {}).get("tracks", []))
     if s["key"]:
         job = jobs.read(s["key"])
         synthetic = synthetic or bool(job.get("synthetic_input") or job.get("synthetic_layers"))
     a, b = s["start"] + 1, s["end"]
     ctx.update(
-        chromosome=chromosome(s), ruler=ruler(ax, s), groups=[g for g in groups if g], other=other_group(s, ax, data), notes=notes,
-        synthetic=synthetic, moves=moves(s, open_), query=query(s, open_), assays=[(k, v[0]) for k, v in ASSAYS.items()],
+        chromosome=chromosome(s), ruler=ruler(ax, v), groups=[g for g in groups if g], other=other_group(v, ax, data), notes=notes,
+        synthetic=synthetic, moves=moves(s, open_), query=query(s, open_), limits=(sl.MIN_WINDOW, sl.MAX_WINDOW), assays=[(k, v[0]) for k, v in ASSAYS.items()],
         assays_open="assays" in open_, tissue_legend=tissue_legend(), size_text=locus_svg.fmt_bp(s.get("size") or 0),
         width_text=locus_svg.fmt_bp(s["end"] - s["start"]), truncated=data.get("truncated"),
         jbrowse=locus.JBROWSE.format(chrom=s["chrom"], start=a, end=b), ensembl=locus.ENSEMBL.format(chrom=s["chrom"], start=a, end=b),
