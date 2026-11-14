@@ -33,7 +33,7 @@ Built on the session branch, for G to inspect before anything is deployed (AGENT
 - [x] Tests: `tests/fixture/rainbow_trout`, snpdata, snpscore and portal tests for the second species
 - [x] On the NREC demo (2026-11-14; PRs #14-#16): the `species-data` workflow built trout-2026-11-13 and its pool on
   GitHub's runners (about 4 h; the cohorts over parallel byte ranges, `prep/remote_sites.py`) and sent them to the VM
-- [ ] The GitHub data prerelease data-trout-2026-11-13, for local installs (`tools/get_data.sh trout-2026-11-13`):
+- [ ] The GitHub data prerelease data-trout-2026-11-13 (`bash snpdata/prep/release_from_demo.sh` on G's Mac), for local installs (`tools/get_data.sh trout-2026-11-13`):
   needs G's Mac (`POOL=1 bash prep/github_release.sh release/trout-2026-11-13`; cloud sessions may not create
   Releases), with the release copied from the VM (the Mac has no trout build): `GENOME=<genome> POOL=1 bash ...`
 - [x] Deploy loose ends (2026-11-14): the deploy workflow rebuilds the stale pool of every species (`update.sh pool
