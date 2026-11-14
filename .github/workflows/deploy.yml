@@ -1,8 +1,9 @@
 name: deploy
 # The NREC demo is updated only when G says so (G, 2026-11-06): a batch of merged, tested changes at a time, never on
 # every merge. Actions > deploy > Run workflow on main, or a session asked to in the chat (AGENTS.md "Deploying the
-# NREC demo"). When the VM says its public pool is stale (a weights.yaml or snpscore change), the pool is built here
-# and sent (the VM's 2 GB RAM can't build it). A new data release still goes up with deploy/nrec.sh.
+# NREC demo"). When the VM says a release's public pool is stale (a weights.yaml or snpscore change), each such pool,
+# of any species, is built here from the GitHub data release and sent (the VM's 2 GB RAM can't build it). A new data
+# release still goes up with deploy/nrec.sh (or, for another species, the species-data workflow).
 on:
   workflow_dispatch:
 
@@ -17,7 +18,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && vars.NREC_HOST != ''
     runs-on: ubuntu-latest
     concurrency: nrec
-    timeout-minutes: 15  # a deploy takes ~20 s, a pool ~3 min; a stuck one shouldn't hold the nrec group for GitHub's 6 h
+    timeout-minutes: 45  # a deploy takes ~20 s, a pool minutes; a stuck one shouldn't hold the nrec group for GitHub's 6 h
     env:
       HOST: ${{ vars.NREC_HOST }}
     steps:
@@ -32,24 +33,36 @@ jobs:
           echo "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
           echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes ubuntu@"$HOST" "$GITHUB_SHA" 2>&1 | tee update.log
-          if grep -q "public pool is stale" update.log; then echo "stale=true" >> "$GITHUB_OUTPUT"; fi
-      # The public pool for the code just deployed: salmo-snp download builds it as in every local install (I3)
+          # one line per release with a stale pool; an update.sh from before 2026-11-14 names none: the default release
+          stale=$(sed -n 's/.*the public pool is stale: \([A-Za-z0-9._-]*\).*/\1/p' update.log | tr '\n' ' ')
+          if [ -z "$stale" ] && grep -q "public pool is stale" update.log; then stale=default; fi
+          echo "stale=$stale" >> "$GITHUB_OUTPUT"
+      # The public pools for the code just deployed: salmo-snp download builds one as in every local install (I3)
       - uses: actions/checkout@v7
-        if: steps.update.outputs.stale == 'true'
+        if: steps.update.outputs.stale != ''
       - uses: actions/setup-python@v7
-        if: steps.update.outputs.stale == 'true'
+        if: steps.update.outputs.stale != ''
         with:
           python-version: "3.12"
-      - name: Build the public pool and send it
-        if: steps.update.outputs.stale == 'true'
+      - name: Build the stale public pools and send them
+        if: steps.update.outputs.stale != ''
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          STALE: ${{ steps.update.outputs.stale }}
         run: |
           pip install -q ./snpscore ./snpportal
-          bash tools/get_data.sh --no-genome
-          version=$(sed -n 's/^RELEASE = "\([^"]*\)".*/\1/p' snpportal/snpportal/serve.py)
-          release=~/.local/share/salmo-snp/releases/$version
-          python -c 'import sys; from snpscore.pool import stale; sys.exit(stale(sys.argv[1]))' "$release"
-          tar -C "$release/pool" -czf - pool.parquet background.json |
-            ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes ubuntu@"$HOST" pool
+          failed=0
+          for version in $STALE; do
+            [ "$version" = default ] && version=$(sed -n 's/^RELEASE = "\([^"]*\)".*/\1/p' snpportal/snpportal/serve.py)
+            release=~/.local/share/salmo-snp/releases/$version
+            # the data release data-<version>; another species' may not be published yet: say so and go on
+            bash tools/get_data.sh "$version" --no-genome &&
+              snpscore pool --release "$release" --if-stale --memory 8GB &&
+              python -c 'import sys; from snpscore.pool import stale; sys.exit(stale(sys.argv[1]))' "$release" &&
+              tar -C "$release/pool" -czf - pool.parquet background.json |
+                ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes ubuntu@"$HOST" "pool $version" ||
+              { echo "::error::the public pool of $version was not updated"; failed=1; }
+            rm -rf "$release"
+          done
+          exit $failed

@@ -35,8 +35,10 @@ Built on the session branch, for G to inspect before anything is deployed (AGENT
   GitHub's runners (about 4 h; the cohorts over parallel byte ranges, `prep/remote_sites.py`) and sent them to the VM
 - [ ] The GitHub data prerelease data-trout-2026-11-13, for local installs (`tools/get_data.sh trout-2026-11-13`):
   needs G's Mac (`POOL=1 bash prep/github_release.sh release/trout-2026-11-13`; cloud sessions may not create
-  Releases). Also open: `deploy/nrec.sh` with two releases is untested, and the deploy workflow's pool step still
-  knows the salmon release only
+  Releases), with the release copied from the VM (the Mac has no trout build): `GENOME=<genome> POOL=1 bash ...`
+- [x] Deploy loose ends (2026-11-14): the deploy workflow rebuilds the stale pool of every species (`update.sh pool
+  <version>`, tested on a mock of the VM's folders; trout's needs the data prerelease above); `deploy/nrec.sh` with
+  two releases dry-run with stand-in ssh and rsync (a real run still needs G's Mac)
 - [x] Known loci from the publications (2026-11-13): 11 rows, gene regions and QTL windows; `snpdata build --reuse`
 - [x] `deploy/species.sh`: the demo fetches another species' release from the GitHub data release
 - [ ] Vetting the catalogue and SNP rows for it (#38; the example list scores its 4 gene-region rows, the 7 QTL
