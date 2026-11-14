@@ -5,20 +5,21 @@ sections after it record what was built (ticked when built and tested), and thei
 Specs: [ROADMAP.md](ROADMAP.md). Questions only G can answer: [DECISIONS.md](DECISIONS.md) (ask, don't decide).
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
-## Where things stand (2026-11-08)
+## Where things stand (2026-11-14)
 - Phase: feature work on the local install, the main product (AGENTS.md plan 4, G 2026-11-03); the live site moves
-  to salmobase later.
-- main is green on GitHub (tests, user-install). The NREC demo https://158.39.75.9/snp/ runs what G last had deployed
-  (the manual `deploy` workflow since 2026-11-06; merges no longer deploy), with release 2026-11-05 (cloud sessions
-  use https://158-39-75-9.sslip.io/snp/: the bare IP didn't connect through their proxy). Since 2026-11-08 15:47 UTC
-  that is c404a9d (PRs #3, #4, #7, #8, #9) with a fresh public pool, the first one the deploy workflow built and sent
-  (PR #9: pools no longer need G's Mac). On 2026-11-08 the VM had hung (Active in NREC, nothing answering on 22 or
-  443) until G hard-rebooted it; the cause is unknown (its console log would say): with 2 GB RAM and 1 vCPU, a 4 GB
-  flavor is the fix if it hangs again.
-- The data for real use: the GitHub Release data-2026-11-05 (`bash tools/get_data.sh`); not on salmobase yet.
-  Release 2026-11-05 = 2026-11-03 plus flank_keys.parquet (I18), built with Python 3.12 and DuckDB 2.0.0: every other
-  table is identical, except the allele named in `motif_tfs` for 33 of 512,745 motif sites (float ties); the demo
-  lists score the same tiers.
+  to salmobase later. Two species since 2026-11-14: Atlantic salmon (the default) and rainbow trout (AGENTS.md Plan 7;
+  the section below), finished and accepted by G; the next work is Push 3 (Next).
+- main is green on GitHub (tests, user-install). The NREC demo https://test.salmobase.org/snp/ (= https://158.39.75.9/snp/)
+  runs what G last had deployed (the manual `deploy` workflow since 2026-11-06; merges no longer deploy; cloud sessions
+  use https://158-39-75-9.sslip.io/snp/: the bare IP didn't connect through their proxy). Since 2026-11-14 that is
+  c6d2e0c (PRs #14-#17), with release 2026-11-05 and, in /srv/snpportal/releases/, trout-2026-11-13 with its pool
+  (built and sent by the `species-data` workflow, 2026-11-14). On 2026-11-08 the VM had hung (Active in NREC, nothing
+  answering on 22 or 443) until G hard-rebooted it; the cause is unknown (its console log would say): with 2 GB RAM
+  and 1 vCPU, a 4 GB flavor is the fix if it hangs again.
+- The data for real use: the GitHub Releases data-2026-11-05 (`bash tools/get_data.sh`) and data-trout-2026-11-13
+  (`bash tools/get_data.sh trout-2026-11-13`); not on salmobase yet. Release 2026-11-05 = 2026-11-03 plus
+  flank_keys.parquet (I18), built with Python 3.12 and DuckDB 2.0.0: every other table is identical, except the allele
+  named in `motif_tfs` for 33 of 512,745 motif sites (float ties); the demo lists score the same tiers.
 - Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
 
 ## Rainbow trout (2026-11-12, G: a second species, with a species bar)
