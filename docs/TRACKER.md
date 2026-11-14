@@ -33,7 +33,7 @@ Built on the session branch, for G to inspect before anything is deployed (AGENT
 - [x] Tests: `tests/fixture/rainbow_trout`, snpdata, snpscore and portal tests for the second species
 - [x] On the NREC demo (2026-11-14; PRs #14-#16): the `species-data` workflow built trout-2026-11-13 and its pool on
   GitHub's runners (about 4 h; the cohorts over parallel byte ranges, `prep/remote_sites.py`) and sent them to the VM
-- [ ] The GitHub data prerelease data-trout-2026-11-13 (`bash snpdata/prep/release_from_demo.sh` on G's Mac), for local installs (`tools/get_data.sh trout-2026-11-13`):
+- [x] (G, 2026-11-14; `tools/get_data.sh trout-2026-11-13` tested from an empty data folder) The GitHub data prerelease data-trout-2026-11-13 (`bash snpdata/prep/release_from_demo.sh` on G's Mac), for local installs (`tools/get_data.sh trout-2026-11-13`):
   needs G's Mac (`POOL=1 bash prep/github_release.sh release/trout-2026-11-13`; cloud sessions may not create
   Releases), with the release copied from the VM (the Mac has no trout build): `GENOME=<genome> POOL=1 bash ...`
 - [x] Deploy loose ends (2026-11-14): the deploy workflow rebuilds the stale pool of every species (`update.sh pool
@@ -41,8 +41,9 @@ Built on the session branch, for G to inspect before anything is deployed (AGENT
   two releases dry-run with stand-in ssh and rsync (a real run still needs G's Mac)
 - [x] Known loci from the publications (2026-11-13): 11 rows, gene regions and QTL windows; `snpdata build --reuse`
 - [x] `deploy/species.sh`: the demo fetches another species' release from the GitHub data release
-- [ ] Vetting the catalogue and SNP rows for it (#38; the example list scores its 4 gene-region rows, the 7 QTL
-  windows are rejected as rows without a position), expression (#44). The guided tour stays salmon only (G, 2026-11-14)
+- [x] G looked at the trout side on the demo (2026-11-14): good in its current form, the known-loci example and the
+  catalogue included. Still open, when wanted: SNP rows with effect alleles for the catalogue (#38), expression
+  (#44). The guided tour stays salmon only (G, 2026-11-14)
 
 ## Next
 Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged: I1-I5, I7-I12, I15,
