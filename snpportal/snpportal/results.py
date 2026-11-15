@@ -143,7 +143,7 @@ NUMERIC = ("score", "p", "beta", "pip", "gerp", "maf", "cm")  # right-aligned, h
 DEFAULT_COLUMNS = ("tier", "score", "id", "gene", "region", "chromatin", "known", "maf", "assay", "flags")
 FILTER_COLUMNS = {"tier": "tier", "max_tier": "tier", "term": "score", "min_score": "score", "chrom": "id", "region": "region", "gene": "gene",
                   "tissue": "chromatin", "maturity": "chromatin", "sex": "chromatin", "act": "chromatin", "known": "known",
-                  "molqtl": "molqtl", "min_maf": "maf", "max_maf": "maf", "assay": "assay", "hide_lore": "assay"}  # hide_*: flags
+                  "molqtl": "molqtl", "min_maf": "maf", "max_maf": "maf", "assay": "assay", "hide_lore": "assay", "track": "id"}  # hide_*: flags
 GWAS_COLUMNS = ("tier", "score", "id", "p", "beta", "pip", "gene", "region", "chromatin")
 EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tier_evidence", "tier_terms", "coding_hgvsp", "known_locus",
                                                                 "known_locus_dist"), "known": ("known_locus_dist",),
@@ -181,7 +181,8 @@ def _open(request, key, write=False, chip=False):
     d = jobs.folder(key)
     if not (d / "result.parquet").exists():
         raise Http404("Result not found or expired")
-    con = jobs.connect([d], d if write else None)
+    from . import mytracks
+    con = jobs.connect([d, *mytracks.read_dirs(request)], d if write else None)  # and the track ?track= filters by
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
     weights = jobs.weights(d)  # the job's snapshot, not the current release
@@ -297,6 +298,13 @@ def filters(request, types, weights):
                         f"chrom = {lit(chrom)} AND pos > {int(start)} AND pos <= {int(end)}"))
         else:
             out.append(({"chrom": chrom}, f"Chromosome {chrom}", f"chrom = {lit(chrom)}"))
+    from . import mytracks  # it imports views, which imports this module
+    track = mytracks.folder(get("track", "")) if get("track") else None
+    if track:  # inside one of the user's own BED tracks (start < pos <= end); an unknown or expired id is ignored
+        m = mytracks.meta(track)  # sorted by chrom, start with a running max_end: one ASOF probe per SNP, overlaps allowed
+        out.append(({"track": m["id"]}, f"Inside my track: {m.get('name') or 'track'}",
+                    f"""file_row_number IN (SELECT s.file_row_number FROM r s ASOF JOIN read_parquet({lit(m['path'])}) t
+                        ON s.chrom = t.chrom AND s.pos > t.start WHERE s.pos <= t.max_end)"""))
     gene = get("gene", "").strip()[:40]
     names = [c for c in ("gene_name", "gene_id", "gene_ortholog_human", "gene_ortholog_zebrafish") if c in types]
     if gene and names:
@@ -612,10 +620,13 @@ def table(request, key, job=None):
            options=[(x, CONSEQUENCE_FILTERS[x][0], x in ticked["region"], "") for x in offered])
     chroms = sorted((summary.get("chrom_tiers", {}).get(chosen["trait"]) or {}), key=_chrom_key) or \
         sorted((c for c, in con.execute("SELECT DISTINCT chrom FROM r").fetchall()), key=_chrom_key)
-    where_text = next((label for params, label, _ in conds if "chrom" in params), "any")
-    dd("location", "where", "Location", where_text.replace("Chromosome ", "chr"), "chrom" in chosen,
-       "A chromosome, or a range on it (start exclusive, end inclusive)", chroms=[(c, c == chosen.get("chrom")) for c in chroms],
-       column="id")
+    from . import mytracks
+    where_text = " · ".join(label for params, label, _ in conds if "chrom" in params or "track" in params) or "any"
+    dd("location", "where", "Location", where_text.replace("Chromosome ", "chr"), "chrom" in chosen or "track" in chosen,
+       "A chromosome, or a range on it (start exclusive, end inclusive); or inside one of your own tracks",
+       chroms=[(c, c == chosen.get("chrom")) for c in chroms], column="id",
+       tracks=[(m["id"], m.get("name") or "Track", m["id"] == chosen.get("track"))
+               for m in mytracks.mine(request, (job or {}).get("assembly") or jobs.manifest().get("assembly", "Ssal_v3.1"))])
     if any(c in types for c in ("gene_name", "gene_id")):
         dd("gene", "gene", "Gene", chosen.get("gene", ""), bool(chosen.get("gene")), "A gene's name, Ensembl id or ortholog",
            value=chosen.get("gene", ""), column="gene")

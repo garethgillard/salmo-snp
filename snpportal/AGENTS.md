@@ -66,11 +66,15 @@ candidate flank (50 kb around a gene), the Manhattan thinning (p > 0.01 thinned 
 the regional plot window (lead +- credible set + 20 kb, 50-250 kb), the GWAS loci cap (`association.MAX_LOCI`: the 200
 strongest loci are listed and fine-mapped) and the settings form's suggestive-p ceiling (0.01); Push 3: the probe
 uniqueness check's cap (`panel.UNIQUENESS_MAX`, 5,000 SNPs), its 50 kb margin and 2 Mb region cap (lib/uniqueness.py)
-and its 7-nt seeds (matches with up to 4 mismatches in 35 nt).
+and its 7-nt seeds (matches with up to 4 mismatches in 35 nt); the user's own tracks (mytracks.py): 50 MB and
+1,000,000 intervals a file (`SNPPORTAL_MAX_TRACK_MB`, `SNPPORTAL_MAX_TRACK_ROWS`; G agreed, 2026-11-15), 20 tracks
+a user, 5,000 intervals drawn per track in a window, in at most 4 lanes.
 
 ## Data safety
 - Uploaded files are deleted right after scoring; results are deleted on 'Delete now', and on a server after
   `SNPPORTAL_KEEP_HOURS` (24 h). Locally (`SNPPORTAL_LOCAL`) nothing expires.
+- A user's own BED tracks (mytracks.py) follow the same rules: the upload is deleted once converted, a track is
+  private to the browser that added it on a server and expires with the results, and its names are never logged.
 - Job folders 0700, files 0600. Never log SNP contents or file names (log `job_ref`, counts, timings).
 - Never put breeder data in tests or fixtures. Synthetic files have SYNTHETIC in the name and are labelled in the UI.
 

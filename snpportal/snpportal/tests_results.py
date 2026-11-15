@@ -8,17 +8,19 @@ import re
 import shutil
 import tempfile
 import time
+import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest import skipUnless
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import reverse
 
 import snpdata
 import snpscore
 
-from . import figures, jobs, results
+from . import figures, jobs, palette, results
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 DATA = SNPSCORE.parent / "snpdata"  # layers.yaml, the fixture, prep/, the catalogue, data/ and release/
@@ -202,6 +204,60 @@ class ResultsTest(SimpleTestCase):
                       f"?active={cond}", "?active=summary", "?term=nope", "?hide_lore=", "?known=2"):  # no single-condition filter
             self.assertEqual(self.count(query), total, query)
         self.assertEqual(self.count("?gene=it's"), 0)  # quoted, not SQL
+
+    def test_your_tracks(self):
+        """A BED file becomes a track: listed for this browser only, drawn first in the locus browser in its own colours
+        with names as hover text, a Table filter that changes no tier, and gone when deleted. Never scored."""
+        from . import mytracks
+        bed = (b'track name="x"\nchrom\tstart\tend\tname\n'
+               b"ssa25\t28990000\t28999000\tmy <region> A\t7\t+\t0\t0\t255,0,0\n"   # overlapping intervals: their union is
+               b"chr25\t28991000\t28992000\tinside A\n25\t28998000\t29000000\ttail\t.\t.\t0\t0\t0\n"  # 28990000-29000000
+               b"scaffold_1\t5\t9\tnot a chromosome\n25\t9\t3\tbackwards\n")
+        add = lambda content, file="regions_SYNTHETIC.bed", **more: self.client.post(  # noqa: E731
+            reverse("snpportal:track_add"), {"file": SimpleUploadedFile(file, content), **more})
+        self.assertNotIn('id="g-tracks"', self.client.get(f"{reverse('snpportal:locus')}?r=25:28,980,000-29,010,000").content.decode())
+        for content, name, code in ((bed, "regions.vcf", "file"), (b"hello\n", "x_SYNTHETIC.bed", "empty"), (b"\x00\xff" * 9, "x_SYNTHETIC.bed", "read")):
+            self.assertIn(f"error={code}", add(content, name).url)
+        with override_settings(SNPPORTAL_MAX_TRACK_ROWS=2):
+            self.assertIn("error=rows", add(bed).url)
+        self.assertIn("error=large", self.client.post(reverse("snpportal:track_add"), CONTENT_LENGTH=str(60 * 2 ** 20)).url)
+        self.assertEqual([p.name for p in jobs.results_dir().iterdir() if p.name.startswith((".", "track-"))], [])  # nothing left behind
+        track = add(bed, name="Mine").url.split("added=")[1]
+        d = mytracks.folder(track)
+        self.assertEqual(sorted(p.name for p in d.iterdir()), ["created", "track.json", "track.parquet"])  # the upload is not kept
+        self.assertEqual((oct(d.stat().st_mode)[-3:], oct((d / "track.parquet").stat().st_mode)[-3:]), ("700", "600"))
+        self.assertEqual({k: mytracks.meta(d)[k] for k in ("name", "n", "dropped", "colours", "assembly")},
+                         {"name": "Mine", "n": 3, "dropped": 2, "colours": 1, "assembly": "Ssal_v3.1"})
+        page = self.client.get(reverse("snpportal:tracks"))
+        self.assertEqual(page["Cache-Control"], "no-store, private")
+        self.assertIn("Mine", page.content.decode())
+        browser = self.client.get(f"{reverse('snpportal:locus')}?r=25:28,980,000-29,010,000").content.decode()
+        self.assertLess(browser.index('id="g-tracks"'), browser.index('id="g-genes"'))  # near the top
+        self.assertIn('fill="#FF0000"', browser)  # the file's colour; the others share the palette's
+        self.assertIn(f'fill="{palette.USER_TRACK}"', browser)
+        self.assertIn("<title>my &lt;region&gt; A · 25:28,990,001-28,999,000 · + strand · score 7</title>", browser)
+        other = self.client_class()  # another browser: no track listed or drawn, though the id still filters (as a job key does)
+        self.assertNotIn("Mine", other.get(reverse("snpportal:tracks")).content.decode())
+        self.assertNotIn('id="g-tracks"', other.get(f"{reverse('snpportal:locus')}?r=25:28,980,000-29,010,000").content.decode())
+        self.assertEqual(other.post(reverse("snpportal:track_change", args=[track]), {"action": "delete"}).status_code, 404)
+        inside = self.count("?chrom=25&start=28990000&end=29000000")
+        self.assertEqual(self.count(f"?track={track}"), inside)
+        self.assertEqual(self.count(f"?track={track}&tier=1"), self.count("?chrom=25&start=28990000&end=29000000&tier=1"))
+        for bad in ("nope", str(uuid.uuid4()), "../../etc"):
+            self.assertEqual(self.count(f"?track={bad}"), self.summary["n_rows"], bad)
+        table = self.client.get(f"{self.url}?tab=table&track={track}").content.decode()
+        self.assertIn("Inside my track: Mine", table)
+        self.assertIn(f'<option value="{track}" selected>Mine</option>', table)
+        self.assertNotIn("Inside my track", self.client.get(f"{self.url}?tab=overview&track={track}").content.decode())  # the Table only
+        self.assertEqual(json.loads((self.d / "summary.json").read_text()), self.summary)  # no tier or count changed
+        tsv = self.client.get(f"{reverse('snpportal:download', args=[self.key])}?track={track}")
+        tsv = b"".join(tsv.streaming_content).decode()
+        self.assertEqual(sum(1 for line in tsv.splitlines() if line and not line.startswith(("#", "chrom"))), inside)
+        self.client.post(reverse("snpportal:track_change", args=[track]), {"action": "hide"})
+        self.assertNotIn('id="g-tracks"', self.client.get(f"{reverse('snpportal:locus')}?r=25:28,980,000-29,010,000").content.decode())
+        self.client.post(reverse("snpportal:track_change", args=[track]), {"action": "delete"})
+        self.assertIsNone(mytracks.folder(track))
+        self.assertEqual(self.count(f"?track={track}"), self.summary["n_rows"])  # a deleted track filters nothing
 
     def test_table_page_sort_columns_and_barcode(self):
         page = self.client.get(self.url + "?tab=table&size=100").content.decode()

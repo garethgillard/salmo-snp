@@ -46,6 +46,10 @@ Built on the session branch, for G to inspect before anything is deployed (AGENT
   (#44). The guided tour stays salmon only (G, 2026-11-14)
 
 ## Next
+Built outside Push 3 (G, 2026-11-14 and -15): the Locus browser moves and zooms with the mouse, with a margin and a
+marker line that pins to a base (PR #18); the user's own BED tracks in the Locus browser and as a Table filter,
+never scored (mytracks.py).
+
 Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged: I1-I5, I7-I12, I15,
 I17, I18 (PR #2, 2026-11-05); mixed purposes (I8), Primer3 and Agena files (I14), the ICSASG_v2 conversion (I19), the
 salmobase container, health and release checks (P8.4, P8.5) (PR #3, 2026-11-06); the Ssal_v3.1 <-> fSalSal1

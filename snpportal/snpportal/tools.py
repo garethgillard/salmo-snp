@@ -103,12 +103,14 @@ def _columns(con, rel):
     return dict(con.execute(f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM {rel})").fetchall())
 
 
-def _open(d, trait, weights, selected=False):
+def _open(d, trait, weights, selected=False, request=None):
     """Sandboxed connection that reads the job folder and the release (genome neighbours, pool) and writes only the
     job folder, with view v = the result plus the tiers of `trait` (as on the Table tab) and, when the job has a chip,
     view vc = v plus on_chip, dist_to_chip, near_chip and novel_functional (results.chip_view). With `selected`, v
     holds only the SNPs of the Table's selection (the Panel designs from it). Returns (con, view name, its types)."""
-    con = jobs.connect([d, jobs.release()], d)
+    from . import mytracks  # a Table filter may name one of the user's tracks: the saved selection's, or `request`'s
+    tracks = mytracks.read_dirs(results.selection_request(results.selection(d))) + (mytracks.read_dirs(request) if request else [])
+    con = jobs.connect([d, jobs.release(), *tracks], d)
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet({lit(d / 'result.parquet')}, file_row_number=true)")
     columns = _columns(con, "r")
     tiers, suffix = jobs.trait_tiers(d, weights, trait) if weights else (None, None)
@@ -897,7 +899,7 @@ def export(request, key, job, fmt):
     d = jobs.folder(key)
     weights = jobs.weights(d)
     trait = "all"  # tiers always count all 21 conditions
-    con, view, types = _open(d, trait, weights)
+    con, view, types = _open(d, trait, weights, request=request)
     table, tag, filters, panel_hash, synthetic = _scope(request, key, d, con, view, types, weights, job,
                                                         "all" if fmt == "priors" else None)  # priors: every SNP
     n = con.execute(f"SELECT count(*) FROM {table}").fetchone()[0]

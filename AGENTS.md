@@ -138,6 +138,11 @@ Decided:
   and a species bar at the top right that picks the release). How it was done: Plan 7; what Claude chose on the way
   is under Provisional below and in docs/DECISIONS.md #38-#45.
 
+- Your own tracks (G, 2026-11-15): a user's BED file (coordinates; the name as hover text; its own colours only when
+  the file has them) is shown near the top of the Locus browser and offered as a Table filter, and is never scored:
+  no tier, Overview or card changes. Global in a local install, private to the browser and expiring like results on
+  a server. The limits (50 MB, 1,000,000 intervals) are in snpportal/AGENTS.md "Provisional".
+
 - Rainbow trout chromosome Y is kept (G, 2026-11-14): scored, shown and in the ideogram (sdY and 3,928 AQUA-FAANG
   peaks are on it).
 
