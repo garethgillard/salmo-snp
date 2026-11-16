@@ -204,10 +204,10 @@ def tracks_group(request, s, ax):
     for m in mytracks.mine(request, jobs.manifest().get("assembly", "Ssal_v3.1")):
         if not m.get("shown", True):
             continue
-        found = mytracks.rows(m, s["chrom"], s["start"], s["end"])
+        found = mytracks.rows(m, s["chrom"], s["start"], s["end"], s.get("shown"))
         h, body = mytracks.draw(m, ax, s["chrom"], found, W)
-        cut = f"the first {mytracks.DRAWN:,} here: zoom in" if len(found) > mytracks.DRAWN else ""
-        rows.append(row(m.get("name") or "Track", trk(h, body), cut or f"{m.get('n', 0):,} intervals"))
+        cut = f"{mytracks.DRAWN:,} drawn here: zoom in" if len(found) > mytracks.DRAWN else ""
+        rows.append(row(mytracks.asis(m.get("name") or "Track"), trk(h, body), cut or f"{m.get('n', 0):,} intervals"))
     if not rows:
         return None
     g = group("tracks", "Your tracks", "your own BED files &middot; shown here and as a Table filter, never scored", rows)

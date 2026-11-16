@@ -8,10 +8,12 @@ listed for the browser that uploaded it (a cookie) and removed with the results 
 A track belongs to the assembly it was uploaded for: only that assembly's pages show it."""
 from __future__ import annotations
 
+import gzip
 import os
 import shutil
 import time
 import uuid
+import zlib
 from html import escape
 from pathlib import Path
 
@@ -19,6 +21,7 @@ from django.http import Http404, HttpResponseNotAllowed
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.datastructures import MultiValueDict
+from django.utils.safestring import mark_safe
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 from snpscore.formats import lit
@@ -30,10 +33,12 @@ COOKIE = "snpportal_mytracks"  # this browser's track ids on a server, newest fi
 SUFFIXES = (".bed.gz", ".bed", ".txt.gz", ".txt")
 # PROVISIONAL limits (snpportal/AGENTS.md): G agreed 50 MB and a million intervals (2026-11-15); the rest are Claude's
 MAX_MB, MAX_ROWS, MAX_TRACKS, NAME = 50, 1_000_000, 20, 80
+MAX_UNPACKED_MB = 500  # a gzipped file, unpacked (a million BED lines with names is about 100 MB)
 DRAWN, LANES = 5000, 4  # intervals drawn per track in a window, and the lanes overlapping ones are packed into
 ERRORS = {
     "file": "Choose a BED file (.bed, .bed.gz or .txt): chromosome, start and end, then optionally a name, score, strand and colour.",
     "large": "The file is larger than {mb:g} MB.",
+    "unpacked": "Unpacked, the file is larger than {unpacked:g} MB.",
     "rows": "The file has more than {rows:,} intervals.",
     "empty": "No interval in the file is on a chromosome of {assembly}: check the chromosome names and the assembly.",
     "many": "You have {tracks} tracks already: delete one first.",
@@ -67,7 +72,9 @@ def meta(d):
 
 
 def _ids(request):
-    return [i for i in request.COOKIES.get(COOKIE, "").split(",") if i][:MAX_TRACKS]
+    """The track ids this browser added (a server's signed cookie: an id alone, as in a shared Table link, only filters)."""
+    cookie = request.get_signed_cookie(COOKIE, default="", salt=COOKIE) if hasattr(request, "get_signed_cookie") else ""
+    return [i for i in cookie.split(",") if i][:MAX_TRACKS]
 
 
 def mine(request, assembly=None):
@@ -78,16 +85,16 @@ def mine(request, assembly=None):
     else:
         ids = _ids(request)
     found = [meta(d) for d in map(folder, ids) if d]
-    if jobs.local():
-        found.sort(key=lambda m: m.get("added_utc") or "", reverse=True)
+    if jobs.local():  # newest first ('created' never changes; added_utc is to the minute)
+        found.sort(key=lambda m: (m["path"].parent / "created").stat().st_mtime, reverse=True)
     return [m for m in found if assembly is None or m.get("assembly") == assembly]
 
 
 def keep(response, ids):
     """Remember this browser's tracks (a server only: a local install lists its folder)."""
     if not jobs.local():
-        response.set_cookie(COOKIE, ",".join(ids[:MAX_TRACKS]), max_age=int(jobs.keep_seconds() or jobs.FOREVER),
-                            httponly=True, samesite="Lax")
+        response.set_signed_cookie(COOKIE, ",".join(ids[:MAX_TRACKS]), salt=COOKIE,
+                                   max_age=int(jobs.keep_seconds() or jobs.FOREVER), httponly=True, samesite="Lax")
     return response
 
 
@@ -98,57 +105,79 @@ def read_dirs(request):
     return [d] if d else []
 
 
+def asis(text, guard=None):
+    """User text (a track's or an interval's name) escaped for HTML or SVG and, on another species' pages, written as
+    character references, so that jobs.wording() (which turns the pages' salmon wording into the release's) leaves it
+    as the user wrote it. `guard`: whether wording applies, when the caller already knows."""
+    guard = bool(jobs.wording()) if guard is None else guard
+    if not guard:
+        return mark_safe(escape(str(text)))
+    return mark_safe("".join(f"&#{ord(c)};" if c.isascii() and c.isalnum() else escape(c) for c in str(text)))
+
+
 # ---- reading a BED file ----
 
-def convert(src, d, assembly):
+def unpacked(src, limit):
+    """Check a gzipped file whole before it is read: ValueError('unpacked') past `limit` bytes unpacked (a small file
+    can unpack to gigabytes), ValueError('read') when it is damaged or cut short."""
+    total = 0
+    try:
+        with gzip.open(src, "rb") as f:
+            while chunk := f.read(1 << 20):
+                total += len(chunk)
+                if total > limit:
+                    raise ValueError("unpacked")
+    except (OSError, EOFError, zlib.error):
+        raise ValueError("read") from None
+
+
+def convert(src, d):
     """Write d/track.parquet from the BED file `src`: lines of chromosome, start, end and optionally name, score,
-    strand, (thickStart, thickEnd,) itemRgb, split on tabs when the file has them (so names may hold spaces), else on
-    runs of spaces. Header, comment, 'track' and 'browser' lines are skipped. Chromosome names go through the
-    release's aliases (ssa25, chr25, accessions); intervals on other names, or without 0 <= start < end, are left
-    out and counted. Returns {n, dropped, colours}; raises ValueError('rows' | 'empty' | 'read')."""
+    strand, (thickStart, thickEnd,) itemRgb. A line with a tab is split on tabs (so names may hold spaces), others on
+    runs of spaces. Comment, 'track' and 'browser' lines are skipped, and a first line whose start is not a number
+    and whose chromosome is not one is a header. Chromosome names go through the release's aliases (ssa25, chr25,
+    accessions); intervals on other names, or without 0 <= start < end, are left out and counted. max_end is the
+    largest end of the chromosome's intervals starting at or before each start (ties share it): the Table's filter
+    finds the last start before a SNP and compares its max_end. Returns {n, dropped, colours}; raises
+    ValueError('rows' | 'unpacked' | 'empty' | 'read')."""
     release, cap = jobs.release(), int(jobs.setting("SNPPORTAL_MAX_TRACK_ROWS", MAX_ROWS))
     with open(src, "rb") as f:
-        head = f.read(2)
-    if head == b"\x1f\x8b":
-        import gzip
-        with gzip.open(src, "rb") as f:
-            sample = f.read(65536)
-    else:
-        with open(src, "rb") as f:
-            sample = f.read(65536)
-    split = "string_split(line, '\t')" if b"\t" in sample else "string_split_regex(trim(line), '\\s+')"
+        gz = f.read(2) == b"\x1f\x8b"
+    if gz:
+        unpacked(src, float(jobs.setting("SNPPORTAL_MAX_TRACK_UNPACKED_MB", MAX_UNPACKED_MB)) * 2 ** 20)
+    split = "list_slice(CASE WHEN contains(line, chr(9)) THEN string_split(line, chr(9)) ELSE string_split_regex(trim(line), '\\s+') END, 1, 9)"
+    known = list(jobs.manifest().get("chrom_sizes") or {})
     con = jobs.connect([Path(src).parent, release, d], d)
     try:
         con.execute(f"""CREATE TEMP TABLE raw AS SELECT {split} AS f FROM read_csv({lit(src)}, header=false,
             columns={{'line': 'VARCHAR'}}, delim='\x01', quote='', escape='', auto_detect=false,
-            compression={lit('gzip' if head == b'\x1f\x8b' else 'none')})
+            compression={lit('gzip' if gz else 'none')})
             WHERE trim(line) <> '' AND NOT regexp_matches(line, '^(#|track\\s|browser\\s)') LIMIT {cap + 2}""")
-        total = con.execute("SELECT count(*) FROM raw").fetchall()[0][0]
-        if total and con.execute("SELECT try_cast(trim(f[2]) AS BIGINT) IS NULL FROM raw LIMIT 1").fetchall()[0][0]:
-            con.execute("DELETE FROM raw WHERE rowid = (SELECT min(rowid) FROM raw)")  # a header line
-            total -= 1
-        if total > cap:
-            raise ValueError("rows")
         alias = release / "alias.parquet"
         join = f"LEFT JOIN read_parquet({lit(alias)}) a ON a.alias = lower(trim(r.f[1]))" if alias.exists() else ""
         chrom = "coalesce(a.chrom, trim(r.f[1]))" if join else "trim(r.f[1])"
-        known = list(jobs.manifest().get("chrom_sizes") or {})
         rgb = "regexp_extract(trim(r.f[9]), '^(\\d{1,3}),(\\d{1,3}),(\\d{1,3})$', ['r', 'g', 'b'])"
-        con.execute(f"""CREATE TEMP TABLE t AS SELECT {chrom} AS chrom, try_cast(trim(r.f[2]) AS BIGINT) AS start,
+        con.execute(f"""CREATE TEMP TABLE t AS SELECT r.rowid AS i, {chrom} AS chrom, try_cast(trim(r.f[2]) AS BIGINT) AS start,
                 try_cast(trim(r.f[3]) AS BIGINT) AS "end", nullif(nullif(trim(r.f[4]), ''), '.')[:200] AS name,
                 try_cast(trim(r.f[5]) AS DOUBLE) AS score, CASE WHEN trim(r.f[6]) IN ('+', '-') THEN trim(r.f[6]) END AS strand,
                 {rgb} AS c
             FROM raw r {join}""")
+        total, header = con.execute("""SELECT count(*), count(*) FILTER (WHERE i = (SELECT min(i) FROM t) AND start IS NULL
+                                              AND chrom NOT IN (SELECT unnest(?::VARCHAR[]))) FROM t""", [known]).fetchall()[0]
+        total -= header
+        if total > cap:
+            raise ValueError("rows")
         con.execute("""CREATE TEMP TABLE kept AS SELECT chrom, start, "end", name, score, strand,
                 CASE WHEN r <= 255 AND g <= 255 AND b <= 255 AND r + g + b > 0  -- 0 or 0,0,0: no colour of its own
                      THEN printf('#%02X%02X%02X', r, g, b) END AS rgb
-            FROM (SELECT *, try_cast(c.r AS INT) AS r, try_cast(c.g AS INT) AS g, try_cast(c.b AS INT) AS b FROM t) WHERE chrom IN (SELECT unnest(?::VARCHAR[])) AND start >= 0 AND "end" > start""", [known])
+            FROM (SELECT *, try_cast(c.r AS INT) AS r, try_cast(c.g AS INT) AS g, try_cast(c.b AS INT) AS b FROM t)
+            WHERE chrom IN (SELECT unnest(?::VARCHAR[])) AND start >= 0 AND "end" > start""", [known])
         n, colours = con.execute("SELECT count(*), count(rgb) FROM kept").fetchall()[0]
         if not n:
             raise ValueError("empty")
         new = d / ".track.parquet"
-        con.execute(f"""COPY (SELECT *, max("end") OVER (PARTITION BY chrom ORDER BY start, "end"
-                                                         ROWS UNBOUNDED PRECEDING) AS max_end
+        con.execute(f"""COPY (SELECT *, max("end") OVER (PARTITION BY chrom ORDER BY start
+                                                         RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS max_end
                              FROM kept ORDER BY chrom, start, "end") TO {lit(new)} (FORMAT parquet)""")
     except ValueError:
         raise
@@ -173,7 +202,7 @@ def create(upload, name, assembly):
         os.replace(upload.path, src)
         os.chmod(src, 0o600)
         (d / "created").touch(mode=0o600)  # never changes: cleanup counts the hours from it
-        found = convert(src, d, assembly)
+        found = convert(src, d)
         src.unlink()
         jobs._write_json(d / "track.json", {
             "id": track_id, "name": name[:NAME], "assembly": assembly, "release": jobs.manifest().get("version"),
@@ -186,36 +215,40 @@ def create(upload, name, assembly):
 
 # ---- the locus browser's group ----
 
-def rows(m, chrom, start, end):
-    """A track's intervals overlapping chrom:start-end (BED), at most DRAWN + 1, by start."""
+def rows(m, chrom, start, end, shown=None):
+    """A track's intervals overlapping chrom:start-end (BED), at most DRAWN + 1, by start: those in the `shown` window
+    (start, end) first, so the cap is spent where the user looks rather than in the margins drawn for a drag."""
+    a, b = shown or (start, end)
     con = jobs.connect([m["path"].parent])
     try:
         cur = con.execute(f"""SELECT start, "end", name, score, strand, rgb FROM read_parquet({lit(m['path'])})
-                              WHERE chrom = ? AND start < ? AND "end" > ? ORDER BY start, "end" LIMIT {DRAWN + 1}""",
-                          [chrom, end, start])
-        return cur.fetchall()
+                              WHERE chrom = ? AND start < ? AND "end" > ?
+                              ORDER BY ("end" <= ? OR start >= ?), start, "end" LIMIT {DRAWN + 1}""",
+                          [chrom, end, start, a, b])
+        found = cur.fetchall()
     finally:
         con.close()
+    return sorted(found[:DRAWN], key=lambda r: (r[0], r[1])) + found[DRAWN:]  # drawn by start; one more: cut
 
 
 def draw(m, ax, chrom, found, width):
     """(height, SVG body) of one track's row: its intervals as boxes in the BED's own colour, else the tracks' colour,
     packed into at most LANES lanes where they overlap (the last lane takes the rest); hover: name, position, strand
     and score. `width`: the track column's, for the lines that span the margins."""
-    lanes, body, shown = [], [], found[:DRAWN]
-    for a, e, name, score, strand, rgb in shown:
+    lanes, body, guard = [], [], bool(jobs.wording())  # lanes: each one's last end, in bp
+    for a, e, name, score, strand, rgb in found[:DRAWN]:
         x0, x1 = ax.x(a), ax.x(e)
-        lane = next((i for i, right in enumerate(lanes) if right <= x0), None)
+        lane = next((i for i, right in enumerate(lanes) if right <= a), None)  # overlapping intervals go below
         if lane is None:
             lane = len(lanes) if len(lanes) < LANES else LANES - 1
             lanes[len(lanes):] = [0] * (lane + 1 - len(lanes))
-        lanes[lane] = max(lanes[lane], x1 + 1)
+        lanes[lane] = max(lanes[lane], e)
         fill = rgb or palette.USER_TRACK
         tip = " · ".join(x for x in (name, f"{chrom}:{a + 1:,}-{e:,}", f"{strand} strand" if strand else "",
-                                     f"score {score:g}" if score is not None else "") if x)
+                                     f"score {score:.10g}" if score is not None else "") if x)
         edge = f' stroke="{palette.edge(fill)}" stroke-width="0.5"' if palette.edge(fill) else ""
         body.append(f'<rect x="{x0:.1f}" y="{2 + lane * 11}" width="{max(1.5, x1 - x0):.1f}" height="9" fill="{fill}"{edge}>'
-                    f'<title>{escape(tip)}</title></rect>')
+                    f'<title>{asis(tip, guard)}</title></rect>')
     h = 4 + 11 * max(1, len(lanes))
     line = f'<line x1="{-width}" x2="{2 * width}" y1="{h - 0.5}" y2="{h - 0.5}" stroke="{palette.GREY[300]}"/>'
     return h, line + "".join(body)
@@ -226,6 +259,7 @@ def draw(m, ax, chrom, found, width):
 def _error(code, assembly):
     text = ERRORS.get(code or "", "")
     return text.format(mb=float(jobs.setting("SNPPORTAL_MAX_TRACK_MB", MAX_MB)), assembly=assembly, tracks=MAX_TRACKS,
+                       unpacked=float(jobs.setting("SNPPORTAL_MAX_TRACK_UNPACKED_MB", MAX_UNPACKED_MB)),
                        rows=int(jobs.setting("SNPPORTAL_MAX_TRACK_ROWS", MAX_ROWS)))
 
 
@@ -240,7 +274,8 @@ def page(request):
     return render(request, "snpportal/tracks.html", {
         "nav": "explore", "title": "Your tracks", "tracks": tracks, "assembly": assembly, "added": added,
         "error": _error(request.GET.get("error"), assembly), "local": jobs.local(), "keep_hours": (jobs.keep_seconds() or 0) / 3600,
-        "max_mb": float(jobs.setting("SNPPORTAL_MAX_TRACK_MB", MAX_MB)), "max_rows": int(jobs.setting("SNPPORTAL_MAX_TRACK_ROWS", MAX_ROWS))})
+        "max_mb": float(jobs.setting("SNPPORTAL_MAX_TRACK_MB", MAX_MB)), "max_rows": int(jobs.setting("SNPPORTAL_MAX_TRACK_ROWS", MAX_ROWS)),
+        "max_unpacked": float(jobs.setting("SNPPORTAL_MAX_TRACK_UNPACKED_MB", MAX_UNPACKED_MB))})
 
 
 def _back(code=None, **more):

@@ -5,8 +5,8 @@
 {% block main %}
 <div class="sp-stack">
   {% if error %}<div class="sp-status sp-status-warn" role="alert">&#9888; {{ error }}</div>{% endif %}
-  {% if added %}<div class="sp-status sp-status-ok" role="status">&#10003; Added <strong>{{ added.name }}</strong>: {{ added.n|thousands }} interval{{ added.n|pluralize }}{% if added.dropped %};
-    {{ added.dropped|thousands }} line{{ added.dropped|pluralize }} left out (not on a chromosome of {{ added.assembly }}, or without a start before its end){% endif %}.
+  {% if added %}<div class="sp-status sp-status-ok" role="status">&#10003; Added <strong>{{ added.name|asis }}</strong>: {{ added.n|thousands }} interval{{ added.n|pluralize }}{% if added.dropped %};
+    {{ added.dropped|thousands }} line{{ added.dropped|pluralize }} left out (not on a chromosome of {{ added.assembly|asis }}, or without a start before its end){% endif %}.
     <a href="{% url 'snpportal:locus' %}">Open the Locus browser</a></div>{% endif %}
   <section class="sp-card" aria-labelledby="add-h">
     <h2 id="add-h">Add a track</h2>
@@ -19,7 +19,7 @@
       <input class="form-control form-control-sm w-auto" type="text" name="name" maxlength="80" placeholder="Name (the file's, if empty)" aria-label="Track name" autocomplete="off">
       <button class="btn btn-sm btn-primary" type="submit">Add track</button>
     </form>
-    <p class="sp-small sp-muted mt-2 mb-0">Up to {{ max_mb|floatformat:"-1" }} MB and {{ max_rows|thousands }} intervals; .bed, .bed.gz or .txt. Chromosomes as 25, ssa25, chr25 or an
+    <p class="sp-small sp-muted mt-2 mb-0">Up to {{ max_mb|floatformat:"-1" }} MB ({{ max_unpacked|floatformat:"-1" }} MB unpacked) and {{ max_rows|thousands }} intervals; .bed, .bed.gz or .txt. Chromosomes as 25, ssa25, chr25 or an
       accession. Colours come from the file where it has them; other intervals share one colour.
       {% if local %}Tracks are kept on this computer until you delete them; the uploaded file itself is not kept.{% else %}Tracks are
       private to this browser and deleted after {{ keep_hours|floatformat:"-1" }} hours; the uploaded file itself is not kept.{% endif %}</p>
@@ -29,14 +29,14 @@
     <h2 id="list-h">Your tracks</h2>
     <div class="table-responsive"><table class="table table-sm sp-table sp-small mb-0">
       <thead><tr><th scope="col">Name</th><th scope="col" class="sp-num">Intervals</th><th scope="col">Colours</th><th scope="col">Assembly</th><th scope="col">Added</th><th scope="col">In the Locus browser</th><th scope="col"></th></tr></thead>
-      <tbody>{% for t in tracks %}<tr><td>{{ t.name }}</td><td class="sp-num">{{ t.n|thousands }}</td>
+      <tbody>{% for t in tracks %}<tr><td>{{ t.name|asis }}</td><td class="sp-num">{{ t.n|thousands }}</td>
         <td>{% if t.colours %}from the file{% if t.colours < t.n %} ({{ t.colours|thousands }}){% endif %}{% else %}one colour{% endif %}</td>
-        <td>{{ t.assembly }}{% if not t.here %} <span class="sp-muted">(another species: choose it in the species bar)</span>{% endif %}</td>
+        <td>{{ t.assembly|asis }}{% if not t.here %} <span class="sp-muted">(another species: choose it in the species bar)</span>{% endif %}</td>
         <td class="text-nowrap">{{ t.added_utc }}</td>
         <td><form method="post" action="{% url 'snpportal:track_change' t.id %}">{% csrf_token %}{% if t.shown %}shown &middot;
           <button class="btn btn-sm btn-link p-0" type="submit" name="action" value="hide">Hide</button>{% else %}hidden &middot;
           <button class="btn btn-sm btn-link p-0" type="submit" name="action" value="show">Show</button>{% endif %}</form></td>
-        <td><form method="post" action="{% url 'snpportal:track_change' t.id %}" data-confirm="Delete {{ t.name }}? This can't be undone." data-confirm-ok="Delete">{% csrf_token %}
+        <td><form method="post" action="{% url 'snpportal:track_change' t.id %}" data-confirm="Delete {{ t.name|asis }}? This can't be undone." data-confirm-ok="Delete">{% csrf_token %}
           <input type="hidden" name="action" value="delete"><button class="btn btn-sm btn-link p-0" type="submit">Delete</button></form></td></tr>{% endfor %}</tbody>
     </table></div>
   </section>

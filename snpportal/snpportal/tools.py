@@ -910,7 +910,8 @@ def export(request, key, job, fmt):
                       "first, or add a selection to your Design panel, which makes vendor files for it."}, status=400)
     formats = ["tsv", "bed"] + (list(VENDORS) if n <= cap else [])
     notes = {"vendor_files": f"left out above {cap:,} SNPs"} if fmt == "bundle" and n > cap else {}
-    meta = _meta(job, trait, synthetic, {**filters, **notes}, panel_hash, _command(job, trait, tag, fmt))
+    named = {k: ("one of your own tracks" if k == "track" else v) for k, v in filters.items()}  # a track by name, not its id
+    meta = _meta(job, trait, synthetic, {**named, **notes}, panel_hash, _command(job, trait, tag, fmt))
     saved = _saved(d, panel_hash) if panel_hash else None
     if saved and saved.get("params"):
         meta["panel_params"] = panel_params(saved["params"])

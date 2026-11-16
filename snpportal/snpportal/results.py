@@ -299,12 +299,18 @@ def filters(request, types, weights):
         else:
             out.append(({"chrom": chrom}, f"Chromosome {chrom}", f"chrom = {lit(chrom)}"))
     from . import mytracks  # it imports views, which imports this module
-    track = mytracks.folder(get("track", "")) if get("track") else None
-    if track:  # inside one of the user's own BED tracks (start < pos <= end); an unknown or expired id is ignored
-        m = mytracks.meta(track)  # sorted by chrom, start with a running max_end: one ASOF probe per SNP, overlaps allowed
+    try:
+        track_id = str(uuid.UUID(get("track", ""))) if get("track") else None
+    except ValueError:  # not an id: ignored, as other bad values are
+        track_id = None
+    track = mytracks.folder(track_id) if track_id else None
+    if track:  # inside one of the user's own BED tracks (start < pos <= end)
+        m = mytracks.meta(track)  # sorted by chrom, start with max_end (mytracks.convert): one ASOF probe per SNP
         out.append(({"track": m["id"]}, f"Inside my track: {m.get('name') or 'track'}",
                     f"""file_row_number IN (SELECT s.file_row_number FROM r s ASOF JOIN read_parquet({lit(m['path'])}) t
                         ON s.chrom = t.chrom AND s.pos > t.start WHERE s.pos <= t.max_end)"""))
+    elif track_id:  # deleted or expired: keep nothing and say so, rather than widen a saved selection to every SNP
+        out.append(({"track": track_id}, "Inside my track: no longer available", "false"))
     gene = get("gene", "").strip()[:40]
     names = [c for c in ("gene_name", "gene_id", "gene_ortholog_human", "gene_ortholog_zebrafish") if c in types]
     if gene and names:
@@ -481,6 +487,18 @@ def tier_facets(con, view, conds, types, summary, trait):
     return con.execute(f"SELECT tier, count(*) FROM {view} {_where(others)} GROUP BY tier ORDER BY tier").fetchall()
 
 
+def offered_tracks(request, job, chosen):
+    """[(id, name, selected)] for the Location filter: this user's tracks on the job's assembly, and the chosen one
+    when it is not among them (a shared link, a track gone), so that changing another filter keeps it."""
+    from . import mytracks
+    out = [(m["id"], m.get("name") or "Track", m["id"] == chosen)
+           for m in mytracks.mine(request, (job or {}).get("assembly") or jobs.manifest().get("assembly", "Ssal_v3.1"))]
+    if chosen and all(i != chosen for i, _, _ in out):
+        d = mytracks.folder(chosen)
+        out.append((chosen, (mytracks.meta(d).get("name") or "Track") if d else "no longer available", True))
+    return out
+
+
 def table(request, key, job=None):
     """Context for the Table tab: one page of rows sorted and paged on the server, the filters (one row, the rest under
     'More filters'), chips, the column chooser, an empty-state hint and the evidence drawer (?snp=<row>). Fast on 1.6M
@@ -572,14 +590,16 @@ def table(request, key, job=None):
         r["out"] = r["n"] in picks_out  # the selector: + in the selection, − taken out (one click each way)
         r["pick"] = link(page=here, **({"include": r["n"]} if r["out"] else {"exclude": r["n"]}))
     filter_keys = [k for params, _, _ in conds for k in params]
-    chips = [(label, link(drop=list(params), page=None)) for params, label, _ in conds]
+    from . import mytracks
+    chips = [(mytracks.asis(label) if "track" in params else label, link(drop=list(params), page=None))
+             for params, label, _ in conds]  # a track's name as the user wrote it, also on trout pages
     suggest = None
-    if conds and not matching and len(conds) > 1:  # name the filter that removes the most on its own
+    if conds and not matching:  # name the filter that removes the most on its own (the only one, e.g. a track gone)
         counts = con.execute("SELECT " + ", ".join(f"count(*) FILTER (WHERE {_where(conds[:i] + conds[i + 1:])[6:]})"
-                                                   for i in range(len(conds))) + f" FROM {view}").fetchone()
+                                                   if len(conds) > 1 else "count(*)" for i in range(len(conds))) + f" FROM {view}").fetchall()[0]
         best = max(range(len(conds)), key=lambda i: counts[i])
         if counts[best]:
-            suggest = (conds[best][1], counts[best], chips[best][1])
+            suggest = (chips[best][0], counts[best], chips[best][1])
 
     # The filter bar: dropdowns (a summary of the choice, a panel applied on change) in this order. 'list' panels tick
     # any of several values ('Any' clears them), 'radio' panels pick one; Chromatin, Location and More have their own.
@@ -625,8 +645,7 @@ def table(request, key, job=None):
     dd("location", "where", "Location", where_text.replace("Chromosome ", "chr"), "chrom" in chosen or "track" in chosen,
        "A chromosome, or a range on it (start exclusive, end inclusive); or inside one of your own tracks",
        chroms=[(c, c == chosen.get("chrom")) for c in chroms], column="id",
-       tracks=[(m["id"], m.get("name") or "Track", m["id"] == chosen.get("track"))
-               for m in mytracks.mine(request, (job or {}).get("assembly") or jobs.manifest().get("assembly", "Ssal_v3.1"))])
+       tracks=offered_tracks(request, job, chosen.get("track")))
     if any(c in types for c in ("gene_name", "gene_id")):
         dd("gene", "gene", "Gene", chosen.get("gene", ""), bool(chosen.get("gene")), "A gene's name, Ensembl id or ortholog",
            value=chosen.get("gene", ""), column="gene")

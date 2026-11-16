@@ -314,7 +314,8 @@ def download(request, key):
         f = open(tmp, "rb")
     finally:
         os.unlink(tmp)  # an open handle keeps the data until the response is closed; nothing is left behind
-    lines = [] if request.GET.get("plain") else jobs.provenance(job, chosen["trait"], {k: v for k, v in chosen.items() if k != "trait"})
+    named = {k: ("one of your own tracks" if k == "track" else v) for k, v in chosen.items() if k != "trait"}  # not its id
+    lines = [] if request.GET.get("plain") else jobs.provenance(job, chosen["trait"], named)
     if lines and tools.chip_info(d).get("synthetic"):  # the Panel tab's chip adds its columns (results._open)
         lines.insert(-1, "# SYNTHETIC: on_chip, dist_to_chip, near_chip and novel_functional come from a synthetic chip")
     response = StreamingHttpResponse(_stream("".join(f"{line}\n" for line in lines).encode(), f),

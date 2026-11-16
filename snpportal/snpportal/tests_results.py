@@ -1,6 +1,8 @@
 """Overview dashboard (P3.2) and results table (P3.3) on a job scored from snpscore's fixture, run inline
 (SNPPORTAL_WORKERS=0): summary.json, every panel whose columns exist, figure downloads, bin -> table links, the
 filter whitelist, sorting, paging, the column chooser, column gating and the empty state."""
+import gzip
+import html
 import json
 import logging
 import os
@@ -11,7 +13,7 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from unittest import skipUnless
+from unittest import mock, skipUnless
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, SimpleTestCase, override_settings
@@ -212,12 +214,16 @@ class ResultsTest(SimpleTestCase):
         bed = (b'track name="x"\nchrom\tstart\tend\tname\n'
                b"ssa25\t28990000\t28999000\tmy <region> A\t7\t+\t0\t0\t255,0,0\n"   # overlapping intervals: their union is
                b"chr25\t28991000\t28992000\tinside A\n25\t28998000\t29000000\ttail\t.\t.\t0\t0\t0\n"  # 28990000-29000000
+               b"25\t28990000\t28990500\tsame start\n25 28999500 28999600 split on spaces\n"
                b"scaffold_1\t5\t9\tnot a chromosome\n25\t9\t3\tbackwards\n")
         add = lambda content, file="regions_SYNTHETIC.bed", **more: self.client.post(  # noqa: E731
             reverse("snpportal:track_add"), {"file": SimpleUploadedFile(file, content), **more})
         self.assertNotIn('id="g-tracks"', self.client.get(f"{reverse('snpportal:locus')}?r=25:28,980,000-29,010,000").content.decode())
-        for content, name, code in ((bed, "regions.vcf", "file"), (b"hello\n", "x_SYNTHETIC.bed", "empty"), (b"\x00\xff" * 9, "x_SYNTHETIC.bed", "read")):
-            self.assertIn(f"error={code}", add(content, name).url)
+        for content, name, code in ((bed, "regions.vcf", "file"), (b"hello\n", "x_SYNTHETIC.bed", "empty"), (b"\x00\xff" * 9, "x_SYNTHETIC.bed", "read"),
+                                    (b"\x1f\x8b" + b"not gzip" * 9, "x_SYNTHETIC.bed.gz", "read"), (gzip.compress(bed)[:40], "x_SYNTHETIC.bed.gz", "read")):
+            self.assertIn(f"error={code}", add(content, name).url, code)
+        with override_settings(SNPPORTAL_MAX_TRACK_UNPACKED_MB=len(bed) * 3 / 2 ** 20):  # a small file that unpacks large
+            self.assertIn("error=unpacked", add(gzip.compress(bed * 4), "x_SYNTHETIC.bed.gz").url)
         with override_settings(SNPPORTAL_MAX_TRACK_ROWS=2):
             self.assertIn("error=rows", add(bed).url)
         self.assertIn("error=large", self.client.post(reverse("snpportal:track_add"), CONTENT_LENGTH=str(60 * 2 ** 20)).url)
@@ -227,7 +233,9 @@ class ResultsTest(SimpleTestCase):
         self.assertEqual(sorted(p.name for p in d.iterdir()), ["created", "track.json", "track.parquet"])  # the upload is not kept
         self.assertEqual((oct(d.stat().st_mode)[-3:], oct((d / "track.parquet").stat().st_mode)[-3:]), ("700", "600"))
         self.assertEqual({k: mytracks.meta(d)[k] for k in ("name", "n", "dropped", "colours", "assembly")},
-                         {"name": "Mine", "n": 3, "dropped": 2, "colours": 1, "assembly": "Ssal_v3.1"})
+                         {"name": "Mine", "n": 5, "dropped": 2, "colours": 1, "assembly": "Ssal_v3.1"})
+        con = jobs.connect([d])  # intervals sharing a start share max_end, which the filter's ASOF join relies on
+        self.assertEqual(con.execute(f"SELECT DISTINCT max_end FROM '{d / 'track.parquet'}' WHERE start = 28990000").fetchall(), [(28999000,)])
         page = self.client.get(reverse("snpportal:tracks"))
         self.assertEqual(page["Cache-Control"], "no-store, private")
         self.assertIn("Mine", page.content.decode())
@@ -240,11 +248,15 @@ class ResultsTest(SimpleTestCase):
         self.assertNotIn("Mine", other.get(reverse("snpportal:tracks")).content.decode())
         self.assertNotIn('id="g-tracks"', other.get(f"{reverse('snpportal:locus')}?r=25:28,980,000-29,010,000").content.decode())
         self.assertEqual(other.post(reverse("snpportal:track_change", args=[track]), {"action": "delete"}).status_code, 404)
+        other.cookies[mytracks.COOKIE] = track  # the id alone (a shared link) is not the signed cookie
+        self.assertNotIn("Mine", other.get(reverse("snpportal:tracks")).content.decode())
+        self.assertEqual(other.post(reverse("snpportal:track_change", args=[track]), {"action": "delete"}).status_code, 404)
         inside = self.count("?chrom=25&start=28990000&end=29000000")
         self.assertEqual(self.count(f"?track={track}"), inside)
         self.assertEqual(self.count(f"?track={track}&tier=1"), self.count("?chrom=25&start=28990000&end=29000000&tier=1"))
-        for bad in ("nope", str(uuid.uuid4()), "../../etc"):
+        for bad in ("nope", "../../etc"):
             self.assertEqual(self.count(f"?track={bad}"), self.summary["n_rows"], bad)
+        self.assertEqual(self.count(f"?track={uuid.uuid4()}"), 0)  # an id whose track is gone keeps nothing
         table = self.client.get(f"{self.url}?tab=table&track={track}").content.decode()
         self.assertIn("Inside my track: Mine", table)
         self.assertIn(f'<option value="{track}" selected>Mine</option>', table)
@@ -257,7 +269,11 @@ class ResultsTest(SimpleTestCase):
         self.assertNotIn('id="g-tracks"', self.client.get(f"{reverse('snpportal:locus')}?r=25:28,980,000-29,010,000").content.decode())
         self.client.post(reverse("snpportal:track_change", args=[track]), {"action": "delete"})
         self.assertIsNone(mytracks.folder(track))
-        self.assertEqual(self.count(f"?track={track}"), self.summary["n_rows"])  # a deleted track filters nothing
+        self.assertEqual(self.count(f"?track={track}"), 0)  # a deleted track: no SNP, rather than every SNP
+        self.assertIn("Inside my track: no longer available", self.client.get(f"{self.url}?tab=table&track={track}").content.decode())
+        with mock.patch.object(jobs, "wording", return_value=[(re.compile(r"\bssa(?=\d)"), "omy")]):  # a trout page
+            self.assertEqual(html.unescape(mytracks.asis("ssa25 & <x>")), "ssa25 & <x>")
+            self.assertNotIn("ssa", mytracks.asis("ssa25"))
 
     def test_table_page_sort_columns_and_barcode(self):
         page = self.client.get(self.url + "?tab=table&size=100").content.decode()
