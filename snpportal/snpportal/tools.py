@@ -103,12 +103,14 @@ def _columns(con, rel):
     return dict(con.execute(f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM {rel})").fetchall())
 
 
-def _open(d, trait, weights, selected=False):
+def _open(d, trait, weights, selected=False, request=None):
     """Sandboxed connection that reads the job folder and the release (genome neighbours, pool) and writes only the
     job folder, with view v = the result plus the tiers of `trait` (as on the Table tab) and, when the job has a chip,
     view vc = v plus on_chip, dist_to_chip, near_chip and novel_functional (results.chip_view). With `selected`, v
     holds only the SNPs of the Table's selection (the Panel designs from it). Returns (con, view name, its types)."""
-    con = jobs.connect([d, jobs.release()], d)
+    from . import mytracks  # a Table filter may name one of the user's tracks: the saved selection's, or `request`'s
+    tracks = mytracks.read_dirs(results.selection_request(results.selection(d))) + (mytracks.read_dirs(request) if request else [])
+    con = jobs.connect([d, jobs.release(), *tracks], d)
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet({lit(d / 'result.parquet')}, file_row_number=true)")
     columns = _columns(con, "r")
     tiers, suffix = jobs.trait_tiers(d, weights, trait) if weights else (None, None)
@@ -123,7 +125,7 @@ def _open(d, trait, weights, selected=False):
         con.execute(f"CREATE VIEW v0 AS {jobs.scored_sql('r', weights, list(columns), trait, d)}")
     else:
         con.execute("CREATE VIEW v0 AS SELECT * FROM r")
-    where = results._where(results.filters(results.selection_request(results.selection(d)), _columns(con, "v0"), weights)
+    where = results._where(results.filters(results.selection_request(results.selection(d)), _columns(con, "v0"), weights, d)
                            + [m for m in [results.manual(d)] if m]) if selected else ""  # the − rows stay out
     con.execute(f"CREATE VIEW v AS SELECT * FROM v0 {where}")
     view = "v"
@@ -654,7 +656,7 @@ def panel(request, key, job):
     more = request.GET.copy()
     more["show"] = "all"
     visible, advanced = _fields(p, types, pv["gap_bp"] / 1e6)
-    picked = results.filters(results.selection_request(results.selection(d)), _columns(con, "v0"), weights)
+    picked = results.filters(results.selection_request(results.selection(d)), _columns(con, "v0"), weights, d)
     designer = {
         "selection": {"n": con.execute("SELECT count(*) FROM v").fetchone()[0], "total": con.execute("SELECT count(*) FROM r").fetchone()[0],
                       "filters": [label for _, label, _ in picked], "table": f"?{results.selection(d)}&tab=table"},
@@ -869,7 +871,7 @@ def _scope(request, key, d, con, view, types, weights, job, scope=None):
                     f"FROM read_parquet({lit(d / 'panels' / (info['hash'] + '.parquet'))})")
         return "p", f"panel-{info['hash']}", {}, info["hash"], _synthetic(job, info.get("chip_synthetic"))
     synthetic = _synthetic(job, view == "vc" and chip_info(d).get("synthetic"))
-    conds = results.filters(request, types, weights) + [m for m in [results.manual(d)] if m] if scope == "filtered" else []
+    conds = results.filters(request, types, weights, d) + [m for m in [results.manual(d)] if m] if scope == "filtered" else []
     if not conds:
         return view, None, {}, None, synthetic
     con.execute(f"CREATE OR REPLACE VIEW f AS SELECT * FROM {view} WHERE " + " AND ".join(f"({sql})" for _, _, sql in conds))
@@ -897,7 +899,7 @@ def export(request, key, job, fmt):
     d = jobs.folder(key)
     weights = jobs.weights(d)
     trait = "all"  # tiers always count all 21 conditions
-    con, view, types = _open(d, trait, weights)
+    con, view, types = _open(d, trait, weights, request=request)
     table, tag, filters, panel_hash, synthetic = _scope(request, key, d, con, view, types, weights, job,
                                                         "all" if fmt == "priors" else None)  # priors: every SNP
     n = con.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
@@ -908,7 +910,8 @@ def export(request, key, job, fmt):
                       "first, or add a selection to your Design panel, which makes vendor files for it."}, status=400)
     formats = ["tsv", "bed"] + (list(VENDORS) if n <= cap else [])
     notes = {"vendor_files": f"left out above {cap:,} SNPs"} if fmt == "bundle" and n > cap else {}
-    meta = _meta(job, trait, synthetic, {**filters, **notes}, panel_hash, _command(job, trait, tag, fmt))
+    named = {k: ("one of your own tracks" if k == "track" else v) for k, v in filters.items()}  # a track by name, not its id
+    meta = _meta(job, trait, synthetic, {**named, **notes}, panel_hash, _command(job, trait, tag, fmt))
     saved = _saved(d, panel_hash) if panel_hash else None
     if saved and saved.get("params"):
         meta["panel_params"] = panel_params(saved["params"])
@@ -1021,7 +1024,7 @@ def exports(request, key, job):
     con, view, types = _open(d, trait, weights)
     gwas = job.get("input_kind") == "gwas"
     settings = results.gwas_settings(request) if gwas else {}  # the loci and credible sets of the Association page's settings
-    conds = results.filters(results.selection_request(results.selection(d)), types, weights) + [m for m in [results.manual(d)] if m]
+    conds = results.filters(results.selection_request(results.selection(d)), types, weights, d) + [m for m in [results.manual(d)] if m]
     chosen = {k: v for params, _, _ in conds for k, v in params.items()}
     chip = chip_info(d)
     wanted = request.GET.get("scope")

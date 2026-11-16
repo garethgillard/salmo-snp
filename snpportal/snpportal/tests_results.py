@@ -1,6 +1,8 @@
 """Overview dashboard (P3.2) and results table (P3.3) on a job scored from snpscore's fixture, run inline
 (SNPPORTAL_WORKERS=0): summary.json, every panel whose columns exist, figure downloads, bin -> table links, the
 filter whitelist, sorting, paging, the column chooser, column gating and the empty state."""
+import gzip
+import html
 import json
 import logging
 import os
@@ -8,17 +10,19 @@ import re
 import shutil
 import tempfile
 import time
+import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from unittest import skipUnless
+from unittest import mock, skipUnless
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.urls import reverse
 
 import snpdata
 import snpscore
 
-from . import figures, jobs, results
+from . import figures, jobs, palette, results
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 DATA = SNPSCORE.parent / "snpdata"  # layers.yaml, the fixture, prep/, the catalogue, data/ and release/
@@ -202,6 +206,86 @@ class ResultsTest(SimpleTestCase):
                       f"?active={cond}", "?active=summary", "?term=nope", "?hide_lore=", "?known=2"):  # no single-condition filter
             self.assertEqual(self.count(query), total, query)
         self.assertEqual(self.count("?gene=it's"), 0)  # quoted, not SQL
+
+    def test_your_tracks(self):
+        """A BED file becomes a track: listed for this browser only, drawn first in the locus browser in its own colours
+        with names as hover text, a Table filter that changes no tier, and gone when deleted. Never scored."""
+        from . import mytracks
+        bed = (b'track name="x"\nchrom\tstart\tend\tname\n'
+               b"ssa25\t28990000\t28999000\tmy <region> A\t7\t+\t0\t0\t255,0,0\n"   # overlapping intervals: their union is
+               b"chr25\t28991000\t28992000\tinside A\n25\t28998000\t29000000\ttail\t.\t.\t0\t0\t0\n"  # 28990000-29000000
+               b"25\t28990000\t28990500\tsame start\n25 28999500 28999600 split on spaces\n"
+               b"scaffold_1\t5\t9\tnot a chromosome\n25\t9\t3\tbackwards\n")
+        add = lambda content, file="regions_SYNTHETIC.bed", **more: self.client.post(  # noqa: E731
+            reverse("snpportal:track_add"), {"file": SimpleUploadedFile(file, content), **more})
+        self.assertNotIn('id="g-tracks"', self.client.get(f"{reverse('snpportal:locus')}?r=25:28,980,000-29,010,000").content.decode())
+        for content, name, code in ((bed, "regions.vcf", "file"), (b"hello\n", "x_SYNTHETIC.bed", "empty"), (b"\x00\xff" * 9, "x_SYNTHETIC.bed", "encoding"),
+                                    (b"\x1f\x8b" + b"not gzip" * 9, "x_SYNTHETIC.bed.gz", "read"), (gzip.compress(bed)[:40], "x_SYNTHETIC.bed.gz", "read")):
+            self.assertIn(f"error={code}", add(content, name).url, code)
+        with override_settings(SNPPORTAL_MAX_TRACK_UNPACKED_MB=len(bed) * 3 / 2 ** 20):  # a small file that unpacks large
+            self.assertIn("error=unpacked", add(gzip.compress(bed * 4), "x_SYNTHETIC.bed.gz").url)
+        with override_settings(SNPPORTAL_MAX_TRACK_ROWS=2):
+            self.assertIn("error=rows", add(bed).url)
+        self.assertIn("error=large", self.client.post(reverse("snpportal:track_add"), CONTENT_LENGTH=str(60 * 2 ** 20)).url)
+        self.assertEqual([p.name for p in jobs.results_dir().iterdir() if p.name.startswith((".", "track-"))], [])  # nothing left behind
+        track = add(bed, name="Mine").url.split("added=")[1]
+        d = mytracks.folder(track)
+        self.assertEqual(sorted(p.name for p in d.iterdir()), ["created", "track.json", "track.parquet"])  # the upload is not kept
+        self.assertEqual((oct(d.stat().st_mode)[-3:], oct((d / "track.parquet").stat().st_mode)[-3:]), ("700", "600"))
+        self.assertEqual({k: mytracks.meta(d)[k] for k in ("name", "n", "dropped", "colours", "assembly")},
+                         {"name": "Mine", "n": 5, "dropped": 2, "colours": 1, "assembly": "Ssal_v3.1"})
+        con = jobs.connect([d])  # intervals sharing a start share max_end, which the filter's ASOF join relies on
+        self.assertEqual(con.execute(f"SELECT DISTINCT max_end FROM '{d / 'track.parquet'}' WHERE start = 28990000").fetchall(), [(28999000,)])
+        page = self.client.get(reverse("snpportal:tracks"))
+        self.assertEqual(page["Cache-Control"], "no-store, private")
+        self.assertIn("Mine", page.content.decode())
+        browser = self.client.get(f"{reverse('snpportal:locus')}?r=25:28,980,000-29,010,000").content.decode()
+        self.assertLess(browser.index('id="g-tracks"'), browser.index('id="g-genes"'))  # near the top
+        self.assertIn('fill="#FF0000"', browser)  # the file's colour; the others share the palette's
+        self.assertIn(f'fill="{palette.USER_TRACK}"', browser)
+        self.assertIn("<title>my &lt;region&gt; A · 25:28,990,001-28,999,000 · + strand · score 7</title>", browser)
+        other = self.client_class()  # another browser: no track listed or drawn, though the id still filters (as a job key does)
+        self.assertNotIn("Mine", other.get(reverse("snpportal:tracks")).content.decode())
+        self.assertNotIn('id="g-tracks"', other.get(f"{reverse('snpportal:locus')}?r=25:28,980,000-29,010,000").content.decode())
+        self.assertEqual(other.post(reverse("snpportal:track_change", args=[track]), {"action": "delete"}).status_code, 404)
+        other.cookies[mytracks.COOKIE] = track  # the id alone (a shared link) is not the signed cookie
+        self.assertNotIn("Mine", other.get(reverse("snpportal:tracks")).content.decode())
+        self.assertEqual(other.post(reverse("snpportal:track_change", args=[track]), {"action": "delete"}).status_code, 404)
+        inside = self.count("?chrom=25&start=28990000&end=29000000")
+        self.assertEqual(self.count(f"?track={track}"), 0)  # a server: the id works only on jobs its owner filtered with it,
+        other.get(f"{self.url}?tab=table&track={track}")      # so it can't map a track with a list of one's own
+        self.assertEqual(self.count(f"?track={track}"), 0)
+        self.client.get(f"{self.url}?tab=table&track={track}")  # the owner filters this job: from now on its links do
+        self.assertEqual(self.count(f"?track={track}"), inside)
+        self.assertEqual(self.count(f"?track={track}&tier=1"), self.count("?chrom=25&start=28990000&end=29000000&tier=1"))
+        for bad in ("nope", "../../etc"):
+            self.assertEqual(self.count(f"?track={bad}"), self.summary["n_rows"], bad)
+        self.assertEqual(self.count(f"?track={uuid.uuid4()}"), 0)  # an id whose track is gone keeps nothing
+        table = self.client.get(f"{self.url}?tab=table&track={track}").content.decode()
+        self.assertIn("Inside my track: Mine", table)
+        self.assertIn(f'<option value="{track}" selected>Mine</option>', table)
+        self.assertIn(f'value="{track}" selected>Mine</option>', other.get(f"{self.url}?tab=table&track={track}").content.decode())  # a shared link
+        self.assertNotIn(track, self.client.get(f"{reverse('snpportal:report', args=[self.key])}?track={track}").content.decode().split("Filters:")[1][:200])
+        self.assertNotIn("Inside my track", self.client.get(f"{self.url}?tab=overview&track={track}").content.decode())  # the Table only
+        self.assertEqual(json.loads((self.d / "summary.json").read_text()), self.summary)  # no tier or count changed
+        tsv = self.client.get(f"{reverse('snpportal:download', args=[self.key])}?track={track}")
+        tsv = b"".join(tsv.streaming_content).decode()
+        self.assertEqual(sum(1 for line in tsv.splitlines() if line and not line.startswith(("#", "chrom"))), inside)
+        self.client.post(reverse("snpportal:track_change", args=[track]), {"action": "hide"})
+        self.assertNotIn('id="g-tracks"', self.client.get(f"{reverse('snpportal:locus')}?r=25:28,980,000-29,010,000").content.decode())
+        self.client.post(reverse("snpportal:track_change", args=[track]), {"action": "delete"})
+        self.assertIsNone(mytracks.folder(track))
+        self.assertEqual(self.count(f"?track={track}"), 0)  # a deleted track: no SNP, rather than every SNP
+        self.assertIn("Inside my track: no longer available", self.client.get(f"{self.url}?tab=table&track={track}").content.decode())
+        with override_settings(SNPPORTAL_LOCAL=True, SNPPORTAL_MYTRACKS_DIR=str(Path(self.tmp.name) / "mytracks")):  # a local install
+            local = add(bed, name="Here").url.split("added=")[1]
+            self.assertIn("Here", self.client_class().get(reverse("snpportal:tracks")).content.decode())  # every track, no cookie
+            self.assertEqual(self.count(f"?track={local}"), inside)  # on any job of its assembly
+            self.client.post(reverse("snpportal:track_change", args=[local]), {"action": "delete"})
+            self.assertEqual(list((Path(self.tmp.name) / "mytracks").iterdir()), [])
+        with mock.patch.object(jobs, "wording", return_value=[(re.compile(r"\bssa(?=\d)"), "omy")]):  # a trout page
+            self.assertEqual(html.unescape(mytracks.asis("ssa25 & <x>")), "ssa25 & <x>")
+            self.assertNotIn("ssa", mytracks.asis("ssa25"))
 
     def test_table_page_sort_columns_and_barcode(self):
         page = self.client.get(self.url + "?tab=table&size=100").content.decode()

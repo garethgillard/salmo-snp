@@ -82,6 +82,8 @@ expires: everything stays until you delete it.
   - any chip you compared against, the panels you designed, and the file's name as the list's label.
 - `results/panel-<id>/`: your Design panel.
 - `projects/<name>/`: the design projects you saved, one folder per version (the panel's SNPs, its chip and a note).
+- `tracks/<id>/`: your own BED tracks for the Locus browser (their intervals, names and colours; the uploaded file is
+  not kept).
 - `secret_key`: signs the portal's cookies.
 - On macOS and Linux the folders are readable only by your user account (0700, files 0600); on Windows, by your
   profile's permissions. Disk encryption (FileVault, BitLocker, LUKS) protects them like any other work file.
@@ -90,8 +92,8 @@ expires: everything stays until you delete it.
 - Temporary files, such as DuckDB's working files and exports being prepared, go in the results folder and are removed
   when done.
 - The terminal running `salmo-snp serve` logs event names, counts and timings, never SNPs or file names.
-- Your browser keeps cookies for the form protection, the results it opened, your Design panel and your choice of
-  chromatin colours.
+- Your browser keeps cookies for the form protection, the results it opened, your Design panel, the species and your
+  choice of chromatin colours.
 
 **Network requests the portal makes**
 - `salmo-snp download`: the release and the genome, from the address you give.
@@ -104,7 +106,7 @@ expires: everything stays until you delete it.
 - Nothing else. Pages and their scripts are served by the portal itself, and links to Ensembl, salmobase or papers are
   only followed when you click them, without telling those sites which page you came from.
 
-**Deleting**: Delete on a result, or Clear on the Design panel, removes that folder. Removing the data folder removes
+**Deleting**: Delete on a result or a track, or Clear on the Design panel, removes that folder. Removing the data folder removes
 everything.
 
 **Sharing**: what you export (tables, vendor files, the zip bundle, the printed report) contains your SNPs. Each file

@@ -100,6 +100,7 @@ SNP_SETS = {  # public SNP datasets in the locus browser: the 504-fish panel kee
     # ColorBrewer Dark2 hues that no tissue uses
     "public_af": "#495057", "aquafaang12": "#7570B3", "synchrosmolt_af": "#A6761D", "axiom": "#E7298A"}
 BASES = {"A": "#1A9850", "C": "#2166AC", "G": "#E69500", "T": "#D73027"}  # sequence logos: the usual base colours
+USER_TRACK = "#3949AB"  # indigo: a user's own BED track in the locus browser, where its file names no colour
 MOTIF = "#66A61E"  # ColorBrewer Dark2 green: a TF motif change (score block, locus browser row); no term or tissue uses it
 REGBUILD = "#56B4E9"  # Okabe-Ito sky blue: 'Ensembl regulatory' in the 'why this tier' bar (apart from the blues under CVD)
 

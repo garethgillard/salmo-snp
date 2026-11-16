@@ -13,6 +13,7 @@ from urllib.parse import urlencode
 
 from django.http import Http404, HttpResponse, QueryDict
 from django.urls import reverse
+from django.utils.html import escape
 from django.utils.safestring import mark_safe
 
 import snpscore
@@ -143,7 +144,7 @@ NUMERIC = ("score", "p", "beta", "pip", "gerp", "maf", "cm")  # right-aligned, h
 DEFAULT_COLUMNS = ("tier", "score", "id", "gene", "region", "chromatin", "known", "maf", "assay", "flags")
 FILTER_COLUMNS = {"tier": "tier", "max_tier": "tier", "term": "score", "min_score": "score", "chrom": "id", "region": "region", "gene": "gene",
                   "tissue": "chromatin", "maturity": "chromatin", "sex": "chromatin", "act": "chromatin", "known": "known",
-                  "molqtl": "molqtl", "min_maf": "maf", "max_maf": "maf", "assay": "assay", "hide_lore": "assay"}  # hide_*: flags
+                  "molqtl": "molqtl", "min_maf": "maf", "max_maf": "maf", "assay": "assay", "hide_lore": "assay", "track": "id"}  # hide_*: flags
 GWAS_COLUMNS = ("tier", "score", "id", "p", "beta", "pip", "gene", "region", "chromatin")
 EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tier_evidence", "tier_terms", "coding_hgvsp", "known_locus",
                                                                 "known_locus_dist"), "known": ("known_locus_dist",),
@@ -181,7 +182,8 @@ def _open(request, key, write=False, chip=False):
     d = jobs.folder(key)
     if not (d / "result.parquet").exists():
         raise Http404("Result not found or expired")
-    con = jobs.connect([d], d if write else None)
+    from . import mytracks
+    con = jobs.connect([d, *mytracks.read_dirs(request)], d if write else None)  # and the track ?track= filters by
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
     weights = jobs.weights(d)  # the job's snapshot, not the current release
@@ -209,7 +211,8 @@ def _open(request, key, write=False, chip=False):
     chipped = chip and chip_view(con, d, "v1", weights)  # the Panel tab's chip (P6.6), for the pages that use its columns
     con.execute(f"CREATE VIEW v AS {chipped or 'SELECT * FROM v1'}")
     types = dict(con.execute("SELECT column_name, column_type FROM (DESCRIBE v)").fetchall())
-    conds = filters(request, types, weights) + [m for m in [manual(d)] if m]  # the − rows: out of the selection
+    mytracks.allow(request, d)  # the owner filtering this job with their track: from now on it may (usable)
+    conds = filters(request, types, weights, d) + [m for m in [manual(d)] if m]  # the − rows: out of the selection
     chosen = {"trait": trait}
     for params, _, _ in conds:
         chosen.update(params)
@@ -278,9 +281,10 @@ def consequence_sql(key, types):
     return sql if "coding_consequence" in types else sql.split(" AND coalesce(coding_consequence")[0].split(" OR coalesce(coding_consequence")[0]
 
 
-def filters(request, types, weights):
+def filters(request, types, weights, d=None):
     """[(URL parameters, chip label, SQL)] for the whitelisted filters in the request whose columns exist. Other
-    parameters are ignored; values are checked or quoted before they reach SQL."""
+    parameters are ignored; values are checked or quoted before they reach SQL. `d`: the job's folder (a track filters
+    only jobs it may: mytracks.usable)."""
     get, out = request.GET.get, []
     tiers = sorted({t for x in picks(request, "tier") or [{"1": "1", "2": "1-2", "3": "1-3"}.get(get("max_tier", ""), "")]
                     for t in TIER_SETS.get(x, [x]) if t in TIER_SETS["1-4"]})  # max_tier, 1-2: older links
@@ -297,6 +301,21 @@ def filters(request, types, weights):
                         f"chrom = {lit(chrom)} AND pos > {int(start)} AND pos <= {int(end)}"))
         else:
             out.append(({"chrom": chrom}, f"Chromosome {chrom}", f"chrom = {lit(chrom)}"))
+    from . import mytracks  # it imports views, which imports this module
+    try:
+        track_id = str(uuid.UUID(get("track", ""))) if get("track") else None
+    except ValueError:  # not an id: ignored, as other bad values are
+        track_id = None
+    track = mytracks.folder(track_id) if track_id else None
+    m = mytracks.meta(track) if track else None
+    why = mytracks.usable(m, d) if m else "no longer available"
+    if m and not why:  # inside one of the user's own BED tracks (start < pos <= end)
+        # sorted by chrom, start with max_end (mytracks.convert): one ASOF probe per SNP
+        out.append(({"track": m["id"]}, f"Inside my track: {m.get('name') or 'track'}",
+                    f"""file_row_number IN (SELECT s.file_row_number FROM r s ASOF JOIN read_parquet({lit(m['path'])}) t
+                        ON s.chrom = t.chrom AND s.pos > t.start WHERE s.pos <= t.max_end)"""))
+    elif track_id:  # deleted, expired, not this job's or another assembly's: keep nothing and say so, rather than
+        out.append(({"track": track_id}, f"Inside my track: {why}", "false"))  # widen a saved selection to every SNP
     gene = get("gene", "").strip()[:40]
     names = [c for c in ("gene_name", "gene_id", "gene_ortholog_human", "gene_ortholog_zebrafish") if c in types]
     if gene and names:
@@ -473,6 +492,18 @@ def tier_facets(con, view, conds, types, summary, trait):
     return con.execute(f"SELECT tier, count(*) FROM {view} {_where(others)} GROUP BY tier ORDER BY tier").fetchall()
 
 
+def offered_tracks(request, job, chosen, label):
+    """[(id, name, selected)] for the Location filter: this user's tracks on the job's assembly, and the chosen one
+    when it is not among them (a shared link, a track gone: named as its filter's `label` names it), so that
+    changing another filter keeps it."""
+    from . import mytracks
+    out = [(m["id"], m.get("name") or "Track", m["id"] == chosen)
+           for m in mytracks.mine(request, (job or {}).get("assembly") or jobs.manifest().get("assembly", "Ssal_v3.1"))]
+    if chosen and all(i != chosen for i, _, _ in out):
+        out.append((chosen, (label or "").removeprefix("Inside my track: ") or "Track", True))
+    return out
+
+
 def table(request, key, job=None):
     """Context for the Table tab: one page of rows sorted and paged on the server, the filters (one row, the rest under
     'More filters'), chips, the column chooser, an empty-state hint and the evidence drawer (?snp=<row>). Fast on 1.6M
@@ -496,7 +527,7 @@ def table(request, key, job=None):
                 if a["loci"] else "SELECT NULL::BIGINT AS file_row_number, NULL::DOUBLE AS pip_uniform, NULL::DOUBLE AS pip_functional")
         con.execute(f"CREATE VIEW vt AS SELECT v.*, f.pip_uniform, f.pip_functional FROM v LEFT JOIN ({pips}) f USING (file_row_number)")
         types = dict(con.execute("SELECT column_name, column_type FROM (DESCRIBE vt)").fetchall())
-        conds = filters(request, types, weights) + [m for m in [manual(d)] if m]
+        conds = filters(request, types, weights, d) + [m for m in [manual(d)] if m]
         settings = a["query"]  # the fine-mapping settings travel with every link, as the PIPs depend on them
         chosen = {"trait": a["trait"], **{k: v for params, _, _ in conds for k, v in params.items()}}
     else:
@@ -564,14 +595,17 @@ def table(request, key, job=None):
         r["out"] = r["n"] in picks_out  # the selector: + in the selection, − taken out (one click each way)
         r["pick"] = link(page=here, **({"include": r["n"]} if r["out"] else {"exclude": r["n"]}))
     filter_keys = [k for params, _, _ in conds for k in params]
-    chips = [(label, link(drop=list(params), page=None)) for params, label, _ in conds]
+    from . import mytracks
+    chips = [(mytracks.asis(label) if "track" in params else label,  # a track's name as written, also on trout pages
+              link(include_all=1, picked=None, page=None) if label == UNSELECTED else link(drop=list(params), page=None))
+             for params, label, _ in conds]  # the − marks are cleared (as the Selected dropdown's reset), not dropped
     suggest = None
-    if conds and not matching and len(conds) > 1:  # name the filter that removes the most on its own
+    if conds and not matching:  # name the filter that removes the most on its own (the only one, e.g. a track gone)
         counts = con.execute("SELECT " + ", ".join(f"count(*) FILTER (WHERE {_where(conds[:i] + conds[i + 1:])[6:]})"
-                                                   for i in range(len(conds))) + f" FROM {view}").fetchone()
+                                                   if len(conds) > 1 else "count(*)" for i in range(len(conds))) + f" FROM {view}").fetchall()[0]
         best = max(range(len(conds)), key=lambda i: counts[i])
         if counts[best]:
-            suggest = (conds[best][1], counts[best], chips[best][1])
+            suggest = (chips[best][0], counts[best], chips[best][1])
 
     # The filter bar: dropdowns (a summary of the choice, a panel applied on change) in this order. 'list' panels tick
     # any of several values ('Any' clears them), 'radio' panels pick one; Chromatin, Location and More have their own.
@@ -612,10 +646,13 @@ def table(request, key, job=None):
            options=[(x, CONSEQUENCE_FILTERS[x][0], x in ticked["region"], "") for x in offered])
     chroms = sorted((summary.get("chrom_tiers", {}).get(chosen["trait"]) or {}), key=_chrom_key) or \
         sorted((c for c, in con.execute("SELECT DISTINCT chrom FROM r").fetchall()), key=_chrom_key)
-    where_text = next((label for params, label, _ in conds if "chrom" in params), "any")
-    dd("location", "where", "Location", where_text.replace("Chromosome ", "chr"), "chrom" in chosen,
-       "A chromosome, or a range on it (start exclusive, end inclusive)", chroms=[(c, c == chosen.get("chrom")) for c in chroms],
-       column="id")
+    from . import mytracks
+    where_text = mark_safe(" · ".join(mytracks.asis(label) if "track" in params else escape(label.replace("Chromosome ", "chr"))
+                                      for params, label, _ in conds if "chrom" in params or "track" in params) or "any")
+    dd("location", "where", "Location", where_text, "chrom" in chosen or "track" in chosen,
+       "A chromosome, or a range on it (start exclusive, end inclusive); or inside one of your own tracks",
+       chroms=[(c, c == chosen.get("chrom")) for c in chroms], column="id",
+       tracks=offered_tracks(request, job, chosen.get("track"), next((label for params, label, _ in conds if "track" in params), "")))
     if any(c in types for c in ("gene_name", "gene_id")):
         dd("gene", "gene", "Gene", chosen.get("gene", ""), bool(chosen.get("gene")), "A gene's name, Ensembl id or ortholog",
            value=chosen.get("gene", ""), column="gene")

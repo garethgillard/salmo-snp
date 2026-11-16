@@ -232,6 +232,19 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 - Probe uniqueness (lib/uniqueness.py): each SNP's flanks against its gene's Ss4R ohnolog regions, from the local
   genome, into `uniqueness.parquet`: the Duplicate column and the counts.
 - The design report (panel_report.py): `panel/report/` and `projects/<name>/<n>/report/`, two A4 pages.
+- Your tracks (mytracks.py, `/snp/tracks/`): a user's own BED files (chromosome, start, end; optionally a name, score,
+  strand and itemRgb colour), converted to `track.parquet` (the release's chromosome names, sorted, with a running
+  `max_end`) and `track.json` in a folder named by an unguessable id; the upload is deleted. A local install keeps
+  them in the data folder's `tracks/<id>/` until deleted; a server in `results/track-<id>/`, listed for the browser
+  that uploaded them (the signed `snpportal_mytracks` cookie) and removed with the results. A gzipped file is checked
+  whole first (500 MB unpacked at most); names stay as written on another species' pages (`mytracks.asis`). The Locus browser draws the
+  tracks of the page's assembly first (`browser.tracks_group`: the file's colours, else `palette.USER_TRACK`; the
+  name, position, strand and score on hover; hidden tracks left out); the Table's Location filter offers 'Inside my
+  track' (`?track=<id>`, an ASOF join: start < pos <= end; intervals sharing a start share `max_end`). On a server a
+  track filters only the results its owner opened with it (`mytracks.allow`, `usable`): their links keep working, but
+  the id can't be pasted into another list's Table to map the track; a track that is gone, or on another assembly,
+  keeps no SNP and says so. Tracks are never scored: no tier, Overview or card
+  changes, and the standalone SVG download leaves them out.
 - Saved projects (local installs, projects.py): `projects/<name>/v<N>/` in the data folder holds panel.parquet (the
   kept SNPs with their annotations), the chip, the populations, the other chips, the uniqueness check and meta.json;
   versions are compared, downloaded, exported and imported as a zip, and opened in the Design panel again.

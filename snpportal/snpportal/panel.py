@@ -142,7 +142,7 @@ def add(request, key):
     finally:
         rows.unlink(missing_ok=True)
     s["sources"].append({"id": i, "job": str(key), "label": job.get("label") or "Results", "n": n, "selection": query,
-                         "filters": [label for _, label, _ in results.filters(req, types, jobs.weights(jd))],
+                         "filters": [label for _, label, _ in results.filters(req, types, jobs.weights(jd), jd)],
                          "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers")), "added_utc": jobs.utc()})
     s["next"] = i + 1
     jobs._write_json(d / "panel.json", s)

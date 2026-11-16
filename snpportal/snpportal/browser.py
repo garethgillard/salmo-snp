@@ -19,7 +19,7 @@ from django.utils.safestring import mark_safe
 from .lib import locus as sl
 from snpscore.formats import lit
 
-from . import explore, jobs, locus, locus_svg, palette
+from . import explore, jobs, locus, locus_svg, mytracks, palette
 from .views import private
 
 W = 1000  # SVG user units across the track column, drawn 1:1 so text never stretches
@@ -192,6 +192,27 @@ def ruler(ax, s):
         anchor = "start" if x - half < 0 else "end" if x + half > W else "middle"
         body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="25" y2="30" stroke="{G[500]}"/>' + locus_svg._t(x, 21, f"{t:,}", 11, G[900], anchor))
     return trk(34, "".join(body))
+
+
+# ---- the user's own tracks ----
+
+def tracks_group(request, s, ax):
+    """'Your tracks' (mytracks: the user's own BED files on this assembly, those not hidden), one row each, above the
+    release's groups: intervals in the file's own colours, else one colour; hover: the interval's name. None without
+    tracks. Read at render time and never cached, as the user's SNPs are."""
+    rows = []
+    for m in mytracks.mine(request, jobs.manifest().get("assembly", "Ssal_v3.1")):
+        if not m.get("shown", True):
+            continue
+        found = mytracks.rows(m, s["chrom"], s["start"], s["end"], s.get("shown"))
+        h, body = mytracks.draw(m, ax, s["chrom"], found, W)
+        cut = f"{mytracks.DRAWN:,} drawn here: zoom in" if len(found) > mytracks.DRAWN else ""
+        rows.append(row(mytracks.asis(m.get("name") or "Track"), trk(h, body), cut or f"{m.get('n', 0):,} intervals"))
+    if not rows:
+        return None
+    g = group("tracks", "Your tracks", "your own BED files &middot; shown here and as a Table filter, never scored", rows)
+    g["link"] = (reverse("snpportal:tracks"), "Manage tracks")
+    return g
 
 
 # ---- genes and variants ----
@@ -641,7 +662,7 @@ def context(request, s, layout):
     prefix = f"snpportal:{(info.get('sha256') or 'release')[:12]}"
     deadline = float(jobs.setting("SNPPORTAL_SIGNAL_DEADLINE", 4.0))
     notes = []
-    groups = [genes_group(request, v, ax, data, open_), public_group(v, ax, data, open_), motifs_group(v, ax, data),
+    groups = [tracks_group(request, v, ax), genes_group(request, v, ax, data, open_), public_group(v, ax, data, open_), motifs_group(v, ax, data),
               peaks_group(v, ax, data, cfg, prefix, deadline, open_, notes),
               hmm_group(v, ax, data, cfg, prefix, deadline, open_, notes)]
     synthetic = bool(info.get("synthetic")) or any(locus.synthetic_track(t) for t in (cfg or {}).get("tracks", []))

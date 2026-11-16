@@ -76,6 +76,7 @@ def report(request, key):
     best = results.top(request, key, job, TOP)  # the Table selection in the URL
     trait = best["chosen"]["trait"]
     filters = {k: v for k, v in best["chosen"].items() if k != "trait"}
+    shown = {k: ("one of your own tracks" if k == "track" else v) for k, v in filters.items()}  # printed: not a track's id
     finemap = None
     if job.get("input_kind") == "gwas" and (d / "gwas.parquet").exists():  # the Association page's settings (kept in its links)
         finemap = association.finemap_used(association.analyse(request, key))
@@ -93,7 +94,7 @@ def report(request, key):
                                        f"printed {jobs.utc()}"] if x),
         "actions": [{"label": "Back to the results", "url": f"{base}?{urlencode({'trait': trait, **filters})}"}],
         "warnings": ov["warnings"], "summary": ov["figs"].get(FIGURES[0]), "figs": [ov["figs"][n] for n in FIGURES[1:] if n in ov["figs"]], "panel": panel(request, key, d),
-        "top": best, "filters": filters, "synthetic": synthetic,
+        "top": best, "filters": shown, "synthetic": synthetic,
         "table_url": f"{base}?{urlencode({'tab': 'table', 'trait': trait, **filters})}",
         "methods_url": request.build_absolute_uri(reverse("snpportal:methods")), "refs": references(refs),
         "release": f"{m.get('version') or job.get('release')} ({m.get('assembly') or job.get('assembly', 'Ssal_v3.1')})",

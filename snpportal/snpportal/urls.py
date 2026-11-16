@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import about, association, browser, explore, health, locus, panel, panel_report, projects, report, search, tools, views
+from . import about, association, browser, explore, health, locus, mytracks, panel, panel_report, projects, report, search, tools, views
 
 app_name = "snpportal"
 urlpatterns = [
@@ -21,6 +21,10 @@ urlpatterns = [
     path("projects/<str:name>/<int:n>/open/", projects.open_view, name="project_open"),
     path("projects/<str:name>/<int:n>/download/", projects.download, name="project_download"),
     path("projects/<str:name>/<int:n>/report/", panel_report.project_report, name="project_report"),
+    # the user's own BED tracks: shown in the locus browser, a Table filter; never scored
+    path("tracks/", mytracks.page, name="tracks"),
+    path("tracks/add/", mytracks.add, name="track_add"),
+    path("tracks/<uuid:track_id>/", mytracks.change, name="track_change"),
     path("search/", search.search, name="search"),
     path("search/suggest/", search.suggest, name="suggest"),
     path("tour/", explore.tour, name="tour"),

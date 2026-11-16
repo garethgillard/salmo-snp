@@ -364,7 +364,7 @@ class PortalTest(SimpleTestCase):
         self.assertIsNone(jobs.read(b))
 
     def test_pages_render(self):
-        for name in ("upload", "locus", "about_data", "methods", "help", "run_locally", "tour", "search"):
+        for name in ("upload", "locus", "about_data", "methods", "help", "run_locally", "tour", "search", "tracks"):
             response = self.client.get(reverse(f"snpportal:{name}"))
             self.assertContains(response, 'class="sp-nav"', msg_prefix=name)
         self.assertContains(self.client.get(reverse("snpportal:about_data")), "chromatin")

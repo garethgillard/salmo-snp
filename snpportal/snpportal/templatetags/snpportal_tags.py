@@ -59,3 +59,10 @@ def elapsed(started):
 @register.filter
 def get(mapping, key):
     return mapping.get(key) if hasattr(mapping, "get") else None
+
+
+@register.filter
+def asis(text):
+    """User text (a track's name) as the user wrote it, also on another species' pages (mytracks.asis)."""
+    from snpportal import mytracks
+    return mytracks.asis(text)

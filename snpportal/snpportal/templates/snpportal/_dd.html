@@ -1,6 +1,6 @@
 {% comment %}One filter dropdown (results.table's dds), in its column's header: a funnel button, and a panel whose controls
    belong to the filter form #tf, which applies them on change. portal.js places the panel on the page, as the table's
-   scroll box would clip it.{% endcomment %}
+   scroll box would clip it.{% endcomment %}{% load snpportal_tags %}
 <details class="sp-dd sp-dd-col" id="{{ dd.id }}">
   <summary class="sp-colf{% if dd.on %} on{% endif %}" title="Filter {{ dd.label }}{% if dd.on %}: {{ dd.summary }}{% endif %}" aria-label="Filter {{ dd.label }}"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 2.5h13l-5 6v4.5l-3 1.5v-6z" fill="{% if dd.on %}currentColor{% else %}none{% endif %}" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></summary>
   <div class="sp-dd-panel{% if right %} sp-dd-right{% endif %}">
@@ -32,6 +32,9 @@
         {% for c, sel in dd.chroms %}<option value="{{ c }}"{% if sel %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
       <div class="sp-dd-row"><label>from <input class="form-control form-control-sm sp-pos" type="text" inputmode="numeric" name="start" value="{{ start }}" aria-label="From position (exclusive)"></label>
         <label>to <input class="form-control form-control-sm sp-pos" type="text" inputmode="numeric" name="end" value="{{ end }}" aria-label="To position"></label></div>
+      {% if dd.tracks %}<label class="sp-dd-row">Inside my track <select class="form-select form-select-sm" name="track"><option value="">any</option>
+        {% for id, name, sel in dd.tracks %}<option value="{{ id }}"{% if sel %} selected{% endif %}>{{ name|asis }}</option>{% endfor %}</select></label>
+      <p class="sp-dd-foot sp-dd-note">SNPs inside an interval of <a href="{% url 'snpportal:tracks' %}" hx-boost="false">your own BED track</a>. This filters the table only: tracks are never scored.</p>{% endif %}
     {% elif dd.kind == 'more' %}
       <fieldset class="sp-dd-list"><legend class="visually-hidden">More filters</legend>
         {% for name, label, ticked in dd.extras %}<label><input class="form-check-input" type="checkbox" name="{{ name }}" value="1"{% if ticked %} checked{% endif %}> {{ label }}</label>{% endfor %}
