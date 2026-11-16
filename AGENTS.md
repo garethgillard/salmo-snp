@@ -271,9 +271,9 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   2026-11-04, so check before changing anything.
 - GitHub: the cloud proxy refuses GitHub's GraphQL API, so `gh` works only through `gh api` (REST): no
   `gh release download` or `gh pr create`. Pull requests, their checks and comments go through the GitHub MCP tools.
-- The NREC demo: https://test.salmobase.org/snp/ for people (salmobase's Apache redirects it to https://158.39.75.9/snp/;
-  G, 2026-11-10); sessions use https://158-39-75-9.sslip.io/snp/ (the bare IP didn't connect through the session's
-  proxy on 2026-11-04).
+- The NREC demo: https://158.39.75.9/snp/ for people (test.salmobase.org/snp/ redirected there from 2026-11-10 but
+  answered 404 on 2026-11-16: use the IP until salmobase's Apache line is back); sessions use
+  https://158-39-75-9.sslip.io/snp/ (the bare IP didn't connect through the session's proxy on 2026-11-04).
 - EBI's FTP hosts (ftp.ebi.ac.uk, ftp.sra.ebi.ac.uk) reset about half of the connections through the session's proxy
   and serve about 1.5 MB/s per connection (2026-11-12): `snpdata fetch` asks again from where a download stopped
   (build.Resuming), but the trout cohort VCFs (7, 16 and 55 GB) took parallel ranged downloads here, processed in

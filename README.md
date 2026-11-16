@@ -8,7 +8,7 @@ fine-maps GWAS summary statistics with a functional prior, and designs marker pa
 Rainbow trout (USDA_OmykA_1.1, the assembly of the AQUA-FAANG trout data) is a second species, with its own data
 release and 17 AQUA-FAANG conditions; a species bar at the top right of the portal switches between the two.
 
-Public demo: https://test.salmobase.org/snp/ (public data only: don't upload confidential lists there).
+Public demo: https://158.39.75.9/snp/ (public data only: don't upload confidential lists there).
 
 ## Run it on your own computer
 
