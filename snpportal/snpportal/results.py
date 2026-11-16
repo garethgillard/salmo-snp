@@ -13,6 +13,7 @@ from urllib.parse import urlencode
 
 from django.http import Http404, HttpResponse, QueryDict
 from django.urls import reverse
+from django.utils.html import escape
 from django.utils.safestring import mark_safe
 
 import snpscore
@@ -210,7 +211,8 @@ def _open(request, key, write=False, chip=False):
     chipped = chip and chip_view(con, d, "v1", weights)  # the Panel tab's chip (P6.6), for the pages that use its columns
     con.execute(f"CREATE VIEW v AS {chipped or 'SELECT * FROM v1'}")
     types = dict(con.execute("SELECT column_name, column_type FROM (DESCRIBE v)").fetchall())
-    conds = filters(request, types, weights) + [m for m in [manual(d)] if m]  # the − rows: out of the selection
+    mytracks.allow(request, d)  # the owner filtering this job with their track: from now on it may (usable)
+    conds = filters(request, types, weights, d) + [m for m in [manual(d)] if m]  # the − rows: out of the selection
     chosen = {"trait": trait}
     for params, _, _ in conds:
         chosen.update(params)
@@ -279,9 +281,10 @@ def consequence_sql(key, types):
     return sql if "coding_consequence" in types else sql.split(" AND coalesce(coding_consequence")[0].split(" OR coalesce(coding_consequence")[0]
 
 
-def filters(request, types, weights):
+def filters(request, types, weights, d=None):
     """[(URL parameters, chip label, SQL)] for the whitelisted filters in the request whose columns exist. Other
-    parameters are ignored; values are checked or quoted before they reach SQL."""
+    parameters are ignored; values are checked or quoted before they reach SQL. `d`: the job's folder (a track filters
+    only jobs it may: mytracks.usable)."""
     get, out = request.GET.get, []
     tiers = sorted({t for x in picks(request, "tier") or [{"1": "1", "2": "1-2", "3": "1-3"}.get(get("max_tier", ""), "")]
                     for t in TIER_SETS.get(x, [x]) if t in TIER_SETS["1-4"]})  # max_tier, 1-2: older links
@@ -304,13 +307,15 @@ def filters(request, types, weights):
     except ValueError:  # not an id: ignored, as other bad values are
         track_id = None
     track = mytracks.folder(track_id) if track_id else None
-    if track:  # inside one of the user's own BED tracks (start < pos <= end)
-        m = mytracks.meta(track)  # sorted by chrom, start with max_end (mytracks.convert): one ASOF probe per SNP
+    m = mytracks.meta(track) if track else None
+    why = mytracks.usable(m, d) if m else "no longer available"
+    if m and not why:  # inside one of the user's own BED tracks (start < pos <= end)
+        # sorted by chrom, start with max_end (mytracks.convert): one ASOF probe per SNP
         out.append(({"track": m["id"]}, f"Inside my track: {m.get('name') or 'track'}",
                     f"""file_row_number IN (SELECT s.file_row_number FROM r s ASOF JOIN read_parquet({lit(m['path'])}) t
                         ON s.chrom = t.chrom AND s.pos > t.start WHERE s.pos <= t.max_end)"""))
-    elif track_id:  # deleted or expired: keep nothing and say so, rather than widen a saved selection to every SNP
-        out.append(({"track": track_id}, "Inside my track: no longer available", "false"))
+    elif track_id:  # deleted, expired, not this job's or another assembly's: keep nothing and say so, rather than
+        out.append(({"track": track_id}, f"Inside my track: {why}", "false"))  # widen a saved selection to every SNP
     gene = get("gene", "").strip()[:40]
     names = [c for c in ("gene_name", "gene_id", "gene_ortholog_human", "gene_ortholog_zebrafish") if c in types]
     if gene and names:
@@ -487,15 +492,15 @@ def tier_facets(con, view, conds, types, summary, trait):
     return con.execute(f"SELECT tier, count(*) FROM {view} {_where(others)} GROUP BY tier ORDER BY tier").fetchall()
 
 
-def offered_tracks(request, job, chosen):
+def offered_tracks(request, job, chosen, label):
     """[(id, name, selected)] for the Location filter: this user's tracks on the job's assembly, and the chosen one
-    when it is not among them (a shared link, a track gone), so that changing another filter keeps it."""
+    when it is not among them (a shared link, a track gone: named as its filter's `label` names it), so that
+    changing another filter keeps it."""
     from . import mytracks
     out = [(m["id"], m.get("name") or "Track", m["id"] == chosen)
            for m in mytracks.mine(request, (job or {}).get("assembly") or jobs.manifest().get("assembly", "Ssal_v3.1"))]
     if chosen and all(i != chosen for i, _, _ in out):
-        d = mytracks.folder(chosen)
-        out.append((chosen, (mytracks.meta(d).get("name") or "Track") if d else "no longer available", True))
+        out.append((chosen, (label or "").removeprefix("Inside my track: ") or "Track", True))
     return out
 
 
@@ -522,7 +527,7 @@ def table(request, key, job=None):
                 if a["loci"] else "SELECT NULL::BIGINT AS file_row_number, NULL::DOUBLE AS pip_uniform, NULL::DOUBLE AS pip_functional")
         con.execute(f"CREATE VIEW vt AS SELECT v.*, f.pip_uniform, f.pip_functional FROM v LEFT JOIN ({pips}) f USING (file_row_number)")
         types = dict(con.execute("SELECT column_name, column_type FROM (DESCRIBE vt)").fetchall())
-        conds = filters(request, types, weights) + [m for m in [manual(d)] if m]
+        conds = filters(request, types, weights, d) + [m for m in [manual(d)] if m]
         settings = a["query"]  # the fine-mapping settings travel with every link, as the PIPs depend on them
         chosen = {"trait": a["trait"], **{k: v for params, _, _ in conds for k, v in params.items()}}
     else:
@@ -591,8 +596,9 @@ def table(request, key, job=None):
         r["pick"] = link(page=here, **({"include": r["n"]} if r["out"] else {"exclude": r["n"]}))
     filter_keys = [k for params, _, _ in conds for k in params]
     from . import mytracks
-    chips = [(mytracks.asis(label) if "track" in params else label, link(drop=list(params), page=None))
-             for params, label, _ in conds]  # a track's name as the user wrote it, also on trout pages
+    chips = [(mytracks.asis(label) if "track" in params else label,  # a track's name as written, also on trout pages
+              link(include_all=1, picked=None, page=None) if label == UNSELECTED else link(drop=list(params), page=None))
+             for params, label, _ in conds]  # the − marks are cleared (as the Selected dropdown's reset), not dropped
     suggest = None
     if conds and not matching:  # name the filter that removes the most on its own (the only one, e.g. a track gone)
         counts = con.execute("SELECT " + ", ".join(f"count(*) FILTER (WHERE {_where(conds[:i] + conds[i + 1:])[6:]})"
@@ -641,11 +647,12 @@ def table(request, key, job=None):
     chroms = sorted((summary.get("chrom_tiers", {}).get(chosen["trait"]) or {}), key=_chrom_key) or \
         sorted((c for c, in con.execute("SELECT DISTINCT chrom FROM r").fetchall()), key=_chrom_key)
     from . import mytracks
-    where_text = " · ".join(label for params, label, _ in conds if "chrom" in params or "track" in params) or "any"
-    dd("location", "where", "Location", where_text.replace("Chromosome ", "chr"), "chrom" in chosen or "track" in chosen,
+    where_text = mark_safe(" · ".join(mytracks.asis(label) if "track" in params else escape(label.replace("Chromosome ", "chr"))
+                                      for params, label, _ in conds if "chrom" in params or "track" in params) or "any")
+    dd("location", "where", "Location", where_text, "chrom" in chosen or "track" in chosen,
        "A chromosome, or a range on it (start exclusive, end inclusive); or inside one of your own tracks",
        chroms=[(c, c == chosen.get("chrom")) for c in chroms], column="id",
-       tracks=offered_tracks(request, job, chosen.get("track")))
+       tracks=offered_tracks(request, job, chosen.get("track"), next((label for params, label, _ in conds if "track" in params), "")))
     if any(c in types for c in ("gene_name", "gene_id")):
         dd("gene", "gene", "Gene", chosen.get("gene", ""), bool(chosen.get("gene")), "A gene's name, Ensembl id or ortholog",
            value=chosen.get("gene", ""), column="gene")

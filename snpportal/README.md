@@ -236,10 +236,14 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
   strand and itemRgb colour), converted to `track.parquet` (the release's chromosome names, sorted, with a running
   `max_end`) and `track.json` in a folder named by an unguessable id; the upload is deleted. A local install keeps
   them in the data folder's `tracks/<id>/` until deleted; a server in `results/track-<id>/`, listed for the browser
-  that uploaded them (the `snpportal_mytracks` cookie) and removed with the results. The Locus browser draws the
+  that uploaded them (the signed `snpportal_mytracks` cookie) and removed with the results. A gzipped file is checked
+  whole first (500 MB unpacked at most); names stay as written on another species' pages (`mytracks.asis`). The Locus browser draws the
   tracks of the page's assembly first (`browser.tracks_group`: the file's colours, else `palette.USER_TRACK`; the
   name, position, strand and score on hover; hidden tracks left out); the Table's Location filter offers 'Inside my
-  track' (`?track=<id>`, an ASOF join: start < pos <= end). Tracks are never scored: no tier, Overview or card
+  track' (`?track=<id>`, an ASOF join: start < pos <= end; intervals sharing a start share `max_end`). On a server a
+  track filters only the results its owner opened with it (`mytracks.allow`, `usable`): their links keep working, but
+  the id can't be pasted into another list's Table to map the track; a track that is gone, or on another assembly,
+  keeps no SNP and says so. Tracks are never scored: no tier, Overview or card
   changes, and the standalone SVG download leaves them out.
 - Saved projects (local installs, projects.py): `projects/<name>/v<N>/` in the data folder holds panel.parquet (the
   kept SNPs with their annotations), the chip, the populations, the other chips, the uniqueness check and meta.json;

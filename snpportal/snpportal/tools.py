@@ -125,7 +125,7 @@ def _open(d, trait, weights, selected=False, request=None):
         con.execute(f"CREATE VIEW v0 AS {jobs.scored_sql('r', weights, list(columns), trait, d)}")
     else:
         con.execute("CREATE VIEW v0 AS SELECT * FROM r")
-    where = results._where(results.filters(results.selection_request(results.selection(d)), _columns(con, "v0"), weights)
+    where = results._where(results.filters(results.selection_request(results.selection(d)), _columns(con, "v0"), weights, d)
                            + [m for m in [results.manual(d)] if m]) if selected else ""  # the − rows stay out
     con.execute(f"CREATE VIEW v AS SELECT * FROM v0 {where}")
     view = "v"
@@ -656,7 +656,7 @@ def panel(request, key, job):
     more = request.GET.copy()
     more["show"] = "all"
     visible, advanced = _fields(p, types, pv["gap_bp"] / 1e6)
-    picked = results.filters(results.selection_request(results.selection(d)), _columns(con, "v0"), weights)
+    picked = results.filters(results.selection_request(results.selection(d)), _columns(con, "v0"), weights, d)
     designer = {
         "selection": {"n": con.execute("SELECT count(*) FROM v").fetchone()[0], "total": con.execute("SELECT count(*) FROM r").fetchone()[0],
                       "filters": [label for _, label, _ in picked], "table": f"?{results.selection(d)}&tab=table"},
@@ -871,7 +871,7 @@ def _scope(request, key, d, con, view, types, weights, job, scope=None):
                     f"FROM read_parquet({lit(d / 'panels' / (info['hash'] + '.parquet'))})")
         return "p", f"panel-{info['hash']}", {}, info["hash"], _synthetic(job, info.get("chip_synthetic"))
     synthetic = _synthetic(job, view == "vc" and chip_info(d).get("synthetic"))
-    conds = results.filters(request, types, weights) + [m for m in [results.manual(d)] if m] if scope == "filtered" else []
+    conds = results.filters(request, types, weights, d) + [m for m in [results.manual(d)] if m] if scope == "filtered" else []
     if not conds:
         return view, None, {}, None, synthetic
     con.execute(f"CREATE OR REPLACE VIEW f AS SELECT * FROM {view} WHERE " + " AND ".join(f"({sql})" for _, _, sql in conds))
@@ -1024,7 +1024,7 @@ def exports(request, key, job):
     con, view, types = _open(d, trait, weights)
     gwas = job.get("input_kind") == "gwas"
     settings = results.gwas_settings(request) if gwas else {}  # the loci and credible sets of the Association page's settings
-    conds = results.filters(results.selection_request(results.selection(d)), types, weights) + [m for m in [results.manual(d)] if m]
+    conds = results.filters(results.selection_request(results.selection(d)), types, weights, d) + [m for m in [results.manual(d)] if m]
     chosen = {k: v for params, _, _ in conds for k, v in params.items()}
     chip = chip_info(d)
     wanted = request.GET.get("scope")

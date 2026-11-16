@@ -24,6 +24,7 @@ from django.utils.datastructures import MultiValueDict
 from django.utils.safestring import mark_safe
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
+from snpscore.annotate import parquet_columns
 from snpscore.formats import lit
 
 from . import jobs, palette
@@ -43,6 +44,7 @@ ERRORS = {
     "empty": "No interval in the file is on a chromosome of {assembly}: check the chromosome names and the assembly.",
     "many": "You have {tracks} tracks already: delete one first.",
     "read": "The file could not be read as BED: chromosome, start and end, separated by tabs or spaces.",
+    "encoding": "The file is not UTF-8 text (Excel's 'Text (Tab delimited)' on Windows is not): save it as UTF-8 and try again.",
 }
 
 
@@ -98,6 +100,28 @@ def keep(response, ids):
     return response
 
 
+def usable(m, d):
+    """Why track `m` may not filter the job in folder `d`, or None when it may. It must be on the job's assembly; and
+    on a server, the job must be one its owner filtered with it (allow): the id then works in that job's links, as
+    the job's key does, but pasting it into another job's Table can't map the track with a list of one's own."""
+    if not jobs.local() and (d is None or Path(d).name not in m.get("jobs", [])):
+        return "no longer available"  # as for a deleted track: says nothing of whether it exists
+    if m.get("assembly") != jobs.manifest(d).get("assembly", "Ssal_v3.1"):
+        return "on another assembly"
+    return None
+
+
+def allow(request, d):
+    """On a server, when the browser that owns the track in ?track= opens the job in folder `d` with it, let the track
+    filter that job from then on (usable). A local install needs nothing."""
+    track = folder(request.GET.get("track", "")) if not jobs.local() and request.GET.get("track") else None
+    if track is None or track.name.removeprefix("track-") not in _ids(request):
+        return
+    m = jobs.read_json(track / "track.json")
+    if Path(d).name not in m.get("jobs", []):
+        jobs._write_json(track / "track.json", {**m, "jobs": [*m.get("jobs", []), Path(d).name]})
+
+
 def read_dirs(request):
     """The folder of the track a request's ?track= names, as a list (empty when none): what a sandboxed connection
     must be allowed to read for the Table's filter."""
@@ -139,7 +163,7 @@ def convert(src, d):
     accessions); intervals on other names, or without 0 <= start < end, are left out and counted. max_end is the
     largest end of the chromosome's intervals starting at or before each start (ties share it): the Table's filter
     finds the last start before a SNP and compares its max_end. Returns {n, dropped, colours}; raises
-    ValueError('rows' | 'unpacked' | 'empty' | 'read')."""
+    ValueError('rows' | 'unpacked' | 'empty' | 'encoding' | 'read')."""
     release, cap = jobs.release(), int(jobs.setting("SNPPORTAL_MAX_TRACK_ROWS", MAX_ROWS))
     with open(src, "rb") as f:
         gz = f.read(2) == b"\x1f\x8b"
@@ -154,7 +178,8 @@ def convert(src, d):
             compression={lit('gzip' if gz else 'none')})
             WHERE trim(line) <> '' AND NOT regexp_matches(line, '^(#|track\\s|browser\\s)') LIMIT {cap + 2}""")
         alias = release / "alias.parquet"
-        join = f"LEFT JOIN read_parquet({lit(alias)}) a ON a.alias = lower(trim(r.f[1]))" if alias.exists() else ""
+        warned = " AND a.warning IS NULL" if alias.exists() and "warning" in parquet_columns(con, alias) else ""
+        join = f"LEFT JOIN read_parquet({lit(alias)}) a ON a.alias = lower(trim(r.f[1])){warned}" if alias.exists() else ""  # not an older sequence's (HG993277.1)
         chrom = "coalesce(a.chrom, trim(r.f[1]))" if join else "trim(r.f[1])"
         rgb = "regexp_extract(trim(r.f[9]), '^(\\d{1,3}),(\\d{1,3}),(\\d{1,3})$', ['r', 'g', 'b'])"
         con.execute(f"""CREATE TEMP TABLE t AS SELECT r.rowid AS i, {chrom} AS chrom, try_cast(trim(r.f[2]) AS BIGINT) AS start,
@@ -181,8 +206,8 @@ def convert(src, d):
                              FROM kept ORDER BY chrom, start, "end") TO {lit(new)} (FORMAT parquet)""")
     except ValueError:
         raise
-    except Exception:  # DuckDB could not read it (its message may quote the file: withheld)
-        raise ValueError("read") from None
+    except Exception as e:  # DuckDB could not read it (its message may quote the file: withheld)
+        raise ValueError("encoding" if "not utf-8 encoded" in str(e).lower() else "read") from None
     finally:
         con.close()
     os.chmod(new, 0o600)
@@ -216,15 +241,16 @@ def create(upload, name, assembly):
 # ---- the locus browser's group ----
 
 def rows(m, chrom, start, end, shown=None):
-    """A track's intervals overlapping chrom:start-end (BED), at most DRAWN + 1, by start: those in the `shown` window
-    (start, end) first, so the cap is spent where the user looks rather than in the margins drawn for a drag."""
+    """A track's intervals overlapping chrom:start-end (BED), at most DRAWN + 1: those in the `shown` window (start,
+    end) first, an even sample of them when there are more, then the margins' nearest the window first, so the cap is
+    spent where the user looks and next to it. The first DRAWN by start; one more means some were left out."""
     a, b = shown or (start, end)
     con = jobs.connect([m["path"].parent])
     try:
         cur = con.execute(f"""SELECT start, "end", name, score, strand, rgb FROM read_parquet({lit(m['path'])})
                               WHERE chrom = ? AND start < ? AND "end" > ?
-                              ORDER BY ("end" <= ? OR start >= ?), start, "end" LIMIT {DRAWN + 1}""",
-                          [chrom, end, start, a, b])
+                              ORDER BY ("end" <= ? OR start >= ?), greatest(? - "end", start - ?, 0), hash(start, "end")
+                              LIMIT {DRAWN + 1}""", [chrom, end, start, a, b, a, b])
         found = cur.fetchall()
     finally:
         con.close()
@@ -244,11 +270,12 @@ def draw(m, ax, chrom, found, width):
             lanes[len(lanes):] = [0] * (lane + 1 - len(lanes))
         lanes[lane] = max(lanes[lane], e)
         fill = rgb or palette.USER_TRACK
-        tip = " · ".join(x for x in (name, f"{chrom}:{a + 1:,}-{e:,}", f"{strand} strand" if strand else "",
-                                     f"score {score:.10g}" if score is not None else "") if x)
+        score = None if score is None else repr(score).removesuffix(".0")  # every digit the file has
+        tip = " · ".join(x for x in (asis(name, guard) if name else "", f"{chrom}:{a + 1:,}-{e:,}",
+                                     f"{strand} strand" if strand else "", f"score {score}" if score else "") if x)
         edge = f' stroke="{palette.edge(fill)}" stroke-width="0.5"' if palette.edge(fill) else ""
         body.append(f'<rect x="{x0:.1f}" y="{2 + lane * 11}" width="{max(1.5, x1 - x0):.1f}" height="9" fill="{fill}"{edge}>'
-                    f'<title>{asis(tip, guard)}</title></rect>')
+                    f'<title>{tip}</title></rect>')
     h = 4 + 11 * max(1, len(lanes))
     line = f'<line x1="{-width}" x2="{2 * width}" y1="{h - 0.5}" y2="{h - 0.5}" stroke="{palette.GREY[300]}"/>'
     return h, line + "".join(body)

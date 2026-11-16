@@ -219,7 +219,7 @@ class ResultsTest(SimpleTestCase):
         add = lambda content, file="regions_SYNTHETIC.bed", **more: self.client.post(  # noqa: E731
             reverse("snpportal:track_add"), {"file": SimpleUploadedFile(file, content), **more})
         self.assertNotIn('id="g-tracks"', self.client.get(f"{reverse('snpportal:locus')}?r=25:28,980,000-29,010,000").content.decode())
-        for content, name, code in ((bed, "regions.vcf", "file"), (b"hello\n", "x_SYNTHETIC.bed", "empty"), (b"\x00\xff" * 9, "x_SYNTHETIC.bed", "read"),
+        for content, name, code in ((bed, "regions.vcf", "file"), (b"hello\n", "x_SYNTHETIC.bed", "empty"), (b"\x00\xff" * 9, "x_SYNTHETIC.bed", "encoding"),
                                     (b"\x1f\x8b" + b"not gzip" * 9, "x_SYNTHETIC.bed.gz", "read"), (gzip.compress(bed)[:40], "x_SYNTHETIC.bed.gz", "read")):
             self.assertIn(f"error={code}", add(content, name).url, code)
         with override_settings(SNPPORTAL_MAX_TRACK_UNPACKED_MB=len(bed) * 3 / 2 ** 20):  # a small file that unpacks large
@@ -252,6 +252,10 @@ class ResultsTest(SimpleTestCase):
         self.assertNotIn("Mine", other.get(reverse("snpportal:tracks")).content.decode())
         self.assertEqual(other.post(reverse("snpportal:track_change", args=[track]), {"action": "delete"}).status_code, 404)
         inside = self.count("?chrom=25&start=28990000&end=29000000")
+        self.assertEqual(self.count(f"?track={track}"), 0)  # a server: the id works only on jobs its owner filtered with it,
+        other.get(f"{self.url}?tab=table&track={track}")      # so it can't map a track with a list of one's own
+        self.assertEqual(self.count(f"?track={track}"), 0)
+        self.client.get(f"{self.url}?tab=table&track={track}")  # the owner filters this job: from now on its links do
         self.assertEqual(self.count(f"?track={track}"), inside)
         self.assertEqual(self.count(f"?track={track}&tier=1"), self.count("?chrom=25&start=28990000&end=29000000&tier=1"))
         for bad in ("nope", "../../etc"):
@@ -260,6 +264,8 @@ class ResultsTest(SimpleTestCase):
         table = self.client.get(f"{self.url}?tab=table&track={track}").content.decode()
         self.assertIn("Inside my track: Mine", table)
         self.assertIn(f'<option value="{track}" selected>Mine</option>', table)
+        self.assertIn(f'value="{track}" selected>Mine</option>', other.get(f"{self.url}?tab=table&track={track}").content.decode())  # a shared link
+        self.assertNotIn(track, self.client.get(f"{reverse('snpportal:report', args=[self.key])}?track={track}").content.decode().split("Filters:")[1][:200])
         self.assertNotIn("Inside my track", self.client.get(f"{self.url}?tab=overview&track={track}").content.decode())  # the Table only
         self.assertEqual(json.loads((self.d / "summary.json").read_text()), self.summary)  # no tier or count changed
         tsv = self.client.get(f"{reverse('snpportal:download', args=[self.key])}?track={track}")
@@ -271,6 +277,12 @@ class ResultsTest(SimpleTestCase):
         self.assertIsNone(mytracks.folder(track))
         self.assertEqual(self.count(f"?track={track}"), 0)  # a deleted track: no SNP, rather than every SNP
         self.assertIn("Inside my track: no longer available", self.client.get(f"{self.url}?tab=table&track={track}").content.decode())
+        with override_settings(SNPPORTAL_LOCAL=True, SNPPORTAL_MYTRACKS_DIR=str(Path(self.tmp.name) / "mytracks")):  # a local install
+            local = add(bed, name="Here").url.split("added=")[1]
+            self.assertIn("Here", self.client_class().get(reverse("snpportal:tracks")).content.decode())  # every track, no cookie
+            self.assertEqual(self.count(f"?track={local}"), inside)  # on any job of its assembly
+            self.client.post(reverse("snpportal:track_change", args=[local]), {"action": "delete"})
+            self.assertEqual(list((Path(self.tmp.name) / "mytracks").iterdir()), [])
         with mock.patch.object(jobs, "wording", return_value=[(re.compile(r"\bssa(?=\d)"), "omy")]):  # a trout page
             self.assertEqual(html.unescape(mytracks.asis("ssa25 & <x>")), "ssa25 & <x>")
             self.assertNotIn("ssa", mytracks.asis("ssa25"))

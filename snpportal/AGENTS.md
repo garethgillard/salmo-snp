@@ -74,7 +74,8 @@ unpacked for a gzipped file (`SNPPORTAL_MAX_TRACK_UNPACKED_MB`), 20 tracks a use
 - Uploaded files are deleted right after scoring; results are deleted on 'Delete now', and on a server after
   `SNPPORTAL_KEEP_HOURS` (24 h). Locally (`SNPPORTAL_LOCAL`) nothing expires.
 - A user's own BED tracks (mytracks.py) follow the same rules: the upload is deleted once converted, a track is
-  private to the browser that added it on a server and expires with the results, and its names are never logged.
+  private to the browser that added it on a server (a signed cookie), filters only the results its owner used it on,
+  expires with the results, and its names are never logged.
 - Job folders 0700, files 0600. Never log SNP contents or file names (log `job_ref`, counts, timings).
 - Never put breeder data in tests or fixtures. Synthetic files have SYNTHETIC in the name and are labelled in the UI.
 
