@@ -70,7 +70,9 @@ DuckDB and gunicorn they allow; every deploy upgrades them) in a venv, Caddy for
 renewed by Caddy; a `<ip-with-dashes>.sslip.io` name works too) and systemd units for the app (`snpportal`) and an
 hourly `snpportal_cleanup`. Rerun it for a new release or new web names: results and the secret key are kept. The
 snpsite project serves the demo with `DJANGO_DEBUG=0` and the settings in `/srv/snpportal/env`; `SNPSCORE_GENOME`
-points snpscore at the VM's genome copy. Logs: `journalctl -u snpportal`.
+points snpscore at the VM's genome copy. Logs: `journalctl -u snpportal`. salmo-cells' demo shares the VM
+(https://158-39-75-9.sslip.io/cells/; its own `cellportal/deploy/nrec.sh` installs it): when `/etc/caddy/salmo-cells.caddy`
+exists, each site this script writes imports it, so a rerun keeps the `/cells/` routes.
 
 ### Deploying the demo
 
