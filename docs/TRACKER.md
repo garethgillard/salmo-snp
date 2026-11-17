@@ -5,15 +5,16 @@ sections after it record what was built (ticked when built and tested), and thei
 Specs: [ROADMAP.md](ROADMAP.md). Questions only G can answer: [DECISIONS.md](DECISIONS.md) (ask, don't decide).
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
-## Where things stand (2026-11-14)
+## Where things stand (2026-11-16)
 - Phase: feature work on the local install, the main product (AGENTS.md plan 4, G 2026-11-03); the live site moves
   to salmobase later. Two species since 2026-11-14: Atlantic salmon (the default) and rainbow trout (AGENTS.md Plan 7;
   the section below), finished and accepted by G; the next work is Push 3 (Next).
-- main is green on GitHub (tests, user-install). The NREC demo https://test.salmobase.org/snp/ (= https://158.39.75.9/snp/)
-  runs what G last had deployed (the manual `deploy` workflow since 2026-11-06; merges no longer deploy; cloud sessions
-  use https://158-39-75-9.sslip.io/snp/: the bare IP didn't connect through their proxy). Since 2026-11-14 that is
-  c6d2e0c (PRs #14-#17), with release 2026-11-05 and, in /srv/snpportal/releases/, trout-2026-11-13 with its pool
-  (built and sent by the `species-data` workflow, 2026-11-14). On 2026-11-08 the VM had hung (Active in NREC, nothing
+- main is green on GitHub (tests, user-install). The NREC demo https://158.39.75.9/snp/ (test.salmobase.org/snp/
+  redirected there from 2026-11-10 but answers 404 since 2026-11-16) runs what G last had deployed (the manual
+  `deploy` workflow since 2026-11-06; merges no longer deploy; cloud sessions use https://158-39-75-9.sslip.io/snp/:
+  the bare IP didn't connect through their proxy). Since 2026-11-16 that is 70506bc (PRs #18 and #21: the Locus
+  browser moves and zooms with the mouse; the user's own BED tracks), with release 2026-11-05 and, in
+  /srv/snpportal/releases/, trout-2026-11-13 with its pool (built and sent by the `species-data` workflow, 2026-11-14). On 2026-11-08 the VM had hung (Active in NREC, nothing
   answering on 22 or 443) until G hard-rebooted it; the cause is unknown (its console log would say): with 2 GB RAM
   and 1 vCPU, a 4 GB flavor is the fix if it hangs again.
 - The data for real use: the GitHub Releases data-2026-11-05 (`bash tools/get_data.sh`) and data-trout-2026-11-13
