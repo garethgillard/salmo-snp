@@ -117,10 +117,14 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 EOF
+# salmo-cells' demo shares this VM (G, 2026-11-17): its /cells/ routes, which its cellportal/deploy/nrec.sh writes to
+# /etc/caddy/salmo-cells.caddy, stay imported into every site when this script rewrites the Caddyfile
+cells=""
+[ -f /etc/caddy/salmo-cells.caddy ] && cells=$'\timport /etc/caddy/salmo-cells.caddy\n'
 for name in $NAMES; do  # one site per name; an IPv4 address gets Let's Encrypt's short-lived IP certificate
   tls=""
   [[ $name =~ ^[0-9.]+$ ]] && tls=$'\ttls {\n\t\tissuer acme {\n\t\t\tprofile shortlived\n\t\t}\n\t}\n'
-  printf '%s {\n%s\tencode gzip\n\tredir / /snp/\n\thandle_path /static/* {\n\t\troot * /srv/snpportal/static\n\t\tfile_server\n\t}\n\treverse_proxy 127.0.0.1:8000\n}\n\n' "$name" "$tls"
+  printf '%s {\n%s%s\tencode gzip\n\tredir / /snp/\n\thandle_path /static/* {\n\t\troot * /srv/snpportal/static\n\t\tfile_server\n\t}\n\treverse_proxy 127.0.0.1:8000\n}\n\n' "$name" "$cells" "$tls"
 done | sudo tee /etc/caddy/Caddyfile >/dev/null
 sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 sudo chmod 755 /srv/snpportal /srv/snpportal/static  # Caddy reads the static files; results stay 0700
