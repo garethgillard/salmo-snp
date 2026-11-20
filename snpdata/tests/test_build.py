@@ -128,6 +128,20 @@ def test_parse_trackdb():
         "ChromHMM_Brain_Immature_Female", "BodyMap", "bigBed", "chromatin_Brain_Immature_Female")
     assert (blast["tissue"], blast["stage"]) == ("Embryo", "LateBlastulation")
     assert blast["url"] == "https://salmobase.org/datafiles/datasets/Aqua-Faang/" + CHROMHMM.split()[1]
+    # the ImmunoMap (2026): head kidney after immune stimulation; the condition names the treatment, R is the fish
+    imm, = trackhub.parse_trackdb("track a\ntype bigWig\nbigDataUrl ATAC/bigWig/AtlanticSalmon_ATAC_HeadKidney_invivo_polyIC"
+                                  "_R4.mLb.clN.bigWig\n", trackhub.HUB + "ImmunoMap/", "ImmunoMap")
+    assert (imm["id"], imm["tissue"], imm["maturity"], imm["sex"], imm["condition"], imm["chromatin_condition"]) == (
+        "ATAC_HeadKidney_invivo_polyIC_R4", "HeadKidney", None, None, "HeadKidney_invivo_polyIC", None)
+    gill, hk = trackhub.parse_bigbeds("chromatin_states/AtlanticSalmon/BodyMap/AtlanticSalmon_Gill_Mature_Male.bb\n"
+                                      "chromatin_states/AtlanticSalmon/ImmunoMap/AtlanticSalmon_HeadKidney_invivo_pbs.bb",
+                                      "https://salmobase.org/x/", with_states={"Brain_Immature_Female"})
+    assert (gill["chromatin_condition"], hk["source"], hk["tissue"]) == (None, "ImmunoMap", "HeadKidney")
+    # added(): what a release's registry lacks, for the portal's tracks_added.yaml
+    new = {"generated": "2026-11-20", "hub": trackhub.HUB, "tracks": [imm], "chromhmm": [brain, gill], "peaks": []}
+    extra = trackhub.added(new, {"generated": "2026-10-08", "tracks": [], "chromhmm": [brain]})
+    assert [t["id"] for k in ("tracks", "chromhmm", "peaks") for t in extra[k]] == [imm["id"], gill["id"]]
+    assert (extra["since"], extra["hosts"]) == ("2026-10-08", ["salmobase.org"])
 
 
 def test_ncbi_transcripts(release):

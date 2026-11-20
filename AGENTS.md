@@ -146,6 +146,11 @@ Decided:
 - Rainbow trout chromosome Y is kept (G, 2026-11-14): scored, shown and in the ideogram (sdY and 3,928 AQUA-FAANG
   peaks are on it).
 
+- New AQUA-FAANG salmon data (G, 2026-11-20: "integrated into the app now as new tracks to see"): the gill ATAC-seq
+  re-made in 2026 (gill states and peaks) and the ImmunoMap (head kidney after PBS, poly I:C or Vibrio) are Locus
+  browser tracks, never scored. The tiers keep the 21 conditions of the unified peaks v1 (layers.yaml pins
+  archive/v1/; salmobase's current file is v3). Claude's display choices and the scoring question: DECISIONS #47-#48.
+
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.
   Not counted: repressed polycomb, quiescent, ZNF genes and repeats, Unknown_1.
@@ -214,7 +219,8 @@ Open (ask G; all collected with options and recommendations in docs/DECISIONS.md
   redistribution agreed, G 2026-11-10): which significance rule (paper: eigenMT BF < 0.1), which allele does pi refer to?
 - Public AF: the 504-fish panel is mostly Bertolotti 2020 (PRJEB38061) wild/farmed fish plus the 12 AQUA-FAANG fish (hosting
   derived AF agreed, G 2026-11-10): how should the population be described? (docs/RESEARCH.md section 4)
-- ImmunoMap regions; Enhancer-CNE source; vetting of the 40-row known-loci catalogue (docs/RESEARCH.md section 2).
+- Scoring the gill and ImmunoMap conditions (unified peaks v3; DECISIONS #47); Enhancer-CNE source; vetting of the
+  40-row known-loci catalogue (docs/RESEARCH.md section 2).
 - Data gap: the public 12-fish VCF (pool, demo list, synthetic GWAS) has only 70 sites on chr10 and stops near 105 Mb on chr1,
   while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
 - Assay QC: flank repeat shares are mostly 0 or 1, so ~55% of public SNPs warn on 'repeat' whatever the cut-off; should fully

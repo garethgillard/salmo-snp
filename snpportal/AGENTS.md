@@ -21,6 +21,9 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   session `dockerd &` starts Docker; build with `--secret id=ca,src=/root/.ccr/ca-bundle.crt` and the proxy as build
   args (HTTPS_PROXY), so pip trusts the session's proxy.
 - Health: `/snp/health/` (JSON, no content) and a Django system check (`manage.py check`: the release re-hashed).
+- Tracks AQUA-FAANG publishes after a release (2026: salmon gill ATAC-seq, the ImmunoMap) go live with a deploy:
+  `snpdata tracks --added-since <release>/tracks.yaml` (in ../snpdata) regenerates tracks.yaml and writes
+  `snpportal/lib/tracks_added.yaml`, which lib/tracks.load_tracks adds to a release registry of the same hub.
 
 ## Species
 - A release is for one species (manifest `species`). `jobs.species_releases()` gives one release per species: the

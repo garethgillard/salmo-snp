@@ -47,6 +47,15 @@
     <details id="states"><summary>What do tiers, evidence terms and chromatin colours mean?</summary>
       <p class="sp-small"><a href="{% url 'snpportal:methods' %}">Methods</a> defines the tiers, the evidence weights, the
         chromatin states with their colours, and a glossary.</p></details>
+    <details id="aquafaang-tracks"><summary>Which AQUA-FAANG data does the Locus browser show?</summary>
+      <p class="sp-small">Signal (RNA-seq, ATAC-seq and ChIP-seq, the mean of each condition's replicates), chromatin states
+        and robust ATAC peaks, read from salmobase for the region on screen: the BodyMap tissues and DevMap embryo stages
+        (the 21 conditions the tiers count) and, for Atlantic salmon, the data added in November 2026, shown but not
+        scored: gill ATAC-seq re-made in 2026 (weaker than the other tissues; gill states from their own model) and the
+        ImmunoMap, head kidney after PBS, poly I:C or Vibrio ('HK' rows: in vivo, six fish each; 'HK cells': leukocytes
+        in vitro, RNA-seq only; states from its own six-state model, whose three combined labels have their own colours;
+        Naseer et al. 2025, <a href="https://doi.org/10.1101/gr.280579.125" rel="noreferrer">Genome Research</a>).
+        Hover a row's name for its details.</p></details>
   </section>
 
   <section class="sp-card sp-faq" id="formats"><h2>Input formats</h2>

@@ -266,7 +266,11 @@ Locus browser groups, top to bottom: Genes and variants (your SNPs, published lo
 panel, its 12 AQUA-FAANG fish, the Synchrosmolt parents; colours in `palette.SNP_SETS`), TF motifs (public SNPs in
 robust peaks that change a motif match: ticks, the two largest changes enlarged in wedges below them, and from 150 bp
 every changed motif's logo over the reference sequence; windows go down to 60 bp), Regulatory elements, Chromatin
-states, Functional assays and Other annotation.
+states, Functional assays and Other annotation. The AQUA-FAANG rows come from the release's tracks.yaml plus
+`snpportal/lib/tracks_added.yaml`: tracks published after the release (salmon gill ATAC-seq of 2026, gill states and
+peaks, the ImmunoMap), added to a registry of the same hub that lacks them (`snpdata tracks --added-since
+<release>/tracks.yaml` writes it); `lib/tracks.UNUSED` leaves out the libraries the AQUA-FAANG README says weren't used.
+They are shown, never scored: the Combined peak row and the tiers count the release's 21 conditions (DECISIONS #47-#48).
 
 Public data on the pages (R1, R3-R8 of docs/ROADMAP.md 'Push 2'):
 - Public allele frequencies are the 504-fish reference panel's (`public_af_af`, `_maf`, `_ac`, `_an`, `_ns`); the 12

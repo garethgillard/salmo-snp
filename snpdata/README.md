@@ -13,6 +13,7 @@ snpdata fetch                                    # download public inputs into d
 bash prep/make_demo.sh                           # portal demo inputs before build: public_50k, SYNTHETIC chip and GWAS (~20 s)
 snpdata build --out release/2026-11-03           # standardise every layer in layers.yaml (versions are dates)
 snpdata tracks                                   # regenerate tracks.yaml from the AQUA-FAANG trackhub (rarely needed)
+snpdata tracks --added-since <release>/tracks.yaml  # also: the tracks that release lacks, for the portal (lib/tracks_added.yaml)
 python prep/make_synthetic.py chip --scale fixture  # SYNTHETIC demo chip for the tests (tests/fixture/synthetic)
 python -m pytest -q                              # tests run on the small regions in tests/fixture
 ```

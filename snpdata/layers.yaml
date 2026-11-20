@@ -114,7 +114,9 @@ layers:
     type: interval
     format: aquafaang_peaks
     file: AtlanticSalmon_unified_peaks.bed
-    url: https://salmobase.org/datafiles/datasets/Aqua-Faang/robust_ATAC_peaks/unified_annotated_peaks/AtlanticSalmon_unified_peaks.bed
+    # v1, the published 21 conditions: salmobase's current file is v3 (2026-11-18, adds gill and the ImmunoMap; the
+    # locus browser shows those; scoring them is G's call, docs/DECISIONS.md #47). v1 is the file 2026-11-05 was built from.
+    url: https://salmobase.org/datafiles/datasets/Aqua-Faang/robust_ATAC_peaks/unified_annotated_peaks/archive/v1/AtlanticSalmon_unified_peaks.bed
     id: true
     description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 21 conditions (empty = no peak there)
     citation: AQUA-FAANG consortium, Atlantic salmon unified ATAC peaks and ChromHMM states (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
