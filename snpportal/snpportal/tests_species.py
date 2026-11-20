@@ -70,5 +70,5 @@ class SpeciesTest(SimpleTestCase):
         data = self.page("snpportal:about_data")
         self.assertIn("AQUA-FAANG rainbow trout BodyMap", data)
         self.assertIn("PRJEB109732", data)
-        self.assertNotIn("504", data)
+        self.assertNotRegex(data, r"\b504\b")  # salmon's 504-fish panel (not a hash that happens to contain 504)
         self.assertEqual(self.client.get(reverse("snpportal:releases")).status_code, 404)  # the Releases page is a local install's

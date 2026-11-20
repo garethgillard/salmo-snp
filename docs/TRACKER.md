@@ -50,7 +50,9 @@ Built on the session branch, for G to inspect before anything is deployed (AGENT
 ## Next
 Built outside Push 3 (G, 2026-11-14 and -15): the Locus browser moves and zooms with the mouse, with a margin and a
 marker line that pins to a base (PR #18); the user's own BED tracks in the Locus browser and as a Table filter,
-never scored (mytracks.py).
+never scored (mytracks.py). New AQUA-FAANG data (G, 2026-11-20): the salmon gill ATAC-seq of 2026 and the ImmunoMap
+(head kidney after immune stimulation) as Locus browser tracks, shown from snpportal's `lib/tracks_added.yaml` without
+a new release (`snpdata tracks --added-since`); scoring them is DECISIONS #47.
 
 Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged: I1-I5, I7-I12, I15,
 I17, I18 (PR #2, 2026-11-05); mixed purposes (I8), Primer3 and Agena files (I14), the ICSASG_v2 conversion (I19), the
@@ -96,7 +98,8 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
 - [ ] Enhancer-CNEs
 - [ ] Ohnolog pairs and element duplication class (shared / alignable-only / exclusive)
 - [x] molQTL from the public nf-RASQUAL lead-SNP tables (Push 2 R4, weight 0)
-- [ ] ImmunoMap response regions (source needed from G)
+- [x] ImmunoMap (salmobase, 2026-11-18) and the re-made gill ATAC-seq: Locus browser tracks, not scored (2026-11-20)
+- [ ] Score gill and the ImmunoMap (unified peaks v3, DECISIONS #47): a new release once G decides
 - [x] TF motif disruption (JASPAR 2024, G's rule of 2026-10-19: 'More public data' below)
 - [ ] DeepFARM scores (agree redistribution first): now I16 (G retrains it)
 - [x] Assay axis, part 1: variants within 35 bp (public 12-fish VCF), A/T-C/G flag

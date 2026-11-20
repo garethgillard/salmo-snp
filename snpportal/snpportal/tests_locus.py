@@ -140,6 +140,19 @@ class LocusTest(SimpleTestCase):
         self.assertIn('class="sp-grp open" id="g-ATAC"', self.get(url + "&open=ATAC"))
         self.assertEqual(self.client.get(f"{reverse('snpportal:locus_assay')}?{VGLL3}&assay=nope").status_code, 400)
 
+    def test_new_aquafaang_rows(self):
+        """The ImmunoMap and the 2026 gill rows: short labels, details on hover, head kidney order, and the ImmunoMap's
+        combined state with a '/' in its name gets a valid CSS class."""
+        from . import browser
+        im = ["HeadKidney_invitro_pbs", "HeadKidney_invivo_vibrio", "HeadKidney_invivo_pbs", "HeadKidney_Mature_Male", "Gill_Mature_Male"]
+        self.assertEqual([browser.short(c) for c in sorted(im, key=browser.order)],
+                         ["Gill Mat M", "Head kidney Mat M", "HK PBS", "HK Vibrio", "HK cells PBS"])
+        self.assertEqual(browser.long("HeadKidney_invivo_pbs", "ATAC"), "ImmunoMap: head kidney in vivo, PBS (control)")
+        self.assertIn("re-made in 2026", browser.long("Gill_Mature_Male", "states"))
+        self.assertEqual(browser.long("Gill_Mature_Male", "H3K27ac"), "")  # the gill ChIP-seq wasn't re-made
+        self.assertIn("H3K4me1", browser.long("Gill_Immature_Female", "states"))
+        self.assertIn(r".st-Bivalent_or_mixed_active\/polycomb{background:", palette.css())
+
     def test_fragment_download_and_moves(self):
         url = f"{reverse('snpportal:locus_svg')}?{VGLL3}"
         fragment = self.get(url, HTTP_HX_REQUEST="true", HTTP_HX_TARGET="locus-view")

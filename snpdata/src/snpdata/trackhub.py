@@ -1,6 +1,8 @@
-"""Signal track registry: the AQUA-FAANG trackhub bigWigs (BodyMap and DevMap trackDb.txt) and the per-condition
-ChromHMM and robust ATAC peak bigBeds, written as tracks.yaml. Regenerate it with `snpdata tracks` (needs the
-network); `snpdata build` copies it into the release, and the portal reads release/<v>/tracks.yaml."""
+"""Signal track registry: the AQUA-FAANG trackhub bigWigs (BodyMap, DevMap and, for salmon, ImmunoMap trackDb.txt) and
+the per-condition ChromHMM and robust ATAC peak bigBeds, written as tracks.yaml. Regenerate it with `snpdata tracks`
+(needs the network); `snpdata build` copies it into the release, and the portal reads release/<v>/tracks.yaml.
+`--added-since <a release's tracks.yaml>` also writes the entries that release lacks (the portal's tracks_added.yaml),
+so tracks AQUA-FAANG publishes later are shown without a new release."""
 from __future__ import annotations
 
 import argparse
@@ -17,9 +19,13 @@ from snpscore.score import CHROMATIN_CONDITIONS
 HUB = "https://salmobase.org/datafiles/datasets/Aqua-Faang/trackhub/AtlanticSalmon/"
 SOURCES = ("BodyMap", "DevMap")
 # Per species (the hub's folder name, which also starts every file name): the ChromHMM and robust ATAC peak file lists,
-# relative to the hub (their paths are relative to their parent), and the default rows of the 'all' preset.
+# relative to the hub (their paths are relative to their parent), the trackDb folders (sources), the conditions with a
+# chromatin_<condition> column in the release ('scored'; default: every ChromHMM condition) and the default rows of the
+# 'all' preset. Salmon's gill (2026) and ImmunoMap states are shown, not scored: the release's chromatin layer is the
+# 21-condition unified peaks v1 (layers.yaml).
 SPECIES = {
-    "AtlanticSalmon": {"chromhmm": "../../chromatin_states/chromhmm_salmon_files.txt", "peaks": "../../robust_ATAC_peaks/salmon_files.txt"},
+    "AtlanticSalmon": {"chromhmm": "../../chromatin_states/chromhmm_salmon_files.txt", "peaks": "../../robust_ATAC_peaks/salmon_files.txt",
+                       "sources": ("BodyMap", "DevMap", "ImmunoMap"), "scored": CHROMATIN_CONDITIONS},
     "RainbowTrout": {"chromhmm": "../../chromatin_states/chromhmm_trout_files.txt", "peaks": "../../robust_ATAC_peaks/trout_files.txt",
                      "all": ["Brain_Immature_Female", "Gill_Immature_Female", "Gonad_Immature_Female", "Liver_Immature_Female",
                              "Muscle_Immature_Female", "LateBlastulation"]},
@@ -30,17 +36,22 @@ DEFAULTS = {  # PROVISIONAL (G to confirm): the signal rows a view shows before 
     "replicate": "R1",
     "max_rows": 8,
     # preset -> condition prefixes. Presets not listed here use their weights.yaml prefixes (see default_tracks).
-    # 'all' = the first condition of each tissue in trackDb order (Gill gives ChIP rows only: see DISCARDED).
+    # 'all' = the first condition of each tissue in trackDb order (Gill gives ChIP rows only: its ATAC R1 is unused,
+    # snpportal lib/tracks.UNUSED).
     "presets": {"all": ["Brain_Immature_Female", "Gill_Immature_Female", "Gonad_Immature_Female", "Liver_Immature_Female",
                         "Muscle_Immature_Female", "LateBlastulation"]},
 }
 
 
 
-def _condition(cond, with_states=CHROMATIN_CONDITIONS):
-    """Fields of a file-name condition: [tissue, maturity, sex] (BodyMap) or [stage] (DevMap). `with_states`: the
-    conditions that have ChromHMM states (a chromatin_<condition> column in the release)."""
-    tissue, maturity, sex, stage = cond + [None] if len(cond) == 3 else ["Embryo", None, None, cond[0]]
+def _condition(cond, with_states=CHROMATIN_CONDITIONS, source=None):
+    """Fields of a file-name condition: [tissue, maturity, sex] (BodyMap), [stage] (DevMap) or [HeadKidney,
+    invivo|invitro, treatment] (ImmunoMap: the condition names the treatment). `with_states`: the conditions with a
+    chromatin_<condition> column in the release."""
+    if source == "ImmunoMap":
+        tissue, maturity, sex, stage = cond[0], None, None, None
+    else:
+        tissue, maturity, sex, stage = cond + [None] if len(cond) == 3 else ["Embryo", None, None, cond[0]]
     condition = "_".join(cond)
     return {"tissue": tissue, "sex": sex, "maturity": maturity, "stage": stage, "condition": condition,
             "chromatin_condition": f"chromatin_{condition}" if condition in with_states else None}
@@ -48,8 +59,9 @@ def _condition(cond, with_states=CHROMATIN_CONDITIONS):
 
 def parse_trackdb(text, base, source, species="AtlanticSalmon", with_states=CHROMATIN_CONDITIONS):
     """bigWig tracks of one trackDb.txt; bigDataUrl paths are relative to `base` (the trackDb folder).
-    File names look like AtlanticSalmon_<assay>_<tissue>_<maturity>_<sex>_R1[.forward].bigWig (BodyMap)
-    or AtlanticSalmon_<assay>_<stage>_R1....bigWig (DevMap)."""
+    File names look like AtlanticSalmon_<assay>_<tissue>_<maturity>_<sex>_R1[.forward].bigWig (BodyMap),
+    AtlanticSalmon_<assay>_<stage>_R1....bigWig (DevMap) or AtlanticSalmon_<assay>_HeadKidney_invivo_pbs_R1....bigWig
+    (ImmunoMap: R is the fish)."""
     tracks = []
     for stanza in re.split(r"\n\s*\n", text):
         f = dict((line.strip().split(" ", 1) + [""])[:2] for line in stanza.splitlines() if line.strip() and not line.startswith("#"))
@@ -62,7 +74,7 @@ def parse_trackdb(text, base, source, species="AtlanticSalmon", with_states=CHRO
             raise ValueError(f"unexpected trackhub file name {name}")
         assay = assay.replace("ChIP-", "").replace("input", "Input")
         strand = "+" if "forward" in ext else "-" if "reverse" in ext else None  # nf-core/rnaseq .forward/.reverse
-        fields = _condition(cond, with_states)
+        fields = _condition(cond, with_states, source)
         tracks.append({
             "id": "_".join([assay, fields["condition"], rep] + (["forward" if strand == "+" else "reverse"] if strand else [])),
             "source": source, "assay": assay, **fields,
@@ -71,11 +83,12 @@ def parse_trackdb(text, base, source, species="AtlanticSalmon", with_states=CHRO
     return tracks
 
 
-def parse_bigbeds(text, base, assay="ChromHMM", species="AtlanticSalmon"):
+def parse_bigbeds(text, base, assay="ChromHMM", species="AtlanticSalmon", with_states=None):
     """One bigBed per condition from a salmobase file list, paths relative to `base`: ChromHMM segmentations
     (chromhmm_salmon_files.txt: chromatin_states/AtlanticSalmon/<BodyMap|DevMap>/AtlanticSalmon_<condition>.bb) or,
     with assay 'Peaks', the robust ATAC peaks (robust_ATAC_peaks/salmon_files.txt: .../AtlanticSalmon_ATAC_<condition>.bb).
-    Either way the bigBed name field is the ChromHMM state (e.g. 'Accessible chromatin'), read by locus.segments()."""
+    Either way the bigBed name field is the ChromHMM state (e.g. 'Accessible chromatin'), read by locus.segments().
+    `with_states` as for parse_trackdb (None: every condition)."""
     prefix = f"{species}_ATAC_" if assay == "Peaks" else f"{species}_"
     out = []
     for line in text.split():
@@ -83,25 +96,27 @@ def parse_bigbeds(text, base, assay="ChromHMM", species="AtlanticSalmon"):
         cond = name[len(prefix):-len(".bb")].split("_")
         if not (name.startswith(prefix) and name.endswith(".bb") and len(cond) in (1, 3)):
             raise ValueError(f"unexpected {assay} file name {name}")
-        fields = _condition(cond, ["_".join(cond)])  # a ChromHMM or peak file: the condition has states
+        fields = _condition(cond, ["_".join(cond)] if with_states is None else with_states, source)
         out.append({"id": f"{assay}_{fields['condition']}", "source": source, "assay": assay, **fields,
                     "replicate": None, "strand": None, "kind": "bigBed", "url": urljoin(base, line)})
     return out
 
 
 def from_trackhub(hub=HUB, defaults=None):
-    """The tracks.yaml content, read from the trackhub's BodyMap and DevMap trackDb.txt and the ChromHMM and robust
-    ATAC peak file lists."""
+    """The tracks.yaml content, read from the trackhub's trackDb.txt files and the ChromHMM and robust ATAC peak file
+    lists."""
     hub = hub.rstrip("/") + "/"
     species = hub.rstrip("/").rsplit("/", 1)[-1]  # AtlanticSalmon, RainbowTrout
     lists = SPECIES[species]
-    beds = {}
-    for key, assay in (("chromhmm", "ChromHMM"), ("peaks", "Peaks")):
-        listing = urljoin(hub, lists[key])
-        beds[key] = parse_bigbeds(bbi.read_all(listing).decode(), urljoin(listing, "../"), assay, species)
-    with_states = {t["condition"] for t in beds["chromhmm"]}  # the release's chromatin_<condition> columns
+    listed = {key: urljoin(hub, lists[key]) for key in ("chromhmm", "peaks")}
+    texts = {key: bbi.read_all(url).decode() for key, url in listed.items()}
+    hmm = parse_bigbeds(texts["chromhmm"], urljoin(listed["chromhmm"], "../"))  # its conditions, for 'scored'
+    scored = set(lists.get("scored") or (t["condition"] for t in hmm))  # the release's chromatin_<condition> columns
+    with_states = {t["condition"] for t in hmm} & scored
+    beds = {key: parse_bigbeds(texts[key], urljoin(listed[key], "../"), assay, species, with_states)
+            for key, assay in (("chromhmm", "ChromHMM"), ("peaks", "Peaks"))}
     tracks = []
-    for source in SOURCES:
+    for source in lists.get("sources", SOURCES):
         base = f"{hub}{source}/"
         tracks += parse_trackdb(bbi.read_all(base + "trackDb.txt").decode(), base, source, species, with_states)
     if not defaults and lists.get("all"):
@@ -115,9 +130,18 @@ def from_trackhub(hub=HUB, defaults=None):
             "tracks": tracks, **beds}
 
 
-def write_tracks(cfg, path):
-    head = ("# Signal track registry, generated by `snpdata tracks` from the AQUA-FAANG trackhub; do not edit tracks\n"
-            "# by hand. `defaults` is PROVISIONAL (G to confirm) and is kept when the file is regenerated.\n")
+def added(cfg, old):
+    """The entries of registry `cfg` whose ids registry `old` (a release's tracks.yaml) lacks, for the portal to add to
+    that release's registry (snpportal lib/tracks_added.yaml): the same hub, hosts and lists, without `defaults`."""
+    have = {t["id"] for key in ("tracks", "chromhmm", "peaks") for t in old.get(key, [])}
+    new = {key: [t for t in cfg[key] if t["id"] not in have] for key in ("tracks", "chromhmm", "peaks")}
+    return {"version": 1, "generated": cfg["generated"], "hub": cfg["hub"], "since": old.get("generated"),
+            "hosts": sorted({urlsplit(t["url"]).hostname for v in new.values() for t in v}), **new}
+
+
+def write_tracks(cfg, path, head=None):
+    head = head or ("# Signal track registry, generated by `snpdata tracks` from the AQUA-FAANG trackhub; do not edit tracks\n"
+                    "# by hand. `defaults` is PROVISIONAL (G to confirm) and is kept when the file is regenerated.\n")
     Path(path).write_text(head + yaml.safe_dump(cfg, sort_keys=False, default_flow_style=None, width=4096))
 
 
@@ -125,10 +149,19 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="snpdata tracks", description="Regenerate tracks.yaml from the AQUA-FAANG trackhub")
     p.add_argument("-o", "--out", default=str(DEFAULT), help="default: tracks.yaml (run it next to layers.yaml)")
     p.add_argument("--hub", default=HUB, help="the species' trackhub folder (.../trackhub/RainbowTrout/ for rainbow trout)")
+    p.add_argument("--added-since", metavar="TRACKS_YAML", help="a release's tracks.yaml: also write the entries it lacks "
+                   "to --added-out, the portal's ../snpportal/snpportal/lib/tracks_added.yaml")
+    p.add_argument("--added-out", default="../snpportal/snpportal/lib/tracks_added.yaml")
     args = p.parse_args(argv)
     old = (yaml.safe_load(Path(args.out).read_text()) or {}) if Path(args.out).exists() else {}
     cfg = from_trackhub(args.hub, old.get("defaults"))
     write_tracks(cfg, args.out)
+    if args.added_since:
+        extra = added(cfg, yaml.safe_load(Path(args.added_since).read_text()) or {})
+        write_tracks(extra, args.added_out, "# AQUA-FAANG tracks published after a release's registry was made, written by `snpdata tracks\n"
+                     "# --added-since`: the portal adds them to a release whose tracks.yaml has the same hub and lacks them.\n")
+        print(f"{args.added_out}: " + ", ".join(f"{len(extra[k])} {k}" for k in ("tracks", "chromhmm", "peaks"))
+              + f" added since the registry of {extra['since']}")
     counts = {}
     for t in cfg["tracks"]:
         counts[(t["source"], t["assay"])] = counts.get((t["source"], t["assay"]), 0) + 1
