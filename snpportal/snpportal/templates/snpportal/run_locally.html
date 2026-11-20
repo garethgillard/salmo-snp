@@ -29,7 +29,7 @@ salmo-snp download --from site</pre>{% endif %}</li>
   <h2>From the command line</h2>
   <ol class="sp-small mb-0">
     <li class="mb-2">Score a list (VCF, SNP table, PLINK .bim/.map or chip manifest) against a release folder
-      (<code>salmo-snp info</code> prints it), tiers for all 21 conditions as in the portal:
+      (<code>salmo-snp info</code> prints it), tiers for all 27 conditions as in the portal:
       <pre class="sp-mono mb-0">{{ command }}</pre>
       Add <code>--threads 4 --memory 4GB</code> to change DuckDB's limits, or <code>-o my_snps.parquet</code> for Parquet.
       Next to the output come <code>.validation.json</code> (the upload QC) and <code>.rejects.tsv</code> (rows not annotated).</li>

@@ -180,7 +180,23 @@ def _genes(release, rows, chrom, genes, all_transcripts):
 ISOFORMS = {"ensembl": ("transcripts.parquet", "Ensembl 116"), "ncbi": ("transcripts_ncbi.parquet", "NCBI RefSeq RS_2025_05")}
 
 
-def isoforms(release_dir, chrom, start, end, genes=()):
+def ncbi_genes(release_dir, chrom, start, end):
+    """One transcript per NCBI RefSeq gene overlapping the window, drawn like the Ensembl genes lane (RefSeq marks no
+    canonical transcript here, so the one with the most CDS bases, then the longest); None when the release lacks the
+    NCBI table."""
+    models = isoforms(release_dir, chrom, start, end, only="ncbi").get("ncbi")
+    if models is None:
+        return None
+    best = {}
+    for m in models:
+        parts = m["transcripts"][0]["parts"]
+        key = (sum(p["end"] - p["start"] for p in parts if p["part"] == "CDS"), m["end"] - m["start"])
+        if m["id"] not in best or key > best[m["id"]][0]:
+            best[m["id"]] = (key, {**m, "label": m["name"] or m["id"]})
+    return sorted((g for _, g in best.values()), key=lambda g: g["start"])
+
+
+def isoforms(release_dir, chrom, start, end, genes=(), only=None):
     """Every transcript overlapping the window, each as its own gene-like dict for drawing (label 'gene transcript',
     transcripts = [that one]), from both annotations: {'ensembl': [...], 'ncbi': [...]} (a key is missing when the
     release lacks its table). Ensembl genes take their label from `genes` (the lane's dicts) when they are there."""
@@ -188,7 +204,7 @@ def isoforms(release_dir, chrom, start, end, genes=()):
     con, out = duckdb.connect(), {}
     for key, (name, _) in ISOFORMS.items():
         path = release / name
-        if not path.exists():
+        if not path.exists() or only not in (None, key):
             continue
         rows = con.execute(f"""
             WITH t AS (SELECT * FROM read_parquet({lit(path)}) WHERE chrom = $c)

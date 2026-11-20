@@ -47,13 +47,14 @@ def read_tsv(path, layer):
 
 def read_aquafaang_peaks(path, layer):
     # Column 4 lists "Condition:State" for each condition where the peak is called.
-    # Pivot to one column per condition holding its state (NULL = no peak in that condition).
+    # Pivot to one column per condition holding its state (NULL = no peak in that condition). v1 ends with a summary
+    # label (the peak's state of most importance, never shown) and its colour; v3 (2026-11-18) has neither: summary NULL.
     return f"""SELECT * FROM (
         PIVOT (
             SELECT chrom, start, "end", summary, split_part(cs, ':', 1) AS condition, split_part(cs, ':', 2) AS state
             FROM (SELECT chrom, start::BIGINT AS start, "end"::BIGINT AS "end", summary,
                          unnest(string_split(states, ',')) AS cs
-                  FROM read_csv({lit(path)}, header=false, all_varchar=true, delim='\t',
+                  FROM read_csv({lit(path)}, header=false, all_varchar=true, delim='\t', null_padding=true,
                                 names=['chrom', 'start', 'end', 'states', 'score', 'strand', 'summary']))
         ) ON condition USING first(state) GROUP BY chrom, start, "end", summary)"""
 

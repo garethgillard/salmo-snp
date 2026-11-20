@@ -20,7 +20,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-RELEASE = "2026-11-05"  # the data release this version of the code expects (Atlantic salmon, the default species)
+RELEASE = "2026-11-20"  # the data release this version of the code expects (Atlantic salmon, the default species)
 RELEASES = {"atlantic_salmon": RELEASE, "rainbow_trout": "trout-2026-11-13"}  # ... and per species: the species bar's
 DATA_URL = os.environ.get("SALMO_SNP_DATA_URL")  # where the data is published (set once it is hosted, e.g. on salmobase)
 

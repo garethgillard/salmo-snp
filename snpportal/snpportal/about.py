@@ -26,11 +26,13 @@ from . import explore, figures, jobs, palette, search, serve
 # AQUA-FAANG's ChromHMM states have no written definitions: the emission figure is the only one (docs/RESEARCH.md section 6),
 # so the Methods table gives each state's label and model, and links the figure (one-line definitions: G to supply).
 EMISSIONS = "https://salmobase.org/datafiles/datasets/Aqua-Faang/figures/chromHMM.png"
-STATE_MODELS = {"Bivalent": "DevMap only", "Poised_enhancer_2": "BodyMap only"}  # BodyMap and DevMap: separate 12-state models
+STATE_MODELS = {"Bivalent": "DevMap only", "Poised_enhancer_2": "BodyMap only", "Unknown_2": "gill only",  # separate models
+                "Bivalent_or_mixed_active/polycomb": "ImmunoMap only", "Active_TSS_or_enhancer": "ImmunoMap tracks only",
+                "Flanking_TSS_or_poised_enhancer": "ImmunoMap tracks only"}
 TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.scored)
-    "active": "An active state (Active TSS or Active enhancer) in at least one of the 21 conditions.",
+    "active": "An active state (Active TSS or Active enhancer) in at least one of the 27 conditions.",
     "active_elsewhere": "An active state only outside the chosen conditions (snpscore's --trait; never in the portal, "
-                        "which counts all 21).",
+                        "which counts all 27).",
     "weak": "A weak state in at least one condition, and no active state in any.",
     "coding": "A CDS change to the protein (missense, stop gained or lost, start lost) or of unknown effect.",
     "synonymous": "A synonymous CDS change (or stop retained): no amino-acid change (weight under review).",
@@ -86,7 +88,7 @@ FORMATS = [  # (anchor, format, what is read, example built from the published v
 ]
 STANDARD = ("provisional", "active_states", "weak_states", "weights", "tiers", "presets")  # weights.yaml blocks shown as tables
 LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall back to their manifest description
-    "chromatin": ("Chromatin state in 21 tissues and stages, inside robust ATAC peaks", "AQUA-FAANG"),
+    "chromatin": ("Chromatin state in 27 tissues and stages, inside robust ATAC peaks", "AQUA-FAANG"),
     "region": ("Genic region: CDS, splice region, UTR, exon or intron", "Ensembl"),
     "regbuild": ("Regulatory build: promoters, enhancers, open chromatin", "Ensembl"),
     "gerp": ("Constrained elements in a 65-fish alignment (GERP)", "Ensembl Compara"),

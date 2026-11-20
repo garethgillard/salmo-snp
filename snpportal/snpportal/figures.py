@@ -20,6 +20,23 @@ FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif"
 TIER_NAMES = {1: "tier 1", 2: "tier 2", 3: "tier 3", 4: "tier 4 (no evidence)"}
 STAGE_LABELS = {"LateBlastulation": "Blastula", "MidGastrulation": "Gastrula", "EarlySomitogenesis": "E somit.",  # the one
                 "MidSomitogenesis": "M somit.", "LateSomitogenesis": "L somit."}  # short name of each embryo stage
+TISSUE_NAMES = {"HeadKidney": "Head kidney"}  # tissue keys of the condition names, as pages write them
+TREATMENTS = {"pbs": "PBS", "polyIC": "poly I:C", "vibrio": "Vibrio"}  # the ImmunoMap's head kidney conditions
+
+
+def condition_label(condition):
+    """(tissue, short label): ('Brain', 'Imm F') for Brain_Immature_Female, ('HeadKidney', 'poly I:C') for the
+    ImmunoMap's HeadKidney_invivo_polyIC, ('Embryo', 'Blastula') for LateBlastulation."""
+    parts = condition.split("_")
+    if len(parts) == 3 and parts[1] in ("invivo", "invitro"):
+        return parts[0], TREATMENTS.get(parts[2], parts[2]) + (" in vitro" if parts[1] == "invitro" else "")
+    if len(parts) == 3:
+        return parts[0], f"{parts[1][:3]} {parts[2][0]}"
+    return "Embryo", STAGE_LABELS.get(condition, condition)
+
+
+def tissue_name(tissue):
+    return TISSUE_NAMES.get(tissue, tissue)
 IDEOGRAM_TIER4 = palette.GREY[300]  # #F0F0F0 would vanish on the white chromosome
 IDEOGRAM_OTHER = palette.GREY[300]  # bins whose SNPs are all in tier 3-4
 

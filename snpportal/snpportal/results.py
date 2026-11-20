@@ -99,8 +99,9 @@ FORMAT_NAMES = {"vcf": "VCF", "text": "text table", "tsv": "tab-separated table"
                 "axiom": "Axiom annotation", "paste": "pasted positions", "rows": "public variants (genes or intervals)"}
 STAGES = ["LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomitogenesis", "LateSomitogenesis"]
 STAGE_LABELS = figures.STAGE_LABELS
-SAMPLES = "brain, gonad, liver and muscle of 12 AquaGen fish (BodyMap); 5 embryo stages from embryo pools (DevMap)"
-NO_PEAK = f"No AQUA-FAANG peak in the 21 conditions sampled ({SAMPLES}). No immune tissue, gill or skin."
+SAMPLES = ("brain, gonad, liver, muscle and gill of 12 AquaGen fish (BodyMap); head kidney of juvenile fish after PBS, "
+           "poly I:C or Vibrio (ImmunoMap); 5 embryo stages from embryo pools (DevMap)")
+NO_PEAK = f"No AQUA-FAANG peak in the 27 conditions sampled ({SAMPLES}). No skin or intestine."
 CARD_SQL = "SELECT * FROM v WHERE file_row_number = ?"  # the card reads one row, never the whole result
 
 # Table columns, in display order: key -> (header, tooltip, columns (shown when any exists; () = always), sort [(SQL,
@@ -122,8 +123,9 @@ COLUMNS = {
              [("coalesce(gene_name, gene_ortholog_human, gene_id)", True)]),
     "region": ("Consequence", "Where the SNP falls in the nearest gene and, in coding sequence, its effect on the protein "
                "(Ensembl 116 gene models)", ("region_class",), [("region_class", True)]),
-    "chromatin": ("Chromatin", "AQUA-FAANG chromatin state in 21 conditions: Brain, Gonad, Liver, Muscle (immature F, M; "
-                  "mature F, M), then 5 embryo stages", ("chromatin",), []),
+    "chromatin": ("Chromatin", "AQUA-FAANG chromatin state in 27 conditions: Brain, Gill, Gonad, Liver, Muscle (immature "
+                  "F, M; mature F, M; gill has no mature F), head kidney (PBS, poly I:C, Vibrio), then 5 embryo stages",
+                  ("chromatin",), []),
     "known": ("Known locus", "A published locus of the known-loci catalogue within the window: this SNP, or one nearby (how "
               "far); * a caveat (hover)", ("known_locus",), [("known_locus_dist", True)]),
     "molqtl": ("molQTL", "Lead SNP of an eQTL (e) or caQTL (ca) in 12 fish; display only, never counted in tiers",
@@ -187,7 +189,7 @@ def _open(request, key, write=False, chip=False):
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
     weights = jobs.weights(d)  # the job's snapshot, not the current release
-    trait = "all"  # tiers always count all 21 conditions (CLAUDE.md); the Table only filters after scoring
+    trait = "all"  # tiers always count all 27 conditions (CLAUDE.md); the Table only filters after scoring
     if weights:
         path, suffix = jobs.trait_tiers(d, weights, trait)
         stored = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet('{path}'))").fetchall()] if path else []
@@ -336,7 +338,7 @@ def filters(request, types, weights, d=None):
     if get("molqtl") == "1" and "molqtl" in types:
         out.append(({"molqtl": "1"}, "molQTL lead SNPs", "coalesce(molqtl, false)"))
     chromatin = chromatin_choice(request)
-    if chromatin and conditions_of(types):  # after scoring: tiers still count all 21 conditions
+    if chromatin and conditions_of(types):  # after scoring: tiers still count all 27 conditions
         tissues, maturity, sex, level = chromatin
         mine = [c for c in sorted(jobs.conditions_in(jobs.selection_prefixes(jobs.selection_key(tissues, maturity, sex))))
                 if f"chromatin_{c}" in types]
@@ -363,18 +365,19 @@ def filters(request, types, weights, d=None):
 # ---- conditions, labels ----
 
 def conditions_of(columns):
-    """Chromatin condition names, tissues first (alphabetical: immature F, M, mature F, M), then the embryo stages."""
+    """Chromatin condition names: the tissues in snpscore's order (brain, gonad, liver, muscle by immature F, M, mature
+    F, M; gill; head kidney by treatment), others alphabetically, then the embryo stages."""
     found = [c[len("chromatin_"):] for c in columns if c.startswith("chromatin_") and c not in snpscore.score.NOT_CONDITIONS]
-    return sorted(found, key=lambda c: (c in STAGES, STAGES.index(c) if c in STAGES else 0, c))
+    known = snpscore.score.CHROMATIN_CONDITIONS
+    return sorted(found, key=lambda c: (c in STAGES, STAGES.index(c) if c in STAGES else 0,
+                                        known.index(c) if c in known else len(known), c))
 
 
 def condition_groups(conditions):
-    """[(group, [(short label, condition)])]: one group per tissue, and 'Embryo' for the stages."""
+    """[(group, [(short label, condition)])]: one group per tissue (its key, e.g. HeadKidney), and 'Embryo' for the stages."""
     groups = {}
     for c in conditions:
-        tissue, _, rest = c.partition("_")
-        group, label = (tissue, " ".join([rest.split("_")[0][:3]] + [p[:1] for p in rest.split("_")[1:]])) if rest \
-            else ("Embryo", STAGE_LABELS.get(c, c[:8]))
+        group, label = figures.condition_label(c)
         groups.setdefault(group, []).append((label, c))
     return list(groups.items())
 
@@ -385,13 +388,11 @@ def trait_tip(weights, trait):
         return jobs.trait_label(trait)
     prefixes = list(((weights or {}).get("presets") or {}).get(trait) or [])
     if not prefixes:
-        text = "all 21 conditions"
+        text = "all 27 conditions"
     elif set(prefixes) <= set(STAGES):
         text = f"{len(prefixes)} embryo stages"
     else:
         text = ", ".join(prefixes) + (" only" if len(prefixes) == 1 else "")
-    if "disease" in trait:
-        text += " (no immune tissue, gill or skin sampled)"
     return f"{jobs.trait_label(trait)}: {text}"
 
 
@@ -411,7 +412,7 @@ def evidence_text(evidence, terms=None):
     out = []
     for x in parts:
         head, sep, items = x.partition(": ")
-        out.append(head + sep + ", ".join(STAGE_LABELS.get(i, i) for i in items.split(",")) if sep else x)
+        out.append(head + sep + ", ".join(STAGE_LABELS.get(i) or figures.tissue_name(i) for i in items.split(",")) if sep else x)
     return "; ".join(out)
 
 
@@ -618,12 +619,13 @@ def table(request, key, job=None):
         dds.append({"kind": kind, "id": f"dd-{key}", "label": label, "summary": summary, "on": active, "tip": tip,
                     "anyon": not any(x[2 if len(x) > 2 else 1] for x in ticks), **more})  # 'Any' ticked: nothing else is
 
-    if conditions:  # chromatin activity in some conditions: a filter only, the tiers count all 21
+    if conditions:  # chromatin activity in some conditions: a filter only, the tiers count them all
         choice = chromatin_choice(request)
         tissues, maturity, sex, level = choice or ([], None, None, "peak")
         dd("active", "active", "Chromatin", chromatin_text(choice) if choice else "any", bool(choice),
            "SNPs in a robust ATAC peak, or an active state, in at least one of these conditions (filters the table only)",
-           tissues=[(x, x in tissues) for x in jobs.TISSUES],
+           tissues=[(x, figures.tissue_name(x), x in tissues) for x in jobs.TISSUES
+                    if any(figures.condition_label(c)[0] == x for c in conditions)],
            maturity=[("", "any", not maturity)] + [(x, x.lower(), x == maturity) for x in jobs.MATURITIES],
            sex=[("", "any", not sex)] + [(x, x.lower(), x == sex) for x in jobs.SEXES],
            levels=[(k, label, tip, k == level) for k, (label, tip) in ACTIVITY.items()], column="chromatin",
@@ -1091,7 +1093,7 @@ def _fig_conditions(c, link, desc):
             fold = share / bg[cond] if bg.get(cond) else None
             out.append((label, cond, share, fold, False))  # all conditions count: none stands out
             tsv.append((cond, counts[cond], f"{share:.5f}", f"{bg[cond]:.5f}" if cond in bg else "", f"{fold:.3f}" if fold else ""))
-        rows.append((group, palette.TISSUES.get(group, palette.GREY[500]), out))
+        rows.append((figures.tissue_name(group), palette.TISSUES.get(group, palette.GREY[500]), out))
     svg = figures.heatmap(rows, "Active chromatin per condition", desc, c["synthetic"])  # no links: the Table filters after scoring
     return svg, ["condition", "snps_active", "share", "background_share", "fold"], tsv
 
@@ -1161,7 +1163,7 @@ def _fig_maf(c, link, desc):
 
 
 FIGURES = {  # name -> (card title, (i) definition, builder(context, link or None, desc) -> (svg, header, rows) or None)
-    "summary": ("Summary", "How the SNPs scored for all 21 conditions (tier 1 = strongest functional evidence, tier 4 = no "
+    "summary": ("Summary", "How the SNPs scored for all 27 conditions (tier 1 = strongest functional evidence, tier 4 = no "
                 "evidence found, not evidence of no effect), where they fall relative to genes, how many are near a "
                 "published locus and how they did in the assay design check. Thin bars: the same split for the release's "
                 "public sites, for comparison. Click a number, a part of a bar or its legend entry to list those SNPs.",
@@ -1169,7 +1171,7 @@ FIGURES = {  # name -> (card title, (i) definition, builder(context, link or Non
     "ideogram": ("Where the SNPs are", "Chromosomes to scale (Ssal_v3.1). Each 1 Mb bin holding SNPs is shaded: blue when "
                  "some are in tier 1–2 (darker = more of them), grey when none are. On the right: each chromosome's SNPs "
                  "and, as a bar, its tier 1–2 SNPs. Click a bin, chromosome or bar to list those SNPs.", _fig_ideogram),
-    "conditions": ("Active chromatin per condition", "Share of the SNPs in an active chromatin state in each of the 21 "
+    "conditions": ("Active chromatin per condition", "Share of the SNPs in an active chromatin state in each of the 27 "
                    "AQUA-FAANG conditions; × = fold over a background of public sites, when the release has one. "
                    "Click a cell to list those SNPs.", _fig_conditions),
     "regions": ("Genic region by tier", "SNPs per genic region class (Ensembl 116), split by tier; the black tick is "

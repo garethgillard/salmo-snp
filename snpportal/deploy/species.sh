@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# The other species' releases on the NREC demo (serve.py RELEASES: rainbow trout). Two ways in, both checked the same
+# The releases this code names on the NREC demo (serve.py RELEASE, the default species', and RELEASES: rainbow trout).
+# The default species' goes in /srv/snpportal/release (SNPSCORE_RELEASE), the one it replaces into releases/<version>
+# (results made with it keep it); the others in releases/<version>. Two ways in, both checked the same
 # way (every file against SHA256SUMS, the genome against the manifest) before anything is put in place:
 #   species.sh                   update.sh runs this after a deploy: a release that is not in
 #                                /srv/snpportal/releases/<version>/ yet is fetched from this repository's GitHub data
@@ -13,6 +15,12 @@
 set -uo pipefail
 ROOT=/srv/snpportal
 REPO=garethgillard/salmo-snp
+SERVE=$ROOT/salmo-snp/snpportal/snpportal/serve.py
+
+default_version() { sed -n 's/^RELEASE = "\([^"]*\)".*/\1/p' "$SERVE"; }
+version_of() {  # the version in folder $1's manifest, or nothing
+  [ -f "$1/manifest.json" ] && "$ROOT/venv/bin/python" -c 'import json, sys; print(json.load(open(sys.argv[1]))["version"])' "$1/manifest.json"
+}
 
 install_site() {  # <folder holding site/ and maybe pool/> <version>: check, then move into place
   local T=$1 v=$2
@@ -40,18 +48,30 @@ PY
   mv "$T"/site/raw/*.fa.gz* "$ROOT/genome/" || return 1
   [ -d "$T/pool" ] && mv "$T/pool" "$T/site/releases/$v/pool"
   chmod -R a+rX "$T/site/releases/$v"
+  if [ "$v" = "$(default_version)" ]; then  # the default species' new release replaces /srv/snpportal/release
+    old=$(version_of "$ROOT/release")
+    mkdir -p "$ROOT/releases"
+    if [ -n "$old" ] && [ "$old" != "$v" ]; then
+      rm -rf "$ROOT/releases/$old" && mv "$ROOT/release" "$ROOT/releases/$old"  # kept for the results made with it
+    else
+      rm -rf "$ROOT/.release-old" && { [ ! -d "$ROOT/release" ] || mv "$ROOT/release" "$ROOT/.release-old"; }
+    fi
+    mv "$T/site/releases/$v" "$ROOT/release" && rm -rf "$ROOT/.release-old" "$ROOT/releases/$v"
+    return
+  fi
   rm -rf "$ROOT/releases/.old-$v"
   [ -d "$ROOT/releases/$v" ] && mv "$ROOT/releases/$v" "$ROOT/releases/.old-$v"
   mv "$T/site/releases/$v" "$ROOT/releases/$v" && rm -rf "$ROOT/releases/.old-$v"
 }
 
-named() {  # the versions serve.py RELEASES names besides the default
-  sed -n 's/^RELEASES = {\(.*\)}.*/\1/p' "$ROOT/salmo-snp/snpportal/snpportal/serve.py" | grep -o ': "[^"]*"' | tr -d ':" '
+named() {  # the versions serve.py names: RELEASE (the default species'), then those of RELEASES
+  default_version
+  sed -n 's/^RELEASES = {\(.*\)}.*/\1/p' "$SERVE" | grep -o ': "[^"]*"' | tr -d ':" '
 }
 
 if [ "${1:-}" = stdin ]; then
   v=${2:-}
-  named | grep -qxF "$v" || { echo "release '$v' is not one this code names (serve.py RELEASES)" >&2; exit 1; }
+  grep -qxF "$v" <<< "$(named)" || { echo "release '$v' is not one this code names (serve.py RELEASE, RELEASES)" >&2; exit 1; }
   T=$(mktemp -d "$ROOT/.fetch-XXXXXX")
   trap 'rm -rf "$T"' EXIT
   tar -xf - -C "$T" --no-same-owner || { echo "release $v: the archive could not be read" >&2; exit 1; }
@@ -61,7 +81,7 @@ if [ "${1:-}" = stdin ]; then
 fi
 
 for v in $(named); do
-  [ -f "$ROOT/releases/$v/manifest.json" ] && continue
+  { [ -f "$ROOT/releases/$v/manifest.json" ] || [ "$(version_of "$ROOT/release")" = "$v" ]; } && continue
   free=$(df -Pk "$ROOT" | awk 'NR == 2 { print $4 }')
   [ "$free" -gt 5000000 ] || { echo "release $v not fetched: under 5 GB free on the VM" >&2; continue; }
   T=$(mktemp -d "$ROOT/.fetch-XXXXXX")

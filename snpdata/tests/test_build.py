@@ -117,7 +117,7 @@ chromatin_states/AtlanticSalmon/DevMap/AtlanticSalmon_LateBlastulation.bb
 
 def test_parse_trackdb():
     gill, rna, chip = trackhub.parse_trackdb(TRACKDB, trackhub.HUB + "BodyMap/", "BodyMap")
-    assert gill["id"] == "ATAC_Gill_Mature_Male_R2" and gill["chromatin_condition"] is None
+    assert gill["id"] == "ATAC_Gill_Mature_Male_R2" and gill["chromatin_condition"] == "chromatin_Gill_Mature_Male"  # scored since v3
     assert (gill["tissue"], gill["maturity"], gill["sex"], gill["replicate"]) == ("Gill", "Mature", "Male", "R2")
     assert gill["url"] == trackhub.HUB + "BodyMap/ATAC/bigWig/AtlanticSalmon_ATAC_Gill_Mature_Male_R2.mLb.clN.bigWig"
     assert rna["strand"] == "-" and rna["chromatin_condition"] == "chromatin_Liver_Immature_Female"
@@ -132,7 +132,7 @@ def test_parse_trackdb():
     imm, = trackhub.parse_trackdb("track a\ntype bigWig\nbigDataUrl ATAC/bigWig/AtlanticSalmon_ATAC_HeadKidney_invivo_polyIC"
                                   "_R4.mLb.clN.bigWig\n", trackhub.HUB + "ImmunoMap/", "ImmunoMap")
     assert (imm["id"], imm["tissue"], imm["maturity"], imm["sex"], imm["condition"], imm["chromatin_condition"]) == (
-        "ATAC_HeadKidney_invivo_polyIC_R4", "HeadKidney", None, None, "HeadKidney_invivo_polyIC", None)
+        "ATAC_HeadKidney_invivo_polyIC_R4", "HeadKidney", None, None, "HeadKidney_invivo_polyIC", "chromatin_HeadKidney_invivo_polyIC")
     gill, hk = trackhub.parse_bigbeds("chromatin_states/AtlanticSalmon/BodyMap/AtlanticSalmon_Gill_Mature_Male.bb\n"
                                       "chromatin_states/AtlanticSalmon/ImmunoMap/AtlanticSalmon_HeadKidney_invivo_pbs.bb",
                                       "https://salmobase.org/x/", with_states={"Brain_Immature_Female"})

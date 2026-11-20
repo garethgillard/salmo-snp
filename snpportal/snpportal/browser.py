@@ -117,6 +117,14 @@ def row(label, svg, sub="", tissue=None, dense=False, title=""):
     return {"label": label, "sub": sub, "tissue": tissue, "svg": svg, "dense": dense, "title": title}
 
 
+def separated(rows):
+    """`rows` with sep set on each row whose tissue differs from the row above (BodyMap tissues, the ImmunoMap's head
+    kidney, the DevMap's embryo stages): a thin line above it (G, 2026-11-20)."""
+    for above, r in zip([None] + rows, rows):
+        r["sep"] = above is not None and r["tissue"] != above["tissue"]
+    return rows
+
+
 def group(gid, title, note, rows, more=(), more_label="", open_=(), legend=None, kind="grp"):
     return {"id": gid, "title": title, "note": mark_safe(note), "rows": rows, "more": list(more), "more_label": more_label,
             "open": gid in open_, "legend": legend or [], "kind": kind}
@@ -293,22 +301,32 @@ def genes_group(request, s, ax, data, open_=()):
                         f'stroke-width="0.5"><title>{escape(m.get("title") or "")}</title></path>')
         rows.append(row("molQTL leads", trk(13, "".join(body)), "nf-RASQUAL, 12 fish"))
     duplicates(data.get("genes", []))
-    body = []
-    h = locus_svg._genes(body, ax, data.get("genes", []), 0, lambda gid: reverse("snpportal:gene", args=[gid]), 8, noop)
+    gene_page = lambda gid: reverse("snpportal:gene", args=[gid])  # noqa: E731
+    ensembl = []
+    h = locus_svg._genes(ensembl, ax, data.get("genes", []), 0, gene_page, 8, noop)
+    ensembl = (ensembl, h, "Ensembl 116, one isoform each")
+    ncbi = sl.ncbi_genes(jobs.release(), s["chrom"], s["start"], s["end"])  # the default lane (G, 2026-11-20)
+    if ncbi is not None:
+        body = []
+        h = locus_svg._genes(body, ax, ncbi, 0, NCBI_GENE.format, 8, noop, sl.ISOFORMS["ncbi"][1])
+        default = (body, h, "NCBI RefSeq, one isoform each")  # its version: the isoform row below
+    else:
+        default = ensembl
+    body, h, sub = default
     lore = "".join(f'<rect x="{ax.x(b["start"]):.1f}" y="0" width="{ax.x(b["end"]) - ax.x(b["start"]):.1f}" height="{h}" '
                    f'fill="url(#sp-lore)" fill-opacity="0.25"><title>LORe region {escape(str(b.get("label") or ""))}: the duplicate '
                    'copies are still nearly identical</title></rect>' for b in data.get("lore", []))
     defs = locus_svg._hatch("sp", "lore", locus_svg.LORE, -45) if lore else ""  # id sp-lore
-    rows.append(row("Genes", trk(h, (f"<defs>{defs}</defs>" if defs else "") + lore + "".join(body)),
-                    "Ensembl 116, one isoform each"))
-    more = []  # every isoform of both annotations, one transcript per line
+    rows.append(row("Genes", trk(h, (f"<defs>{defs}</defs>" if defs else "") + lore + "".join(body)), sub))
+    # opened: the Ensembl genes (their gene pages and Ss4R duplicates) under the NCBI lane, then every isoform of both
+    more = [row("Ensembl genes", trk(ensembl[1], "".join(ensembl[0])), ensembl[2])] if default is not ensembl else []
     links = {"ensembl": lambda gid: reverse("snpportal:gene", args=[gid]), "ncbi": NCBI_GENE.format}
     for key, models in sl.isoforms(jobs.release(), s["chrom"], s["start"], s["end"], data.get("genes", [])).items():
         body = []
         h = locus_svg._genes(body, ax, models, 0, links[key], ISOFORM_ROWS, noop, sl.ISOFORMS[key][1], "transcripts")
         more.append(row(f"{'Ensembl' if key == 'ensembl' else 'NCBI RefSeq'} isoforms", trk(h, "".join(body)),
                         f"{sl.ISOFORMS[key][1]}, {len(models)} transcript{'s' * (len(models) != 1)}"))
-    return group("genes", "Genes and variants", "", rows, more, "All isoforms", open_)
+    return group("genes", "Genes and variants", "", rows, more, "Ensembl genes and all isoforms" if ncbi is not None else "All isoforms", open_)
 
 
 # ---- public SNPs ----
@@ -416,7 +434,7 @@ def peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes):
         note += f" · Combined: the {len(conditions)} conditions the tiers count; the gill and head kidney (HK) rows are shown only"
     return group("peaks", "Regulatory elements", note,
                  [row("Combined", trk(32, "".join(body)), f"n/{len(conditions)}: conditions with the peak")],
-                 more, f"{len(more)} conditions", open_)
+                 separated(more), f"{len(more)} conditions", open_)
 
 
 def motifs_group(s, ax, data):
@@ -541,7 +559,7 @@ def hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes):
     if any(c.startswith("Gill_") for c in conditions):
         note += " · gill: its own model of weaker 2026 data"
     return group("hmm", "Chromatin states", note, [row("Combined", trk(h + 2, "".join(body)), f"conditions per state, 0–{total}")],
-                 more, f"{len(more)} conditions", open_, legend)
+                 separated(more), f"{len(more)} conditions", open_, legend)
 
 
 # ---- functional assays (RNA-seq, ATAC-seq, ChIP-seq): one request per assay ----

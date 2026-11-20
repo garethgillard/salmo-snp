@@ -105,7 +105,7 @@ def score(request):
 @csrf_protect
 @sensitive_post_parameters()
 def _score(request):
-    preset = "all"  # tiers (and the functional prior) always count all 21 conditions
+    preset = "all"  # tiers (and the functional prior) always count all 27 conditions
     example, upload = request.POST.get("example"), request.FILES.get("sumstats")
     try:
         if example:
