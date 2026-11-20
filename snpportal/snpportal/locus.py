@@ -30,7 +30,7 @@ from snpscore import motif as sm
 from snpscore.annotate import genome_location
 from snpscore.fasta import Fasta
 from snpscore.formats import lit
-from snpscore.score import NOT_CONDITIONS, preset_conditions
+from snpscore.score import CHROMATIN_CONDITIONS, NOT_CONDITIONS, preset_conditions
 
 from . import explore, figures, jobs, locus_svg, palette, results, search
 from .lib import locus as sl
@@ -116,7 +116,7 @@ def view_state(request):
     """{chrom, start, end (BED), trait, assay, hmm, scale, key, row, error, too_wide, mark, compact} from ?r= (also
     ?region= or ?chrom=&start=&end=, 1-based), or the SNP in ?key=&row=."""
     g = request.GET
-    s = {"trait": "all", "assay": g.get("assay") if g.get("assay") in ASSAYS else "ATAC",  # tiers: always all 21 conditions
+    s = {"trait": "all", "assay": g.get("assay") if g.get("assay") in ASSAYS else "ATAC",  # tiers: always all 27 conditions
          "hmm": g.get("hmm") == "1", "scale": "track" if g.get("scale") == "track" else "shared", "key": None, "row": None,
          "chrom": None, "error": None, "too_wide": False, "compact": g.get("compact") == "1",
          "mark": int(g["mark"]) if g.get("mark", "").isdecimal() else None, "gwas": {}}
@@ -225,7 +225,7 @@ def lanes(chrom, start, end):
 
 def draw(request, s, download=False, show=FULL):
     """(svg, notes, synthetic) for the view s. `show`: the optional lanes (FULL or REGION_LANES); outside
-    the locus browser only the trait's chromatin rows are drawn (all 21 for 'all'). On screen the figure carries no
+    the locus browser only the trait's chromatin rows are drawn (all of them for 'all'). On screen the figure carries no
     title or provenance lines (the page has them; a download keeps them)."""
     info = jobs.release_info()
     data = lanes(s["chrom"], s["start"], s["end"])
@@ -374,15 +374,15 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
     ev["terms"] = results.tier_parts(snp.get) or None  # 'Missense p.Thr46Met (...)', 3; the blocks' hover text
     states = {c[len("chromatin_"):]: snp[c] for c in snp if c.startswith("chromatin_") and c not in NOT_CONDITIONS}
     data = None  # the mini browser's lanes, when there is a chromatin layer
-    chosen = set()  # tiers count all 21 conditions: none stands out in the tiles or the counts
+    chosen = set()  # tiers count all 27 conditions: none stands out in the tiles or the counts
     if weights and "tier_terms" in snp:
         ev["blocks"] = mark_safe(locus_svg.score_blocks(score_parts(snp, states, chosen, weights), weights["tiers"], snp.get("tier_score") or 0,
                                                         synthetic))
     if states:
         tiles = locus_svg.chromatin_grid(states, chosen, bool(snp.get("blacklist")), synthetic, legend=False) if any(states.values()) else None
         if not tiles:
-            ev["no_peak"] = (results.NO_PEAK if len(states) == 21 else
-                             f"No AQUA-FAANG peak in the {len(states)} conditions sampled. No immune tissue, gill or skin.")
+            ev["no_peak"] = (results.NO_PEAK if len(states) == len(CHROMATIN_CONDITIONS) else
+                             f"No AQUA-FAANG peak in the {len(states)} conditions sampled.")
         data = lanes(chrom, *mini_window(pos))
         ev["mini"] = mark_safe(locus_svg.mini_browser(data, pos, snps, lambda gid: reverse("snpportal:gene", args=[gid]), synthetic,
                                                       tiles=tiles))
@@ -441,7 +441,7 @@ CHROMATIN_TERMS = ("active", "active_elsewhere", "weak")  # their blocks say wha
 
 def score_parts(snp, states=None, chosen=(), weights=None):
     """The evidence terms that count, largest first, for the score blocks: [(label, weight, colour, full text)] with
-    labels as short as the key facts' chips: 'active in 5/21' (of the chosen conditions), 'weak in 3/21', 'missense',
+    labels as short as the key facts' chips: 'active in 5/27' (of the chosen conditions), 'weak in 3/27', 'missense',
     'conserved', '5′ UTR', 'Ensembl enhancer'; the full text (conditions, protein change) on hover. A chromatin block
     has the colour of its strongest state there, as in the tiles."""
     g, fired, states = snp.get, snp.get("tier_terms") or [], states or {}
@@ -473,7 +473,7 @@ def conditions_text(items):
     stages = [x for x in names if x in results.STAGES]
     embryo = (["embryo (all stages)" if len(stages) == len(results.STAGES) else f"embryo ({len(stages)} stage{'s' * (len(stages) > 1)})"]
               if stages else [])
-    return ", ".join([x for x in names if x not in results.STAGES] + embryo)
+    return ", ".join([figures.tissue_name(x) for x in names if x not in results.STAGES] + embryo)
 
 
 FACT_ORDER = ("gene", "region", "gwas", "chromatin", "known", "molqtl", "scores")
@@ -809,7 +809,7 @@ def variant(request, spec):
     except ValueError as e:
         raise Http404(str(e)) from None
     pos, ref, alt = int(m.group(2)), (m.group(3) or "").upper() or None, (m.group(4) or "").upper() or None
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     try:
         snp = sl.annotate_position(jobs.release(), chrom, pos, ref, alt, trait, work_dir=jobs.results_dir())
     except snpscore.InputError as e:

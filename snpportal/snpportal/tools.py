@@ -330,7 +330,7 @@ def figure(request, key, name):
     if name not in FIGURES:
         raise Http404("No such figure")
     d, weights = jobs.folder(key), jobs.weights(jobs.folder(key))
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     con, view, types = _open(d, trait, weights, selected=True)
     c = _context(key, job, d, trait, con)
     if name.startswith("panel"):
@@ -639,7 +639,7 @@ def panel(request, key, job):
     The default panel is designed on the first visit; every parameter set is cached in the job folder."""
     d = jobs.folder(key)
     weights = jobs.weights(d)
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     con, view, types = _open(d, trait, weights, selected=True)
     chip = chip_info(d)
     c = _context(key, job, d, trait, con)
@@ -691,7 +691,7 @@ def design(request, key):
     _views().finished(key)
     d = jobs.folder(key)
     weights = jobs.weights(d)
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     con, view, types = _open(d, trait, weights, selected=True)
     ids = MUST.findall(request.POST.get("must", "")[:20_000])
     info = _design(con, view, d, trait, _params(request.POST, weights, types, ids), weights, chip_info(d))
@@ -800,7 +800,7 @@ def chip(request, key):
 @sensitive_post_parameters()
 def _chip(request, key):
     d = jobs.folder(key)
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     if request.POST.get("remove"):
         for path in [d / "chip.parquet", d / "chip.json", *d.glob("chip_rows_*.parquet")]:
             path.unlink(missing_ok=True)
@@ -898,7 +898,7 @@ def export(request, key, job, fmt):
         raise Http404("Unknown export format")
     d = jobs.folder(key)
     weights = jobs.weights(d)
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     con, view, types = _open(d, trait, weights, request=request)
     table, tag, filters, panel_hash, synthetic = _scope(request, key, d, con, view, types, weights, job,
                                                         "all" if fmt == "priors" else None)  # priors: every SNP
@@ -1020,7 +1020,7 @@ def exports(request, key, job):
     with their association files and one KASP row for the credible-set SNPs."""
     d = jobs.folder(key)
     weights = jobs.weights(d)
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     con, view, types = _open(d, trait, weights)
     gwas = job.get("input_kind") == "gwas"
     settings = results.gwas_settings(request) if gwas else {}  # the loci and credible sets of the Association page's settings

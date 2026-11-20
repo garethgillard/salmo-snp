@@ -6,7 +6,7 @@
     <ol class="sp-small mb-0 mt-2">
       <li><a href="{% url 'snpportal:upload' %}">Score</a> a file, pasted positions, genes or regions, or try an example. The Score
         page lists the results this browser opened.</li>
-      <li>Read the Overview: tiers count all 21 sample conditions.</li>
+      <li>Read the Overview: tiers count all 27 sample conditions.</li>
       <li>Filter the Table on its columns (Chromatin: a peak in the tissues you pick) and click a SNP for its evidence card.</li>
       <li>Add the selection to your <a href="{% url 'snpportal:design_panel' %}">Design panel</a>, compare it with your chip and
         download vendor files.</li>
@@ -34,7 +34,7 @@
       <p class="sp-small">Illumina manifests and Axiom annotation files are read as they are, but their positions are often on
         ICSASG_v2 and their alleles on the TOP/BOT or probe strand: watch the assembly warning and the ref_check column.</p></details>
     <details id="conditions"><summary>Why don't tiers change when I filter by tissue?</summary>
-      <p class="sp-small">Tiers always count all 21 conditions, so a SNP has the same tier in the Overview, its card, the Design
+      <p class="sp-small">Tiers always count all 27 conditions, so a SNP has the same tier in the Overview, its card, the Design
         panel and every download. The Table's Chromatin filter only picks rows: SNPs inside a robust ATAC peak (or, if you
         choose, an active state) in at least one of the conditions you tick.</p></details>
     <details id="my-results"><summary>Where are my results?</summary>
@@ -49,12 +49,12 @@
         chromatin states with their colours, and a glossary.</p></details>
     <details id="aquafaang-tracks"><summary>Which AQUA-FAANG data does the Locus browser show?</summary>
       <p class="sp-small">Signal (RNA-seq, ATAC-seq and ChIP-seq, the mean of each condition's replicates), chromatin states
-        and robust ATAC peaks, read from salmobase for the region on screen: the BodyMap tissues and DevMap embryo stages
-        (the 21 conditions the tiers count) and, for Atlantic salmon, the data added in November 2026, shown but not
-        scored: gill ATAC-seq re-made in 2026 (weaker than the other tissues; gill states from their own model) and the
-        ImmunoMap, head kidney after PBS, poly I:C or Vibrio ('HK' rows: in vivo, six fish each; 'HK cells': leukocytes
-        in vitro, RNA-seq only; states from its own six-state model, whose three combined labels have their own colours;
-        Naseer et al. 2025, <a href="https://doi.org/10.1101/gr.280579.125" rel="noreferrer">Genome Research</a>).
+        and robust ATAC peaks, read from salmobase for the region on screen: the BodyMap tissues, the DevMap embryo stages
+        and, for Atlantic salmon, the data added in November 2026 (counted in the tiers from release 2026-11-20): gill
+        ATAC-seq re-made in 2026 (weaker than the other tissues; gill states from their own model) and the ImmunoMap,
+        head kidney after PBS, poly I:C or Vibrio ('HK' rows: in vivo, six fish each; 'HK cells': leukocytes in vitro,
+        RNA-seq only, not counted; states from its own six-state model, whose three combined labels have their own
+        colours; Naseer et al. 2025, <a href="https://doi.org/10.1101/gr.280579.125" rel="noreferrer">Genome Research</a>).
         Hover a row's name for its details.</p></details>
   </section>
 

@@ -51,7 +51,7 @@ def test_lanes(release):
     t = vgll3["transcripts"]
     assert (len(t), t[0]["transcript_id"], t[0]["canonical"]) == (1, "ENSSSAT00000230965", True)
     assert any(p["part"] == "CDS" and p["start"] < 28996360 <= p["end"] for p in t[0]["parts"])
-    assert len(d["conditions"]) == 21 and (d["conditions"][0], d["conditions"][-1]) == ("Brain_Immature_Female", "LateSomitogenesis")
+    assert len(d["conditions"]) == 27 and (d["conditions"][0], d["conditions"][-1]) == ("Brain_Immature_Female", "LateSomitogenesis")
     assert d["peaks"] and all(p["states"] and set(p["states"]) <= set(d["conditions"]) for p in d["peaks"])
     assert any(v["pos"] == 28996360 and v["maf"] == 0.480159 for v in d["variants"])  # 504-fish panel (12 fish: 0.33)
     # catalogue order; vgll3_tag_SW2020 (25:28980165) came with the 36-row catalogue (Push 2, R3)

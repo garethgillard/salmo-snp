@@ -196,7 +196,7 @@ def _score(request):
 
 def start_job(request):
     """Create the job for a POSTed example, file or paste. Returns (key, preset)."""
-    preset = "all"  # tiers always count all 21 conditions
+    preset = "all"  # tiers always count all 27 conditions
     example, upload, paste = request.POST.get("example"), request.FILES.get("snps"), request.POST.get("paste", "").strip()
     if example:
         found = examples().get(example)
@@ -259,7 +259,7 @@ def results(request, key):
                "synthetic": synthetic}
     if job["state"] == "done":
         d = jobs.folder(key)
-        trait = "all"  # tiers always count all 21 conditions
+        trait = "all"  # tiers always count all 27 conditions
         settings = result_views.gwas_settings(request) if gwas else {}
         context.update(trait=trait, query=urlencode(settings), release_changed=jobs.release_changed(job))
         if tab == "table":

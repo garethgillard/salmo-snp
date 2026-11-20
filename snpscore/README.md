@@ -1,13 +1,13 @@
 # snpscore
 
 Annotates any Atlantic salmon SNP list against a release built by ../snpdata, and gives each SNP a tier.
-Layers so far: AQUA-FAANG chromatin states (21 conditions), genic region class and the coding consequence (VEP-lite),
+Layers so far: AQUA-FAANG chromatin states (27 conditions; 21 before release 2026-11-20), genic region class and the coding consequence (VEP-lite),
 Ensembl regulatory build, GERP constrained elements, blacklist, late-rediploidized (LORe) regions, nearest gene (with
 description, expression per tissue, human and zebrafish ortholog names and its Ss4R duplicate), known variants within
 35 bp (probe flank), allele frequencies (the public 504-fish panel, the Synchrosmolt parents), TF motif changes
 (JASPAR 2024, in robust ATAC peaks), nf-RASQUAL caQTL/eQTL lead SNPs, genetic map position (cM), and the known-loci
 catalogue. rs IDs (EVA release 9) place SNP lists that have only rs IDs or ICSASG_v2 positions. Each SNP gets a tier
-from the rules in `src/snpscore/weights.yaml` (provisional until G agrees them): for all 21 conditions by default, as
+from the rules in `src/snpscore/weights.yaml` (provisional until G agrees them): for all 27 conditions by default, as
 the portal always counts them, or for a trait preset (`--trait`).
 On top of that: assay designability QC, the public background pool, a benchmark against known loci, and GWAS summary
 statistics (loci and fine-mapping with a functional prior). The panel designer, chip comparison and vendor exports are

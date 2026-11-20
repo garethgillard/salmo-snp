@@ -51,8 +51,10 @@ Built on the session branch, for G to inspect before anything is deployed (AGENT
 Built outside Push 3 (G, 2026-11-14 and -15): the Locus browser moves and zooms with the mouse, with a margin and a
 marker line that pins to a base (PR #18); the user's own BED tracks in the Locus browser and as a Table filter,
 never scored (mytracks.py). New AQUA-FAANG data (G, 2026-11-20): the salmon gill ATAC-seq of 2026 and the ImmunoMap
-(head kidney after immune stimulation) as Locus browser tracks, shown from snpportal's `lib/tracks_added.yaml` without
-a new release (`snpdata tracks --added-since`); scoring them is DECISIONS #47.
+(head kidney after immune stimulation) as Locus browser tracks (PR #25), then scored: release 2026-11-20 counts 27
+conditions (unified peaks v3; the ImmunoMap's mixed label weak; disease_resistance = head kidney, gill and liver), built,
+published as data-2026-11-20 and installed on the demo by the `species-data` workflow, no Mac needed. NCBI RefSeq is
+the default gene lane; thin lines separate the tissues in the chromatin drop-downs.
 
 Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged: I1-I5, I7-I12, I15,
 I17, I18 (PR #2, 2026-11-05); mixed purposes (I8), Primer3 and Agena files (I14), the ICSASG_v2 conversion (I19), the
@@ -79,7 +81,7 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
 - [x] Test fixture: chr21 32-34 Mb (Ensembl "vgll3", the ohnolog), chr25 28.5-29.5 Mb (maturation vgll3, unnamed in Ensembl), chr26 14-16 Mb (nae1, IPN QTL), chr1 110-111 Mb (LORe)
 
 ## Step 1: first layers and annotate
-- [x] Layers: chromatin (21 conditions), blacklist, LORe, nearest gene
+- [x] Layers: chromatin (21 conditions; 27 from release 2026-11-20), blacklist, LORe, nearest gene
 - [x] `snpscore build` and `snpscore annotate`
 - [x] Genome-wide check: 45,802 active-TSS and 78,424 active-enhancer peaks, as in the paper
 - [x] Speed: 54K SNPs in 3 s, 1.6M SNPs in about 1 min (with all step 3 layers so far: 50K in 4 s, 1.6M in 94 s)
@@ -99,7 +101,8 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
 - [ ] Ohnolog pairs and element duplication class (shared / alignable-only / exclusive)
 - [x] molQTL from the public nf-RASQUAL lead-SNP tables (Push 2 R4, weight 0)
 - [x] ImmunoMap (salmobase, 2026-11-18) and the re-made gill ATAC-seq: Locus browser tracks, not scored (2026-11-20)
-- [ ] Score gill and the ImmunoMap (unified peaks v3, DECISIONS #47): a new release once G decides
+- [x] Score gill and the ImmunoMap (G, 2026-11-20; DECISIONS #47): unified peaks v3, 27 conditions, release 2026-11-20
+  built and published by the `species-data` workflow (atlantic_salmon)
 - [x] TF motif disruption (JASPAR 2024, G's rule of 2026-10-19: 'More public data' below)
 - [ ] DeepFARM scores (agree redistribution first): now I16 (G retrains it)
 - [x] Assay axis, part 1: variants within 35 bp (public 12-fish VCF), A/T-C/G flag

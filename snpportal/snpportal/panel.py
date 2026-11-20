@@ -4,7 +4,7 @@ checked and exported as vendor files.
 
 It belongs to one browser: its folder (results/panel-<uuid>) is named by an HttpOnly cookie, never by a URL, and
 jobs.cleanup removes it 24 hours after it was started (its 'created' marker). To keep it longer, download its TSV
-and score that list again later. Its SNPs carry their tiers for all 21 conditions, so SNPs from lists scored for
+and score that list again later. Its SNPs carry their tiers for all 27 conditions, so SNPs from lists scored for
 other conditions compare."""
 from __future__ import annotations
 

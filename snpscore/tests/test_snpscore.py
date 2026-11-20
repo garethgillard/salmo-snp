@@ -422,7 +422,9 @@ def test_read_snps_keeps_input_order(tmp_path):
 #   (checked by building the fixture with and without the layer).
 # - motif layer and term (2026-10-19): six motif* columns after synchrosmolt_af; no fixture SNP changes a motif (the
 #   fixture genome is mostly N), so tiers are unchanged (checked by building with and without the layer).
-GOLDEN = "7ba0332580ca662d5b8179821ad8bcd55bf48e9585020190ee644d217b6604e6"
+# - unified peaks v3 (2026-11-20, G: score gill and the ImmunoMap): 6 more chromatin_<condition> columns (gill, head
+#   kidney); 8 of the 2,519 fixture SNPs change tier or score, all through head kidney states (tier 4 -> 2 for two).
+GOLDEN = "accf65b1fcb3a535e82ae4734b98a6ec5a95b3a66201c3fd35665cb568821c2c"
 
 
 def test_long_lists_are_written_in_sorted_parts(release, tmp_path, monkeypatch):

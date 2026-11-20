@@ -40,6 +40,8 @@ from snpscore.annotate import user_message
 from snpscore.formats import lit
 from snpscore.pool import maf_bin_sql
 
+from . import figures
+
 log = logging.getLogger("snpportal")
 STALE = 300  # seconds without a heartbeat before a queued or running job is given up (server restarted)
 MAX_QUEUED = 10
@@ -189,12 +191,15 @@ def wording(where=None):
     """[(pattern, replacement)] that turn the pages' Atlantic salmon wording into that of another species' release:
     the assembly and the older one, the number of chromatin conditions, the chromosome names, the species' names and
     the release's own pairs (layers.yaml species.wording, e.g. the samples and the public SNP set). The pages are
-    written for salmon, the first species; this is the one place that says what differs. [] for a salmon release."""
+    written for salmon, the first species, and its 27 conditions; this is the one place that says what differs (for a
+    salmon release only the number of conditions, when it has another, as 2026-11-05's 21)."""
     m, sp = manifest(where), species(where)
-    if sp["key"] == SALMON["key"]:
-        return []
     chromatin = next((layer for layer in m.get("layers", []) if layer["name"] == "chromatin"), {})
     n = sum(1 for c in chromatin.get("columns", []) if c not in ("summary", "id"))
+    count = [(re.compile(r"\b27(?=\s+(?:chromatin\s+|sample\s+|AQUA-FAANG\s+)?(?:conditions|tissues and stages))"), str(n))] \
+        if n and n != len(CONDITIONS) else []  # the pages say 27 (salmon since 2026-11-20); 2026-11-05 has 21
+    if sp["key"] == SALMON["key"]:
+        return count
     older = (m.get("rsid") or {}).get("older") or "an older assembly"
     span = str(m.get("chromosomes", "")).split(" (")[0]
     latin, prefix = sp.get("latin", ""), sp.get("prefix", "chr")
@@ -202,9 +207,7 @@ def wording(where=None):
     pairs += [(r"Ssal_v3\.1", m.get("assembly", "")), (r"ICSASG_v2", older), (r"Salmo_salar", latin.replace(" ", "_")),
               (r"(?<!title=\")Salmo salar", latin), (r"(?<!>)Atlantic salmon", sp["name"].lower()), (r"\bssa(?=\d)", prefix), (r"\bSsa(?=\d+p|&lt;chromosome|<chromosome)", prefix.capitalize()),
               (r"(?<=[Cc]hromosomes )1[-–]29", span), (r"\b1[-–]29(?= \(Ensembl)", span)]
-    if n:
-        pairs.append((r"\b21(?=\s+(?:chromatin\s+|sample\s+|AQUA-FAANG\s+)?(?:conditions|tissues and stages))", str(n)))
-    return [(re.compile(a), b) for a, b in pairs]
+    return [(re.compile(a), b) for a, b in pairs] + count
 
 
 def middleware(get_response):
@@ -338,7 +341,7 @@ def trait_label(trait):
     if sel and trait != "all":
         tissues, maturity, sex = sel
         who = " ".join(x.lower() for x in (maturity, sex and f"{sex}s") if x)
-        return " + ".join(t.lower() for t in tissues) + (f" ({who})" if who else "")
+        return " + ".join(figures.tissue_name(t).lower() for t in tissues) + (f" ({who})" if who else "")
     return "all conditions"
 
 
@@ -361,10 +364,17 @@ def _as_key(name, presets=None):
 # '.Female' or '.Male' ('Brain+Gonad.Mature.Female'). URLs carry ?trait=; a key with the same conditions as a named
 # preset becomes that preset, whose tiers are stored; other keys are scored once per job (trait_tiers). ----
 
-TISSUES = ("Brain", "Gonad", "Liver", "Muscle", "Embryo")  # Embryo: the 5 DevMap stages (no maturity or sex)
+TISSUES = ("Brain", "Gonad", "Liver", "Muscle", "Gill", "HeadKidney", "Embryo")  # Embryo: the 5 DevMap stages (no maturity
+# or sex); HeadKidney: the ImmunoMap's three treatments (no maturity or sex either)
 MATURITIES, SEXES = ("Immature", "Mature"), ("Female", "Male")
 STAGES = ("LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomitogenesis", "LateSomitogenesis")
-CONDITIONS = tuple(f"{t}_{m}_{s}" for t in TISSUES[:-1] for m in MATURITIES for s in SEXES) + STAGES
+CONDITIONS = snpscore.score.CHROMATIN_CONDITIONS
+
+
+def preset_tissue(name):
+    """The tissue key of a single-tissue preset name ('head_kidney' -> 'HeadKidney'), else None."""
+    key = "".join(w.capitalize() for w in name.split("_"))
+    return key if key in TISSUES else None
 
 
 def selection(key):
@@ -436,7 +446,7 @@ def cli_trait(trait):
     """snpscore's --trait for these conditions: 'all' or a single tissue's preset; None for any other set."""
     w = weights() or {}
     name = stored_preset(canonical(trait, w["presets"]), w["presets"]) if w.get("presets") else None
-    return name if name and (name == "all" or name.capitalize() in TISSUES) else None
+    return name if name and (name == "all" or preset_tissue(name)) else None
 
 
 def stored_preset(trait, presets):
@@ -445,7 +455,7 @@ def stored_preset(trait, presets):
     if trait == "all":
         return "all" if dict.__contains__(presets, "all") else None
     wanted = conditions_in(presets[trait])
-    names = sorted(presets, key=lambda p: p.capitalize() not in TISSUES)
+    names = sorted(presets, key=lambda p: not preset_tissue(p))
     return next((p for p in names if conditions_in(presets[p]) == wanted), None)
 
 

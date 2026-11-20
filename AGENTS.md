@@ -100,7 +100,8 @@ Decided:
 - No phenotypic traits in the portal (2026-10-09): it names sample conditions only (tissues, maturity, sex, embryo
   stages), never maturation, growth and so on; users map conditions to traits themselves. weights.yaml presets stay as
   snpscore's CLI names and the portal's cache of precomputed condition sets (to rename to tissue names later).
-- All conditions (2026-10-11, replaces 'Trait = Active in'): the portal's tiers always count all 21 conditions (Table,
+- All conditions (2026-10-11, replaces 'Trait = Active in'): the portal's tiers always count all 27 conditions (21 until
+  release 2026-11-20: see the AQUA-FAANG 2026 entry below) (Table,
   card, Overview, GWAS functional prior, gene page, variant page); there is no Active in and no condition picker. The
   Table only filters after scoring: its Chromatin column filter keeps SNPs in a robust ATAC peak (or an active state) in
   at least one chosen condition (tissues, maturity, sex) and changes no tier, Overview or card. One SNP's card opens in
@@ -146,17 +147,26 @@ Decided:
 - Rainbow trout chromosome Y is kept (G, 2026-11-14): scored, shown and in the ideogram (sdY and 3,928 AQUA-FAANG
   peaks are on it).
 
-- New AQUA-FAANG salmon data (G, 2026-11-20: "integrated into the app now as new tracks to see"): the gill ATAC-seq
-  re-made in 2026 (gill states and peaks) and the ImmunoMap (head kidney after PBS, poly I:C or Vibrio) are Locus
-  browser tracks, never scored. The tiers keep the 21 conditions of the unified peaks v1 (layers.yaml pins
-  archive/v1/; salmobase's current file is v3). Claude's display choices and the scoring question: DECISIONS #47-#48.
+- New AQUA-FAANG salmon data (G, 2026-11-20): the gill ATAC-seq re-made in 2026 (gill states and peaks) and the
+  ImmunoMap (head kidney after PBS, poly I:C or Vibrio) are Locus browser tracks ("integrated into the app now as new
+  tracks to see") and are scored ("include gill and immunomap in the scoring"): the chromatin layer is the unified
+  peaks v3, 27 conditions (gill: immature female and male, mature male; head kidney: three in vivo treatments), from
+  release 2026-11-20. The ImmunoMap's new label Bivalent_or_mixed_active/polycomb counts as weak, like Bivalent; the
+  disease_resistance preset is head kidney, gill and liver, and gill and head_kidney presets were added. The release
+  is built and published by the `species-data` workflow (G chose it over his Mac). Claude's display choices:
+  DECISIONS #48.
+- NCBI RefSeq is the Locus browser's default gene lane (G, 2026-11-20), one isoform per gene (the most CDS bases);
+  Ensembl genes (their gene pages and Ss4R duplicates) and every isoform of both are one click away. Thin lines
+  separate the tissues, the ImmunoMap and the DevMap in the Chromatin states and Regulatory elements drop-downs (G,
+  2026-11-20).
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
-- Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.
-  Not counted: repressed polycomb, quiescent, ZNF genes and repeats, Unknown_1.
+- Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
+  and the ImmunoMap's bivalent or mixed active/polycomb (G, 2026-11-20). Not counted: repressed polycomb, quiescent, ZNF
+  genes and repeats, Unknown_1 and Unknown_2 (gill's).
 - Trait presets (condition prefixes): maturation = Brain + Gonad; growth_and_fillet = Muscle + Liver;
-  disease_resistance = Liver (the only AQUA-FAANG tissue near immune function); development = the 5 DevMap stages;
-  plus one preset per tissue and `all`.
+  disease_resistance = HeadKidney + Gill + Liver (G, 2026-11-20; Liver alone before the ImmunoMap); development = the
+  5 DevMap stages; plus one preset per tissue (gill and head_kidney too) and `all`.
 - Weights and tier cut-offs: see weights.yaml (active 3, CDS/splice 3, constrained 2, weak/UTR/active elsewhere/Ensembl
   regulatory 1; tiers at 5, 3, 1). Ensembl regulatory features count only where AQUA-FAANG has no peak (68-86% overlap).
 - Benchmark controls matched on distance to the nearest gene and public MAF (0.05 bins), not LD.
@@ -219,8 +229,7 @@ Open (ask G; all collected with options and recommendations in docs/DECISIONS.md
   redistribution agreed, G 2026-11-10): which significance rule (paper: eigenMT BF < 0.1), which allele does pi refer to?
 - Public AF: the 504-fish panel is mostly Bertolotti 2020 (PRJEB38061) wild/farmed fish plus the 12 AQUA-FAANG fish (hosting
   derived AF agreed, G 2026-11-10): how should the population be described? (docs/RESEARCH.md section 4)
-- Scoring the gill and ImmunoMap conditions (unified peaks v3; DECISIONS #47); Enhancer-CNE source; vetting of the
-  40-row known-loci catalogue (docs/RESEARCH.md section 2).
+- Enhancer-CNE source; vetting of the 40-row known-loci catalogue (docs/RESEARCH.md section 2).
 - Data gap: the public 12-fish VCF (pool, demo list, synthetic GWAS) has only 70 sites on chr10 and stops near 105 Mb on chr1,
   while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
 - Assay QC: flank repeat shares are mostly 0 or 1, so ~55% of public SNPs warn on 'repeat' whatever the cut-off; should fully
@@ -319,13 +328,18 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   A release that exists only on the VM (built by that workflow) goes on GitHub from G's Mac with
   `bash snpdata/prep/release_from_demo.sh [version] [ssh host]` (copies it, its pool and genome from the VM, then
   `GENOME=<its genome> POOL=1 bash prep/github_release.sh`); done for trout-2026-11-13 on 2026-11-14.
-  A new trout release, in short: bump serve.py RELEASES, merge, deploy, run `species-data` on main, then
-  `release_from_demo.sh` on the Mac.
+  A new trout release, in short: bump serve.py RELEASES, merge, deploy, run `species-data` on main.
+  Since 2026-11-20 the `species-data` workflow takes a species (rainbow_trout or atlantic_salmon): it builds the
+  release serve.py names (RELEASE for salmon) on GitHub's runner, publishes it as the GitHub data release
+  data-<version> itself (prep/github_release.sh with the workflow's token, POOL=1) and sends it to the VM; a salmon
+  release becomes /srv/snpportal/release there (deploy/species.sh), the one it replaces moving to
+  releases/<version> for the results made with it. A new salmon release, in short: bump serve.py RELEASE, merge,
+  deploy, run `species-data` (atlantic_salmon) on main; no Mac needed (deploy/nrec.sh still works).
 - Deploying the NREC demo (G, 2026-11-06): only when G asks in the chat ("deploy to NREC"), usually after several
   merged pull requests; never on your own initiative, and never a branch. Run the `deploy` workflow on main:
   `gh workflow run deploy.yml --ref main` (cloud sessions, REST only: `gh api -X POST
   repos/garethgillard/salmo-snp/actions/workflows/deploy.yml/dispatches -f ref=main`), or G uses Actions > deploy >
   Run workflow. It runs the tests, then `deploy/update.sh` on the VM (~20 s). Then check
   https://158-39-75-9.sslip.io/snp/health/ and tell G what went live (the merges since the last deploy run). A new
-  data release still needs `deploy/nrec.sh` from G's Mac; a stale public pool (after a weights.yaml or snpscore
+  data release goes up with the `species-data` workflow (above) or `deploy/nrec.sh` from G's Mac; a stale public pool (after a weights.yaml or snpscore
   change) is built on GitHub's runner and sent by the same workflow run (snpportal/README.md "Deploying the demo").

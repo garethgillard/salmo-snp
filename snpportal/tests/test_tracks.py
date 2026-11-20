@@ -42,30 +42,33 @@ def remote(folder, monkeypatch):
         yield s
 
 
-GILL = ["Gill_Immature_Female", "Gill_Immature_Male", "Gill_Mature_Male"]  # gill ATAC-seq of 2026 (no usable Mature Female)
 IMMUNOMAP = ["HeadKidney_invivo_pbs", "HeadKidney_invivo_polyIC", "HeadKidney_invivo_vibrio"]
 
 
 def check_registry(cfg):
     """P4.1 acceptance: 54 BodyMap ATAC bigWigs = 16 conditions x 3 replicates and the 6 gill libraries AQUA-FAANG used
-    (UNUSED drops the rest), the ImmunoMap's 3 treatments x 6 fish, ChromHMM states for the 21 scored conditions plus
-    gill and the ImmunoMap, and the bigWigs' chromatin conditions are the annotate chromatin_<condition> columns."""
+    (UNUSED drops the rest), the ImmunoMap's 3 treatments x 6 fish, ChromHMM states for the 27 conditions (gill and the
+    ImmunoMap included), and the bigWigs' chromatin conditions are the annotate chromatin_<condition> columns."""
     atac = [t for t in cfg["tracks"] if t["assay"] == "ATAC" and t["source"] == "BodyMap"]
     assert len(atac) == 54 and len({t["condition"] for t in atac}) == 19 and {t["replicate"] for t in atac} == {"R1", "R2", "R3"}
     assert {t["id"] for t in atac if t["tissue"] == "Gill"} == {"ATAC_Gill_Immature_Female_R2", "ATAC_Gill_Immature_Female_R3",
         "ATAC_Gill_Immature_Male_R1", "ATAC_Gill_Immature_Male_R2", "ATAC_Gill_Immature_Male_R3", "ATAC_Gill_Mature_Male_R3"}
-    assert {t["chromatin_condition"] for t in atac if t["tissue"] == "Gill"} == {None}
-    assert {t["chromatin_condition"] for t in cfg["tracks"]} - {None} == {f"chromatin_{c}" for c in CHROMATIN_CONDITIONS}
     immuno = [t for t in cfg["tracks"] if t["source"] == "ImmunoMap" and t["assay"] == "ATAC"]
     assert len(immuno) == 18 and sorted({t["condition"] for t in immuno}) == IMMUNOMAP and {t["tissue"] for t in immuno} == {"HeadKidney"}
     for key in ("chromhmm", "peaks"):  # one bigBed per condition with states
-        assert sorted(t["condition"] for t in cfg[key]) == sorted([*CHROMATIN_CONDITIONS, *GILL, *IMMUNOMAP])
-        assert {t["kind"] for t in cfg[key]} == {"bigBed"}
+        assert sorted(t["condition"] for t in cfg[key]) == sorted(CHROMATIN_CONDITIONS) and {t["kind"] for t in cfg[key]} == {"bigBed"}
+
+
+def check_columns(cfg):
+    """The bigWigs' chromatin conditions are the annotate chromatin_<condition> columns of a release built now."""
+    assert {t["chromatin_condition"] for t in cfg["tracks"]} - {None} == {f"chromatin_{c}" for c in CHROMATIN_CONDITIONS}
+    assert {t["chromatin_condition"] for t in cfg["tracks"] if t["condition"] == "Gill_Mature_Female"} == {None}
 
 
 def test_registry(tmp_path):
     cfg = tracks.load_tracks(REGISTRY)
     check_registry(cfg)
+    check_columns(cfg)
     with pytest.raises(FileNotFoundError, match="snpdata build"):
         tracks.load_tracks(tmp_path)  # a release folder without tracks.yaml: no fallback to the repo copy
     presets = yaml.safe_load((WEIGHTS).read_text())["presets"]
@@ -114,3 +117,4 @@ def test_registry_matches_release():
     columns = next(layer["columns"] for layer in manifest["layers"] if layer["name"] == "chromatin")
     assert {f"chromatin_{c}" for c in columns if c not in ("summary", "id")} == {f"chromatin_{c}" for c in CHROMATIN_CONDITIONS}
     check_registry(tracks.load_tracks(release))
+    check_columns(tracks.load_tracks(release))

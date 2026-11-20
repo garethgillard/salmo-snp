@@ -11,7 +11,7 @@ from html import escape
 from . import figures, palette
 
 WIDTH, GUTTER, RIGHT = 1200, 170, 14
-TISSUE_ORDER = ("Brain", "Gonad", "Liver", "Muscle")
+TISSUE_ORDER = ("Brain", "Gonad", "Liver", "Muscle", "Gill")  # the grid's tissue rows (head kidney and embryo rows follow)
 COLUMNS = (("Immature", "Female", "Imm F"), ("Immature", "Male", "Imm M"), ("Mature", "Female", "Mat F"), ("Mature", "Male", "Mat M"))
 STAGES = figures.STAGE_LABELS
 REGBUILD = {"promoter": "Active_TSS", "enhancer": "Active_enhancer", "open_chromatin_region": "Accessible_chromatin"}  # -> state colour
@@ -57,12 +57,7 @@ def _hatch(uid, name, colour, angle=45):
             f'<line x1="0" y1="0" x2="0" y2="6" stroke="{colour}" stroke-width="2"/></pattern>')
 
 
-def condition_label(condition):
-    """('Brain', 'Imm F') for Brain_Immature_Female, ('Embryo', 'Blastula') for LateBlastulation."""
-    parts = condition.split("_")
-    if len(parts) == 3:
-        return parts[0], f"{parts[1][:3]} {parts[2][0]}"
-    return "Embryo", STAGES.get(condition, condition)
+condition_label = figures.condition_label  # ('Brain', 'Imm F'), ('HeadKidney', 'PBS'), ('Embryo', 'Blastula')
 
 
 def fmt_bp(n):
@@ -173,7 +168,7 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
     if any(g["label"].startswith("~") for g in data.get("genes", [])):
         legend.setdefault("Genes", []).append(("", "~NAME = unnamed in Ensembl 116, named by its human (else zebrafish) ortholog"))
 
-    # chromatin: 21 condition rows, states inside robust peaks (or the ChromHMM segmentation)
+    # chromatin: 27 condition rows, states inside robust peaks (or the ChromHMM segmentation)
     y, present, chosen = _chromatin(body, ax, data, y, chosen, hmm, compact, gutter, uid, lane_label)
     states = [(_swatch(palette.STATES[s][0]), f"{s.replace('_', ' ')} ({palette.STATES[s][1]})") for s in palette.STATES if s in present]
     if chosen:
@@ -404,7 +399,7 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label, source="Ensembl 1
 
 
 def _chromatin(body, ax, data, y, chosen, hmm, compact, gutter, uid, lane_label):
-    """21 condition rows, grouped by tissue (embryo stages last). Returns (y, states present, conditions marked)."""
+    """27 condition rows, grouped by tissue (embryo stages last). Returns (y, states present, conditions marked)."""
     conditions = data.get("conditions") or []
     rows = {r["condition"]: r["segments"] for r in hmm} if hmm is not None else None
     h, gap = (5, 1) if compact else (9, 1)
@@ -420,14 +415,14 @@ def _chromatin(body, ax, data, y, chosen, hmm, compact, gutter, uid, lane_label)
         if group != last_group:
             body.append(f'<rect x="{gutter - 6}" y="{y}" width="3" height="{(h + gap) * sum(condition_label(x)[0] == group for x in conditions) - gap}" '
                         f'fill="{palette.TISSUES.get(group, G[500])}"/>')
-            body.append(_t(8, y + h + (3 if compact else 0), group, 11 if compact else 9.5, G[900], weight="600"))
+            body.append(_t(8, y + h + (3 if compact else 0), figures.tissue_name(group), 11 if compact else 9.5, G[900], weight="600"))
         last_group = group
         if c in chosen:
             body.append(f'<path d="M{gutter - 15} {y} l5 {h / 2} l-5 {h / 2}z" fill="{palette.ACCENT}"><title>a chosen condition</title></path>')
         if not compact:
             body.append(_t(gutter - (17 if c in chosen else 10), y + h - 1, label, 8.5, G[900] if c in chosen else G[700], "end",
                            "600" if c in chosen else ""))
-        name = f"{group} {label}" if group != "Embryo" else label
+        name = f"{figures.tissue_name(group)} {label}" if group != "Embryo" else label
         if rows is not None:
             segs = rows.get(c)
             if segs is None:
@@ -546,9 +541,11 @@ GRID = {"cw": 58, "ch": 22, "gap": 4, "left": 70, "top": 18}  # the tiles: cell 
 
 
 def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="cg", legend=True):
-    """Tissue rows x immature/mature female/male columns, plus an embryo row: the state of each of the 21 conditions
-    at one SNP. states: {condition: state or None}. Preset cells are outlined; blacklisted cells without a state are
-    hatched 'n/a'. legend=False: no legend of its own (the card shares one with its mini browser)."""
+    """Tissue rows x immature/mature female/male columns, a head kidney row (the ImmunoMap's treatments) and an embryo
+    row: the state of each condition at one SNP. states: {condition: state or None}, every condition of the release (a
+    tissue without any is left out; a cell of a condition the release lacks, as gill's mature females, is blank). Preset
+    cells are outlined; blacklisted cells without a state are hatched 'n/a'. legend=False: no legend of its own (the
+    card shares one with its mini browser)."""
     cw, ch, gap, left = GRID["cw"], GRID["ch"], GRID["gap"], GRID["left"]
     defs = f"<defs>{_hatch(uid, 'na', G[500])}</defs>"
     parts, y, present = [], GRID["top"], set()
@@ -556,6 +553,8 @@ def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="c
         parts.append(_t(left + i * (cw + gap) + cw / 2, 12, short, 9.5, G[700], "middle"))
 
     def cell(x, yy, condition, label, cw=cw):
+        if condition not in states:  # not sampled (gill's mature females)
+            return f'<g><title>not sampled</title><rect x="{x + 0.5}" y="{yy + 0.5}" width="{cw - 1}" height="{ch - 1}" rx="2" fill="none" stroke="{G[200]}" stroke-dasharray="2 2"/></g>'
         state = states.get(condition)
         tip = state.replace("_", " ") if state else "blacklisted: cannot tell" if blacklisted else "no peak"  # the rows and columns say where
         out = [f"<title>{escape(tip)}</title>"]
@@ -575,10 +574,21 @@ def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="c
         return f"<g>{''.join(out)}</g>"
 
     for tissue in TISSUE_ORDER:
+        if not any(c.startswith(tissue + "_") for c in states):
+            continue
         parts.append(_t(4, y + 15, tissue, 10.5))
         for i, (maturity, sex, _) in enumerate(COLUMNS):
             parts.append(cell(left + i * (cw + gap), y, f"{tissue}_{maturity}_{sex}", ""))
         y += ch + gap
+    immuno = [c for c in states if c.startswith("HeadKidney_inv")]  # the ImmunoMap: one cell per treatment, labelled
+    if immuno:
+        y += 4
+        parts.append(_t(4, y + 15, figures.tissue_name("HeadKidney"), 10.5))
+        hw = (4 * (cw + gap) - gap - (len(immuno) - 1) * gap) / len(immuno)
+        order = list(figures.TREATMENTS)
+        for i, c in enumerate(sorted(immuno, key=lambda c: (c.split("_")[1] != "invivo", order.index(c.split("_")[2]) if c.split("_")[2] in order else 9))):
+            parts.append(cell(round(left + i * (hw + gap), 1), y, c, condition_label(c)[1], round(hw, 1)))
+        y += ch + 14
     y += 4
     parts.append(_t(4, y + 15, "Embryo", 10.5))
     ew = (4 * (cw + gap) - gap - 4 * gap) / 5
@@ -697,7 +707,7 @@ def motif_logos(hits, seq, w, ref, alt, width=640, row=34):
 def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, tiles=None):
     """The card's mini locus browser: the locus browser's lanes in one SVG: the list's SNPs (unnamed; tier colour,
     height = score, faded when not in the selection), genes, public variants (height = MAF), GERP constrained elements
-    and the robust ATAC peaks (coloured by their strongest state; n/21 under each: the conditions with the peak). Lane
+    and the robust ATAC peaks (coloured by their strongest state; n/27 under each: the conditions with the peak). Lane
     names explain themselves on hover, a peak shows its state; variants and GERP show nothing. No ruler: the window's
     ends are marked beside the SNP's label. The SNP is a line through the lanes and its own peak is outlined; `tiles`
     (chromatin_grid without a legend) hang under the SNP in a wedge from it: that peak per condition. data: locus.lanes(); snps:

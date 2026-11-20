@@ -55,7 +55,7 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   say the rules are provisional. No PROVISIONAL or SYNTHETIC badges: a synthetic job's title says so.
 - Panels, filters, card sections and export columns render only when their column exists in the result.
 - `hx-boost` only on links and forms that stay on the same page (a boosted file or other-page link swaps in nothing; tested).
-- Results tabs: Overview | Table | Export; GWAS jobs: Association | Overview | Table | Export. Tiers always count all 21
+- Results tabs: Overview | Table | Export; GWAS jobs: Association | Overview | Table | Export. Tiers always count all 27
   conditions (no trait picker); the curated panel is its own page (Design panel, `panel.py`; `?tab=panel` is unlinked).
   View state lives in whitelisted GET parameters (GWAS links keep the fine-mapping settings); derived files are
   cached in the job folder by a hash of their parameters (`panels/<hash>.parquet`, `loci/<hash>.parquet`), so the

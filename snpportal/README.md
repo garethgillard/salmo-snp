@@ -1,6 +1,6 @@
 # snpportal
 
-The salmo-snp web portal (a Django app, linked from salmobase.org): score a SNP list against AQUA-FAANG functional maps and tier it by its evidence in all 21
+The salmo-snp web portal (a Django app, linked from salmobase.org): score a SNP list against AQUA-FAANG functional maps and tier it by its evidence in all 27
 sample conditions, then explore the result (overview, a table filtered on its columns, an evidence card per SNP in the
 table's drawer), collect selections in a Design panel, compare it with an existing chip, export it (TSV, Parquet, BED, Illumina-, Axiom- and KASP-style files, genomic-prediction priors, or a zip bundle) and
 print a one-page report.
@@ -84,7 +84,7 @@ files and restarts the portal; if the portal doesn't answer within 40 s it goes 
 job fails (Actions tab), as it does after 15 minutes. The key GitHub uses can run nothing else on the VM (a forced
 command in `authorized_keys`). One-time setup, after `nrec.sh`: `bash deploy/github_deploy.sh nrec 158.39.75.9` (makes
 that key, stores it as the repository secret `NREC_DEPLOY_KEY` with the host key, and sets the variable `NREC_HOST`;
-rerun it to replace the key). Releases are not in git: a new release still goes up with `nrec.sh`. The public pool
+rerun it to replace the key). Releases are not in git: a new release goes up with the `species-data` workflow (any species, Atlantic salmon included since 2026-11-20: built on GitHub's runner, published as the GitHub data release and installed by `deploy/species.sh`; a salmon release becomes /srv/snpportal/release) or with `nrec.sh`. The public pool
 after a change to weights.yaml or snpscore is the workflow's: the VM (2 GB RAM) can't build it (it swapped for 17
 minutes until the SSH session dropped, 2026-11-06), so update.sh says it is stale, and the job then builds it on
 GitHub's runner (the data release through `tools/get_data.sh --no-genome`, whose `salmo-snp download` builds it, about
@@ -163,7 +163,7 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 | `panel/`, `panel/change/` (POST), `panel/download/?format=tsv\|kasp\|illumina\|axiom[&scope=new]`, `results/<key>/add-to-panel/` (POST) | the Design panel: see "Design panel" below |
 | `current/` | the results this browser last opened (a cookie), else the Score page |
 | `` (the home page) | the Score page: 'Your results' (a green box, only when there are any), the examples and one tab per input, each with the same hint line and Score button; beside them the tour (a screenshot of a SNP's card); it sends `no-store` when it lists results. Delete and Clear panel ask in a small dialog (`data-confirm` on the form, portal.js). 'Your results': the results this browser opened (an HttpOnly cookie, newest first; named by the uploaded file, or 'Pasted' and the time), each with its SNPs, time, a link and Delete (`results/<key>/delete/` with `next=score` comes back here) |
-| `results/<key>/report/?[filters][&panel=<hash>]` | one-page printable report (two A4 pages): the Overview's numbers and the top 20 SNPs of the Table's selection, tiers for all 21 conditions |
+| `results/<key>/report/?[filters][&panel=<hash>]` | one-page printable report (two A4 pages): the Overview's numbers and the top 20 SNPs of the Table's selection, tiers for all 27 conditions |
 | `results/<key>/figure/<name>.svg`, `results/<key>/tools/<name>.svg` | Overview and (unlinked) Panel-tab figures (`&format=tsv` for their data) |
 | `results/<key>/association/` (+ `<name>.svg`, `download/`, `region/`) | GWAS jobs: QC, Manhattan, QQ, loci, fine-mapping, regional plot |
 | `results/<key>/snp/<row>/`, `variant/<chrom>-<pos>[-ref-alt]/`, `locus/?r=[&key=]`, `gene/<id>/` | a job's SNP (opens its card in the Table's drawer, `?snp=`), variant page, locus browser (with a GWAS job's key it draws the association lane; `&embed=1`: without the site's chrome and with no Back steps, as the card drawer shows it), gene page |
@@ -176,7 +176,7 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 - Overview, Table and Export; GWAS jobs have Association, Overview, Table and Export, and every link of theirs keeps
   the fine-mapping settings (`sig`, `sugg`, `window`, `prior_sd`, `lam`, `trait_sd`). `tab=panel`, the automatic
   designer, still works but is no longer linked: the Design panel page is the curated panel.
-- Tiers always count all 21 conditions (no Active in, no condition picker; an older link's `trait` is ignored): the
+- Tiers always count all 27 conditions (no Active in, no condition picker; an older link's `trait` is ignored): the
   Table only filters after scoring.
 - Table filters: `tier`, `region`, `chrom/start/end`, `gene`, `min_maf`, `assay`, `known`, `min_score` (the Score
   column's slider), `hide_*`; Chromatin: `tissue` (several), `maturity`, `sex` and `act=active`, SNPs in a robust ATAC
@@ -270,7 +270,9 @@ states, Functional assays and Other annotation. The AQUA-FAANG rows come from th
 `snpportal/lib/tracks_added.yaml`: tracks published after the release (salmon gill ATAC-seq of 2026, gill states and
 peaks, the ImmunoMap), added to a registry of the same hub that lacks them (`snpdata tracks --added-since
 <release>/tracks.yaml` writes it); `lib/tracks.UNUSED` leaves out the libraries the AQUA-FAANG README says weren't used.
-They are shown, never scored: the Combined peak row and the tiers count the release's 21 conditions (DECISIONS #47-#48).
+The tiers and the Combined peak row count the release's own conditions: 27 from release 2026-11-20 (gill and the
+ImmunoMap's in vivo treatments included; G, 2026-11-20), 21 in 2026-11-05, whose pages show the newer rows only
+(DECISIONS #47-#48).
 
 Public data on the pages (R1, R3-R8 of docs/ROADMAP.md 'Push 2'):
 - Public allele frequencies are the 504-fish reference panel's (`public_af_af`, `_maf`, `_ac`, `_an`, `_ns`); the 12
@@ -410,7 +412,7 @@ for `preset` as in design(). Rows keep the source's order (a connection's view i
 `--format priors` (`export.priors(source, out, release_dir, preset, meta, categories=None)`) writes a zip of
 genomic-prediction prior files: `bayesrc_classes.txt` (SNP<TAB>class, no header, input order), `sets/<category>.txt`
 (GFBLUP/MultiBLUP sets, which overlap), `ldak_partitions/partition1..K` (disjoint, covering every SNP), `annot.tsv`
-(CHR, BP, SNP, a 0/1 column per category, tier_score, `active_<condition>` for the 21 conditions), `snp_lookup.tsv`
+(CHR, BP, SNP, a 0/1 column per category, tier_score, `active_<condition>` for the 27 conditions), `snp_lookup.tsv`
 (only when some ids are missing: names `Ssa<chrom>p<pos>`), `README.txt` (provenance, category definitions and counts,
 a methods paragraph, references) and `methods.txt`. Categories: tier1_2, active, coding (non-synonymous
 `coding_consequence`, else region_class CDS), constrained, regulatory, none; a SNP's class is the first category it is

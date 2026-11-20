@@ -237,7 +237,7 @@ class LocusTest(SimpleTestCase):
         self.assertIn('class="sp-selected sp-out"', out)
         self.assertIn("include=0", out[out.index('id="drawer"'):])
         self.get(reverse("snpportal:results", args=[key]) + "?tab=table&include=0")
-        self.assertIn("No AQUA-FAANG peak in the 21 conditions sampled", card)  # one line instead of an empty grid
+        self.assertIn("No AQUA-FAANG peak in the 27 conditions sampled", card)  # one line instead of an empty grid
         self.assertNotIn("Chromatin state per condition", card)
         self.assertIn("Expression of the nearest gene (not necessarily the target)</summary>", card)  # closed
         self.assertIn('aria-label="Published association"', card)

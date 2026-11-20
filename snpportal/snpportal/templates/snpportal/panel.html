@@ -33,7 +33,7 @@
         <td><form method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0" type="submit" name="remove" value="{{ s.id }}">Remove</button></form></td></tr>{% endfor %}</tbody>
     </table></div>
     {% if n %}<p class="sp-small mb-0"><strong>{{ n|thousands }}</strong> SNPs in the panel{% if several %}; {{ several|thousands }} in more than one source{% endif %}.
-      Tiers here count all 21 conditions, so sources scored for other conditions compare.</p>{% endif %}
+      Tiers here count all 27 conditions, so sources scored for other conditions compare.</p>{% endif %}
   </section>
   {% if n %}
     <section class="sp-card" aria-labelledby="chip-h">
