@@ -5,22 +5,25 @@ sections after it record what was built (ticked when built and tested), and thei
 Specs: [ROADMAP.md](ROADMAP.md). Questions only G can answer: [DECISIONS.md](DECISIONS.md) (ask, don't decide).
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
-## Where things stand (2026-11-16)
+## Where things stand (2026-11-20)
 - Phase: feature work on the local install, the main product (AGENTS.md plan 4, G 2026-11-03); the live site moves
   to salmobase later. Two species since 2026-11-14: Atlantic salmon (the default) and rainbow trout (AGENTS.md Plan 7;
   the section below), finished and accepted by G; the next work is Push 3 (Next).
 - main is green on GitHub (tests, user-install). The NREC demo https://158.39.75.9/snp/ (test.salmobase.org/snp/
   redirected there from 2026-11-10 but answers 404 since 2026-11-16) runs what G last had deployed (the manual
   `deploy` workflow since 2026-11-06; merges no longer deploy; cloud sessions use https://158-39-75-9.sslip.io/snp/:
-  the bare IP didn't connect through their proxy). Since 2026-11-16 that is 70506bc (PRs #18 and #21: the Locus
-  browser moves and zooms with the mouse; the user's own BED tracks), with release 2026-11-05 and, in
-  /srv/snpportal/releases/, trout-2026-11-13 with its pool (built and sent by the `species-data` workflow, 2026-11-14). On 2026-11-08 the VM had hung (Active in NREC, nothing
-  answering on 22 or 443) until G hard-rebooted it; the cause is unknown (its console log would say): with 2 GB RAM
-  and 1 vCPU, a 4 GB flavor is the fix if it hangs again.
-- The data for real use: the GitHub Releases data-2026-11-05 (`bash tools/get_data.sh`) and data-trout-2026-11-13
-  (`bash tools/get_data.sh trout-2026-11-13`); not on salmobase yet. Release 2026-11-05 = 2026-11-03 plus
-  flank_keys.parquet (I18), built with Python 3.12 and DuckDB 2.0.0: every other table is identical, except the allele
-  named in `motif_tfs` for 33 of 512,745 motif sites (float ties); the demo lists score the same tiers.
+  the bare IP didn't connect through their proxy). Since 2026-11-20 that is 5e1a180 (PRs #25 and #26: the new
+  AQUA-FAANG gill and ImmunoMap tracks, scored; NCBI genes by default; tissue separators), with release 2026-11-20
+  (built, published and installed by the `species-data` workflow, 2026-11-20) and, in /srv/snpportal/releases/,
+  2026-11-05 (for the results made with it) and trout-2026-11-13, each with its pool. On 2026-11-08 the VM had hung
+  (Active in NREC, nothing answering on 22 or 443) until G hard-rebooted it; the cause is unknown (its console log
+  would say): with 2 GB RAM and 1 vCPU, a 4 GB flavor is the fix if it hangs again.
+- The data for real use: the GitHub Releases data-2026-11-20 (`bash tools/get_data.sh`; its pool included) and
+  data-trout-2026-11-13 (`bash tools/get_data.sh trout-2026-11-13`); not on salmobase yet. Release 2026-11-20 =
+  2026-11-05 with the unified peaks v3 (328,894 peaks, 27 conditions: gill and the ImmunoMap's head kidney added), so
+  533,163 motif sites (512,745) and more in-peak evidence: of the 1,622,674 public sites, 8,145 gain evidence and
+  none lose any; 8,026 move up a tier (tier 1: 7,190 -> 7,591; tier 2: 103,732 -> 110,358), 7,260 of them with an
+  active state in head kidney or gill. data-2026-11-05 stays for installs that name it.
 - Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
 
 ## Rainbow trout (2026-11-12, G: a second species, with a species bar)
