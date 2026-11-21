@@ -69,7 +69,8 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
    (I19); no fSalSal1 alignment (postponed: build skips the fSalSal1 tables without its PAF). The I18
    check against a real ICSASG_v2 Axiom manifest still waits for one; its counts settle DECISIONS #34 and #36.
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
-4. **Phase 3**: G's DeepFARM and CADD-like data as variant-score layers (I16).
+4. **Phase 3**: variant-score layers (I16): ChromBPNet first (G, 2026-11-21), in its own repository on Orion
+   (docs/CHROMBPNET.md); then DeepFARM retrained and a CADD-like score.
 5. **Phase 4 rest, postponed** (G, 2026-11-06): the fSalSal1 conversion's data (the alignment, snpdata README "The
    fSalSal1 conversion"; the code is merged and tested) and a release with the data tracks on fSalSal1 (I20, once
    AQUA-FAANG and the other analyses are re-run there); the conversion then moves older lists, panels and projects to it.
@@ -221,7 +222,8 @@ Phase 2, chip design (Axiom first: DECISIONS #27):
 Phase 3, variant scores:
 - [x] I15 One layer format for per-variant scores (layers.yaml format variant_scores: score and percentile; shown on
       the Table, card and locus pages; weight 0 until weights.yaml variant_scores names a percentile, DECISIONS #33)
-- [ ] I16 DeepFARM (retrained by G) and a CADD-like score, as I15 layers in a release (G's data)
+- [ ] I16 ChromBPNet scores (27 conditions; its own repository on Orion, docs/CHROMBPNET.md), then DeepFARM (retrained
+      by G) and a CADD-like score, as I15 layers in a release
 
 Phase 4, genomes (later):
 - [x] I17 Several releases side by side on a local install: the Releases page switches the release new work uses; a
