@@ -116,7 +116,9 @@ BENCH_AXIS = (1 / 8, 64)  # enrichment axis (log2); intervals beyond it end in a
 ENA = "https://www.ebi.ac.uk/ena/browser/view/{}"
 AQUAFAANG_PROJECTS = [  # (atlas, assay, ENA project); docs/RESEARCH.md section 6
     ("BodyMap", "RNA-seq", "PRJEB47409"), ("BodyMap", "ATAC-seq", "PRJEB47408"), ("BodyMap", "ChIP-seq", "PRJEB55063"),
-    ("DevMap", "RNA-seq", "PRJEB51855"), ("DevMap", "ATAC-seq", "PRJEB51854"), ("DevMap", "ChIP-seq", "PRJEB53399")]
+    ("DevMap", "RNA-seq", "PRJEB51855"), ("DevMap", "ATAC-seq", "PRJEB51854"), ("DevMap", "ChIP-seq", "PRJEB53399"),
+    ("ImmunoMap", "RNA-seq", "PRJEB50076"), ("ImmunoMap", "ATAC-seq", "PRJEB50077"), ("ImmunoMap", "ChIP-seq", "PRJEB56698")]
+# The 2026 gill ATAC-seq is not in ENA yet (AQUA-FAANG README on salmobase, 2026-11-20)
 BODYMAP_FISH = [("Immature female", "J8, J9, J10"), ("Immature male", "J15, J16, J18"), ("Mature female", "A14, A15, A24"),
                 ("Mature male", "A19, A20, A22")]
 CITATIONS = [  # (what, reference, DOI or URL): wording provisional (author lists to confirm)
