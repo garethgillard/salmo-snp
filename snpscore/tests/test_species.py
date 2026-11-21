@@ -35,9 +35,8 @@ def test_annotate_trout(trout, tmp_path):
 
 
 def test_trout_pool_samples_the_public_sites(trout, tmp_path, monkeypatch):
-    """Without the 12 AQUA-FAANG fish's column, the pool takes an even sample of at most MAX_SITES public sites."""
+    """Beyond MAX_SITES common public sites, the pool takes an even sample of them."""
     sites = duckdb.sql(f"SELECT count(*) FROM read_parquet('{trout / 'public_af.parquet'}')").fetchall()[0][0]
     monkeypatch.setattr(pool, "MAX_SITES", sites // 4)
-    target = pool.release_sites(trout, tmp_path)
-    n = len(target.read_text().splitlines()) - 1
+    n = sum(len(t.read_text().splitlines()) - 1 for t in pool.release_sites(trout, tmp_path))
     assert 0 < n < sites / 2

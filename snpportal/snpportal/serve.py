@@ -114,11 +114,11 @@ def download(version=None, source=None, genome=True):
 
 def ensure_pool(release):
     """The release's public background pool (snpscore pool: the Overview's comparison with public sites, gene-page
-    candidates), built when it is missing or was made for other rules or another snpscore; about a minute."""
+    candidates), built when it is missing or was made for other rules or another snpscore; a minute or two."""
     from snpscore.pool import build_pool, stale
     if not stale(release):
         return
-    print("salmo-snp: scoring the release's public sites for comparison (about a minute, once per release and rules)",
+    print("salmo-snp: scoring the release's public sites for comparison (a minute or two, once per release and rules)",
           flush=True)
     try:
         build_pool(release, threads=max(2, min(8, os.cpu_count() or 2)), memory_limit="4GB")

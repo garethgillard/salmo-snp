@@ -193,16 +193,21 @@ see "Biology decisions" in ../AGENTS.md and `provisional` in the manifest.
 ## Public background pool
 
 `snpscore pool --release R [--sites aquafaang12|panel] [--background VCF] [--assay] [--if-stale]`
-(`snpscore.pool.build_pool`) annotates public sites taken from the release itself: by default every site of the 12
-AQUA-FAANG fish (`public_af` rows with `aquafaang12_af`, the 1.6M sites of their VCF, all of them 504-panel sites;
-`--sites panel`: all 7.6M panel sites; `snpscore.pool.SITES`, DECISIONS #15), or the sites of a VCF. Sequence and assay
-checks run only with `--assay`, which needs `--memory 8GB` for the 1.6M sites and takes about 100 s; the default run
-takes about 35-40 s with 4 threads and 4 GB. It writes, under `R/pool/`:
+(`snpscore.pool.build_pool`) annotates public sites taken from the release itself, or the sites of a VCF. By default
+(`--sites panel`, `snpscore.pool.SITES`; G, 2026-11-21, DECISIONS #15) it takes the common ones, with a public MAF of
+at least the panel designer's `design.min_maf` (0.05), because the designer picks its candidates from the pool: for
+salmon the 3,436,671 such sites of the 504-fish panel's 7.6M, on all 29 chromosomes; above `MAX_SITES` (4,000,000) an
+even sample, the same sites every time (rainbow trout: 3.37M of its 13.5M). `--sites aquafaang12` takes the 1.6M
+sites of the 12 AQUA-FAANG fish's VCF instead, the pool until 2026-11-21 (only 70 on chromosome 10, none past 105 Mb
+on chromosome 1). Annotation runs in parts of whole chromosomes of at most `CHUNK` (1.5M) sites, so 4 GB is enough:
+release 2026-11-20 takes about 80 s with 4 threads (85 MB). Sequence and assay checks run only with `--assay`, which
+needs `--memory 8GB`. It writes, under `R/pool/`:
 - `pool.parquet`: the annotate columns (tiers for the `all` preset), then `tier__<preset>` and `tier_score__<preset>`
   for every preset in weights.yaml (wide, one row per site, in genome order).
 - `background.json`: `n_sites`, `rows_read`, `rejected`, `release`, `created`, `source`, `assay_checked`, `seconds`,
-  `weights_sha256` and `snpscore_version` (`stale()`: no pool, or one made for another release version, other weights
-  or another snpscore; `--if-stale` builds only then, as `salmo-snp download` and `serve` and the NREC deploys do);
+  `weights_sha256`, `snpscore_version` and `sites_rule` (`stale()`: no pool, or one made for another release version,
+  other weights, another snpscore or another site rule; `--if-stale` builds only then, as `salmo-snp download` and
+  `serve` and the NREC deploys do);
   categories as {key: {`n`, `share`}} whose shares sum to 1: `tiers` {preset: {tier}}, `region_class` (NULL =
   `intergenic`), `maf_histogram` (public MAF in bins of 0.05, `0.00-0.05` ... `0.45-0.50`), `assay_status` (with
   `--assay`); independent shares (share of sites): `active_by_condition` {condition: share with an active state},

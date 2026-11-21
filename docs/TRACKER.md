@@ -5,22 +5,25 @@ sections after it record what was built (ticked when built and tested), and thei
 Specs: [ROADMAP.md](ROADMAP.md). Questions only G can answer: [DECISIONS.md](DECISIONS.md) (ask, don't decide).
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
-## Where things stand (2026-11-16)
+## Where things stand (2026-11-20)
 - Phase: feature work on the local install, the main product (AGENTS.md plan 4, G 2026-11-03); the live site moves
   to salmobase later. Two species since 2026-11-14: Atlantic salmon (the default) and rainbow trout (AGENTS.md Plan 7;
   the section below), finished and accepted by G; the next work is Push 3 (Next).
 - main is green on GitHub (tests, user-install). The NREC demo https://158.39.75.9/snp/ (test.salmobase.org/snp/
   redirected there from 2026-11-10 but answers 404 since 2026-11-16) runs what G last had deployed (the manual
   `deploy` workflow since 2026-11-06; merges no longer deploy; cloud sessions use https://158-39-75-9.sslip.io/snp/:
-  the bare IP didn't connect through their proxy). Since 2026-11-16 that is 70506bc (PRs #18 and #21: the Locus
-  browser moves and zooms with the mouse; the user's own BED tracks), with release 2026-11-05 and, in
-  /srv/snpportal/releases/, trout-2026-11-13 with its pool (built and sent by the `species-data` workflow, 2026-11-14). On 2026-11-08 the VM had hung (Active in NREC, nothing
-  answering on 22 or 443) until G hard-rebooted it; the cause is unknown (its console log would say): with 2 GB RAM
-  and 1 vCPU, a 4 GB flavor is the fix if it hangs again.
-- The data for real use: the GitHub Releases data-2026-11-05 (`bash tools/get_data.sh`) and data-trout-2026-11-13
-  (`bash tools/get_data.sh trout-2026-11-13`); not on salmobase yet. Release 2026-11-05 = 2026-11-03 plus
-  flank_keys.parquet (I18), built with Python 3.12 and DuckDB 2.0.0: every other table is identical, except the allele
-  named in `motif_tfs` for 33 of 512,745 motif sites (float ties); the demo lists score the same tiers.
+  the bare IP didn't connect through their proxy). Since 2026-11-20 that is 5e1a180 (PRs #25 and #26: the new
+  AQUA-FAANG gill and ImmunoMap tracks, scored; NCBI genes by default; tissue separators), with release 2026-11-20
+  (built, published and installed by the `species-data` workflow, 2026-11-20) and, in /srv/snpportal/releases/,
+  2026-11-05 (for the results made with it) and trout-2026-11-13, each with its pool. On 2026-11-08 the VM had hung
+  (Active in NREC, nothing answering on 22 or 443) until G hard-rebooted it; the cause is unknown (its console log
+  would say): with 2 GB RAM and 1 vCPU, a 4 GB flavor is the fix if it hangs again.
+- The data for real use: the GitHub Releases data-2026-11-20 (`bash tools/get_data.sh`; its pool included) and
+  data-trout-2026-11-13 (`bash tools/get_data.sh trout-2026-11-13`); not on salmobase yet. Release 2026-11-20 =
+  2026-11-05 with the unified peaks v3 (328,894 peaks, 27 conditions: gill and the ImmunoMap's head kidney added), so
+  533,163 motif sites (512,745) and more in-peak evidence: of the 1,622,674 public sites, 8,145 gain evidence and
+  none lose any; 8,026 move up a tier (tier 1: 7,190 -> 7,591; tier 2: 103,732 -> 110,358), 7,260 of them with an
+  active state in head kidney or gill. data-2026-11-05 stays for installs that name it.
 - Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
 
 ## Rainbow trout (2026-11-12, G: a second species, with a species bar)
@@ -54,7 +57,9 @@ never scored (mytracks.py). New AQUA-FAANG data (G, 2026-11-20): the salmon gill
 (head kidney after immune stimulation) as Locus browser tracks (PR #25), then scored: release 2026-11-20 counts 27
 conditions (unified peaks v3; the ImmunoMap's mixed label weak; disease_resistance = head kidney, gill and liver), built,
 published as data-2026-11-20 and installed on the demo by the `species-data` workflow, no Mac needed. NCBI RefSeq is
-the default gene lane; thin lines separate the tissues in the chromatin drop-downs.
+the default gene lane; thin lines separate the tissues in the chromatin drop-downs. The public pool (G, 2026-11-21,
+DECISIONS #15) takes the 504-fish panel's 3.44M common sites (MAF >= 0.05, all 29 chromosomes) instead of the 12-fish
+VCF's 1.6M (70 on chromosome 10), built in parts of at most 1.5M sites so 4 GB is enough.
 
 Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged: I1-I5, I7-I12, I15,
 I17, I18 (PR #2, 2026-11-05); mixed purposes (I8), Primer3 and Agena files (I14), the ICSASG_v2 conversion (I19), the
@@ -62,11 +67,12 @@ salmobase container, health and release checks (P8.4, P8.5) (PR #3, 2026-11-06);
 conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: see 5). What remains:
 1. **G's answers** (DECISIONS.md #25-#37 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
    is PROVISIONAL until then. #34 and #36 (chip placement by flank) are answered for now (G, 2026-11-05), to revisit.
-2. **A new release** (G's Mac): `snpdata build` and `bash prep/github_release.sh`: it adds liftover_icsasg_v2.parquet
-   (I19); no fSalSal1 alignment (postponed: build skips the fSalSal1 tables without its PAF). The I18
-   check against a real ICSASG_v2 Axiom manifest still waits for one; its counts settle DECISIONS #34 and #36.
+2. **Done in release 2026-11-20** (the `species-data` workflow): liftover_icsasg_v2.parquet (I19, 735,344 blocks); no
+   fSalSal1 alignment (postponed: build skips the fSalSal1 tables without its PAF). The I18 check against a real
+   ICSASG_v2 Axiom manifest still waits for one; its counts settle DECISIONS #34 and #36.
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
-4. **Phase 3**: G's DeepFARM and CADD-like data as variant-score layers (I16).
+4. **Phase 3**: variant-score layers (I16): ChromBPNet first (G, 2026-11-21), in its own repository on Orion
+   (docs/CHROMBPNET.md); then DeepFARM retrained and a CADD-like score.
 5. **Phase 4 rest, postponed** (G, 2026-11-06): the fSalSal1 conversion's data (the alignment, snpdata README "The
    fSalSal1 conversion"; the code is merged and tested) and a release with the data tracks on fSalSal1 (I20, once
    AQUA-FAANG and the other analyses are re-run there); the conversion then moves older lists, panels and projects to it.
@@ -218,7 +224,8 @@ Phase 2, chip design (Axiom first: DECISIONS #27):
 Phase 3, variant scores:
 - [x] I15 One layer format for per-variant scores (layers.yaml format variant_scores: score and percentile; shown on
       the Table, card and locus pages; weight 0 until weights.yaml variant_scores names a percentile, DECISIONS #33)
-- [ ] I16 DeepFARM (retrained by G) and a CADD-like score, as I15 layers in a release (G's data)
+- [ ] I16 ChromBPNet scores (27 conditions; its own repository on Orion, docs/CHROMBPNET.md), then DeepFARM (retrained
+      by G) and a CADD-like score, as I15 layers in a release
 
 Phase 4, genomes (later):
 - [x] I17 Several releases side by side on a local install: the Releases page switches the release new work uses; a

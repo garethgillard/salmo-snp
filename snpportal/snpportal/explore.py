@@ -130,11 +130,14 @@ def nearby(chrom, pos, window=None):
 
 
 def public_source():
-    """Where candidate public variants come from: the release pool's VCF, else the 504-fish panel sites (public_af)."""
+    """Where candidate public variants come from: the release pool (its common 504-fish panel sites, the 12 AQUA-FAANG
+    fish's or a VCF's), else every 504-fish panel site (public_af)."""
     if (jobs.release() / "pool" / "pool.parquet").exists():
         source = jobs.read_json(jobs.release() / "pool" / "background.json").get("source") or ""
+        maf = ((jobs.weights() or {}).get("design") or {}).get("min_maf", 0)
         return ("sites of the 12 AQUA-FAANG fish (release pool)" if source.startswith("12_samples") or "aquafaang12" in source
-                else "sites of the 504-fish reference panel (release pool)" if source.startswith("ALL_chrome") or "panel" in source
+                else f"common sites (MAF at least {maf:g}) of the 504-fish panel (release pool)" if "(panel)" in source
+                else "sites of the 504-fish reference panel (release pool)" if source.startswith("ALL_chrome")
                 else "the release pool of public sites")
     return "sites of the 504-fish reference panel"
 
