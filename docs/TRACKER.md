@@ -57,7 +57,9 @@ never scored (mytracks.py). New AQUA-FAANG data (G, 2026-11-20): the salmon gill
 (head kidney after immune stimulation) as Locus browser tracks (PR #25), then scored: release 2026-11-20 counts 27
 conditions (unified peaks v3; the ImmunoMap's mixed label weak; disease_resistance = head kidney, gill and liver), built,
 published as data-2026-11-20 and installed on the demo by the `species-data` workflow, no Mac needed. NCBI RefSeq is
-the default gene lane; thin lines separate the tissues in the chromatin drop-downs.
+the default gene lane; thin lines separate the tissues in the chromatin drop-downs. The public pool (G, 2026-11-21,
+DECISIONS #15) takes the 504-fish panel's 3.44M common sites (MAF >= 0.05, all 29 chromosomes) instead of the 12-fish
+VCF's 1.6M (70 on chromosome 10), built in parts of at most 1.5M sites so 4 GB is enough.
 
 Push 3, for industry users (G, 2026-11-04; specs in ROADMAP.md "Push 3", boxes in step 9). Merged: I1-I5, I7-I12, I15,
 I17, I18 (PR #2, 2026-11-05); mixed purposes (I8), Primer3 and Agena files (I14), the ICSASG_v2 conversion (I19), the
@@ -65,9 +67,9 @@ salmobase container, health and release checks (P8.4, P8.5) (PR #3, 2026-11-06);
 conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: see 5). What remains:
 1. **G's answers** (DECISIONS.md #25-#37 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
    is PROVISIONAL until then. #34 and #36 (chip placement by flank) are answered for now (G, 2026-11-05), to revisit.
-2. **A new release** (G's Mac): `snpdata build` and `bash prep/github_release.sh`: it adds liftover_icsasg_v2.parquet
-   (I19); no fSalSal1 alignment (postponed: build skips the fSalSal1 tables without its PAF). The I18
-   check against a real ICSASG_v2 Axiom manifest still waits for one; its counts settle DECISIONS #34 and #36.
+2. **Done in release 2026-11-20** (the `species-data` workflow): liftover_icsasg_v2.parquet (I19, 735,344 blocks); no
+   fSalSal1 alignment (postponed: build skips the fSalSal1 tables without its PAF). The I18 check against a real
+   ICSASG_v2 Axiom manifest still waits for one; its counts settle DECISIONS #34 and #36.
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
 4. **Phase 3**: variant-score layers (I16): ChromBPNet first (G, 2026-11-21), in its own repository on Orion
    (docs/CHROMBPNET.md); then DeepFARM retrained and a CADD-like score.

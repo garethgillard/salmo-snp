@@ -38,7 +38,7 @@ You need:
    curl -LO https://github.com/garethgillard/salmo-snp/releases/download/data-2026-11-20/salmo-snp-genome-Ssal_v3.1.tar      # ~800 MB
    tar -xf salmo-snp-data-2026-11-20.tar && tar -xf salmo-snp-genome-Ssal_v3.1.tar
    salmo-snp download --from site      # checks every file, copies it into the data folder and scores the public
-                                       # sites for comparison (about a minute); then delete site/
+                                       # sites for comparison (a minute or two); then delete site/
    ```
    In a clone of the repository, `bash tools/get_data.sh` does the same. Once the data is hosted online,
    `salmo-snp download` alone will do (or `--from <address>`; a copy of the published folder on a disk or a share

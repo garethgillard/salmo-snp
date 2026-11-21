@@ -55,11 +55,12 @@ def main():
     o.add_argument("--release", required=True)
     o.add_argument("--background", help="public sites as a VCF (default: the release's own public_af sites, --sites)")
     o.add_argument("--sites", choices=("aquafaang12", "panel"), default=None,
-                   help="which of the release's public sites: the 12 AQUA-FAANG fish's (default) or the whole 504-fish panel")
+                   help="which of the release's public sites: an even sample of at most 2,000,000 (default; salmon: of the "
+                        "504-fish panel) or the 12 AQUA-FAANG fish's (salmon)")
     o.add_argument("--if-stale", action="store_true",
                    help="only if the release has no pool, or one made with other weights or another snpscore version")
     o.add_argument("--assay", action="store_true",
-                   help="also run the sequence and assay checks (1.6M sites: about 80 s with --memory 8GB; 4GB is too little)")
+                   help="also run the sequence and assay checks (needs --memory 8GB: 4GB is too little)")
     o.add_argument("--threads", type=int, default=4)
     o.add_argument("--memory", default="4GB", help="DuckDB memory limit")
 

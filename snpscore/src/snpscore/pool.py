@@ -22,26 +22,30 @@ from .score import WEIGHTS, load_weights, scored
 
 FLAGS = ("chromatin", "regbuild", "gerp", "blacklist", "lore", "public_af", "strand_ambiguous")  # boolean columns
 MAF_EDGES = tuple(i / 20 for i in range(1, 10))  # MAF histogram: [0, 0.05), [0.05, 0.1), ..., [0.45, 0.5]
-# The release's public sites in the pool (DECISIONS #15): 'aquafaang12', the 12 AQUA-FAANG fish's sites (as their VCF
-# gives them; 1.6M), or 'panel', every site of the 504-fish panel (7.6M). A release without the 12 fish's column (rainbow
-# trout) gives an even sample of at most MAX_SITES of its public sites, the same sites every time.
-SITES = "aquafaang12"
-MAX_SITES = 2_000_000
+# The release's public sites in the pool (DECISIONS #15; G, 2026-11-21): 'panel', the common ones (public MAF at least the
+# panel designer's design.min_maf in weights.yaml, which picks its candidates from the pool), all of them up to MAX_SITES,
+# else an even sample, the same sites every time. Salmon: the 3.4M of the 504-fish panel's 7.6M sites, on every
+# chromosome; rainbow trout: a sample of the 462 fish's 13.5M. Or 'aquafaang12', the sites of the 12 AQUA-FAANG fish's
+# VCF (salmon only: 1.6M, but 70 on chromosome 10 and none past 105 Mb on chromosome 1; the pool until 2026-11-21).
+SITES = "panel"
+MAX_SITES = 4_000_000
+CHUNK = 1_500_000  # sites per annotate run (3.4M salmon sites at once need more than 4 GB with 4 threads)
 
 
 def stamp():
-    """What a pool depends on besides the release: the weights' sha256 and the snpscore version."""
+    """What a pool depends on besides the release: the weights' sha256, the snpscore version and the site rule."""
     from importlib.metadata import PackageNotFoundError, version
     try:
         v = version("snpscore")
     except PackageNotFoundError:
         v = "unknown"
-    return {"weights_sha256": hashlib.sha256(WEIGHTS.read_bytes()).hexdigest(), "snpscore_version": v}
+    return {"weights_sha256": hashlib.sha256(WEIGHTS.read_bytes()).hexdigest(), "snpscore_version": v,
+            "sites_rule": f"{SITES}: public MAF >= design.min_maf, at most {MAX_SITES}"}  # a new rule: every pool stale
 
 
 def stale(release_dir):
-    """True when the release has no pool, or one built for another release version, with other weights or another
-    snpscore version."""
+    """True when the release has no pool, or one built for another release version, with other weights, another
+    snpscore version or another site rule."""
     release = Path(release_dir)
     try:
         made = json.loads((release / "pool" / "background.json").read_text())
@@ -53,22 +57,35 @@ def stale(release_dir):
 
 
 def release_sites(release, work, sites=SITES):
-    """The release's public sites (public_af.parquet) as a chrom, pos, ref, alt table in genome order, for annotate."""
+    """The release's public sites (public_af.parquet) as chrom, pos, ref, alt tables in genome order, for annotate: one
+    TSV per run of whole chromosomes with at most CHUNK sites (a larger chromosome is a part of its own)."""
     con = connect([release], work)
-    target = work / "sites.tsv"
     table = f"read_parquet({lit(release / 'public_af.parquet')})"
     columns = [r[0] for r in con.execute(f"DESCRIBE SELECT * FROM {table}").fetchall()]
-    rows = con.execute(f"SELECT count(*) FROM {table}").fetchall()[0][0]
     keep = "true"
     if sites == "aquafaang12" and "aquafaang12_af" in columns:
         keep = "aquafaang12_af IS NOT NULL"
-    elif sites == "aquafaang12" and rows > MAX_SITES:
-        keep = f"hash(chrom, \"end\") % {-(-rows // MAX_SITES)} = 0"
-    con.execute(f"""COPY (SELECT chrom, "end" AS pos, ref, alt FROM {table}
-                    WHERE {keep} ORDER BY TRY_CAST(chrom AS INTEGER), chrom, pos, ref, alt)
-                    TO {lit(target)} (HEADER, DELIMITER '\t')""")
+    elif "maf" in columns:
+        keep = f"maf >= {float(((load_weights() or {}).get('design') or {}).get('min_maf', 0))}"
+    rows = con.execute(f"SELECT count(*) FROM {table} WHERE {keep}").fetchall()[0][0]
+    if rows > MAX_SITES:
+        keep += f" AND hash(chrom, \"end\") % {-(-rows // MAX_SITES)} = 0"
+    parts = []  # [[chromosomes], sites]
+    for chrom, n in con.execute(f"""SELECT chrom, count(*) FROM {table} WHERE {keep} GROUP BY chrom
+                                    ORDER BY TRY_CAST(chrom AS INTEGER), chrom""").fetchall():
+        if not parts or parts[-1][1] + n > CHUNK:
+            parts.append([[], 0])
+        parts[-1][0].append(chrom)
+        parts[-1][1] += n
+    targets = []
+    for i, (chroms, _) in enumerate(parts or [[[], 0]]):
+        targets.append(work / f"sites_{i}.tsv")
+        where = f"chrom IN ({', '.join(lit(c) for c in chroms)})" if chroms else "false"
+        con.execute(f"""COPY (SELECT chrom, "end" AS pos, ref, alt FROM {table} WHERE {keep} AND {where}
+                        ORDER BY TRY_CAST(chrom AS INTEGER), chrom, pos, ref, alt)
+                        TO {lit(targets[-1])} (HEADER, DELIMITER '\t')""")
     con.close()
-    return target
+    return targets
 
 
 def maf_bin_sql(maf):
@@ -91,24 +108,36 @@ def build_pool(release_dir, background=None, assay=False, threads=4, memory_limi
     with tempfile.TemporaryDirectory(prefix="snpscore-pool-") as work:
         work = Path(work).resolve()
         source = Path(background).name if background else f"public_af.parquet ({sites})"
-        background = background or release_sites(release, work, sites)
-        annotate(background, release, work / "annotated.parquet", "all", sequence=assay, progress=step, threads=threads,
-                 memory_limit=memory_limit)
-        step("pool")
-        validation = json.loads((work / "annotated.validation.json").read_text())
+        parts = [background] if background else release_sites(release, work, sites)
         weights, manifest = load_weights(), json.loads((release / "manifest.json").read_text())
         synthetic = [l["name"] for l in manifest["layers"] if l.get("synthetic")]
-        con = connect([work], out, threads, memory_limit)
-        con.execute(f"CREATE TABLE a AS SELECT * FROM read_parquet({lit(work / 'annotated.parquet')}, file_row_number=true)")
-        columns = [r[0] for r in con.execute("DESCRIBE a").fetchall()]
         presets = list(weights["presets"]) if weights else []
-        for i, p in enumerate(presets):  # one narrow table per preset, joined back on the row number
-            con.execute(f"""CREATE TABLE t{i} AS SELECT file_row_number, tier AS {q('tier__' + p)},
-                            tier_score AS {q('tier_score__' + p)} FROM ({scored('a', weights, columns, p, synthetic)})""")
-        joins = "".join(f" JOIN t{i} USING (file_row_number)" for i in range(len(presets)))
-        tmp = out / f".pool-{uuid.uuid4().hex}.parquet"
-        try:
+        rows_read, rejected, pieces = 0, {}, []
+        for k, part in enumerate(parts):  # one annotate run per part: memory grows with the sites annotated at once
+            annotated = work / f"annotated_{k}.parquet"
+            annotate(part, release, annotated, "all", sequence=assay, progress=step, threads=threads,
+                     memory_limit=memory_limit)
+            step("pool")
+            validation = json.loads((work / f"annotated_{k}.validation.json").read_text())
+            rows_read += validation["rows_read"]
+            for reason, n in validation["rejected"].items():
+                rejected[reason] = rejected.get(reason, 0) + n
+            con = connect([work], out, threads, memory_limit)
+            con.execute(f"CREATE TABLE a AS SELECT * FROM read_parquet({lit(annotated)}, file_row_number=true)")
+            columns = [r[0] for r in con.execute("DESCRIBE a").fetchall()]
+            for i, p in enumerate(presets):  # one narrow table per preset, joined back on the row number
+                con.execute(f"""CREATE TABLE t{i} AS SELECT file_row_number, tier AS {q('tier__' + p)},
+                                tier_score AS {q('tier_score__' + p)} FROM ({scored('a', weights, columns, p, synthetic)})""")
+            joins = "".join(f" JOIN t{i} USING (file_row_number)" for i in range(len(presets)))
+            pieces.append(work / f"pool_{k}.parquet")
             con.execute(f"""COPY (SELECT * EXCLUDE (file_row_number) FROM a{joins} ORDER BY file_row_number)
+                            TO {lit(pieces[-1])} (FORMAT parquet)""")
+            con.close()
+            annotated.unlink()
+        con = connect([work], out, threads, memory_limit)
+        tmp = out / f".pool-{uuid.uuid4().hex}.parquet"
+        try:  # DuckDB reads a file list in its order, so the parts stay in genome order
+            con.execute(f"""COPY (SELECT * FROM read_parquet([{', '.join(lit(p) for p in pieces)}]))
                             TO {lit(tmp)} (FORMAT parquet)""")
             tmp.replace(out / "pool.parquet")
         finally:  # a failed COPY leaves no partial file in the release
@@ -117,7 +146,7 @@ def build_pool(release_dir, background=None, assay=False, threads=4, memory_limi
         con.close()
     created = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     summary.update(release=manifest["version"], created=created, **stamp(),
-                   source=source, rows_read=validation["rows_read"], rejected=validation["rejected"],
+                   source=source, rows_read=rows_read, rejected=rejected,
                    assay_checked=bool(assay), seconds=round(time.time() - t0, 1))
     (out / "background.json").write_text(json.dumps(summary, indent=2))
     return out

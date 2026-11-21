@@ -67,16 +67,25 @@ def test_file_positives_with_the_pool(release):
         assert any(f.endswith("_consequence = missense_variant") and r[3] > 0 for f, r in features.items())
 
 
-def test_pool_from_the_release_matches_the_12_fish_vcf(release, tmp_path):  # I3: any install can build the pool
+def test_pool_from_the_release(release, tmp_path, monkeypatch):  # I3: any install can build the pool
     import json
     import shutil
 
+    from snpscore import pool
     from snpscore.pool import stale
     own = tmp_path / "release"
     shutil.copytree(release, own, ignore=shutil.ignore_patterns("pool"))
     assert stale(own)
-    build_pool(own, threads=2, memory_limit="1GB")  # the release's public_af sites of the 12 AQUA-FAANG fish
+    monkeypatch.setattr(pool, "CHUNK", 1)  # one annotate run per chromosome: the parts join in genome order
+    build_pool(own, threads=2, memory_limit="1GB")  # the default: the panel's sites with MAF >= design.min_maf
     assert not stale(own)
+    made = json.loads((own / "pool" / "background.json").read_text())
+    sites = f"read_parquet('{own / 'public_af.parquet'}')"
+    common = duckdb.sql(f"SELECT count(*), count(DISTINCT chrom) FROM {sites} WHERE maf >= 0.05").fetchall()[0]
+    rows = duckdb.sql(f"SELECT chrom, pos FROM read_parquet('{own / 'pool' / 'pool.parquet'}')").fetchall()
+    assert made["source"] == "public_af.parquet (panel)" and made["n_sites"] == len(rows) == common[0] > 0
+    assert common[1] > 1 and rows == sorted(rows, key=lambda r: (int(r[0]), r[1]))
+    build_pool(own, threads=2, memory_limit="1GB", sites="aquafaang12")  # the 12 AQUA-FAANG fish's sites
     vcf, mine = (json.loads((r / "pool" / "background.json").read_text()) for r in (release, own))
     assert mine["source"] == "public_af.parquet (aquafaang12)" and mine["n_sites"] == vcf["n_sites"] > 0
     assert mine["tiers"] == vcf["tiers"] and mine["region_class"] == vcf["region_class"]

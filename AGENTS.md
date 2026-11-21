@@ -162,6 +162,11 @@ Decided:
 - Variant scores (I16; G, 2026-11-21): ChromBPNet first, one model per AQUA-FAANG condition trained on the ATAC-seq
   read alignments (bigWigs can't be used), in its own repository run on Orion, where the data are; DeepFARM retraining
   and a CADD-like score later. The starting brief, with the data, plan and hand-back format: docs/CHROMBPNET.md.
+- The public pool (DECISIONS #15; G, 2026-11-21): the Overview's public background, the benchmark's controls, the panel
+  designer's and chip comparison's public candidates and the gene pages' public variants all come from the 504-fish
+  panel's common sites (public MAF >= the designer's design.min_maf, 0.05): 3,436,671 sites on all 29 chromosomes in
+  release 2026-11-20, instead of the 1.6M sites of the 12 AQUA-FAANG fish's VCF (70 on chromosome 10). G chose the
+  common sites over a sample of all 7.6M, which are half rare. snpscore.pool.SITES; the README's "Public background pool".
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
@@ -216,7 +221,8 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     migration timing; six6, age at maturity; sdY) and QTL windows published on this assembly (BCWD resistance, 3; IHNV
     resistance, 4: those with a false-positive probability under 0.1). No SNP rows and no effect alleles yet, so
     uploads get a badge only near the four gene-region rows. The Locus browser opens at greb1l and rock1.
-  - The public pool: an even sample of at most 2,000,000 of the release's public sites (snpscore.pool.MAX_SITES).
+  - The public pool: since 2026-11-21 the salmon rule (Decided), so an even sample of at most 4,000,000 (MAX_SITES) of
+    the public sites with MAF >= 0.05: 3.37M of 13.5M (before: 2,000,000 of all 18.8M).
 - Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
   counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
   priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).
@@ -233,8 +239,8 @@ Open (ask G; all collected with options and recommendations in docs/DECISIONS.md
 - Public AF: the 504-fish panel is mostly Bertolotti 2020 (PRJEB38061) wild/farmed fish plus the 12 AQUA-FAANG fish (hosting
   derived AF agreed, G 2026-11-10): how should the population be described? (docs/RESEARCH.md section 4)
 - Enhancer-CNE source; vetting of the 40-row known-loci catalogue (docs/RESEARCH.md section 2).
-- Data gap: the public 12-fish VCF (pool, demo list, synthetic GWAS) has only 70 sites on chr10 and stops near 105 Mb on chr1,
-  while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
+- Data gap: the public 12-fish VCF (demo list, synthetic GWAS) has only 70 sites on chr10 and stops near 105 Mb on chr1,
+  while the 504-fish panel covers both; should the demos use the 504-fish sites too? (The pool does: Decided.)
 - Assay QC: flank repeat shares are mostly 0 or 1, so ~55% of public SNPs warn on 'repeat' whatever the cut-off; should fully
   soft-masked flanks warn at all? (without it ~46% pass instead of ~20%)
 - Chip placement by flank (DECISIONS #34, #36): decided for now (see Decided); revisit with the first real ICSASG_v2
