@@ -12,8 +12,9 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - main is green on GitHub (tests, user-install). The NREC demo https://158.39.75.9/snp/ (test.salmobase.org/snp/
   redirected there from 2026-11-10 but answers 404 since 2026-11-16) runs what G last had deployed (the manual
   `deploy` workflow since 2026-11-06; merges no longer deploy; cloud sessions use https://158-39-75-9.sslip.io/snp/:
-  the bare IP didn't connect through their proxy). Since 2026-11-20 that is 5e1a180 (PRs #25 and #26: the new
-  AQUA-FAANG gill and ImmunoMap tracks, scored; NCBI genes by default; tissue separators), with release 2026-11-20
+  the bare IP didn't connect through their proxy). Since 2026-11-21 that is 66068dc (PRs #25 to #27: the new
+  AQUA-FAANG gill and ImmunoMap tracks, scored; NCBI genes by default; tissue separators; the public pool from the
+  504-fish panel's common sites, every pool rebuilt by the deploy), with release 2026-11-20
   (built, published and installed by the `species-data` workflow, 2026-11-20) and, in /srv/snpportal/releases/,
   2026-11-05 (for the results made with it) and trout-2026-11-13, each with its pool. On 2026-11-08 the VM had hung
   (Active in NREC, nothing answering on 22 or 443) until G hard-rebooted it; the cause is unknown (its console log
