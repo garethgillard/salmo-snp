@@ -159,6 +159,9 @@ Decided:
   Ensembl genes (their gene pages and Ss4R duplicates) and every isoform of both are one click away. Thin lines
   separate the tissues, the ImmunoMap and the DevMap in the Chromatin states and Regulatory elements drop-downs (G,
   2026-11-20).
+- Variant scores (I16; G, 2026-11-21): ChromBPNet first, one model per AQUA-FAANG condition trained on the ATAC-seq
+  read alignments (bigWigs can't be used), in its own repository run on Orion, where the data are; DeepFARM retraining
+  and a CADD-like score later. The starting brief, with the data, plan and hand-back format: docs/CHROMBPNET.md.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
