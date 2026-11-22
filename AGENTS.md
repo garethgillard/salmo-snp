@@ -16,7 +16,8 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
   parts (locus data, panel design, exports, the track registry; `python -m snpportal.lib.cli panel|export|compare`).
 - `docs/`: TRACKER (what's next, then what's built), DECISIONS (questions for G, with options and a recommendation),
   ROADMAP (the spec of every roadmap item), LICENSING (the licences, the CLA, commercial permission, third-party
-  data and software); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
+  data and software), SCORING (how other projects score variants, and the options for our starting point), CHROMBPNET
+  (the brief of the ChromBPNet repository); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
   (the simplification plan of 2026-10-07, built).
 - `tools/`: check.sh (what CI runs), user_install_test.sh (a new user's install), get_data.sh (the data for real use),
   cloud_setup.sh (cloud sessions).
@@ -167,6 +168,12 @@ Decided:
   panel's common sites (public MAF >= the designer's design.min_maf, 0.05): 3,436,671 sites on all 29 chromosomes in
   release 2026-11-20, instead of the 1.6M sites of the 12 AQUA-FAANG fish's VCF (70 on chromosome 10). G chose the
   common sites over a sample of all 7.6M, which are half rare. snpscore.pool.SITES; the README's "Public background pool".
+- Scoring first (G, 2026-11-21): after the data to visualise, the scoring of the SNPs is the most important thing. It
+  will be customisable but needs a good starting point, either real basic or learned from other functional genomics
+  projects (ENCODE, GTEx, GTEx for animals). The research and the options are docs/SCORING.md, its questions for G
+  DECISIONS #49-#53, the order of work TRACKER "Next" (S0-S8). The weights stay G's: the research gives an order of
+  evidence, not numbers. G, 2026-11-22: long research runs one thing at a time, the most important first, so that the
+  usage allowance doesn't run out mid-way; no large multi-agent runs unless G asks.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,

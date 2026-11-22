@@ -3,8 +3,8 @@
 Everything the prototype currently does by a provisional rule, in one place, with the options and a recommendation.
 Each answer goes into ../AGENTS.md under "Decided" and, where it is a number, into snpscore's `weights.yaml` (then
 rebuild the pool with `snpscore pool`: the release holds no weights; a layer setting in layers.yaml needs a new release).
-Evidence sources: RESEARCH.md (section numbers below), the reviews of 2026-10-07 and 2026-11-04 and the benchmark in
-`release/dev`.
+Evidence sources: RESEARCH.md (section numbers below), the reviews of 2026-10-07 and 2026-11-04, the benchmark in
+`release/dev`, and for the scoring questions SCORING.md (how other projects score variants; the research of 2026-11-22).
 
 ## Scoring (changes tiers)
 
@@ -28,6 +28,23 @@ caQTL leads (n = 1,057) give 3-4x, but they are called on the same ATAC data, so
 | 4a | Use eQTL-lead enrichment (gene distance + MAF matched) to calibrate weights? | not used | Yes, with caQTLs reported but not used for calibration |
 | 4b | The v0.1 'benchmark passes thresholds set in advance': which threshold? | none | Lower 95% bound > 1 for tier <= 2 on eQTL leads (met today: 1.27) |
 | 4c | Score a one-tissue molQTL set with that tissue's preset, or always 'all'? | the tissue's preset | Tissue preset |
+
+**Questions from the scoring research** (G, 2026-11-21: the scoring is what matters most after the data to visualise,
+customisable, with a good starting point; [SCORING.md](SCORING.md) has the sources; † = from a paper's full text, not
+re-checked). The literature gives an order of evidence, not numbers: the numbers stay G's.
+
+| # | Question | Now (provisional) | What other projects found | Recommendation |
+|---|---|---|---|---|
+| 49 | Should an active promoter (Active_TSS) count more than an active enhancer? | both are 'active', weight 3 | Pig GWAS lead SNPs: 12-fold in active promoters against 2-fold in active enhancers†; pig molecular QTL most enriched in promoters†; part of this is detection bias towards large effects near genes | Measure both on our benchmark with controls matched on distance to the gene start, then G decides; Claude leans to separating them |
+| 50 | Where does constraint (GERP) sit against an active chromatin state? | 2 against 3 | Conservation ranked first in the cattle score (FAETH) and 16-fold† among fine-mapped human trait variants; but pig lead SNPs were less conserved than background†, and GERP from 65 fish of a duplicated genome is untested. Ours: 2.29x (1.19-4.40) at eQTL leads | Keep 2 until the upgraded benchmark gives its enrichment given the other layers |
+| 51 | The scale of the GWAS prior | exp(0.5 x tier_score): 4.5-fold prior odds at score 3, 12-fold at 5, 55-fold at 8 | Priors that improved fine-mapping were estimated per score bin and re-calibrated; ours is steeper than anything we measured (1.48x for tiers 1-2 at eQTL leads) | Estimate the enrichment per tier on the upgraded benchmark and use it; show the range; offer a flat prior and a cap |
+| 52 | Should distance to the gene start be evidence by itself? | not a term; the benchmark matches on gene distance | The strongest single predictor of fine-mapped eQTL variants†, but GWAS hits, unlike eQTL, do not cluster at gene starts | No: a matching variable, and the baseline the score must beat |
+| 53 | How do ChromBPNet scores and allelic imbalance count when they arrive? | shown, weight 0 (#33) | What orders SNPs inside one locus is evidence at the base; sequence-model annotations added little once coding, conserved and regulatory annotations were accounted for; allelic imbalance marked trait variants from 20 cell lines† | Weight 0 until each passes a test of what it adds among SNPs inside peaks; then a bonus for the top of the distribution, which G sets |
+
+For the older rows the research says: #2, do not drop weak states to 0 (low weight per SNP everywhere, and in a 2026
+shrimp study a bivalent state was the most useful for prediction; one study); #5, among fine-mapped human trait variants
+it is the nonsynonymous change that is enriched (51-fold†), so the recommendation of 1 for synonymous stands; #6, keep
+molQTL leads at 0 (a lead SNP is weak evidence even at GTEx scale, and 12 fish is below the sample sizes tested†).
 
 ## Assay and panel design (changes what goes on a chip)
 
