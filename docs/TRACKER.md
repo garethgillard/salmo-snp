@@ -57,21 +57,29 @@ a good starting point learned from other projects; G, 2026-11-22: the research b
 time, to stay inside the usage allowance). The research is done: [SCORING.md](SCORING.md). In order:
 - [x] S0 How ENCODE, GTEx, FarmGTEx, livestock breeding and aquaculture score or prioritise variants: six reviews, 51
       papers re-checked in PubMed, options A-D and a recommendation for G (SCORING.md; DECISIONS #49-#53)
-- [ ] S1 Our own measurements on release 2026-11-20, written up and re-checked: odds ratios per evidence term against
-      two control designs, the score against its parts and against distance to the gene start, the options of
-      DECISIONS #1, #2 and #5, and what a user can customise today (all computed on 2026-11-22; SCORING.md section 6)
+- [x] S1 Our own measurements on release 2026-11-20 (SCORING.md section 6; 2026-11-22): eQTL leads are in tiers 1-2
+      1.5 times as often as matched controls under both control designs, with no gradient across tiers; the score
+      ranks them no better than distance to the gene start; no option of DECISIONS #1, #2 or #5 changes the benchmark
+      measurably. The molecular-QTL leads cannot calibrate weights: S3 and S6 are what can. And what a user can
+      customise today, with the gaps an audit demonstrated
 - [ ] S2 The benchmark as the literature asks: controls matched on distance to the gene start, LD and gene density; a
       distance-only baseline; held-out chromosomes; enrichment per tier and per layer; a locus-level test; a
-      random-annotation control. And benchmark files in every release: none has them, so Methods shows no benchmark
+      random-annotation control. And benchmark files in every install: none has them, so Methods shows no benchmark
+      (a run takes 5 to 38 s and at most 38 kB, so it can be built with the pool)
 - [ ] S3 An independent test: the age-at-maturity GWAS (Sinclair-Waters 2020; 512,397 SNPs on ICSASG_v2, moved to
       Ssal_v3.1 with liftover_icsasg_v2): tier enrichment near its 116 signals; does the prior narrow credible sets?
 - [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52), then weights.yaml and
-      the pools
+      the pools. Before #5 changes anything: the pool needs coding consequences (it is built without the genome, so
+      the synonymous weight would apply to uploads but not to the public background)
 - [ ] S5 The GWAS prior calibrated per tier, its range shown, with a flat prior and a cap (#51)
 - [ ] S6 Evidence at the base: the ChromBPNet scores and allelic imbalance in the 12 fish (both from the Orion
       repository, docs/CHROMBPNET.md), tested for what they add among SNPs inside peaks; then a bonus G sets (#53)
 - [ ] S7 Customisation: a supported own-weights file, named profiles, the rules stated in every export, and an
-      enrichment-per-tier report from the user's own GWAS
+      enrichment-per-tier report from the user's own GWAS. First the gaps the audit demonstrated (SCORING.md section
+      6): no check of an edited weights.yaml (three of seven mistakes changed tiers silently), a running portal that
+      keeps the old public background after an edit, the Design panel and saved projects stating the wrong rules hash
+      (a saved version's download was re-tiered silently), the README's update command overwriting an edited file,
+      and snpscore outputs that do not name their rules
 - [ ] S8 What the pages tell users about the score (SCORING.md section 5); the AQUA-FAANG citation (the salmonid paper
       is published: Nat Ecol Evol 2026, doi:10.1038/s41559-026-03171-6; layers.yaml still cites the preprint)
 Queued behind it, to run only when G says (cut off twice by the usage limit): a survey of other work (stale texts and

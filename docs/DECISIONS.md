@@ -23,6 +23,18 @@ eQTL lead SNPs (n = 1,606, the fair test) are enriched in tier 1-2 1.48x (1.27-1
 GERP constrained 2.29x (1.19-4.40); tier 1 alone is not significant (1.35x, 0.70-2.61). Gonad eQTLs show no active-state enrichment (0.99x).
 caQTL leads (n = 1,057) give 3-4x, but they are called on the same ATAC data, so this is partly circular. Known loci (n = 37) are biased by selection.
 
+**The same on release 2026-11-20** (27 conditions, the 3.44M-site pool; measured 2026-11-22, all in SCORING.md section 6; odds ratios
+with 95% intervals against all matched controls). eQTL leads: tiers 1-2 1.56 (1.32-1.83); active state 1.51 (1.22-1.84); UTR 2.13
+(1.75-2.56); coding sequence 1.73 (1.32-2.21); GERP constrained 2.89 (1.44-5.18; 11 leads); weak state 1.07 (0.81-1.39); motif 0.87
+(0.49-1.45). What it adds: there is no gradient (tier 3 is as enriched as tier 2; the score's AUC is 0.539 and distance to the nearest
+protein-coding gene start alone reaches 0.562), and **no listed option of #1, #2 or #5 changes the benchmark measurably** (tiers 1-2
+stay at 1.44 to 1.58; the AUC moves by at most 0.004), although the options move 10,871 to 100,933 pool SNPs between tiers. These
+leads (12 fish, tags, with a lead rate that depends on the fishes' allele counts) can confirm that the tiers carry signal; they cannot
+choose between options. #1, #2, #4 and #5 are therefore G's judgement until a better truth set exists (TRACKER S3, S6).
+For #5 also: synonymous and protein-changing leads are equally enriched (1.83 and 1.86), which reflects lying in the transcript, not
+protein function; and the public pool carries no coding consequence (it is built without the genome), so today a synonymous weight
+would apply to uploads but not to the public background.
+
 | # | Question | Now | Recommendation |
 |---|---|---|---|
 | 4a | Use eQTL-lead enrichment (gene distance + MAF matched) to calibrate weights? | not used | Yes, with caQTLs reported but not used for calibration |
@@ -35,9 +47,9 @@ re-checked). The literature gives an order of evidence, not numbers: the numbers
 
 | # | Question | Now (provisional) | What other projects found | Recommendation |
 |---|---|---|---|---|
-| 49 | Should an active promoter (Active_TSS) count more than an active enhancer? | both are 'active', weight 3 | Pig GWAS lead SNPs: 12-fold in active promoters against 2-fold in active enhancers†; pig molecular QTL most enriched in promoters†; part of this is detection bias towards large effects near genes | Measure both on our benchmark with controls matched on distance to the gene start, then G decides; Claude leans to separating them |
-| 50 | Where does constraint (GERP) sit against an active chromatin state? | 2 against 3 | Conservation ranked first in the cattle score (FAETH) and 16-fold† among fine-mapped human trait variants; but pig lead SNPs were less conserved than background†, and GERP from 65 fish of a duplicated genome is untested. Ours: 2.29x (1.19-4.40) at eQTL leads | Keep 2 until the upgraded benchmark gives its enrichment given the other layers |
-| 51 | The scale of the GWAS prior | exp(0.5 x tier_score): 4.5-fold prior odds at score 3, 12-fold at 5, 55-fold at 8 | Priors that improved fine-mapping were estimated per score bin and re-calibrated; ours is steeper than anything we measured (1.48x for tiers 1-2 at eQTL leads) | Estimate the enrichment per tier on the upgraded benchmark and use it; show the range; offer a flat prior and a cap |
+| 49 | Should an active promoter (Active_TSS) count more than an active enhancer? | both are 'active', weight 3 | Pig GWAS lead SNPs: 12-fold in active promoters against 2-fold in active enhancers†; pig molecular QTL most enriched in promoters†; part of this is detection bias towards large effects near genes | Measured (SCORING.md section 6): at eQTL leads, with controls matched on gene distance, an active TSS state shows 1.17 (0.84-1.60) and an active enhancer without one 1.85 (1.41-2.38). So our data give no support for a promoter above an enhancer. Keep them equal until a GWAS-based test (TRACKER S3) says otherwise |
+| 50 | Where does constraint (GERP) sit against an active chromatin state? | 2 against 3 | Conservation ranked first in the cattle score (FAETH) and 16-fold† among fine-mapped human trait variants; but pig lead SNPs were less conserved than background†, and GERP from 65 fish of a duplicated genome is untested. Ours at eQTL leads: 2.89 (1.44-5.18) or 2.12 (1.06-3.81) by control design, from 11 leads; outside coding sequence 3.34 (1.34-6.90) from 7 | Keep 2: the highest odds ratio of any term, but from too few leads to move it |
+| 51 | The scale of the GWAS prior | exp(0.5 x tier_score): 4.5-fold prior odds at score 3, 12-fold at 5, 55-fold at 8 | Priors that improved fine-mapping were estimated per score bin and re-calibrated. Ours is steeper than anything we measured: the odds of eQTL leads stay near 1.7 from score 1 to 4 (lead SNPs are tags, so the true slope is unknown) | Until a GWAS-based calibration (TRACKER S3): show a flat prior beside it and cap the prior near the measured enrichment of tiers 1-2 (1.5 to 2); the cap is G's to set |
 | 52 | Should distance to the gene start be evidence by itself? | not a term; the benchmark matches on gene distance | The strongest single predictor of fine-mapped eQTL variants†, but GWAS hits, unlike eQTL, do not cluster at gene starts | No: a matching variable, and the baseline the score must beat |
 | 53 | How do ChromBPNet scores and allelic imbalance count when they arrive? | shown, weight 0 (#33) | What orders SNPs inside one locus is evidence at the base; sequence-model annotations added little once coding, conserved and regulatory annotations were accounted for; allelic imbalance marked trait variants from 20 cell lines† | Weight 0 until each passes a test of what it adds among SNPs inside peaks; then a bonus for the top of the distribution, which G sets |
 
