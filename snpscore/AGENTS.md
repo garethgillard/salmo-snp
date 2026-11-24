@@ -8,6 +8,9 @@ the annotate output, tiers, the pool, GWAS fine-mapping and the benchmark.
   it is G's to decide; the PROVISIONAL ones say so.
 - Output columns: `<layer>` (bool hit, or a number for count layers) and `<layer>_<column>`; then `strand_ambiguous`,
   `tier`, `tier_score`, `tier_evidence`.
+- Structural variants (`sv.py`, `snpscore sv`): the same columns, computed by overlap, so `score.scored` tiers them
+  unchanged; a 1-bp SV must keep scoring as a SNP at that base (tests/test_sv.py). Extra columns: `end`, `length`,
+  `svtype`, `svlen`, `peaks`, `genes`, `n_genes`, `region_classes`.
 - Interval layers must not overlap (annotate uses an ASOF join).
 - Prefer one DuckDB SQL query over Python loops.
 - Nothing here imports snpdata or snpportal; only the tests build their fixture release with snpdata.

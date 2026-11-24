@@ -143,9 +143,12 @@ release/2026-11-03/
   benchmark.tsv          optional: `snpscore benchmark` output for this release (known loci)
   benchmark_molqtl.tsv   optional: `snpscore benchmark --positives molqtl:ca molqtl:e --by-tissue` (nf-RASQUAL leads
                          vs matched controls); same columns as benchmark.tsv (see "Benchmark")
-  demo/                  example inputs for the portal's buttons (layers.yaml `demo`): known_loci.tsv, public_50k.vcf
-                         (dev only), chip_demo_SYNTHETIC.tsv and gwas_maturation_SYNTHETIC.tsv (dev only; made by
-                         prep/make_demo.sh, the last two through prep/make_synthetic.py)
+  demo/                  example inputs for the portal's buttons (layers.yaml `demo`): known_loci.tsv (the catalogue's
+                         rows with a position), known_svs.tsv (its structural variants: chrom, start, end, svtype, id,
+                         trait, locus), svs_demo_SYNTHETIC.tsv (layers.yaml `demo_svs`: SVs that build makes from the gene
+                         layer, a fixed seed), public_50k.vcf (dev only), chip_demo_SYNTHETIC.tsv and
+                         gwas_maturation_SYNTHETIC.tsv (dev only; made by prep/make_demo.sh, the last two through
+                         prep/make_synthetic.py)
   pool/pool.parquet      optional: `snpscore pool` (see "Public background pool"); annotate never reads it
   pool/background.json   optional: the pool's shares, for the dashboard
   SHA256SUMS             'sha256  path' of every file but pool/ (what `salmo-snp download` checks)
@@ -227,11 +230,15 @@ five_prime_UTR, three_prime_UTR), `phase, canonical` (Ensembl_canonical tag), `b
 this annotation), `biotype` the transcript's feature type (mRNA, lnc_RNA, ...); chromosomes renamed from RefSeq accessions.
 
 `catalog/known_loci.tsv`: `chrom, pos, id, ref, alt, locus, ensembl_gene, trait, evidence, effect, effect_allele,
-effect_direction, icsasg_v2, source` (DOIs), `rsid`, `caveat`, `note`. `effect_allele` is on the Ssal_v3.1 forward
-strand and filled only where the paper is unambiguous (12 rows). `trait` is one of age_at_maturity, ipn_resistance,
-pd_resistance, cms_resistance, sea_lice_resistance, flesh_colour, smoltification, sex_determination. `icsasg_v2` is
+effect_direction, icsasg_v2, source` (DOIs), `rsid`, `caveat`, `note`, `type`, `start`, `end`, `svtype`. `effect_allele` is on the Ssal_v3.1 forward
+strand and filled only where the paper is unambiguous (13 rows). `trait` is one of age_at_maturity, ipn_resistance,
+pd_resistance, cms_resistance, sea_lice_resistance, flesh_colour, smoltification, sex_determination, local_adaptation,
+domestication. `icsasg_v2` is
 the published ICSASG_v2 position, or EVA release 9's for natively Ssal_v3.1 rows. `caveat` says why a row needs care
-(farmed strain only, suggestive, inferred position, not a SNP, ...).
+(farmed strain only, suggestive, inferred position, not a SNP, ...). A structural variant has `type` sv, no `pos`,
+and `start` and `end` (1-based, inclusive) with `svtype` (DEL, DUP, INV, ...): SNP uploads near it get no badge (they
+are matched by `pos`), uploaded SVs that overlap it or lie within `window` do (snpscore sv). The trout catalogue's QTL
+windows (`type` qtl_interval) also have `start` and `end`.
 
 ## Adding a layer
 

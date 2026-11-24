@@ -39,7 +39,8 @@ SNPPORTAL_WORKERS=0 python manage.py test snpportal   # the pages; builds a rele
 Examples on the Score page, which is the home page `/snp/` (the release's `demo/` inputs: known loci, the SYNTHETIC demo chip and the
 SYNTHETIC maturation GWAS; `example=public_50k` still works but is not offered), paste a few positions or rs IDs, upload
 `../snpdata/tests/fixture/snps.vcf`, or follow the guided tour (`/snp/tour/`). The Score page's tabs (Upload SNPs,
-Paste positions, Genes or regions, GWAS) open with `?input=file|paste|regions|gwas` (or `#gwas`). On the Design panel,
+Paste positions, Genes or regions, Structural variants, GWAS) open with `?input=file|paste|regions|sv|gwas` (or
+`#gwas`); the Known SVs and SVs (synthetic) examples post `kind=sv`. On the Design panel,
 'Use the demo chip' compares the panel with the SYNTHETIC demo chip.
 `python manage.py tour_images [--base http://localhost:8000/snp/]` retakes the tour's screenshots (`static/snpportal/tour/`)
 from a running portal with headless Chrome (`--chrome` or `CHROME` if it is not in the usual place), in one fresh
@@ -149,7 +150,13 @@ The folder holds:
 | `loci/<hash>.json`, `.parquet` | GWAS jobs: the loci (the `association.MAX_LOCI` = 200 strongest, and how many there are) and the fine-mapping table of one trait and settings; hash = `params_hash` of the trait and settings, so each page reads them instead of clumping again |
 
 A job whose heartbeat is older than 5 minutes (server restarted) is marked failed; more than 10 queued jobs give 503.
-`jobs.create_from_rows(rows, label)` makes a job from `(chrom, pos, id, ref, alt)` tuples (gene and interval lists). `job.json` `input_kind` is `snps`, `gwas` or `from_rows`.
+`jobs.create_from_rows(rows, label)` makes a job from `(chrom, pos, id, ref, alt)` tuples (gene and interval lists). `job.json` `input_kind` is `snps`, `gwas`, `from_rows` or `sv`.
+SV jobs (structural variants, from the Structural variants tab, its paste box through `jobs.parse_sv_paste` and
+`create_from_sv_rows`, or the SV examples) are annotated by `snpscore.annotate_svs`; their result has `end` and
+`length` (`results.is_sv`), which the Table (the SV's span, a Size column, location and track filters by overlap), the
+card (the SV as a band in the mini browser, its overlapped peaks outlined, what it overlaps under Details), the locus
+browser (SVs as bars over their span) and the exports (BED over the span) use. SV jobs have no panels, vendor files,
+priors or public-SNP comparison; their pages say SVs where SNP pages say SNPs (`jobs.sv_wording`, in the middleware).
 
 Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every view can be bookmarked):
 
