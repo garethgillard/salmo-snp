@@ -33,7 +33,9 @@ def main():
     alias = [x.split("\t") for x in lines("alias_filtered.txt")]
     refseq = {a[1]: a[0] for a in alias}
     write("alias_filtered.txt", ("\t".join(a) for a in alias if a[0] in REGIONS))
-    for name in ("RainbowTrout_unified_peaks.bed", "RainbowTrout_blacklist.bed", "gerp_constrained_elements.oncorhynchus_mykiss.bed"):
+    peaks = sorted("narrowPeak/" + p.name for p in (RAW / "narrowPeak").glob("*.narrowPeak"))  # the summit layer's MACS2 peak files
+    for name in ["RainbowTrout_unified_peaks.bed", "RainbowTrout_blacklist.bed", "gerp_constrained_elements.oncorhynchus_mykiss.bed",
+                 "Omyk_A_to_Eluc.aligned.bed"] + peaks:
         write(name, (x for x in lines(name) if hit(*x.split("\t")[:3])))
     write("Omyk_late_rediploidized_regions.tsv", (x for i, x in enumerate(lines("Omyk_late_rediploidized_regions.tsv"))
                                                   if i == 0 or x.split("\t")[0] in REGIONS))

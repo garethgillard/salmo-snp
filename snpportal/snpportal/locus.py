@@ -452,7 +452,7 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
 
 
 SCORE_LABELS = {"active_elsewhere": "active elsewhere", "synonymous": "synonymous", "splice": "splice region",
-                "constrained": "conserved"}
+                "constrained": "conserved", "pike": "aligns to pike", "summit": "ATAC summit"}
 CHROMATIN_TERMS = ("active", "active_elsewhere", "weak")  # their blocks say what the chromatin chip would
 
 
@@ -493,7 +493,7 @@ def conditions_text(items):
     return ", ".join([figures.tissue_name(x) for x in names if x not in results.STAGES] + embryo)
 
 
-FACT_ORDER = ("gene", "region", "gwas", "chromatin", "known", "molqtl", "scores")
+FACT_ORDER = ("gene", "region", "gwas", "chromatin", "summit", "pike", "known", "molqtl", "scores")
 
 
 def chip(text, cls="", tip="", key="", url=None):
@@ -528,6 +528,13 @@ def facts(snp, ev, states, chosen, active_states):
         tip = f"A robust ATAC peak in {len(peak)} of {n} conditions, active (Active TSS or enhancer) in {len(active)}{mine}"
         out.append(chip(f"active in {len(active)}/{n}" if active else f"peak in {len(peak)}/{n}, not active" if peak
                         else "no ATAC peak", "" if peak else "muted", tip, "chromatin"))
+    summit = results.summit_text(g)
+    if summit and "summit" not in fired:  # the nearest ATAC summit: how far, and how strong among its condition's peaks
+        out.append(chip("ATAC summit " + summit[0] if g("summit_distance") else "at an ATAC summit" + summit[0][len("at the summit"):],
+                        "", summit[1], "summit"))
+    if g("pike") and "pike" not in fired:
+        out.append(chip("aligns to pike", "", "Sequence that aligns to northern pike, the closest relative without the salmonid genome "
+                        "duplication (AQUA-FAANG salmon-trout-pike alignment): display only, not counted in tiers", "pike"))
     if ev.get("known"):
         k = ev["known"]
         out.append(chip(f"★ {k['id']}" if not g("known_locus_dist") and ev.get("sv") else "★ published SNP" if not g("known_locus_dist")

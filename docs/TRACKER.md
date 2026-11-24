@@ -26,6 +26,9 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
   533,163 motif sites (512,745) and more in-peak evidence: of the 1,622,674 public sites, 8,145 gain evidence and
   none lose any; 8,026 move up a tier (tier 1: 7,190 -> 7,591; tier 2: 103,732 -> 110,358), 7,260 of them with an
   active state in head kidney or gill. data-2026-11-05 stays for installs that name it.
+- Since 2026-11-23 salmobase's unified peaks are v5 (gill and head kidney states from retrained models; the same
+  peaks), and the Locus browser's state tracks show them, while release 2026-11-20 scores with v3: the next release
+  closes the gap (Next, S3c).
 - Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
 
 ## Rainbow trout (2026-11-12, G: a second species, with a species bar)
@@ -58,21 +61,48 @@ a good starting point learned from other projects; G, 2026-11-22: the research b
 time, to stay inside the usage allowance). The research is done: [SCORING.md](SCORING.md). In order:
 - [x] S0 How ENCODE, GTEx, FarmGTEx, livestock breeding and aquaculture score or prioritise variants: six reviews, 51
       papers re-checked in PubMed, options A-D and a recommendation for G (SCORING.md; DECISIONS #49-#53)
-- [ ] S1 Our own measurements on release 2026-11-20, written up and re-checked: odds ratios per evidence term against
-      two control designs, the score against its parts and against distance to the gene start, the options of
-      DECISIONS #1, #2 and #5, and what a user can customise today (all computed on 2026-11-22; SCORING.md section 6)
+- [x] S1 Our own measurements on release 2026-11-20 (SCORING.md section 6; 2026-11-22): eQTL leads are in tiers 1-2
+      1.5 times as often as matched controls under both control designs, with no gradient across tiers; the score
+      ranks them no better than distance to the gene start; no option of DECISIONS #1, #2 or #5 changes the benchmark
+      measurably. The molecular-QTL leads cannot calibrate weights: S3 and S6 are what can. And what a user can
+      customise today, with the gaps an audit demonstrated
 - [ ] S2 The benchmark as the literature asks: controls matched on distance to the gene start, LD and gene density; a
       distance-only baseline; held-out chromosomes; enrichment per tier and per layer; a locus-level test; a
-      random-annotation control. And benchmark files in every release: none has them, so Methods shows no benchmark
-- [ ] S3 An independent test: the age-at-maturity GWAS (Sinclair-Waters 2020; 512,397 SNPs on ICSASG_v2, moved to
-      Ssal_v3.1 with liftover_icsasg_v2): tier enrichment near its 116 signals; does the prior narrow credible sets?
-- [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52), then weights.yaml and
-      the pools
+      random-annotation control. And benchmark files in every install: none has them, so Methods shows no benchmark
+      (a run takes 5 to 38 s and at most 38 kB, so it can be built with the pool)
+- [x] S3 An independent test: the age-at-maturity GWAS (Sinclair-Waters 2020; SCORING.md section 6; 2026-11-24).
+      94% of its 512,397 SNPs moved to Ssal_v3.1. Lead SNPs of the 116 signals are in tiers 1-2 1.51 times as often
+      as matched SNPs (0.95-2.33), carried by coding sequence (2.65, 1.50-4.42), not chromatin state (0.81). The
+      prior slope fitted to the GWAS is 0.05 to 0.15, and 0.5 fits worse than a flat prior. Array tags, so it cannot
+      test the chromatin weights. The fitting script is the prototype of S7's report from a user's own GWAS
+- [x] S3b Two layers of evidence built (G, 2026-11-24; SCORING.md section 6; salmon and trout): `pike`, the sequence
+      aligned to northern pike with alignment gaps of up to 50 bp closed (16% of public SNPs; eQTL leads 1.6 to 1.9
+      times; the tests of the base itself, of identity and of the duplicate copies improved nothing, closing short
+      gaps did), and `summit`, the nearest ATAC summit inside a robust peak with its distance, signal and rank (no
+      gain at eQTL leads over the peak itself). Both are terms with weight 0: in the Table, the card and (pike) the
+      Locus browser, never counted, until G sets them (DECISIONS #54, #58). They reach the data with the next release
+- [ ] S3c The next release of both species, built on G's Mac (the handover under step 9's "Next release" below;
+      G, 2026-11-24: the salmon build waits for these layers). It brings the two layers, and for salmon the unified
+      peaks v5: salmobase replaced the gill and head kidney states on 2026-11-23 (retrained models, the same 328,894
+      peaks; Gill Immature Female changes in 4,224 of 7,919 peaks), so the demo scores with v3 states while its
+      browser tracks already show v5. It can also take the ChromBPNet scores if it waits for them
+- [ ] S3d A missense effect score, on Orion: the plan is [MISSENSE.md](MISSENSE.md) (a protein language model on one
+      GPU, SIFT 4G as the cross-check; 80,820 public missense SNPs; checked against rarity in the 504 fish);
+      G's choices: DECISIONS #59
+- [ ] S3e Still to ask or get: allelic imbalance in the 12 fish from the Orion repository (the truth set the summit
+      rule and the ChromBPNet scores need); the large gill eQTL set, if its authors share it
+- [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52, #54, #58), then weights.yaml and
+      the pools. Before #5 changes anything: the pool needs coding consequences (it is built without the genome, so
+      the synonymous weight would apply to uploads but not to the public background)
 - [ ] S5 The GWAS prior calibrated per tier, its range shown, with a flat prior and a cap (#51)
 - [ ] S6 Evidence at the base: the ChromBPNet scores and allelic imbalance in the 12 fish (both from the Orion
       repository, docs/CHROMBPNET.md), tested for what they add among SNPs inside peaks; then a bonus G sets (#53)
 - [ ] S7 Customisation: a supported own-weights file, named profiles, the rules stated in every export, and an
-      enrichment-per-tier report from the user's own GWAS
+      enrichment-per-tier report from the user's own GWAS. First the gaps the audit demonstrated (SCORING.md section
+      6): no check of an edited weights.yaml (three of seven mistakes changed tiers silently), a running portal that
+      keeps the old public background after an edit, the Design panel and saved projects stating the wrong rules hash
+      (a saved version's download was re-tiered silently), the README's update command overwriting an edited file,
+      and snpscore outputs that do not name their rules
 - [ ] S8 What the pages tell users about the score (SCORING.md section 5); the AQUA-FAANG citation (the salmonid paper
       is published: Nat Ecol Evol 2026, doi:10.1038/s41559-026-03171-6; layers.yaml still cites the preprint)
 Queued behind it, to run only when G says (cut off twice by the usage limit): a survey of other work (stale texts and
@@ -123,8 +153,12 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
      `species-data` run of 2026-11-24 was cancelled before publishing, to wait for the Synchrosmolt set and G's
      new layers.
    - Salmon, on G's Mac (after G's new layers are merged): `snpdata fetch`, then `snpdata build --out
-     release/<date>`. fetch keeps any file already in data/raw, so first check that the inputs are current,
-     e.g. the AQUA-FAANG unified peaks v3 of release 2026-11-20 under the same file name. Then `snpscore pool
+     release/<date>`. fetch keeps any file already in data/raw, so first check that the inputs are current:
+     delete `data/raw/AtlanticSalmon_unified_peaks.bed`, so that fetch takes salmobase's v5 (2026-11-23; sha256
+     627534ad...; release 2026-11-20 had v3, 8190b375...).
+     The layers of PR #29 need nothing by hand: fetch adds `narrowPeak/` (27 MACS2 peak files, 400 MB) and
+     `Ssal_A_to_Eluc.aligned.bed` (made from the 90 MB depth track). Expect `pike` 1,226,940 rows and `summit`
+     2,468,735 (trout: 1,192,301 and 1,257,737, from 17 peak files). Then `snpscore pool
      --release release/<date> --memory 8GB` and `POOL=1 bash prep/github_release.sh release/<date>`.
      Then bump serve.py RELEASE to <date>, merge and run `deploy`: deploy/species.sh fetches data-<date> and makes
      it the default.
@@ -132,7 +166,8 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
      - manifest `catalog.rows` 46; demo/ holds known_loci.tsv (40 rows), known_svs.tsv (6) and
        svs_demo_SYNTHETIC.tsv (300);
      - synchrosmolt_af has 3,993,949 rows with ns 112;
-     - `snpscore diff <2026-11-20> release/<date>` lists only the intended changes;
+     - `snpscore diff <2026-11-20> release/<date>` lists only the intended changes (with PR #29: `pike` and
+       `summit` added, and `chromatin` changed in the gill and head kidney states);
      - catalogue row `hubsmolt_ssa14_50815335` takes its effect allele (A) from the Synchrosmolt parents' minor
        allele: check that A is still the minor allele in the 112-fish set.
    - Trout, on G's Mac too: `snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw`

@@ -88,6 +88,13 @@ def scored(table, weights, columns, trait, synthetic=()):
         terms.append(("motif", "motif", f"coalesce(motif_changed, false){in_peak}", "'motif: ' || motif_tfs"))
     if "molqtl" in columns and "molqtl" in w:  # nf-RASQUAL lead SNP: display only while its weight is 0
         terms.append(("molqtl", "molqtl", "molqtl", "'molQTL lead: ' || molqtl_tissues"))
+    if "pike" in columns and "pike" in w:  # sequence that aligns to northern pike: display only while its weight is 0
+        terms.append(("pike", "pike", "coalesce(pike, false)", "'aligns to pike'"))
+    rule = weights.get("summit") or {}
+    if {"summit_distance", "summit_rank"} <= set(columns) and "summit" in w and rule:  # near a strong ATAC summit
+        terms.append(("summit", "summit", f"coalesce(summit_distance <= {int(rule['max_distance'])} "
+                                          f"AND summit_rank >= {float(rule['min_rank'])}, false)",
+                      "'ATAC summit ' || summit_distance || ' bp: ' || summit_condition"))
     for name, cutoff in (weights.get("variant_scores") or {}).items():  # I15: a score layer counts from G's percentile
         if f"{name}_percentile" in columns and name in w:
             terms.append((name, name, f"coalesce({q(name + '_percentile')} >= {float(cutoff)}, false)",

@@ -88,6 +88,12 @@ def test_overlap_evidence(release, tmp_path):
     assert two["chromatin_Liver_Immature_Male"] == "Active_enhancer" and "active" in [t["term"] for t in two["tier_terms"]]
     cds = rows["vgll3_cds"]
     assert cds["region_class"] == "CDS" and cds["region_classes"].startswith("CDS,") and cds["gene_distance"] == 0
+    # the layers of 2026-11-24: pike by overlap; the strongest ATAC summit inside an SV, at distance 0
+    lo, top = duckdb.sql(f"""SELECT (("end" - 1) // 1000) * 1000, max(rank) FROM read_parquet('{release / 'summit.parquet'}')
+                             WHERE chrom = '25' GROUP BY 1 ORDER BY count(*) DESC, 1 LIMIT 1""").fetchall()[0]
+    over, _ = run(release, tmp_path, "summits.tsv", f"chrom\tstart\tend\tid\n25\t{lo + 1}\t{lo + 1000}\tsummits\n")
+    assert cds["pike"] and (over["summits"]["summit_distance"], over["summits"]["summit_rank"]) == (0, top)
+    assert "n_genes" in over["summits"] and "genes" in over["summits"]  # listed once, by the gene layer
     assert cds["known_locus"] == "vgll3_Met54Thr" and cds["known_locus_dist"] == 0 and cds["tier"] <= 2
     assert {"term": "coding", "weight": weights["weights"]["coding"]} in cds["tier_terms"]
     wide = rows["wide"]
@@ -110,6 +116,6 @@ def test_one_base_svs_score_as_snps(release, tmp_path):
     assert len(snps) == len(svs) > 300
     same = [c for c in svs[0] if c in snps[0] and not c.startswith("known_") and c not in ("tier_evidence",)]
     assert {"tier", "tier_score", "region_class", "gene_id", "gene_distance", "gerp", "regbuild", "chromatin_Brain_Mature_Male",
-            "molqtl"} <= set(same)
+            "molqtl", "pike", "summit_distance", "summit_rank"} <= set(same)
     for a, b in zip(snps, svs):
         assert {c: a[c] for c in same} == {c: b[c] for c in same}

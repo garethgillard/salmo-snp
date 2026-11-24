@@ -73,13 +73,13 @@ TERMS = {"active": "active in a condition", "active_elsewhere": "active elsewher
          "weak": "weak state in the chosen conditions", "coding": "CDS (protein change or unknown)", "synonymous": "CDS (synonymous)",
          "splice": "splice region", "utr": "UTR",
          "constrained": "GERP constrained", "regbuild": "Ensembl regulatory", "molqtl": "molQTL lead (display only)",
-         "motif": "TF motif change in a peak"}
+         "motif": "TF motif change in a peak", "pike": "aligns to pike", "summit": "near a strong ATAC summit"}
 ACTIVITY = {  # the Chromatin filter: what a SNP must be in, in at least one of the ticked conditions (a filter only)
     "peak": ("Robust ATAC peak", "inside an AQUA-FAANG robust ATAC peak, in any chromatin state"),
     "active": ("Active state", "inside a peak in an active state (Active TSS or Active enhancer)")}
 TERM_SHORT = {"active": "active", "active_elsewhere": "active elsewhere", "weak": "weak", "coding": "CDS", "synonymous": "synonymous",
               "splice": "splice", "utr": "UTR", "constrained": "constrained", "regbuild": "Ensembl reg.", "molqtl": "molQTL",
-              "motif": "TF motif"}
+              "motif": "TF motif", "pike": "pike", "summit": "ATAC summit"}
 QUIET = ("unknown_chromosomes", "aliases_applied", "alias_warnings", "columns_renamed", "columns_dropped",
          "duplicates_merged", "indels", "multiallelic")  # upload QC lines left out when empty or zero
 REJECTS = {"unknown_chrom": "unknown chromosome", "missing_chrom": "no chromosome", "bad_pos": "no valid position",
@@ -135,6 +135,11 @@ COLUMNS = {
     "molqtl": ("molQTL", "Lead SNP of an eQTL (e) or caQTL (ca) in 12 fish; display only, never counted in tiers",
                ("molqtl",), [("molqtl_best_bf", True)]),
     "gerp": ("GERP", "GERP constrained-element score (65 fish)", ("gerp_score",), [("gerp_score", True)]),
+    "pike": ("Pike", "Sequence that aligns to northern pike, the closest relative without the salmonid genome duplication "
+             "(AQUA-FAANG salmon-trout-pike alignment, gaps of up to 50 bp closed)", ("pike",), [("pike", False)]),
+    "summit": ("ATAC summit", "The nearest ATAC-seq summit inside a robust peak, within 500 bp: how far, and how its signal ranks "
+               "among that condition's peaks (top 5% = stronger than 95% of them); hover for the signal and the condition",
+               ("summit_distance",), [("summit_distance", True), ("summit_rank", False)]),
     "regbuild": ("Ensembl reg.", "Ensembl 116 regulatory build feature", ("regbuild_type",), [("regbuild_type", True)]),
     "scores": ("Scores", "Per-variant scores (such as DeepFARM): the score, and how high it ranks among the variants the "
                "model scored; 'not scored' outside them", ("variant_scores",), []),
@@ -158,7 +163,8 @@ EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt", "end", "svtype", "length"), 
          "region": ("gene_distance", "coding_consequence", "coding_hgvsp", "coding_transcript", "coding_note", "region_classes"),
          "beta": ("se",), "pip": ("pip_functional",),
          "assay": ("assay_reasons", "blacklist", "lore", "strand_ambiguous", "flank_variants"),
-         "molqtl": ("molqtl_tissues", "molqtl_kinds", "molqtl_features"), "cm": ("cm_male",)}  # also fetched
+         "molqtl": ("molqtl_tissues", "molqtl_kinds", "molqtl_features"), "cm": ("cm_male",),
+         "summit": ("summit_signal", "summit_rank", "summit_condition")}  # also fetched
 
 
 # ---- opening a result with filters ----
@@ -830,6 +836,20 @@ def score_text(s):
     return s["label"], f"{s['score']:.2f} · top {top}%", f"Higher than {100 * s['percentile']:.1f}% of the variants scored"
 
 
+def summit_text(g):
+    """('12 bp · top 8%', tooltip) for a row with an ATAC summit within reach: how far the nearest summit inside a robust
+    peak is, and how its signal ranks among its condition's peaks; None without one."""
+    d, rank = g("summit_distance"), g("summit_rank")
+    if d is None:
+        return None
+    tissue, short = figures.condition_label(g("summit_condition") or "")
+    top = "" if rank is None else f" · top {max(1, round(100 * (1 - rank)))}%"
+    signal = "" if g("summit_signal") is None else f"signal {g('summit_signal'):.1f} (fold enrichment) in "
+    return (("at the summit" if d == 0 else f"{d} bp") + top,
+            f"Nearest ATAC summit inside a robust peak: {signal}{figures.tissue_name(tissue)} {short}"
+            + ("" if rank is None else f", stronger than {100 * rank:.0f}% of that condition's peaks"))
+
+
 def _row(r, groups, in_preset, active_states, caveats):
     """One table row as display values (the template adds the markup)."""
     from snpscore.gwas import p_text
@@ -845,6 +865,7 @@ def _row(r, groups, in_preset, active_states, caveats):
            "region": region_text(g), "region_tip": coding_tip(g),
            "distance": _dist(distance) if distance else "",  # outside the gene only
            "gerp": "" if g("gerp_score") is None else f"{g('gerp_score'):.1f}", "regbuild": g("regbuild_type") or "",
+           "pike": "yes" if g("pike") else "", "summit": summit_text(g),
            "maf": "" if g("_maf") is None else f"{g('_maf'):.2f}", "ref_check": g("ref_check") or "",
            "cm": "" if g("cm_female") is None else f"{g('cm_female'):.1f} / {g('cm_male'):.1f}" if g("cm_male") is not None else f"{g('cm_female'):.1f}",
            "p": p_text(g("neglog10p")), "beta": "" if g("beta") is None else f"{g('beta'):.3f}" + (f" ({g('se'):.3f})" if g("se") is not None else ""),

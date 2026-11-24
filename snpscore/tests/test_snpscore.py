@@ -12,6 +12,7 @@ from snpscore import RESERVED, InputError, annotate, benchmark, connect, load_we
 from snpdata import build
 from snpscore.annotate import read_snps
 from snpscore.formats import detect, source
+from snpscore.score import CHROMATIN_CONDITIONS
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT.parent / "snpdata"  # the release build: layers.yaml, fixture, prep/, catalogue, data/, release/
@@ -87,6 +88,34 @@ def test_tier_terms_and_synthetic_layers(release, tmp_path):
     # Weights are whole numbers, so tier_score and tier_terms keep one type across releases
     with pytest.raises(ValueError, match="whole number"):
         scored("t", {**weights, "weights": {**weights["weights"], "active": 2.5}}, columns, "all")
+
+
+def test_pike_and_summit(release, tmp_path):
+    """The layers of 2026-11-24: sequence aligned to pike (an interval layer) and the nearest ATAC summit inside a robust
+    peak (distance, signal, rank among its condition's peaks). Both are terms with weight 0: shown, never counted,
+    until G sets them; the summit rule's cut-offs are weights.yaml's `summit` block."""
+    rows = read(annotate(FIXTURE / "snps.vcf", release, tmp_path / "out.parquet"))
+    assert 0 < sum(r["pike"] for r in rows) < len(rows)
+    near = [r for r in rows if r["summit_distance"] is not None]
+    assert near and all(0 <= r["summit_distance"] <= 500 and 0 <= r["summit_rank"] <= 1 and r["summit_signal"] > 0
+                        and r["chrom"] == "25" for r in near)  # the fixture's peak files cover chromosome 25 only
+    assert all(r["chromatin"] for r in near if r["summit_distance"] == 0)  # summits are kept inside robust peaks only
+    assert {r["summit_condition"] for r in near} <= set(CHROMATIN_CONDITIONS)
+    weights = load_weights()
+    assert weights["weights"]["pike"] == 0 and weights["weights"]["summit"] == 0
+    rule = weights["summit"]
+    for r in rows:
+        terms = {t["term"]: t["weight"] for t in r["tier_terms"]}
+        assert ("pike" in terms) == r["pike"] and terms.get("pike", 0) == 0
+        fires = r["summit_distance"] is not None and r["summit_distance"] <= rule["max_distance"] and r["summit_rank"] >= rule["min_rank"]
+        assert ("summit" in terms) == fires
+    # with weights, the same rows score higher: the rules are in weights.yaml, not in the release
+    con = duckdb.connect()
+    con.execute(f"CREATE TABLE t AS SELECT * FROM read_parquet('{tmp_path / 'out.parquet'}')")
+    columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE t)").fetchall()]
+    counted = {**weights, "weights": {**weights["weights"], "pike": 1, "summit": 2}, "summit": {"max_distance": 100, "min_rank": 0.0}}
+    more = con.execute(f"SELECT sum(tier_score), sum(pike::INT), sum((summit_distance <= 100)::INT) FROM ({scored('t', counted, columns, 'all')})").fetchone()
+    assert more[0] == sum(r["tier_score"] for r in rows) + more[1] + 2 * more[2] and more[2] > 0
 
 
 def test_benchmark_covers_every_known_locus(release, tmp_path):
@@ -428,7 +457,12 @@ def test_read_snps_keeps_input_order(tmp_path):
 #   kidney); 8 of the 2,519 fixture SNPs change tier or score, all through head kidney states (tier 4 -> 2 for two).
 # - synchrosmolt_af from the parents' whole-genome set (G, 2026-11-24; 112 fish): only the seven synchrosmolt_af*
 #   columns change; 1,853 of the 2,528 fixture SNPs are sites instead of 287 (checked against the old fixture's build).
-GOLDEN = "b912ea5f5066950d741617ede3feb17840c3b73a6f66ecfc3964307014188744"
+# - pike and summit layers and terms (2026-11-24): summit_signal, summit_rank, summit_condition and summit_distance after
+#   the chromatin columns, pike after gerp; tier_evidence and tier_terms name the two terms where they fire (707 and 1 of
+#   the 2,519 fixture SNPs), with weight 0, so no tier or score changes (checked by building with and without the
+#   layers). With them, the fixture's unified peaks re-cut from salmobase's v5 (2026-11-23: gill and head kidney states
+#   from retrained models, the same peaks): 26 of its 1,341 peaks change a state, no fixture SNP's tier or score.
+GOLDEN = "e1c4c87aa2a096c4c244c3a0c1ca36c28727b6cd9f61becb28e17c859e6b19e0"
 
 
 def test_long_lists_are_written_in_sorted_parts(release, tmp_path, monkeypatch):

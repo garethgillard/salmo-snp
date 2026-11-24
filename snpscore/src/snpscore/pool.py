@@ -20,7 +20,7 @@ from .assay import breakdown
 from .formats import lit, q
 from .score import WEIGHTS, load_weights, scored
 
-FLAGS = ("chromatin", "regbuild", "gerp", "blacklist", "lore", "public_af", "strand_ambiguous")  # boolean columns
+FLAGS = ("chromatin", "regbuild", "gerp", "pike", "blacklist", "lore", "public_af", "strand_ambiguous")  # boolean columns
 MAF_EDGES = tuple(i / 20 for i in range(1, 10))  # MAF histogram: [0, 0.05), [0.05, 0.1), ..., [0.45, 0.5]
 # The release's public sites in the pool (DECISIONS #15; G, 2026-11-21): 'panel', the common ones (public MAF at least the
 # panel designer's design.min_maf in weights.yaml, which picks its candidates from the pool), all of them up to MAX_SITES,

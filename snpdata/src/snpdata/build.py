@@ -291,6 +291,29 @@ def read_bgee(paths):
                FROM l GROUP BY 1, 2"""
 
 
+def read_summits(paths, layer, out):
+    # MACS2 narrowPeak files, one per condition (each `files` entry names its `condition`): the summit of every peak
+    # (start + column 10) with its signal (column 7, the fold enrichment there) and rank, the share of that condition's
+    # peaks with a lower signal (0 to 1), so that conditions of different library quality read alike. Kept: summits
+    # inside the intervals of the built layer `within`. Summits of several conditions lie within a few bases of each
+    # other, so each summit takes the signal, rank and condition of the highest-ranked one within `window` bp of it;
+    # one row per position.
+    one = " UNION ALL ".join(f"""
+        SELECT {lit(s['condition'])} AS condition, chrom, start + summit AS pos, signal, percent_rank() OVER (ORDER BY signal) AS rank
+        FROM read_csv({lit(path)}, header=false, delim='\t', types={{'chrom': 'VARCHAR'}},
+                      names=['chrom', 'start', 'end', 'name', 'score', 'strand', 'signal', 'p', 'q', 'summit'])"""
+                             for path, s in zip(paths, layer["files"]))
+    w = int(layer["window"])
+    return f"""
+        WITH s AS (SELECT a.* FROM ({one}) a ASOF JOIN read_parquet({lit(out / (layer['within'] + '.parquet'))}) p
+                   ON a.chrom = p.chrom AND a.pos >= p.start WHERE a.pos < p."end"),
+        best AS (SELECT chrom, pos, arg_max({{'signal': signal, 'rank': rank, 'condition': condition}}, (rank, signal, condition))
+                                    OVER (PARTITION BY chrom ORDER BY pos RANGE BETWEEN {w} PRECEDING AND {w} FOLLOWING) AS b FROM s)
+        SELECT chrom, pos AS start, pos + 1 AS "end", any_value(b.signal) AS signal, round(any_value(b.rank), 3) AS rank,
+               any_value(b.condition) AS condition
+        FROM best GROUP BY chrom, pos"""
+
+
 def read_variant_scores(path, layer):
     # Precomputed per-variant scores (ROADMAP I15: DeepFARM, a CADD-like score): a tab-separated file, optionally
     # gzipped, with a header chrom, pos (1-based), ref, alt, score. percentile = the share of the scored set with a
@@ -311,7 +334,7 @@ READERS = {"bed": read_bed, "tsv": read_tsv, "aquafaang_peaks": read_aquafaang_p
            "gff3_regions": read_gff3_regions, "vcf": read_vcf, "rna_counts": read_rna_counts,
            "gff3_transcripts": read_gff3_transcripts, "gff3_ncbi_transcripts": read_gff3_ncbi_transcripts, "vcf_info": read_vcf_info, "gene_tsv": read_gene_tsv,
            "nfrasqual": read_nfrasqual, "genetic_map": read_genetic_map, "ss4r": read_ss4r,
-           "variant_scores": read_variant_scores}
+           "variant_scores": read_variant_scores, "summits": read_summits}
 POSITIONAL = ("interval", "nearest", "count", "point", "features")  # layer types with chrom, start, end
 UNIQUE = {"point": ["chrom", "end", "ref", "alt"], "count": ["chrom", "end"], "gene": ["gene_id"]}  # annotate's join keys
 
@@ -362,7 +385,8 @@ def raw_sources(cfg):
 
 def fetch(layers_yaml, data_dir, mirror=None):
     """Download every `url` in layers.yaml (layers, genome, aliases, rsid, synteny, bgee) that isn't in data_dir yet. A
-    bigBed url with a .bed `file` is converted to BED; a `query` is sent as ?query=... (Ensembl BioMart); a source with
+    bigBed url with a .bed `file` is converted to BED, a bigWig url with a .bed `file` to the stretches it covers
+    (covered()); a `query` is sent as ?query=... (Ensembl BioMart); a source with
     `sites_only` is streamed through sites_only(). With `mirror` (a URL or folder made by `snpdata publish --raw`), every
     file comes from <mirror>/raw/ instead, as published (already processed), checked against its SHA256SUMS. A source
     with `local` instead of `url` (an input that isn't online) is read from that path under data_dir, processed the same
@@ -389,6 +413,11 @@ def fetch(layers_yaml, data_dir, mirror=None):
                 with tempfile.NamedTemporaryFile(suffix=".bb") as bb:
                     download(url, Path(bb.name))
                     part.write_text("".join(f"{c}\t{s}\t{e}\t{rest}\n" for c, s, e, rest in BBIFile(bb.name).all_entries()))
+            elif url.endswith(".bw") and target.suffix == ".bed":
+                with tempfile.NamedTemporaryFile(suffix=".bw") as bw:
+                    download(url, Path(bw.name))
+                    with open(part, "w") as f:
+                        f.writelines(f"{c}\t{s}\t{e}\n" for c, s, e in covered(BBIFile(bw.name), int(layer.get("max_gap", 0))))
             else:
                 download(url, part)
                 if layer.get("query") and part.read_bytes()[:11] == b"Query ERROR":  # BioMart answers 200 with its error
@@ -396,6 +425,24 @@ def fetch(layers_yaml, data_dir, mirror=None):
                     part.unlink()
                     raise SystemExit(f"snpdata: {layer['url']} answered: {message}")
             part.rename(target)
+
+
+def covered(bw, max_gap=0):
+    """(chrom, start, end) of the stretches of a bigWig with a value above 0 (an alignment depth track: the bases
+    aligned to another genome), joined across gaps of at most max_gap bases. BED coordinates, in the file's order."""
+    for chrom, (_, size) in bw.chroms.items():
+        start = end = None
+        for s, e, value in bw.values(chrom, 0, size):
+            if value <= 0:
+                continue
+            if start is not None and s - end <= max_gap:
+                end = e
+                continue
+            if start is not None:
+                yield chrom, start, end
+            start, end = s, e
+        if start is not None:
+            yield chrom, start, end
 
 
 def fetch_mirror(sources_, data, mirror):
@@ -573,10 +620,11 @@ def build(layers_yaml, data_dir, out_dir, reuse=None):
         settings = {k: v for k, v in (dict(layer, meme="motif.meme") if layer["format"] == "motif_effects" else layer).items()
                     if k not in ("file", "files", "columns", "query", "info")}
         was = old_layers.get(layer["name"])
+        needs = {layer[k] for k in ("sites", "within") if k in layer}  # the built layers this one is computed from
         if (was and all(was.get(k) == v for k, v in settings.items()) and was.get("source_sha256") == hashes(paths)[1]
                 and was.get("info_settings", "") in ("", [s.get("info", layer.get("info")) for s in sources(layer)])
-                and (layer["format"] != "motif_effects" or ({layer["sites"], layer["within"]} <= copied
-                                                            and old.get("snpscore_version") == snpscore_version))):
+                and needs <= copied
+                and (layer["format"] != "motif_effects" or old.get("snpscore_version") == snpscore_version)):
             shutil.copyfile(Path(reuse) / was["file"], out / was["file"])
             if layer["format"] == "motif_effects":
                 shutil.copyfile(Path(reuse) / "motif.meme", out / "motif.meme")
@@ -593,8 +641,9 @@ def build(layers_yaml, data_dir, out_dir, reuse=None):
             tmp = out / ".motif-effects.tsv"
             con.execute(f"CREATE OR REPLACE TABLE layer AS {motif.layer_sql(con, paths[0], layer, out, data / genome['file'], tmp)}")
             tmp.unlink()
-        else:
-            con.execute(f"CREATE OR REPLACE TABLE layer AS {READERS[layer['format']](paths if 'files' in layer else paths[0], layer)}")
+        else:  # a reader of a layer computed `within` a built one also gets the release folder
+            args = (paths if "files" in layer else paths[0], layer) + ((out,) if "within" in layer else ())
+            con.execute(f"CREATE OR REPLACE TABLE layer AS {READERS[layer['format']](*args)}")
         if layer["type"] == "interval":
             check_no_overlap(con, layer["name"])
         if layer["type"] in UNIQUE:

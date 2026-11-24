@@ -337,6 +337,11 @@ class ResultsTest(SimpleTestCase):
         self.assertIn(">Score</a>", chosen)
         self.assertNotIn("sort=tier", chosen)
         self.assertIn("col=gerp", chosen)  # kept in the sort and page links
+        layers = self.client.get(self.url + "?tab=table&cols=1&col=id&col=pike&col=summit&sort=summit").content.decode()  # 2026-11-24
+        self.assertIn(">Pike</a>", layers)
+        self.assertIn("<td>yes</td>", layers)
+        self.assertRegex(layers, r'title="Nearest ATAC summit inside a robust peak: signal [\d.]+ \(fold enrichment\) in [^"]+">'
+                                 r'(at the summit|\d+ bp) · top \d+%</td>')
 
     def test_empty_state_names_the_most_restrictive_filter(self):
         page = self.client.get(self.url + "?tab=table&region=coding&tier=4").content.decode()  # coding is never tier 4

@@ -10,7 +10,7 @@ How it was made: six literature reviews (84 findings) by AI researchers on 2026-
 through PubMed and Europe PMC. On 2026-11-22 Claude re-checked the 51 papers cited here against their PubMed records
 (title, authors, journal, year, and the number where the abstract gives it). A number followed by † appears only in
 the paper's full text, as the reviewer read it, and was not re-checked. References with DOI links are at the end.
-Our own measurements on release 2026-11-20 are computed but not yet written up and re-checked (section 6).
+Our own measurements on release 2026-11-20 are in section 6 (added 2026-11-22).
 
 ## 1. The short answer
 
@@ -35,6 +35,19 @@ Our own measurements on release 2026-11-20 are computed but not yet written up a
 - **Customisable means learnable from the company's own data.** Every scheme that worked estimated the value of each
   evidence class from trait data. We can offer that as an optional report on a user's own GWAS, with a fixed,
   transparent default for everyone else.
+- **Our own benchmark confirms that the tiers carry signal, and cannot do more yet** (section 6). eQTL lead SNPs sit
+  in tiers 1 and 2 about 1.5 times as often as matched controls under every design. But there is no gradient across
+  tiers or scores, the score ranks the leads no better than distance to the nearest gene start, and no option of the
+  open decisions changes the result measurably. Calibration has to wait for a better truth set.
+- **The one public salmon GWAS agrees on size and disagrees on the prior** (section 6). The lead SNPs of 116
+  age-at-maturity signals are in tiers 1 and 2 1.5 times as often as matched SNPs, carried by coding sequence and not
+  by chromatin state, and the prior slope the GWAS itself supports is 0.05 to 0.15 per score point, not 0.5.
+- **Conservation can do much more than it does.** The GERP layer has the highest odds of any term but touches 0.2%
+  of SNPs. Sequence that still aligns to pike covers 16% of SNPs and is enriched at eQTL leads more strongly than an
+  active chromatin state (1.6 to 1.9 times; section 6). It is a layer since 2026-11-24, shown and not yet counted.
+- **Two more layers, 2026-11-24.** The distance to the nearest ATAC summit and its signal strength are a layer too;
+  at eQTL leads they add nothing to the peak itself so far. A missense effect score is planned for Orion
+  ([MISSENSE.md](MISSENSE.md)).
 
 ## 2. What other projects do
 
@@ -74,8 +87,8 @@ Genomic prediction, where annotation was used to choose or weight markers:
 | Evidence | What the literature found | In salmo-snp today | Difference |
 |---|---|---|---|
 | Protein change | The largest enrichment per SNP among confidently fine-mapped human trait variants (nonsynonymous 51-fold†). Pig GWAS lead SNPs: 20-fold in coding sequence†. In salmon, the coding candidate at the IPN locus was not supported by genome editing, and the gene that was (nae1) has its strongest variants between genes† | Coding 3, splice 3, and synonymous also 3 | A synonymous change is not what was enriched. Coding suits "candidate causal variant" better than "marker for prediction" |
-| Evolutionary constraint | Ranked first in the cattle score. 16-fold among fine-mapped human variants†. But pig GWAS lead SNPs were less conserved than background†, and it stayed significant in the later cattle score only for the deepest alignment† | GERP element from 65 fish: 2 | The literature puts constraint at or above a regulatory element. Ours is below. GERP from 65 fish of a duplicated genome is untested |
-| Active promoter | Pig lead SNPs 12-fold in active promoters†. Pig molecular QTL most enriched in active promoters† | "Active" 3: active TSS and active enhancer alike | The literature separates the two |
+| Evolutionary constraint | Ranked first in the cattle score. 16-fold among fine-mapped human variants†. But pig GWAS lead SNPs were less conserved than background†, and it stayed significant in the later cattle score only for the deepest alignment† | GERP element from 65 fish: 2 | The literature puts constraint at or above a regulatory element. Ours is below. Ours also reaches only 0.23% of SNPs; alignment to pike reaches 14% and is enriched at eQTL leads (section 6) |
+| Active promoter | Pig lead SNPs 12-fold in active promoters†. Pig molecular QTL most enriched in active promoters† | "Active" 3: active TSS and active enhancer alike | The literature separates the two. Our eQTL leads do not: with controls matched on gene distance an active TSS state shows 1.17 (0.84 to 1.60) and an active enhancer without one 1.85 (1.41 to 2.38) (section 6) |
 | Active enhancer | Pig lead SNPs 2-fold in active enhancers†; more in the matching tissue† | "Active" 3 | Lower than a promoter, and where the tissue matters most. Part of the promoter excess is detection bias towards large effects near genes |
 | Weak, poised, bivalent, accessible | Low weight per SNP. Open chromatin still matters in total because it covers many SNPs. In shrimp the best state for prediction was bivalent | 1 | Agrees. Do not set to zero on present evidence |
 | Matching tissue | eQTL evidence pooled over all tissues generally did best across 41 traits; tissue-specific evidence was stronger for blood and brain traits (Hormozdiari 2018). Immune stimulation revealed effects the resting state lacks (Alasoo 2018) | All 27 conditions by default | Agrees. The head kidney treatments earn their place for disease traits |
@@ -125,12 +138,15 @@ Two more points on form:
 |---|---|---|---|
 | A | Today's rule, unchanged | Transparent; nothing to do | Its order disagrees with the literature in three places; the prior's scale is unmeasured |
 | B | Still basic: whole-number weights that G sets, re-ordered where G agrees with the literature (#5 synonymous, #49 promoter against enhancer, #50 constraint) | Transparent; defensible by citation; a day of work once decided | Borrowed orderings are hypotheses for salmon until our benchmark supports them |
-| C | The same additive form, with the scale measured: enrichment per tier on our benchmark (tighter controls, held-out chromosomes, the maturity GWAS) sets the GWAS prior and checks the order | What the literature does at our data size; the numbers come with intervals | Needs the benchmark upgrades first; with about a thousand positives it can calibrate tiers, not every weight |
+| C | The same additive form, with the scale measured: enrichment per tier on our benchmark (tighter controls, held-out chromosomes, the maturity GWAS) sets the GWAS prior and checks the order | What the literature does at our data size; the numbers come with intervals | Our molecular-QTL leads cannot do it (section 6): it needs the maturity GWAS or allelic imbalance as the truth set first |
 | D | A learned score beside the tier, as RegulomeDB added TURF | The route to within-locus ranking | Needs labels we do not have yet: allelic imbalance in the 12 fish, ChromBPNet effects, a company's own GWAS |
 
-Claude's recommendation: **B and C together now, D as the upgrade path.** G decides the order questions with our own
-measurements beside the literature; the prior is calibrated per tier; the ChromBPNet scores and allelic imbalance
-enter as a bonus only after they pass a test of what they add inside peaks. The numbers stay G's.
+Claude's recommendation, after our own measurements (section 6): **B now, by judgement; C when a better truth set
+exists; D later.** Our molecular-QTL leads confirm that the tiers carry signal but cannot choose between options, so
+the order of the weights is G's judgement of the literature and the biology. Our data do say two things: nothing
+supports weighting an active promoter above an active enhancer once distance to the gene is controlled (#49), and
+nothing supports a prior as steep as exp(0.5 x tier_score) (#51). The ChromBPNet scores and allelic imbalance enter
+as a bonus only after they pass a test of what they add inside peaks. The numbers stay G's.
 
 For customisation, the literature supports three levels, in this order: the evidence always shown beside the tier
 (every project does this); a documented way to run with one's own weights and named profiles; and an optional report
@@ -148,18 +164,264 @@ What to tell users:
 - For genomic prediction in one population, expect little. Estimate any benefit in fish that took no part in
   choosing the markers.
 
-## 6. What our own data say
+## 6. What our own data say (release 2026-11-20)
 
-Already recorded (DECISIONS.md, benchmark on an earlier release): eQTL lead SNPs are enriched in tiers 1 and 2
-1.48-fold (1.27 to 1.72), in an active state 1.40-fold (1.15 to 1.71) and in GERP elements 2.29-fold (1.19 to 4.40);
-tier 1 alone is not significant.
+How it was measured. Positives: the lead SNPs of molecular QTL mapped in 12 fish (1,606 eQTL leads, the fairer test;
+1,057 caQTL leads, circular for chromatin evidence) and the 40 catalogue loci. Controls, in two designs. S: every
+other pool site in the same gene-distance bin and allele-frequency bin, which is the shipped benchmark's rule with all
+controls instead of 10 drawn. T: every site the QTL study could have reported (1,361,114 sites), matched on gene
+distance and on the allele count in the 12 fish. One analyst agent computed it, a second wrote it up and re-derived
+the main numbers with its own queries, and Claude re-checked the counts against the release (2026-11-22). The scripts
+and tables are kept outside the repository.
 
-Computed on release 2026-11-20 on 2026-11-22, not yet written up or independently re-checked: odds ratios for every
-evidence term against two control designs, a joint model, the score against single features and against distance to
-the gene start, and what each option of DECISIONS #1, #2 and #5 would change. A separate audit established what a
-user can customise today: named condition presets on the command line, and editing the installed weights file; no
-portal control; re-tiering needs no new annotation and takes under a second for a list. Both go into this section
-and into DECISIONS when the write-up is checked.
+Odds ratios for eQTL lead SNPs, with 95% intervals:
+
+| Evidence (weight today) | Design S | Design T | Leads with it |
+|---|---|---|---|
+| Tiers 1 and 2 | 1.56 (1.32-1.83) | 1.47 (1.25-1.71) | 167 of 1,475 |
+| Tier 1 | 1.76 (0.91-3.09) | 1.40 (0.72-2.46) | 12 |
+| Active state (3) | 1.51 (1.22-1.84) | 1.37 (1.13-1.66) | 104 |
+| - an active TSS state | 1.17 (0.84-1.60) | 1.07 (0.77-1.43) | 41 |
+| - an active enhancer state, no active TSS state | 1.85 (1.41-2.38) | 1.70 (1.31-2.16) | 63 |
+| Weak state (1) | 1.07 (0.81-1.39) | 1.02 (0.78-1.31) | 58 |
+| Any coding-sequence SNP (3) | 1.73 (1.32-2.21) | 1.68 (1.30-2.13) | 65 |
+| - protein-changing | 1.86 (1.28-2.62) | 1.82 (1.27-2.52) | 34 |
+| - synonymous | 1.83 (1.24-2.61) | 1.74 (1.20-2.44) | 31 |
+| Splice region (3) | 0.43 (0.05-1.56) | 0.43 (0.05-1.56) | 2 |
+| UTR (1) | 2.13 (1.75-2.56) | 1.95 (1.61-2.34) | 123 |
+| GERP constrained (2) | 2.89 (1.44-5.18) | 2.12 (1.06-3.81) | 11 |
+| Ensembl regulatory feature, no peak (1) | 1.15 (0.81-1.58) | 1.36 (0.97-1.87) | 39 |
+| Motif changed inside a peak (1) | 0.87 (0.49-1.45) | 0.86 (0.50-1.38) | 15 |
+
+The state rows compare with SNPs outside peaks; the other rows with SNPs that lack that evidence.
+
+What the data support:
+- **The tiers carry signal, robustly and modestly.** eQTL leads are in tiers 1 and 2 about 1.5 times as often as
+  matched controls under both designs. Known loci: 5.2 (2.9 to 9.3; 13 of 40 against 25 of 400), from few loci, a
+  quarter of them in coding sequence. caQTL leads: 3.2 (2.8 to 3.6), circular.
+- **There is no gradient.** Against tier 4, tier 3 is as enriched as tier 2 (1.60 against 1.64). Score by score the
+  odds are flat (1.66 at score 1, 1.64 at 3, 1.69 at 4). A plain "any evidence, yes or no" ranks the leads as well as
+  the score. The score's AUC is 0.539 (0.528 to 0.550).
+- **The score does not beat distance.** Distance to the nearest protein-coding gene start alone has AUC 0.562, which
+  is 0.023 above the score (0.006 to 0.040). This is the eQTL bias the literature describes, in our own data.
+- **What carries the eQTL signal:** UTR, coding sequence, active enhancers and, from 11 leads, constraint. What shows
+  none: an active TSS state once gene distance is matched, weak states, the Ensembl feature, a motif change, the
+  splice region (2 leads).
+- **Synonymous and protein-changing leads are equally enriched** (ratio 0.97, 0.58 to 1.63). So the coding and UTR
+  signal is about lying in the transcript, where the method measures allele-specific expression, not about protein
+  function. These leads cannot inform DECISIONS #5.
+- **No listed option of DECISIONS #1, #2 or #5 changes the benchmark measurably.** The odds ratio of tiers 1 and 2
+  stays between 1.44 and 1.58 and the AUC moves by at most 0.004. The options do move SNPs: 100,933 fall a tier if
+  weak states count 0, and 49,417 rise if primed enhancers count as active.
+- **The prior is steeper than anything measured.** exp(0.5 x score) assumes 1.6, 2.7, 4.5, 7.4, 12 and 20-fold for
+  scores 1 to 6; the measured odds stay near 1.7. Lead SNPs are tags, which dilutes the measured figures, so the true
+  slope is unknown, not shown to be flat.
+
+What the data cannot support: the size of any weight, a choice between the options, graded chromatin evidence (no
+trend with the number of conditions in which a SNP is active) or the prior's slope. The reasons:
+- The leads come from 12 fish and are tags: 167 of the 1,606 eQTL leads lie inside their own gene.
+- The chance of being a lead rises eight-fold with the allele count in the 12 fish, from 2.7 to 22 per 10,000 sites,
+  and 65% of pool sites could not have been leads at all (chromosomes 10 and 15 almost entirely).
+- eQTL leads are 1.4 times as frequent in late-rediploidised regions (1.24 to 1.56), which points to a reliability
+  problem in the truth set, not to biology.
+
+Found on the way:
+- **The public pool carries no coding consequence**, because it is built without the genome. All 73,579
+  coding-sequence sites in it count as coding and the synonymous weight never applies there, while it does apply to a
+  user's list scored with the genome. If DECISIONS #5 changes that weight, uploads and the public background would be
+  scored by different rules.
+- **The benchmark is cheap:** 5 to 38 seconds and at most 38 kB per run. It can be built with the pool in every
+  install; today no release has it, so the Methods page shows none.
+- Tiers in the pool of 3,436,671 sites: tier 1 13,045 (0.38%), tier 2 211,438 (6.15%), tier 3 291,820 (8.49%),
+  tier 4 2,920,368 (84.98%).
+
+### The age-at-maturity GWAS: an independent test (2026-11-24)
+
+According to PubMed, Sinclair-Waters et al. 2020
+([doi:10.1186/s12711-020-0529-8](https://doi.org/10.1186/s12711-020-0529-8)) mapped age at maturity in 11,166 males
+of one aquaculture strain: 512,397 SNPs (a 50K array imputed to a 930K panel)
+on assembly ICSASG_v2, with 116 independent signals. Its supplementary Table S3 gives the statistics of every SNP.
+`snpscore annotate --from-assembly ICSASG_v2` moved 481,585 SNPs (94.0%) to Ssal_v3.1, all but five of them agreeing
+with the reference base there, and 112 of the 116 lead SNPs. The data are not in the repository.
+
+Lead SNPs against all other GWAS SNPs of the same allele-frequency bin and gene-distance bin:
+
+| Evidence | Leads with it | Matched SNPs | Odds ratio (95%) |
+|---|---|---|---|
+| Tiers 1 and 2 | 29 of 112 (25.9%) | 18.8% | 1.51 (0.95-2.33) |
+| Tier 1 | 4 | 1.5% | 2.43 (0.65-6.41) |
+| Coding sequence | 18 | 6.7% | 2.65 (1.50-4.42) |
+| UTR | 13 | 8.9% | 1.35 (0.69-2.41) |
+| Active state | 11 | 11.9% | 0.81 (0.39-1.50) |
+| In a peak | 20 | 19.2% | 0.92 (0.53-1.50) |
+| GERP constrained | 2 | 1.0% | 1.80 (0.21-6.64) |
+
+- **The same 1.5-fold as at eQTL leads, with a different carrier:** coding sequence, not chromatin state.
+- **The prior's slope, fitted to the GWAS** (the fgwas form: one causal SNP per locus, prior proportional to
+  exp(slope x tier_score), 100 loci of 250 kb either side of a lead): 0.05 (-0.15 to 0.20). With 100 kb windows 0.10
+  (-0.10 to 0.25); without chromosomes 9 and 25, which hold the six6 and vgll3 signals, 0.15 (-0.10 to 0.35). The
+  portal's 0.5 lies outside every interval and fits worse than a flat prior (log-likelihood lower by 19, 14 and 6).
+  As a yes-or-no prior term, coding sequence is supported at 2.0 (0.9 to 4.1), and at 3.3 (1.3 to 6.7) without the
+  two large loci.
+- **Inside loci the posterior does not sit on high-tier SNPs:** the share of posterior on tier 1-2 SNPs is 1.01
+  times their share of the locus' SNPs (0.67 to 1.41). The 95% credible set is one SNP at the median under either
+  prior; the functional prior changes the top SNP in about one locus in ten.
+- Genome-wide, at the same allele frequency and gene distance, tier 1 SNPs have 1.08 times the mean chi-square of
+  tier 4 SNPs (1.00 to 1.15); tiers 2 and 3 show nothing.
+
+Limits. The leads are array tags. Each is almost always a genotyped 50K SNP whose neighbours were imputed with 21 to
+24% discordance, so the posterior concentrates on the tag whatever its function, and tests inside loci lean towards no
+enrichment. A regulatory causal variant is unlikely to be on an array at all, while a coding one may be, which favours
+coding here. The array is itself rich in evidence (18.6% of its SNPs are in tiers 1 and 2, against 6.5% of the public
+pool). One trait, one strain. So this GWAS supports a flatter prior and the coding weight; it does not test the
+chromatin weights.
+
+### Conservation: what would make it count for more (2026-11-24)
+
+Today's layer is membership of a GERP constrained element from Ensembl's 65-fish alignment: 180,364 elements of 32 bp
+at the median, 11.5 Mb or 0.4% of the genome. It applies to 8,058 of the 3,436,671 pool SNPs (0.23%), 37% of them in
+coding sequence. It has the highest odds ratio of any term at eQTL leads and the fewest leads (11).
+
+- **Per-base scores from the same alignment do not help.** Ensembl publishes them (a 448 MB bigWig). Only 22% of
+  the genome has a score at all (the vgll3 missense site has none), and most scored bases are aligned too shallowly
+  to score above 0.4. A score of 2 or more gives 2.15 (0.79 to 4.69) at eQTL leads from 6 leads, and 1 or more gives
+  1.61 (0.80 to 2.89): no better than the element flag. The alignment is the limit, not how it is scored.
+- **Sequence that still aligns to pike is the layer that helps.** AQUA-FAANG's whole-genome alignment of salmon,
+  trout and pike is on salmobase with an alignment-depth track (90 MB). Pike split from salmonids before their genome
+  duplication, so this is sequence retained for over 100 million years. It covers 13.8% of the 7.57 million public
+  SNPs: 65% of those in coding sequence, 41% of those in peaks, 10% of intergenic ones. At eQTL leads:
+
+| Lead SNPs | Design S | Design T | T, also matched on imputation quality |
+|---|---|---|---|
+| All (433 of 1,606 aligned to pike) | 1.74 (1.55-1.95) | 1.46 (1.30-1.63) | 1.47 (1.32-1.65) |
+| With no tier evidence today (tier 4) | 1.64 (1.41-1.91) | 1.38 (1.19-1.60) | |
+| More than 10 kb from a protein-coding gene start | 1.83 (1.56-2.13) | 1.44 (1.24-1.67) | |
+| Aligned to pike, outside peaks and coding sequence | 1.63 (1.43-1.86) | 1.38 (1.21-1.57) | |
+
+  For comparison in the strictest design, being in a peak gives 1.24 (1.05 to 1.45) and a constrained element 2.17
+  (1.08 to 3.88). The result holds with imputation quality of 0.95 or more outside blacklisted regions (1.47, 1.31 to
+  1.64) and outside late-rediploidised regions (1.37, 1.19 to 1.59). So conservation with pike is as informative per
+  SNP as an active chromatin state at these leads, applies to SNPs the score ignores today, and reaches 2.4 times as
+  many leads as tiers 1 and 2 do.
+- **The GWAS does not confirm it and cannot refute it:** 62 of 112 lead SNPs align to pike, against 55.8% of matched
+  array SNPs (0.98, 0.67 to 1.46). The array is already four times richer in pike-aligned sequence than the public
+  sites, which also shows that the flag goes with sequence that is easy to genotype.
+- Whether and how it counts is G's decision (DECISIONS #54). The layer is in the code since 2026-11-24 (`pike`,
+  weight 0: shown, not counted); the tests that shaped it follow.
+
+### The pike layer: what improves it (2026-11-24)
+
+G asked for the layer and for tests to improve it. All on the 7.57 million public sites and the eQTL leads, designs S
+and T as above (T also matched on imputation quality). The alignment's MAF files give the aligned base in pike, in
+the trout ortholog and in the salmon and trout duplicate copies.
+
+| Version of the flag | Share of public SNPs | Design S | Design T |
+|---|---|---|---|
+| The SNP's base aligns to pike (the depth track) | 13.8% | 1.74 (1.55-1.95) | 1.47 (1.32-1.65) |
+| ... and the pike base is the salmon reference base | 7.7% | 1.69 (1.45-1.97) | 1.37 (1.18-1.58) |
+| ... and the pike base differs | 5.3% | 1.54 (1.31-1.81) | 1.39 (1.19-1.61) |
+| 90 to 100% of the 50 flanking bases identical in pike | 0.7% | 2.10 (1.39-3.05) | 1.64 (1.10-2.37) |
+| 70 to 79% identical | 3.1% | 1.38 (1.09-1.73) | 1.15 (0.92-1.43) |
+| Aligned, under 50% identical | 6.1% | 1.57 (1.32-1.84) | 1.46 (1.24-1.72) |
+| Aligned to the trout ortholog but not to pike | 37% | 1.14 | 1.03 (0.93-1.14) |
+| The salmon duplicate copy 70% identical or more, pike not aligned | 10.0% | 1.12 (0.94-1.32) | 1.10 (0.93-1.28) |
+| Aligned to none of the four | 42% | 0.58 | 0.72 (0.64-0.81) |
+| In an alignment gap of 1 to 20 bp | 1.6% | 2.01 (1.52-2.61) | 1.80 (1.37-2.32) |
+| In a gap of 21 to 50 bp | 0.6% | 2.38 (1.56-3.48) | 2.10 (1.38-3.07) |
+| In a gap of 51 to 100 bp | 0.7% | 0.86 (0.41-1.58) | 0.95 (0.47-1.71) |
+| Within 25 bp of aligned sequence, in a gap of over 50 bp | 2.6% | 1.04 (0.75-1.39) | 1.05 (0.78-1.40) |
+| **The layer as built: aligned, gaps of up to 50 bp closed** | **16.0%** | **1.92 (1.72-2.14)** | **1.61 (1.45-1.79)** |
+
+- **Depth of conservation is what matters.** Sequence shared with trout alone carries nothing; neither does the
+  salmon duplicate copy without pike. Pike is the layer.
+- **The base itself adds nothing, and identity little.** A SNP whose reference base is the pike base is no likelier
+  to be a lead than one where they differ. Windows 90 to 100% identical do better, but they are 0.7% of SNPs and 56%
+  of them coding; outside coding sequence, high identity gives no more than plain alignment (SNPs with no tier
+  evidence: 1.16, 0.90 to 1.47, for windows 70% identical or more, against 1.44 for aligned windows under 50%).
+  So the release needs the 90 MB depth track, not the 2 GB of alignments.
+- **Short alignment gaps belong to the conserved stretch.** SNPs in gaps of up to 50 bp are leads at least as often
+  as aligned SNPs; in longer gaps and just outside the edges they are not. Closing gaps of up to 50 bp is the one
+  change that improved the layer, and it is `max_gap: 50` in layers.yaml (PROVISIONAL).
+- **As built:** 563 Mb in 1,226,940 stretches, 16.0% of public SNPs and 18.5% of the pool's: 71% of its coding
+  SNPs, 54% of those in splice regions, 42 to 44% in UTRs, 18% of intronic and 13.5% of intergenic ones. Outside
+  coding sequence, UTRs and splice regions the leads are still enriched (1.83 and 1.54), as among SNPs with no tier
+  evidence (1.84 and 1.55); 79% of the pool SNPs in the layer are outside robust peaks. Rainbow trout gets the same
+  layer from the same alignment (547 Mb), untested: trout has no eQTL set.
+- **A check that does not use the eQTL leads:** in unique sequence the 504 fish have 2.37 public SNPs per kb where no
+  flanking base is identical in pike, then 2.19, 2.07 and 1.77 as identity rises, and 1.24 where 90 to 100% are
+  identical. Fewer variants where conservation is higher is what selection against changes would leave (the share of
+  rare variants changes little, 46.0 to 48.5%).
+
+### ATAC summits: distance and signal strength (2026-11-24)
+
+G asked for a layer of scoring from the distance to the ATAC summit and the signal strength. The nf-core MACS2 peak
+files of the 27 conditions on salmobase give 4.6 million significant summits, 3.0 million of them inside robust
+peaks. A robust peak holds several: its summits span 151 bp at the median. Fold enrichment differs between
+conditions (median 3.1 to 6.5, 90th percentile 5.9 to 18.6), so the layer also gives each summit's rank among its own
+condition's peaks.
+
+| SNPs | Share of pool | Design S | Design T |
+|---|---|---|---|
+| In a robust peak (for comparison) | 7.96% | 1.31 (1.11-1.55) | 1.24 (1.05-1.45) |
+| Within 50 bp of a summit | 3.53% | 1.39 (1.09-1.75) | 1.38 (1.10-1.71) |
+| Within 50 bp of a summit in the strongest quarter of its condition (the rule) | 1.04% | 1.07 (0.62-1.71) | 1.07 (0.64-1.67) |
+| Within 50 bp of a summit in the weaker half | 1.48% | 1.58 (1.10-2.18) | 1.54 (1.11-2.09) |
+| Inside robust peaks only: within 50 bp of a summit against the rest of the peak | | 1.08 (0.78-1.49) | 1.18 (0.86-1.59) |
+| Inside robust peaks only: the rule | | 0.77 (0.43-1.29) | 0.83 (0.48-1.36) |
+| caQTL leads, inside robust peaks only: the rule | | 1.68 (1.24-2.25) | 1.71 (1.27-2.27) |
+| caQTL leads, inside robust peaks only: within 50 bp of any summit | | 1.07 (0.84-1.35) | 1.11 (0.88-1.39) |
+
+- **Distance to a summit says about what the peak says.** Being within 50 bp of a summit is no better at eQTL leads
+  than being in the peak, and inside peaks the difference from the rest of the peak is within noise (163 to 178 leads).
+- **Strength is not supported by the eQTL leads.** Leads are not more often at strong summits; if anything at weak
+  ones. Strong peaks are often shared, promoter-like elements, where a lead found in 12 fish is less likely.
+- **The caQTL leads do support it,** 1.7 times, but a strong peak is also where a caQTL is easiest to detect in 12
+  fish, so this cannot be told from detection.
+- Summits outside robust peaks carried nothing in the first test (0.84 and 0.98), so the layer keeps those inside.
+- **As built:** `summit` gives every SNP within 500 bp of a summit its distance, the signal, the rank and the
+  condition; 98.7% of pool SNPs in a robust peak get them. The rule (weights.yaml `summit`: within 50 bp, rank 0.75
+  or more) has weight 0. It needs evidence at the base to be judged: allelic imbalance in the 12 fish, and the
+  ChromBPNet effects. DECISIONS #58.
+
+### What a user can customise today
+
+From an audit of the code and demonstrations on a copy of the release (2026-11-22):
+- **One set of rules:** weights.yaml inside the installed snpscore package. There are two ways to change the
+  scoring: choose one of 11 named condition presets on the command line (`--trait`), or edit the installed file by
+  hand. No option names another weights file, and no portal page has a control for weights, cut-offs, state lists or
+  conditions.
+- **Re-tiering needs no new annotation:** a tier is SQL over stored evidence columns. Applying other rules to a list
+  of 40 to 209,327 SNPs took 0.09 to 0.64 seconds, against 7 to 28 seconds to annotate again; on the whole pool, 2 to
+  3 seconds for tier counts and 31 to 35 seconds for a new pool file.
+- **Editing the file works for new runs,** and every job keeps a copy of its rules with their hash. But the audit
+  demonstrated gaps:
+  - a running portal keeps comparing new results with the old public background, without notice;
+  - the Design panel and saved projects state the installed file's hash whatever rules made their tiers, and a saved
+    version's download was silently re-tiered (18 of 40 SNPs) while its report showed the stored tiers;
+  - of seven deliberate mistakes in the file, three changed tiers with no message and four gave a Python error;
+  - the README's update command puts the shipped file back;
+  - snpscore's own output files do not say which rules made them.
+- **Effort to each level** (estimates): an own-weights file as a supported option, a day to a few days; named
+  profiles in the portal, a few days plus a public background per profile; editing rules for one job with immediate
+  re-tiering, a week or more; a profile saved with a design project and stated in every export, a few days; learning
+  weights from the user's own data, a week or more and decisions by G.
+
+## 7. Next layers of evidence
+
+In the order of expected value for the effort (2026-11-24). Each has to pass the same test before it counts: what it
+adds given the layers already there.
+
+| Layer | What it adds | Effort | Status |
+|---|---|---|---|
+| ChromBPNet allele effects, per condition | Evidence at the base: the kind that orders SNPs inside a peak or locus | Running on Orion (docs/CHROMBPNET.md) | Good test results so far (G, 2026-11-24) |
+| Allelic imbalance in the 12 fish's ATAC and RNA reads | Measured, variant-level evidence, and a truth set for everything else | A by-product of the ChromBPNet evaluation on Orion | To ask of the Orion repository |
+| Conservation with pike (salmon-trout-pike alignment) | Broad conservation for 16% of SNPs; 1.6 to 1.9 at eQTL leads | Small: one 90 MB track on salmobase | Built 2026-11-24 (layer `pike`, salmon and trout; weight 0); in the data with the next release; DECISIONS #54 |
+| A missense effect score for coding SNPs | Separates damaging from harmless protein changes; coding is the one class both truth sets support, and all of it scores alike today | A protein language model on one GPU on Orion for a few hours, SIFT 4G as the cross-check | Planned: [MISSENSE.md](MISSENSE.md); DECISIONS #59 |
+| Distance to the ATAC summit, and signal strength | Graded accessibility in place of a yes-or-no state | Small: the nf-core peak files on salmobase | Built 2026-11-24 (layer `summit`, salmon and trout; weight 0); no gain at eQTL leads (section 6); DECISIONS #58 |
+| A large fine-mapped eQTL set (the gill study of about 3,000 fish) | The strongest regulatory truth set in salmon | Depends on the authors' data | To ask |
+
+Tested and set aside: per-base GERP scores (section 6). Looked at and not a per-SNP layer: salmobase's TFBS folder,
+which holds motif activity per condition, not binding sites.
 
 ## References
 

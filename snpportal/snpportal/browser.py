@@ -681,6 +681,11 @@ def other_group(s, ax, data):
     if not data.get("gerp"):
         gerp.append(locus_svg._t(4, 10, "none in this window", 9.5, G[700]))
     rows = [row("Ensembl regulatory", trk(13, "".join(body)), "build 116"), row("GERP constrained", trk(13, "".join(gerp)), "65 fish")]
+    if "pike" in data:  # sequence that aligns to northern pike, in releases with the layer
+        pike = "".join(f'<rect x="{ax.x(p["start"]):.1f}" y="2" width="{max(1, ax.x(p["end"]) - ax.x(p["start"])):.1f}" height="9" '
+                       f'fill="{G[700]}"><title>Aligns to northern pike: {p["end"] - p["start"]:,} bp</title></rect>' for p in data["pike"])
+        rows.append(row("Aligns to pike", trk(13, pike or locus_svg._t(4, 10, "none in this window", 9.5, G[700])),
+                        "salmon-trout-pike alignment"))
     for label, sites in (data.get("scores") or {}).items():  # I15: per-variant scores, tick height = percentile
         ticks = [f'<rect x="{ax.x(pos - 1):.1f}" y="{13 - 11 * p:.1f}" width="1.5" height="{max(1, 11 * p):.1f}" fill="{G[900]}">'
                  f'<title>{escape(label)} {score:.2f} ({ref}&gt;{alt}): higher than {100 * p:.1f}% of the variants scored</title></rect>'

@@ -3,6 +3,7 @@
 # Regions: chr21 32-34 Mb (Ensembl "vgll3", the ohnolog of the chr25 maturation gene), chr25 28.5-29.5 Mb (vgll3, akap11),
 #          chr26 14-16 Mb (nae1, IPN QTL), chr1 110-111 Mb (LORe region 1-18), chr9 23-25 Mb (six6),
 #          chr26 18.5-19.5 Mb (bco1l): the vgll3, six6, bco1l and IPN loci of catalog/known_loci.tsv.
+# The ATAC peak files (narrowPeak/) are cut to chr25 28.8-29.1 Mb only.
 # SNPs come from the public 12-fish nf-rasqual VCF (every 3rd SNP, genotypes dropped).
 # Also cut: the 504-fish panel sites (frequencies only, as `snpdata fetch` keeps them), the nf-RASQUAL lead SNPs with
 # BF < 1, the Brekke genetic map (plus the marker either side of each region) and EVA rs IDs (every 40th in the regions
@@ -22,6 +23,12 @@ gff() { gzip -dc "$RAW/$1" | awk -F'\t' "$HIT !/^#/ && hit(\$1, \$4 - 1, \$5)" |
 bed AtlanticSalmon_unified_peaks.bed
 bed AtlanticSalmon_blacklist.bed
 bed gerp_constrained_elements.salmo_salar.bed
+bed Ssal_A_to_Eluc.aligned.bed
+# ATAC summits: the 27 conditions' MACS2 peak files, cut to 300 kb around vgll3 (chromosome 25) to keep the fixture small.
+mkdir -p "$OUT/narrowPeak"
+for f in "$RAW"/narrowPeak/*.narrowPeak; do
+  awk -F'\t' '$1 == "25" && $2 < 29.1e6 && $3 > 28.8e6' "$f" > "$OUT/narrowPeak/${f##*/}"
+done
 awk -F'\t' "$HIT NR == 1 || hit(\$1, \$2, \$3)" "$RAW/Ssal_late_rediploidized_regions.tsv" > "$OUT/Ssal_late_rediploidized_regions.tsv"
 gff Salmo_salar.Ssal_v3.1.116.chr.gff3.gz
 gff Salmo_salar.Ssal_v3.1.regulatory_features.v116.gff3.gz

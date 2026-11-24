@@ -18,6 +18,7 @@ Per layer:
   follow that gene.
 - other interval layers: <layer> = any overlap; numbers the largest (gerp_score), text the distinct values (at most
   MAX_VALUES); an interpolated layer (the genetic map) at the SV's first base.
+- summit (nearest): the highest-ranked ATAC summit inside the SV (distance 0), else the nearest within max_distance.
 - molQTL leads (format nfrasqual) inside the SV: n, tissues, kinds, best BF and features (display only, weight 0).
 - the known-loci catalogue: the nearest entry within catalog.window bp of the SV (0 = inside it; entries with start
   and end count by their extent).
@@ -334,15 +335,20 @@ def molqtl_sql(name, parquet):
 def nearest_sql(name, cols, parquet, layer):
     """The gene the SV overlaps most (lowest start on a tie), else the nearest gene ending before it or starting
     after it (distance from the nearer end; ties to the lower start), within max_distance; genes and n_genes: every
-    gene it overlaps."""
+    gene it overlaps. Another nearest layer (one without an id: the ATAC summits) gives its values and distance the
+    same way, without the lists; of the features an SV overlaps equally, the one with the highest `rank` when the
+    layer has that column, so an SV takes the strongest summit inside it."""
     values = "".join(f", g.{q(c)} AS {q(name + '_' + c)}" for c in cols)
     tie = "".join(f", {q(c)}" for c in cols)
-    label = "coalesce(o.name, o.id)" if {"name", "id"} <= set(cols) else "o.id" if "id" in cols else "NULL"
+    genes = "id" in cols  # the gene layer: also lists the genes overlapped
+    label = "coalesce(o.name, o.id)" if {"name", "id"} <= set(cols) else "o.id" if genes else "NULL"
+    strongest = '"rank" DESC, ' if "rank" in cols else ""
+    lists = ", l.genes, coalesce(l.n_genes, 0) AS n_genes" if genes else ""
     return f"""
         WITH f AS (SELECT * FROM read_parquet({lit(parquet)})),
         o AS ({overlapping(parquet, 'l.* EXCLUDE (_gs, _ge), least(l."end", s."end") - greatest(l.start, s.pos - 1) AS _bases')}),
-        best AS (SELECT * FROM o QUALIFY row_number() OVER (PARTITION BY idx ORDER BY _bases DESC, start{tie}) = 1),
-        listed AS (SELECT idx, string_agg({label}, ', ' ORDER BY o.start, o.id) AS genes, count(*) AS n_genes FROM o GROUP BY idx),
+        best AS (SELECT * FROM o QUALIFY row_number() OVER (PARTITION BY idx ORDER BY _bases DESC, {strongest}start{tie}) = 1),
+        listed AS (SELECT idx, string_agg({label}, ', ' ORDER BY o.start{', o.id' if genes else ''}) AS genes, count(*) AS n_genes FROM o GROUP BY idx),
         up AS (SELECT * FROM f QUALIFY row_number() OVER (PARTITION BY chrom, "end" ORDER BY start{tie}) = 1),
         down AS (SELECT * FROM f QUALIFY row_number() OVER (PARTITION BY chrom, start ORDER BY "end"{tie}) = 1),
         j AS (SELECT s.idx, s.pos - u."end" AS du, d.start + 1 - s."end" AS dd, u AS gu, d AS gd
@@ -352,7 +358,7 @@ def nearest_sql(name, cols, parquet, layer):
                         CASE WHEN b.idx IS NOT NULL THEN {{{', '.join(f"{lit(c)}: b.{q(c)}" for c in ['chrom', 'start', 'end', *cols])}}}
                              WHEN du <= coalesce(dd, du) THEN gu ELSE gd END AS g
                  FROM j LEFT JOIN best b USING (idx))
-        SELECT p.idx, l.genes, coalesce(l.n_genes, 0) AS n_genes{values}, p.distance AS {q(name + '_distance')}
+        SELECT p.idx{lists}{values}, p.distance AS {q(name + '_distance')}
         FROM pick p LEFT JOIN listed l USING (idx)
         WHERE p.distance <= {int(layer['max_distance'])} OR l.idx IS NOT NULL"""
 
