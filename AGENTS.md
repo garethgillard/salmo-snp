@@ -10,7 +10,8 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 - `snpdata/`: collects the public sources and builds a versioned release (Parquet tables, manifest.json, tracks.yaml,
   the known-loci catalogue): `snpdata fetch`, `snpdata build`, `snpdata tracks`. Its README's "Release format" is the
   contract with the other two. One layer registry per species: `layers.yaml` (salmon), `rainbow_trout/layers.yaml`.
-- `snpscore/`: scores a SNP list against a release (`snpscore annotate`), plus `rsid`, `pool`, `benchmark` and `gwas`.
+- `snpscore/`: scores a SNP list against a release (`snpscore annotate`), structural variants by what they overlap
+  (`snpscore sv`), plus `rsid`, `pool`, `benchmark` and `gwas`.
   The tier rules (weights.yaml) live here, not in the release.
 - `snpportal/`: the Django web portal; reads a release and calls snpscore. `snpportal/lib/` holds its plain-Python
   parts (locus data, panel design, exports, the track registry; `python -m snpportal.lib.cli panel|export|compare`).
@@ -118,8 +119,11 @@ Decided:
 - Hubsmolt known loci (2026-10-20, G asked): the chromosome 14 hub SNP ssa14_50815335 and its two high-LD cis-eQTL SNPs
   (ssa14_50820817, ssa14_50852463) from the Synchrosmolt preprint (Saitou et al. 2025, Fig. 4) under smoltification;
   the paper gives no alleles, so the hub SNP's effect allele (A) is the Synchrosmolt parents' minor allele (caveat says so).
-- Synchrosmolt (2026-10-19): the 108 parents' frequencies only (the offspring were imputed from them). The CGD Axiom
-  VCF (PRJEB107807) waits: its positions are not Ssal_v3.1 (snpdata/README.md "Not added").
+- Synchrosmolt (2026-10-19): the parents' frequencies only (the offspring were imputed from them). From the next
+  release (G, 2026-11-24) the parents' whole-genome set, 112 fish and 3,993,949 SNPs, replaces ENA PRJEB114348's 108
+  fish and 411,908 SNPs; it isn't online, so layers.yaml reads it as `local` (snpdata/README.md), and its frequencies
+  may be published (G, 2026-11-24). The CGD Axiom VCF (PRJEB107807) waits: its positions are not Ssal_v3.1
+  (snpdata/README.md "Not added").
 - Industry users (2026-11-04): the plan is ROADMAP.md "Push 3" (I1-I20; boxes in TRACKER step 9), in G's order: ready
   to hand over (I1-I6), chip design (I7-I14), variant scores (I15-I16, G's DeepFARM and CADD-like data), genomes later
   (I17-I20). One user per install, who shares results as files: no accounts, no shared server (on hold). Chip tools
@@ -176,11 +180,17 @@ Decided:
   evidence, not numbers. G, 2026-11-22: long research runs one thing at a time, the most important first, so that the
   usage allowance doesn't run out mid-way; no large multi-agent runs unless G asks.
 
+- Structural variants (G, 2026-11-24): users can score structural variants (any list of regions: an SV VCF, BED, a
+  table, or pasted chrom:start-end lines) instead of SNPs, "scored in the same way, except ignoring anything that would
+  require a specific base position"; "any functional data that overlaps the SV region counts towards evidence of
+  function impact"; the results stay as close to the SNPs' as they can; published SVs join the known loci, with an
+  example set. Built as `snpscore sv` (sv.py) and the Score page's Structural variants tab; Claude's choices are under
+  Provisional and in docs/DECISIONS.md #55-#57.
 - More layers of evidence (G, 2026-11-24: "Add the pike layer, and do any testing to improve this data layer. Add a
   layer of scoring based on ATAC summit distance and signal strength. Add a plan for Missense effect score (run on
   orion?)"; the weights are settled after more data is gathered): `pike` and `summit` are release layers of both
-  species and terms in weights.yaml with weight 0, shown and never counted until G sets them (DECISIONS #54, #55;
-  what Claude chose in building them is under Provisional); the missense plan is docs/MISSENSE.md (DECISIONS #56).
+  species and terms in weights.yaml with weight 0, shown and never counted until G sets them (DECISIONS #54, #58;
+  what Claude chose in building them is under Provisional); the missense plan is docs/MISSENSE.md (DECISIONS #59).
   ChromBPNet allele effects are expected from the Orion repository at the end of that week.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
@@ -221,7 +231,7 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   IDs with one offset (layers.yaml liftover); fSalSal1 from same-chromosome minimap2 asm5 alignments, mapq >= 5,
   overlapping blocks dropped (DECISIONS #37; the alignment postponed, G 2026-11-06: no fSalSal1
   tables in a release until I20).
-- The pike and summit layers (2026-11-24, DECISIONS #54, #55; docs/SCORING.md section 6 has the tests):
+- The pike and summit layers (2026-11-24, DECISIONS #54, #58; docs/SCORING.md section 6 has the tests):
   - `pike`: the bases with alignment depth to northern pike in AQUA-FAANG's salmon-trout-pike alignment, alignment
     gaps of up to 50 bp closed (layers.yaml `max_gap`; chosen from the eQTL test: SNPs in gaps of up to 50 bp are
     lead SNPs as often as aligned ones, in longer gaps not). Trout: the same rule, untested there.
@@ -249,6 +259,14 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     uploads get a badge only near the four gene-region rows. The Locus browser opens at greb1l and rock1.
   - The public pool: since 2026-11-21 the salmon rule (Decided), so an even sample of at most 4,000,000 (MAX_SITES) of
     the public sites with MAF >= 0.05: 3.37M of 13.5M (before: 2,000,000 of all 18.8M).
+- Structural variants (2026-11-24, DECISIONS #55-#57): each evidence term counts once however many elements an SV
+  overlaps (a 1-bp SV scores as a SNP at that base); per condition the strongest state of the peaks it overlaps; the
+  most severe gene region; Ensembl regulatory only without an AQUA-FAANG peak; insertions and breakends are their
+  junction's two bases; inversions and translocations count over their whole span. SV jobs have no panels, vendor
+  files, priors or public-SNP comparison. Catalogue rows of `type` sv (`start`, `end` 1-based, `svtype`): salmon 6
+  (Stenløkk 2022 chr18 and chr9 inversions, `local_adaptation`; Bertolotti 2020 farmed-vs-wild outliers,
+  `domestication`), trout 2 (Omy05, `anadromy`; Omy17, `fillet_yield`). Examples: Known SVs, and 300 SYNTHETIC SVs
+  that build makes (layers.yaml `demo_svs`).
 - Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
   counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
   priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).

@@ -12,7 +12,8 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - main is green on GitHub (tests, user-install). The NREC demo https://158.39.75.9/snp/ (test.salmobase.org/snp/
   redirected there from 2026-11-10 but answers 404 since 2026-11-16) runs what G last had deployed (the manual
   `deploy` workflow since 2026-11-06; merges no longer deploy; cloud sessions use https://158-39-75-9.sslip.io/snp/:
-  the bare IP didn't connect through their proxy). Since 2026-11-21 that is 66068dc (PRs #25 to #27: the new
+  the bare IP didn't connect through their proxy). Since 2026-11-24 that is 257cdf3 (PR #30: structural variants
+  scored by what they overlap; before it, from 2026-11-21, 66068dc: PRs #25 to #27, the new
   AQUA-FAANG gill and ImmunoMap tracks, scored; NCBI genes by default; tissue separators; the public pool from the
   504-fish panel's common sites, every pool rebuilt by the deploy), with release 2026-11-20
   (built, published and installed by the `species-data` workflow, 2026-11-20) and, in /srv/snpportal/releases/,
@@ -79,18 +80,18 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
       times; the tests of the base itself, of identity and of the duplicate copies improved nothing, closing short
       gaps did), and `summit`, the nearest ATAC summit inside a robust peak with its distance, signal and rank (no
       gain at eQTL leads over the peak itself). Both are terms with weight 0: in the Table, the card and (pike) the
-      Locus browser, never counted, until G sets them (DECISIONS #54, #55). They reach the data with the next release
-- [ ] S3c A new release of both species (when G says: bump serve.py RELEASE and RELEASES, merge, deploy, run
-      `species-data` for each). It brings the two layers, and for salmon the unified peaks v5: salmobase replaced the
-      gill and head kidney states on 2026-11-23 (retrained models, the same 328,894 peaks; Gill Immature Female
-      changes in 4,224 of 7,919 peaks), so the demo scores with v3 states while its browser tracks already show v5.
-      One build can also take the ChromBPNet scores if it waits for them
+      Locus browser, never counted, until G sets them (DECISIONS #54, #58). They reach the data with the next release
+- [ ] S3c The next release of both species, built on G's Mac (the handover under step 9's "Next release" below;
+      G, 2026-11-24: the salmon build waits for these layers). It brings the two layers, and for salmon the unified
+      peaks v5: salmobase replaced the gill and head kidney states on 2026-11-23 (retrained models, the same 328,894
+      peaks; Gill Immature Female changes in 4,224 of 7,919 peaks), so the demo scores with v3 states while its
+      browser tracks already show v5. It can also take the ChromBPNet scores if it waits for them
 - [ ] S3d A missense effect score, on Orion: the plan is [MISSENSE.md](MISSENSE.md) (a protein language model on one
       GPU, SIFT 4G as the cross-check; 80,820 public missense SNPs; checked against rarity in the 504 fish);
-      G's choices: DECISIONS #56
+      G's choices: DECISIONS #59
 - [ ] S3e Still to ask or get: allelic imbalance in the 12 fish from the Orion repository (the truth set the summit
       rule and the ChromBPNet scores need); the large gill eQTL set, if its authors share it
-- [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52, #54, #55), then weights.yaml and
+- [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52, #54, #58), then weights.yaml and
       the pools. Before #5 changes anything: the pool needs coding consequences (it is built without the genome, so
       the synonymous weight would apply to uploads but not to the public background)
 - [ ] S5 The GWAS prior calibrated per tier, its range shown, with a flat prior and a cap (#51)
@@ -107,6 +108,16 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
 Queued behind it, to run only when G says (cut off twice by the usage limit): a survey of other work (stale texts and
 the guided tour, the live demo for both species, speed with the larger pool, handover, unused public data, bugs in
 the week's changes).
+
+Structural variants (G, 2026-11-24): users score SVs (any regions: an SV VCF, BED, a table or pasted chrom:start-end
+lines) on the Score page's Structural variants tab, each scored by what it overlaps with the SNPs' rules (`snpscore
+sv`; a 1-bp SV scores as a SNP at that base), shown on the same Overview, Table, card, report and exports; the known
+loci gain 6 salmon SVs (Stenløkk 2022 inversions, Bertolotti 2020 farmed-vs-wild outliers) and 2 trout ones (the Omy05
+double inversion, the Omy17 inversion); examples Known SVs and SVs (synthetic, 300 made by the build). The catalogue
+and examples come with the next releases: trout-2026-11-24 (the `species-data` workflow, 2026-11-24) and the next
+salmon release, built on G's Mac with the Synchrosmolt whole-genome set (PR #31) and the evidence layers G is adding
+(G, 2026-11-24: the build waits for them; serve.py RELEASE stays 2026-11-20 until then). G's questions:
+DECISIONS #55-#57.
 
 Built outside Push 3 (G, 2026-11-14 and -15): the Locus browser moves and zooms with the mouse, with a margin and a
 marker line that pins to a base (PR #18); the user's own BED tracks in the Locus browser and as a Table filter,
@@ -127,6 +138,48 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
 2. **Done in release 2026-11-20** (the `species-data` workflow): liftover_icsasg_v2.parquet (I19, 735,344 blocks); no
    fSalSal1 alignment (postponed: build skips the fSalSal1 tables without its PAF). The I18 check against a real
    ICSASG_v2 Axiom manifest still waits for one; its counts settle DECISIONS #34 and #36.
+   **Next release**: the Synchrosmolt parents' whole-genome set (`synchrosmolt_af`: 3,993,949 SNPs, 112 fish,
+   replacing ENA PRJEB114348; publishing its frequencies agreed, G 2026-11-24). Its VCF isn't online: fetch reads
+   it from `snpdata/data/private/` (layers.yaml `local`), so salmon releases are built on G's Mac (G, 2026-11-24):
+   the `species-data` workflow's runner lacks the file (fetch skips it, build fails). To build there, host the
+   sites file fetch makes (frequencies only) and give the source a `url`, and drop that source's `sites_only` and
+   `count_gt`: counting genotypes in a file that has none writes every frequency as NULL without an error.
+   **Handover for the next releases (SV session, 2026-11-24). G builds the next salmon and trout releases locally
+   on his Mac (G, 2026-11-24):**
+   - What main already has (PRs #30-#32): SV scoring, live on the demo since the deploy of 257cdf3; the 6 salmon and
+     2 trout SV rows in the catalogues; and in every build, demo/known_svs.tsv (the catalogue's `type` sv rows) and
+     demo/svs_demo_SYNTHETIC.tsv (300 SVs, layers.yaml `demo_svs`). serve.py names salmon 2026-11-20 (#32; built
+     before them) and trout-2026-11-24 (not built yet). No GitHub data release data-2026-11-24 was made: the salmon
+     `species-data` run of 2026-11-24 was cancelled before publishing, to wait for the Synchrosmolt set and G's
+     new layers.
+   - Salmon, on G's Mac (after G's new layers are merged): `snpdata fetch`, then `snpdata build --out
+     release/<date>`. fetch keeps any file already in data/raw, so first check that the inputs are current:
+     delete `data/raw/AtlanticSalmon_unified_peaks.bed`, so that fetch takes salmobase's v5 (2026-11-23; sha256
+     627534ad...; release 2026-11-20 had v3, 8190b375...).
+     The layers of PR #29 need nothing by hand: fetch adds `narrowPeak/` (27 MACS2 peak files, 400 MB) and
+     `Ssal_A_to_Eluc.aligned.bed` (made from the 90 MB depth track). Expect `pike` 1,226,940 rows and `summit`
+     2,468,735 (trout: 1,192,301 and 1,257,737, from 17 peak files). Then `snpscore pool
+     --release release/<date> --memory 8GB` and `POOL=1 bash prep/github_release.sh release/<date>`.
+     Then bump serve.py RELEASE to <date>, merge and run `deploy`: deploy/species.sh fetches data-<date> and makes
+     it the default.
+   - Check the salmon release before publishing:
+     - manifest `catalog.rows` 46; demo/ holds known_loci.tsv (40 rows), known_svs.tsv (6) and
+       svs_demo_SYNTHETIC.tsv (300);
+     - synchrosmolt_af has 3,993,949 rows with ns 112;
+     - `snpscore diff <2026-11-20> release/<date>` lists only the intended changes (with PR #29: `pike` and
+       `summit` added, and `chromatin` changed in the gill and head kidney states);
+     - catalogue row `hubsmolt_ssa14_50815335` takes its effect allele (A) from the Synchrosmolt parents' minor
+       allele: check that A is still the minor allele in the 112-fish set.
+   - Trout, on G's Mac too: `snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw`
+     streams the three ENA cohort VCFs (7, 16 and 55 GB; frequencies kept), then build as above, with
+     `--out release/trout-<date>` (and the same layers file and data folder). Then bump RELEASES and deploy.
+     Memory: the `species-data` run of 2026-11-24 (rainbow_trout) failed on GitHub's runner. Its cohort jobs passed,
+     but the build ran out of memory: DuckDB hit its 12.4 GiB default (80% of the runner's RAM) reading the pooled
+     `public_af` cohorts, just after `flank_variants` (46,593,552 rows). That reader is unchanged since the passing
+     run of 2026-11-13, so the cause is the runner or a newer DuckDB 2.x.
+     - On the Mac, DuckDB's default is also 80% of RAM, so a Mac with 16 GB can fail the same way.
+     - The fix that lets it spill to disk: give build's connection a memory limit and a temp directory, and set
+       `preserve_insertion_order=false`. It is also needed before the runner can build trout again.
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
 4. **Phase 3**: variant-score layers (I16): ChromBPNet first (G, 2026-11-21), in its own repository on Orion
    (docs/CHROMBPNET.md); then DeepFARM retrained and a CADD-like score.
@@ -431,6 +484,7 @@ First push = waves A-C (items marked **now**), then wave D (GWAS, M7). Ticked wh
 
 ### More public data (2026-10-19/20)
 - [x] Synchrosmolt parents' allele frequencies (`synchrosmolt_af`, ENA PRJEB114348; 108 WGS fish) and the locus browser's Public SNPs group (combined row, a row per dataset)
+- [x] (G, 2026-11-24) The parents' whole-genome set instead (112 fish, 3,993,949 SNPs; not online: layers.yaml `local`), from the next release
 - [x] TF motif evidence: JASPAR 2024 motif changes at SNPs in robust peaks (+1, G's rule), the card's TF motifs section (logos, both alleles' scores) and the browser's TF motifs group
 - [x] Known loci: the three chromosome 14 hubsmolt SNPs (Saitou et al. 2025 preprint, Fig. 4)
 - [x] Public demo at https://158.39.75.9/snp/ (deploy/nrec.sh with the IP and the sslip.io name)

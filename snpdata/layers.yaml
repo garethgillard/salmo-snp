@@ -14,8 +14,10 @@
 # synthetic: true (test or stand-in data: labelled, and never counted in tiers), citation (shown on the methods page),
 # licence, population (who the frequencies describe).
 # Optional per source: sites_only: [INFO keys] (fetch streams the VCF and writes only its first 8 columns with these INFO
-# keys: genotypes never reach the disk); max_gap (a bigWig url with a .bed file, e.g. an alignment depth track: fetch
-# writes the stretches with a value above 0, joined across gaps of up to max_gap bases).
+# keys: genotypes never reach the disk); local: <path under the data folder> instead of url, for an input that isn't
+# online (fetch processes it the same way; `publish --raw` mirrors only the processed `file`, never the input);
+# max_gap (a bigWig url with a .bed file, e.g. an alignment depth track: fetch writes the stretches with a value above
+# 0, joined across gaps of up to max_gap bases).
 # A layer computed from built layers names them (within, sites): it comes after them in this list.
 
 assembly: Ssal_v3.1
@@ -107,6 +109,9 @@ catalog:
 # --scale fixture` the test chip.
 demo: [../demo/public_50k.vcf, ../synthetic/chip_demo_SYNTHETIC.tsv, synthetic/chip_demo_SYNTHETIC.tsv,
        ../synthetic/gwas_maturation_SYNTHETIC.tsv]
+# Structural variants for the portal's SV tab: build makes a SYNTHETIC set of n (synthetic_svs: a fixed seed, half of
+# them in or near genes of the gene layer); the catalogue's rows of type sv become a second example (demo/known_svs.tsv).
+demo_svs: {file: svs_demo_SYNTHETIC.tsv, n: 300}
 
 # Choices in this file that G still has to confirm; listed in the release manifest with those from weights.yaml.
 provisional: [catalog.window, molqtl.max_bf, pike.max_gap, summit.window, summit.max_distance]
@@ -346,22 +351,25 @@ layers:
     format: vcf_info
     rename_chrom: true  # the VCF names chromosomes ssa01-ssa29
     files:
-      - file: synchrosmolt_parents.sites.vcf.gz
-        url: https://ftp.sra.ebi.ac.uk/vol1/analysis/ERZ295/ERZ29514745/Synchrosmolt_phased_parents_snp.eva_header.vcf.gz
+      # The parents' whole-genome SNP set (G, 2026-11-24), replacing the 411,908 SNPs of ENA PRJEB114348 (95% of
+      # which it holds, same alleles). Not online: copy MOWI_synchro_phased_parents_wgs.vcf.gz from G (NMBU's Orion)
+      # into data/private/ before `snpdata fetch`; the published raw/ mirror holds the sites file fetch makes from it.
+      - file: synchrosmolt_parents_wgs.sites.vcf.gz
+        local: ../private/MOWI_synchro_phased_parents_wgs.vcf.gz
         sites_only: [AC, AN, NS, AF, MAF]
         count_gt: true  # the file has no frequencies: fetch counts them from the genotypes, then drops the genotypes
         info: {af: AF, maf: MAF, ac: AC, an: AN, ns: NS}
     description: >-
-      Site at this exact position among the 108 whole-genome sequenced parents of the Synchrosmolt family experiment:
+      Site at this exact position among the 112 whole-genome sequenced parents of the Synchrosmolt family experiment:
       ALT allele frequency (af), minor allele frequency (maf), ALT allele count (ac), alleles (an) and fish (ns) with a
-      call (411,908 SNPs, phased with Beagle)
+      call (3,993,949 SNPs, phased with Beagle)
     population: >-
-      108 parent fish of the Synchrosmolt smoltification family experiment (NMBU), whole-genome sequenced; their
+      112 parent fish of the Synchrosmolt smoltification family experiment (NMBU), whole-genome sequenced; their
       offspring were imputed from these fish, so the offspring add no sites and their frequencies follow the crosses
     citation: >-
-      Synchrosmolt parent SNP genotypes, ENA PRJEB114348 (NMBU, 2026; reads PRJEB47441); Saitou M et al. 2025, bioRxiv
+      Synchrosmolt parent whole-genome SNP genotypes (NMBU; reads ENA PRJEB47441); Saitou M et al. 2025, bioRxiv
       doi:10.1101/2025.10.16.682803
-    licence: ENA open data (EMBL-EBI terms of use); frequencies only, genotypes are never kept
+    licence: publishing the frequencies agreed (G, 2026-11-24); frequencies only, genotypes are never kept
 
   - name: motif
     type: point

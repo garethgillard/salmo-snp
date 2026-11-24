@@ -123,6 +123,8 @@ def add(request, key):
     query = results.selection(jd)
     req = results.selection_request(query)
     back = f"{reverse('snpportal:results', args=[key])}?{query + '&' if query else ''}tab=table"
+    if job.get("input_kind") == "sv":  # panels are SNP markers; SVs have no probe flanks
+        return redirect(f"{back}&panel_error=sv")
     con, types, where, _ = results.open_result(req, key, write=True)
     n = con.execute(f"SELECT count(*) FROM v {where}").fetchone()[0]
     cap = int(jobs.setting("SNPPORTAL_MAX_PANEL_SNPS", 50_000))

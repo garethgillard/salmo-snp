@@ -29,7 +29,7 @@ def test_catalogue_text_is_for_users():
 
 def test_sites_only_drops_genotypes(tmp_path):
     """fetch streams the 504-fish VCF through sites_only: sample names and genotypes never reach the output."""
-    from snpdata.build import sites_only
+    from snpdata.build import fetch, sites_only
     src = tmp_path / "SYNTHETIC.vcf.gz"
     with gzip.open(src, "wt") as f:  # the last line has no newline
         f.write('##fileformat=VCFv4.2\n##INFO=<ID=AF,Number=A,Type=Float,Description="x">\n'
@@ -49,6 +49,13 @@ def test_sites_only_drops_genotypes(tmp_path):
                                                                         "AC=2;AN=4;NS=2;AF=0.5;MAF=0.5"]
     assert sum(x.startswith("##INFO=<ID=AF,") for x in lines) == 1  # the counted AF replaces the file's own
     assert not any(w in x for x in lines for w in ("fishA", "fishB", "0|1", "1|1"))
+    layers = tmp_path / "layers.yaml"  # an input that isn't online: `local`, a path under --data, processed the same way
+    layers.write_text("layers:\n- {name: x, file: x.sites.vcf.gz, local: ../SYNTHETIC.vcf.gz, "
+                      "sites_only: [AC, AN, NS, AF, MAF], count_gt: true}\n")
+    fetch(layers, tmp_path / "raw")
+    fetched = gzip.open(tmp_path / "raw" / "x.sites.vcf.gz", "rt").read().splitlines()
+    assert fetched[1] == "##snpdata=sites only (genotypes dropped) from ../SYNTHETIC.vcf.gz"  # not the builder's own path
+    assert fetched[2:] == lines[2:]
 
 
 def test_manifest(release):
@@ -60,7 +67,7 @@ def test_manifest(release):
     layers = {l["name"]: l for l in m["layers"]}
     assert "Bertolotti" in layers["public_af"]["population"] and "European farmed" not in json.dumps(m)
     assert layers["molqtl"]["licence"].startswith("redistribution agreed") and len(layers["molqtl"]["urls"]) == 9
-    assert m["rsid"]["rows"] > 0 and m["catalog"]["rows"] == 40
+    assert m["rsid"]["rows"] > 0 and m["catalog"]["rows"] == 46
     assert m["duckdb_version"] == duckdb.__version__ and list(m["files"]) == ["tracks.yaml"]
     aliases = dict(duckdb.sql(f"SELECT alias, chrom FROM read_parquet('{release / 'alias.parquet'}')").fetchall())
     assert aliases["nc_059466.1"] == aliases["ssa25"] == aliases["chr25"] == aliases["hg993284"] == "25"
@@ -215,7 +222,8 @@ def test_rainbow_trout_release(tmp_path):
     layers = {l["name"]: l for l in m["layers"]}
     conditions = [c for c in layers["chromatin"]["columns"] if c not in ("summary", "id")]  # 17 genome-wide; those with a peak here
     assert {"Brain_Mature_Male", "Liver_Immature_Female", "LateBlastulation"} <= set(conditions) and not any("Gonad" in c for c in conditions)
-    assert m["catalog"]["rows"] == 11 and [d["file"] for d in m["demo"]] == ["demo/known_loci.tsv", "demo/public_50k.vcf"]
+    assert m["catalog"]["rows"] == 13 and [d["file"] for d in m["demo"]] == ["demo/known_loci.tsv", "demo/known_svs.tsv", "demo/svs_demo_SYNTHETIC.tsv",
+                                                                                 "demo/public_50k.vcf"]
     assert layers["pike"]["rows"] > 0 and layers["summit"]["rows"] > 0 and len(layers["summit"]["urls"]) == 17  # as for salmon
     again = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "again", reuse=out)
     reused = json.loads((again / "manifest.json").read_text())  # a rebuild that copies every unchanged layer

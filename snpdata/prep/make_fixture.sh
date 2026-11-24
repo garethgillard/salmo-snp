@@ -42,7 +42,7 @@ gzip -dc "$RAW/$VCF" | awk -F'\t' -v OFS='\t' "$HIT /^#CHROM/ || (hit(\$1, \$2 -
 SITES=ALL_chrome_phased_filtered_HWE_1e6_biSNPs_MAF_0.01.sites.vcf.gz  # ID (chrom_pos_ref_alt) blanked to keep it small
 gzip -dc "$RAW/$SITES" | awk -F'\t' -v OFS='\t' "$HIT /^#/ { print; next } hit(\$1, \$2 - 1, \$2) { \$3 = \".\"; print }" \
   | gzip -9 > "$OUT/$SITES"
-SYNCHRO=synchrosmolt_parents.sites.vcf.gz  # sites and counted frequencies only (as fetch keeps them); chromosomes ssa01-ssa29
+SYNCHRO=synchrosmolt_parents_wgs.sites.vcf.gz  # sites and counted frequencies only (as fetch keeps them); chromosomes ssa01-ssa29
 gzip -dc "$RAW/$SYNCHRO" | awk -F'\t' -v OFS='\t' "$HIT /^#/ { print; next } { c = \$1; sub(/^ssa0?/, \"\", c) }
      hit(c, \$2 - 1, \$2) { \$3 = \".\"; print }" | gzip -9 > "$OUT/$SYNCHRO"
 MEME=JASPAR2024_CORE_vertebrates_non-redundant_pfms_meme.txt  # the header, every 25th motif and CTCF (the fixture genome is mostly N, so few sites score)

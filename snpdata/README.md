@@ -26,7 +26,10 @@ weights): `salmo-snp download` and `serve` build it from the release's own sites
 It streams the 975 MB 504-fish VCF and writes only its sites and frequencies (`sites_only` in layers.yaml: CHROM to
 INFO with AF, MAF, AC, AN, NS; 88 MB): genotypes and sample names never reach the disk. A source with `count_gt: true`
 (the Synchrosmolt parents, whose VCF has no frequencies) gets AC, AN, NS, AF and MAF counted from its genotypes as it
-streams, and only those are kept.
+streams, and only those are kept. A source with `local` instead of `url` is an input that isn't online: fetch reads it
+from that path under the data folder (the Synchrosmolt parents' VCF: copy it from G into `data/private/` first) and
+skips it with a note when it isn't there; `publish --raw` mirrors only the sites file fetch makes from it, so
+`fetch --mirror` works without it.
 
 ## Rainbow trout
 
@@ -143,9 +146,12 @@ release/2026-11-03/
   benchmark.tsv          optional: `snpscore benchmark` output for this release (known loci)
   benchmark_molqtl.tsv   optional: `snpscore benchmark --positives molqtl:ca molqtl:e --by-tissue` (nf-RASQUAL leads
                          vs matched controls); same columns as benchmark.tsv (see "Benchmark")
-  demo/                  example inputs for the portal's buttons (layers.yaml `demo`): known_loci.tsv, public_50k.vcf
-                         (dev only), chip_demo_SYNTHETIC.tsv and gwas_maturation_SYNTHETIC.tsv (dev only; made by
-                         prep/make_demo.sh, the last two through prep/make_synthetic.py)
+  demo/                  example inputs for the portal's buttons (layers.yaml `demo`): known_loci.tsv (the catalogue's
+                         rows with a position), known_svs.tsv (its structural variants: chrom, start, end, svtype, id,
+                         trait, locus), svs_demo_SYNTHETIC.tsv (layers.yaml `demo_svs`: SVs that build makes from the gene
+                         layer, a fixed seed), public_50k.vcf (dev only), chip_demo_SYNTHETIC.tsv and
+                         gwas_maturation_SYNTHETIC.tsv (dev only; made by prep/make_demo.sh, the last two through
+                         prep/make_synthetic.py)
   pool/pool.parquet      optional: `snpscore pool` (see "Public background pool"); annotate never reads it
   pool/background.json   optional: the pool's shares, for the dashboard
   SHA256SUMS             'sha256  path' of every file but pool/ (what `salmo-snp download` checks)
@@ -199,11 +205,13 @@ public sites in robust peaks, scored by snpscore.motif), `molqtl` (point: n, tis
   `aquafaang12_af` and `aquafaang12_dr2` are the 12-fish VCF's INFO AF and DR2 (frequency in those 12 fish and their
   imputation quality); every 12-fish site is a panel site. vgll3 Met54Thr (25:28996360 C/T): af 0.480159 (504 fish),
   aquafaang12_af 0.67. layers.yaml records the `population` and the `licence` (redistribution agreed with the authors).
-- `synchrosmolt_af`: the 108 whole-genome sequenced parents of the Synchrosmolt family experiment (NMBU; ENA
-  PRJEB114348, 411,908 SNPs, Beagle-phased; chromosomes ssa01-ssa29, mapped to 1-29 with `rename_chrom` through the
-  alias table). The ENA analysis also has 2,730 offspring imputed from these parents: 99.97% of their sites are
-  parent sites and their frequencies follow the crosses (100 full-sib families), so only the parents are used.
-  247,196 sites are also 504-fish panel sites.
+- `synchrosmolt_af`: the 112 whole-genome sequenced parents of the Synchrosmolt family experiment (NMBU;
+  MOWI_synchro_phased_parents_wgs.vcf.gz from G, 2026-11-24, not online: `local` in layers.yaml; 3,993,949 biallelic
+  SNPs, Beagle 4.1-phased, no missing calls; chromosomes ssa01-ssa29, mapped to 1-29 with `rename_chrom` through the
+  alias table). 2,278,571 sites are also 504-fish panel sites. It replaces the 108 parents of ENA PRJEB114348 (411,908
+  SNPs; releases up to 2026-11-05): it holds 95% of those sites with the same alleles, and their frequencies differ by
+  a median 0.004 (at most 0.03). The ENA analysis also has 2,730 offspring imputed from the parents: 99.97% of their
+  sites are parent sites and their frequencies follow the crosses (100 full-sib families), so only the parents are used.
 - Not added: the CGD Axiom array VCF (ENA PRJEB107807) says Ssal_v3.1 but its contig lengths are Ssal_v3's (chr1
   158,978,050 bp, chr2 72,924,950 bp), EVA files it under Ssal_v3, and its 63,809 positions hit WGS panel sites at
   chance level (0.26%); its reference alleles were set from a genome, so they look right anyway. It needs a lift
@@ -231,11 +239,15 @@ five_prime_UTR, three_prime_UTR), `phase, canonical` (Ensembl_canonical tag), `b
 this annotation), `biotype` the transcript's feature type (mRNA, lnc_RNA, ...); chromosomes renamed from RefSeq accessions.
 
 `catalog/known_loci.tsv`: `chrom, pos, id, ref, alt, locus, ensembl_gene, trait, evidence, effect, effect_allele,
-effect_direction, icsasg_v2, source` (DOIs), `rsid`, `caveat`, `note`. `effect_allele` is on the Ssal_v3.1 forward
-strand and filled only where the paper is unambiguous (12 rows). `trait` is one of age_at_maturity, ipn_resistance,
-pd_resistance, cms_resistance, sea_lice_resistance, flesh_colour, smoltification, sex_determination. `icsasg_v2` is
+effect_direction, icsasg_v2, source` (DOIs), `rsid`, `caveat`, `note`, `type`, `start`, `end`, `svtype`. `effect_allele` is on the Ssal_v3.1 forward
+strand and filled only where the paper is unambiguous (13 rows). `trait` is one of age_at_maturity, ipn_resistance,
+pd_resistance, cms_resistance, sea_lice_resistance, flesh_colour, smoltification, sex_determination, local_adaptation,
+domestication. `icsasg_v2` is
 the published ICSASG_v2 position, or EVA release 9's for natively Ssal_v3.1 rows. `caveat` says why a row needs care
-(farmed strain only, suggestive, inferred position, not a SNP, ...).
+(farmed strain only, suggestive, inferred position, not a SNP, ...). A structural variant has `type` sv, no `pos`,
+and `start` and `end` (1-based, inclusive) with `svtype` (DEL, DUP, INV, ...): SNP uploads near it get no badge (they
+are matched by `pos`), uploaded SVs that overlap it or lie within `window` do (snpscore sv). The trout catalogue's QTL
+windows (`type` qtl_interval) also have `start` and `end`.
 
 ## Adding a layer
 

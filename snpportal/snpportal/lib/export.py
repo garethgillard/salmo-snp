@@ -135,12 +135,25 @@ def provenance(manifest, weights, meta=None):
     return ["# " + line for line in lines]
 
 
-def methods_text(manifest, weights, preset="all", release_dir=None, finemap=None):
+SV_METHODS = (
+    "Structural variants (or other regions) were annotated with snpscore sv: each covers the 1-based bases from its "
+    "start to its end (a VCF's padding base left out; an insertion or a breakend the two bases of its junction) and gets "
+    "the evidence of every layer interval it overlaps. Per AQUA-FAANG condition it takes the strongest chromatin state "
+    "of the robust ATAC peaks it overlaps (the active states first, then the weak ones), as its region the most severe "
+    "gene region it overlaps (CDS, splice region, UTR, non-coding exon, intron), and it is in a GERP constrained element, "
+    "an Ensembl regulatory feature, a blacklisted or a LORe region when it overlaps one. Its tier comes from the same "
+    "weights as a SNP's, each kind of evidence counted once however many elements the SV overlaps, so an SV of one base "
+    "scores as a SNP at that base. Evidence that needs a single base and its alleles (coding consequences, TF motif "
+    "changes, assay design, allele frequencies) was not computed. Scoring inversions and translocations over their whole "
+    "span rather than at their breakpoints is PROVISIONAL.")
+
+
+def methods_text(manifest, weights, preset="all", release_dir=None, finemap=None, sv=False):
     """Paste-ready methods paragraphs (annotation layers, tiers, assay QC; with `finemap`, the GWAS settings used as
     gwas.settings() returns them and gwas.json 'finemap' records them, a loci and fine-mapping paragraph) and the
     references: layer citations (each '; '-separated part once, 'DOI to add' where it has no doi:), GERP++, Wakefield
     2009 (with `finemap`) and the DOIs of the known-loci catalogue (read from release_dir when given). PROVISIONAL
-    rules are named as such."""
+    rules are named as such. `sv`: for structural variants (SV_METHODS instead of the coding and assay paragraphs)."""
     manifest, weights, _, _ = _load(manifest, weights)
     layers = [l for l in manifest.get("layers", []) if l.get("type") != "features"]
     syn = [l["name"] for l in layers if l.get("synthetic")]
@@ -201,6 +214,11 @@ def methods_text(manifest, weights, preset="all", release_dir=None, finemap=None
             f"probabilities were computed under a uniform prior and a functional prior proportional to "
             f"exp({f['functional_lambda']:g} x tier_score), with {f['coverage']:.0%} credible sets. These settings are "
             "PROVISIONAL.")
+    if sv:  # an SV job: scored by overlap; nothing at single bases
+        text = [t.replace("SNPs were annotated with snpscore", "Structural variants were annotated with snpscore", 1)
+                .replace("Each SNP was given", "Each structural variant was given", 1) for t in text
+                if not t.startswith(("Coding consequences", "Assay designability"))]
+        text.insert(2, SV_METHODS)
     parts = {p.strip() for l in layers if l.get("citation") for p in l["citation"].split("; ")}
     refs = [REFERENCES["gerp"] if p.startswith("Ensembl Compara") and "GERP" in p else p if "doi:" in p
             else f"{p} (DOI to add)" for p in parts]
@@ -457,7 +475,8 @@ def export(source, fmt, out, release_dir, preset="all", meta=None, include_faile
                 _copy(con, rel, hide, body, "HEADER true, DELIMITER '\t'", ordered)
             else:
                 name = q("id") if "id" in columns else "chrom || ':' || pos"
-                con.execute(f"""COPY (SELECT chrom, pos - 1 AS start, pos AS "end", {name} AS name FROM {rel} ORDER BY _row)
+                last = '"end"' if "end" in columns and "length" in columns else "pos"  # an SV: its span
+                con.execute(f"""COPY (SELECT chrom, pos - 1 AS start, {last} AS "end", {name} AS name FROM {rel} ORDER BY _row)
                                 TO {lit(body)} (HEADER false, DELIMITER '\t')""")
             n = con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0]
             with open(out, "w") as f, open(body) as b:
@@ -546,7 +565,7 @@ def bundle_zip(out, source, release_dir, preset="all", meta=None, formats=("tsv"
             z.writestr("manifest.json", json.dumps(m, indent=2))
             z.writestr("weights.yaml", yaml.safe_dump(w, sort_keys=False) if isinstance(weights, dict) or not weights
                        else Path(weights).read_text())
-            z.writestr("methods.txt", methods_text(m, w, preset, release, (meta or {}).get("finemap")))
+            z.writestr("methods.txt", methods_text(m, w, preset, release, (meta or {}).get("finemap"), sv=bool((meta or {}).get("sv"))))
             z.writestr("provenance.txt", "\n".join(header) + "\n")
             z.writestr("README.txt", _species_text("\n".join(readme), m) + "\n")
             for name, svg in (svgs or {}).items():

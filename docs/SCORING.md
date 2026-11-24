@@ -381,7 +381,7 @@ condition's peaks.
 - **As built:** `summit` gives every SNP within 500 bp of a summit its distance, the signal, the rank and the
   condition; 98.7% of pool SNPs in a robust peak get them. The rule (weights.yaml `summit`: within 50 bp, rank 0.75
   or more) has weight 0. It needs evidence at the base to be judged: allelic imbalance in the 12 fish, and the
-  ChromBPNet effects. DECISIONS #55.
+  ChromBPNet effects. DECISIONS #58.
 
 ### What a user can customise today
 
@@ -416,8 +416,8 @@ adds given the layers already there.
 | ChromBPNet allele effects, per condition | Evidence at the base: the kind that orders SNPs inside a peak or locus | Running on Orion (docs/CHROMBPNET.md) | Good test results so far (G, 2026-11-24) |
 | Allelic imbalance in the 12 fish's ATAC and RNA reads | Measured, variant-level evidence, and a truth set for everything else | A by-product of the ChromBPNet evaluation on Orion | To ask of the Orion repository |
 | Conservation with pike (salmon-trout-pike alignment) | Broad conservation for 16% of SNPs; 1.6 to 1.9 at eQTL leads | Small: one 90 MB track on salmobase | Built 2026-11-24 (layer `pike`, salmon and trout; weight 0); in the data with the next release; DECISIONS #54 |
-| A missense effect score for coding SNPs | Separates damaging from harmless protein changes; coding is the one class both truth sets support, and all of it scores alike today | A protein language model on one GPU on Orion for a few hours, SIFT 4G as the cross-check | Planned: [MISSENSE.md](MISSENSE.md); DECISIONS #56 |
-| Distance to the ATAC summit, and signal strength | Graded accessibility in place of a yes-or-no state | Small: the nf-core peak files on salmobase | Built 2026-11-24 (layer `summit`, salmon and trout; weight 0); no gain at eQTL leads (section 6); DECISIONS #55 |
+| A missense effect score for coding SNPs | Separates damaging from harmless protein changes; coding is the one class both truth sets support, and all of it scores alike today | A protein language model on one GPU on Orion for a few hours, SIFT 4G as the cross-check | Planned: [MISSENSE.md](MISSENSE.md); DECISIONS #59 |
+| Distance to the ATAC summit, and signal strength | Graded accessibility in place of a yes-or-no state | Small: the nf-core peak files on salmobase | Built 2026-11-24 (layer `summit`, salmon and trout; weight 0); no gain at eQTL leads (section 6); DECISIONS #58 |
 | A large fine-mapped eQTL set (the gill study of about 3,000 fish) | The strongest regulatory truth set in salmon | Depends on the authors' data | To ask |
 
 Tested and set aside: per-base GERP scores (section 6). Looked at and not a per-SNP layer: salmobase's TFBS folder,

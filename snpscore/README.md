@@ -1,6 +1,7 @@
 # snpscore
 
-Annotates any Atlantic salmon SNP list against a release built by ../snpdata, and gives each SNP a tier.
+Annotates any Atlantic salmon SNP list against a release built by ../snpdata, and gives each SNP a tier; structural
+variants (or any regions) are scored the same way by what they overlap (`snpscore sv`, "Structural variants" below).
 Layers so far: AQUA-FAANG chromatin states (27 conditions; 21 before release 2026-11-20), genic region class and the coding consequence (VEP-lite),
 Ensembl regulatory build, GERP constrained elements, blacklist, late-rediploidized (LORe) regions, nearest gene (with
 description, expression per tissue, human and zebrafish ortholog names and its Ss4R duplicate), known variants within
@@ -24,6 +25,7 @@ snpscore pool --release $R --if-stale           # public background pool, a cach
 snpscore benchmark --release $R -o $R/benchmark.tsv   # known loci; controls from the pool
 snpscore benchmark --release $R --positives molqtl:ca molqtl:e --by-tissue -o $R/benchmark_molqtl.tsv
 snpscore gwas sumstats.tsv --release $R --trait maturation -o gwas_out/   # loci.tsv, finemap.tsv
+snpscore sv my_svs.vcf.gz --release $R -o my_svs_annotated.tsv   # structural variants, scored by what they overlap
 python -m pytest -q                              # tests run on the small regions in ../snpdata/tests/fixture
 ```
 
@@ -193,6 +195,51 @@ Tiers are score cut-offs. A preset is a list of condition
 prefixes (e.g. `maturation: [Brain, Gonad]`). Weights are whole numbers, so `tier_score` is always an integer. Layers
 marked `synthetic: true` never count. All of this is provisional:
 see "Biology decisions" in ../AGENTS.md and `provisional` in the manifest.
+
+## Structural variants
+
+`snpscore sv SVS --release R [--trait T] -o OUT` (`snpscore.annotate_svs`, `src/snpscore/sv.py`) scores structural
+variants, or any genomic regions, the way annotate scores SNPs, except for what needs a single base: each SV gets the
+evidence of everything it overlaps, and its tier comes from the same weights.yaml rules (`score.scored`, unchanged), so
+each kind of evidence counts once however many elements an SV overlaps, and an SV of one base scores exactly as a SNP
+without alleles at that base (tested).
+
+Input (`sv.detect`; `validation.json` `format`):
+
+| Input | Read as |
+| --- | --- |
+| VCF of SVs | CHROM, POS, ID, REF, ALT and INFO's END, SVLEN and SVTYPE (genotypes never read). A symbolic allele (`<DEL>`, `<DUP>`, `<INV>`, `<CNV>`) or sequence alleles sharing a first base start after that padding base: `pos` = POS + 1, `end` = END (else POS + SVLEN, else POS + length(REF) - 1). Insertions and breakends (`<INS>`, `N[2:3000[`) are the two bases of their junction, POS and POS + 1. Without SVTYPE the type comes from the allele (`<DEL>`) or the allele lengths (DEL, INS, SNV, MNV) |
+| BED (`.bed`, `.bed.gz`) | chrom, 0-based start, end, name (id); a zero-length interval is an insertion point (its junction) |
+| table with a header (TSV/CSV/spaces) | `chrom` (CHR, Chromosome, seqnames), `start` (Pos, Position, Begin, chromStart), `end` (Stop, chromEnd) or `svlen` (Length, Size) instead of end, optionally `id` (Name) and `svtype` (Type: DEL, DUP, INV, INS, CNV, BND, or deletion, duplication, ...); 1-based and inclusive. Other columns are kept as `in_<name>` |
+| lines without a header | `chrom start end [type] [id]`, or `chrom:start-end [type] [id]` (commas allowed), 1-based and inclusive |
+
+Rejected rows (`rejects.tsv`, with `start`, `end` and `svtype` as read): `missing_chrom`, `bad_pos`, `bad_end` (no
+end or length, or an end before the start), `unknown_chrom`, `duplicate` (same chrom, pos, end and type).
+
+Output, one row per kept SV in input order: `chrom`, `pos` (first base), `end` (last base), `length` (end - pos + 1:
+the bases of the reference the SV spans; 2 for an insertion), `svtype`, `id`, `svlen` (the input's stated length,
+when it has one: an insertion's inserted bases), the input's other columns, then per layer:
+- `chromatin`, `peaks` (robust ATAC peaks overlapped) and `chromatin_<condition>`: per condition the strongest state of
+  the peaks the SV overlaps (weights.yaml active_states in their order, then weak_states, then any other state)
+- `region`, `region_class` (the first of the layer's `classes` the SV overlaps: CDS, splice region, UTR, non-coding
+  exon, intron) and `region_classes` (all it overlaps, in that order)
+- `genes` (the genes it overlaps, names else ids, by start), `n_genes` and the `gene_*` columns of the gene it overlaps
+  most (`gene_distance` 0), else of the nearest gene within max_distance of either end; the gene-keyed layers
+  (orthologs, Ss4R, expression) follow that gene
+- other interval layers: `<layer>` = any overlap; a number column its largest value (`gerp_score`), text the distinct
+  values (at most 10: `regbuild_type` 'enhancer, promoter'); an interpolated layer (the genetic map) at `pos`
+- `summit_*`: the highest-ranked ATAC summit inside the SV (`summit_distance` 0), else the nearest within 500 bp of
+  either end; `pike` = it overlaps sequence aligned to pike
+- `molqtl` and its columns for the nf-RASQUAL lead SNPs inside the SV (count, tissues, kinds, best BF, features)
+- `known_locus`, `known_locus_dist`: the nearest catalogue entry within `catalog.window` of the SV (0 inside it;
+  catalogue rows with `start` and `end`, such as its structural variants, by their extent)
+- the tier columns. The regbuild term counts only for SVs that overlap no AQUA-FAANG peak, as for SNPs.
+
+Left out, as they need one base and its alleles: the sequence and assay checks, coding consequences, motif changes,
+public allele frequencies, flank-variant counts and per-variant scores. Overlaps are one IEJoin per layer on
+genome-wide coordinates (chromosome k at k x 10^10): 100,000 SVs, some of them Mb long, annotate in about 25 s with 2
+threads and 2 GB. What is provisional (G to confirm; DECISIONS #55): inversions and translocations scored over their
+whole span rather than at their breakpoints, and the strongest state per condition.
 
 ## Public background pool
 

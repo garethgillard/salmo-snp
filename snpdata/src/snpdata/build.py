@@ -388,7 +388,9 @@ def fetch(layers_yaml, data_dir, mirror=None):
     bigBed url with a .bed `file` is converted to BED, a bigWig url with a .bed `file` to the stretches it covers
     (covered()); a `query` is sent as ?query=... (Ensembl BioMart); a source with
     `sites_only` is streamed through sites_only(). With `mirror` (a URL or folder made by `snpdata publish --raw`), every
-    file comes from <mirror>/raw/ instead, as published (already processed), checked against its SHA256SUMS."""
+    file comes from <mirror>/raw/ instead, as published (already processed), checked against its SHA256SUMS. A source
+    with `local` instead of `url` (an input that isn't online) is read from that path under data_dir, processed the same
+    way; when it isn't there, fetch says so and goes on."""
     data = Path(data_dir)
     data.mkdir(parents=True, exist_ok=True)
     cfg = load_yaml(layers_yaml)
@@ -396,13 +398,17 @@ def fetch(layers_yaml, data_dir, mirror=None):
         return fetch_mirror(raw_sources(cfg), data, mirror)
     for layer in raw_sources(cfg):
         target = data / layer["file"]
-        if layer.get("url") and not target.exists():
-            url = layer["url"] + ("?query=" + urllib.parse.quote(layer["query"]) if layer.get("query") else "")
-            print(f"downloading {layer['url']} -> {target}", flush=True)
+        if layer.get("local") and not target.exists() and not (data / layer["local"]).exists():
+            print(f"snpdata: {target.name} needs {data / layer['local']} (not online: see layers.yaml); skipped", flush=True)
+        elif (layer.get("url") or layer.get("local")) and not target.exists():
+            url = str(data / layer["local"]) if layer.get("local") else (
+                layer["url"] + ("?query=" + urllib.parse.quote(layer["query"]) if layer.get("query") else ""))
+            print(f"downloading {layer.get('url') or url} -> {target}", flush=True)
             target.parent.mkdir(parents=True, exist_ok=True)
             part = target.with_name(target.name + ".part")
             if layer.get("sites_only"):
-                sites_only(url, part, layer["sites_only"], layer.get("count_gt", False), layer.get("snps_only", False))
+                sites_only(url, part, layer["sites_only"], layer.get("count_gt", False), layer.get("snps_only", False),
+                           layer.get("local"))
             elif url.endswith(".bb") and target.suffix == ".bed":
                 with tempfile.NamedTemporaryFile(suffix=".bb") as bb:
                     download(url, Path(bb.name))
@@ -514,16 +520,17 @@ def gt_counts(fmt, samples):
             b"AF": None if af is None else round(af, 6), b"MAF": None if af is None else round(min(af, 1 - af), 6)}
 
 
-def sites_only(url, target, keys, count_gt=False, snps_only=False):
+def sites_only(url, target, keys, count_gt=False, snps_only=False, name=None):
     """Stream a gzipped VCF from `url` into a gzipped sites-only VCF at `target`: the first 8 columns, with only the INFO
     `keys`, and no sample names. The genotype columns are dropped as the file streams in, so they never reach the disk.
     With count_gt, the AC, AN, NS, AF and MAF among `keys` are counted from the genotypes first (gt_counts), replacing
     any the file has: only these per-site numbers are kept. With snps_only, lines whose REF and ALT are not one base
-    each (indels) are left out."""
+    each (indels) are left out. `name` is what the header says it came from (default: the url; a local path's would
+    be the builder's own)."""
     keys = {k.encode() for k in keys}
     counted = {k for k in GT_INFO if k in keys} if count_gt else set()
     with Resuming(url) as r, gzip.GzipFile(fileobj=r) as vcf, gzip.open(target, "wb", compresslevel=6) as out:
-        out.write(b"##fileformat=VCFv4.2\n##snpdata=sites only (genotypes dropped) from " + url.encode() + b"\n")
+        out.write(b"##fileformat=VCFv4.2\n##snpdata=sites only (genotypes dropped) from " + (name or url).encode() + b"\n")
         rest, n = b"", 0
         while True:
             chunk = vcf.read(1 << 24)
@@ -707,8 +714,12 @@ def build(layers_yaml, data_dir, out_dir, reuse=None):
         shutil.copy(here / catalog["file"], target)
         manifest["catalog"] = {**catalog, "file": f"catalog/{target.name}", "sha256": hashes([target])[1],
                                "rows": sum(1 for line in target.read_text().splitlines()[1:] if line.strip())}
-    demo = [here / catalog["file"]] if catalog and (here / catalog["file"]).exists() else []
+    demo = catalogue_examples(here / catalog["file"], Path(tempfile.mkdtemp())) if catalog and (here / catalog["file"]).exists() else []
     demo += [data / f for f in cfg.get("demo", []) if (data / f).is_file()]
+    svs = cfg.get("demo_svs")  # a SYNTHETIC set of structural variants for the portal's SV tab, from the built gene layer
+    if svs and (out / "gene.parquet").exists():
+        demo.append(synthetic_svs(con, out / "gene.parquet", manifest["chrom_sizes"], Path(tempfile.mkdtemp()) / svs["file"],
+                                  int(svs.get("n", 300))))
     sample = cfg.get("demo_sample")  # an example cut from a built point layer: an even sample of its sites, as a VCF
     if sample and (out / f"{sample['layer']}.parquet").exists():
         table = f"read_parquet({lit(out / (sample['layer'] + '.parquet'))})"
@@ -734,6 +745,63 @@ def build(layers_yaml, data_dir, out_dir, reuse=None):
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
     write_sums(out)
     return out
+
+
+SV_TYPES = {"DEL": 0.55, "INS": 0.2, "DUP": 0.15, "INV": 0.1}  # synthetic_svs: shares of each type
+
+
+def catalogue_examples(catalog, folder):
+    """The portal's examples from the known-loci catalogue, in `folder`: known_loci.tsv (the rows with a position: the
+    SNP example) and, when the catalogue has rows of type sv, known_svs.tsv (chrom, start, end, svtype, id, trait,
+    locus: the SV example; start and end 1-based, as the catalogue gives them). Returns their paths."""
+    import csv
+    with open(catalog, newline="") as f:  # newline="": the csv module reads CRLF lines (a Windows checkout) too
+        reader = csv.DictReader((line for line in f if not line.startswith("#")), delimiter="\t")
+        rows, header = list(reader), reader.fieldnames
+    out = [Path(folder) / "known_loci.tsv"]
+    with open(out[0], "w", newline="") as f:
+        writer = csv.DictWriter(f, header, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(r for r in rows if (r.get("pos") or "").isdecimal())
+    svs = [r for r in rows if r.get("type") == "sv" and (r.get("start") or "").isdecimal() and (r.get("end") or "").isdecimal()]
+    if svs:
+        out.append(Path(folder) / "known_svs.tsv")
+        with open(out[1], "w") as f:
+            f.write("chrom\tstart\tend\tsvtype\tid\ttrait\tlocus\n")
+            f.writelines("\t".join(r.get(k) or "" for k in ("chrom", "start", "end", "svtype", "id", "trait", "locus")) + "\n" for r in svs)
+    return out
+
+
+def synthetic_svs(con, genes, chrom_sizes, target, n=300, seed=2026):
+    """A SYNTHETIC example of n structural variants (the same file for the same release: a fixed seed): types in the
+    SV_TYPES shares; sizes log-uniform within decades: half 50 bp to 1 kb, 30% to 10 kb, 15% to 100 kb, 5% to 1 Mb; half placed in or near a gene of
+    the built gene layer (`genes`), half anywhere on the chromosomes. Insertions are points (start = end) with their
+    inserted length in svlen. Returns the file (a table of chrom, start, end, svtype, svlen, id; 1-based)."""
+    decades = [(1.7, 3), (3, 4), (4, 5), (5, 6)]  # 50 bp-1 kb, 1-10 kb, 10-100 kb, 100 kb-1 Mb: most SVs are short
+    import random
+    rng = random.Random(seed)
+    sizes = {c: n for c, n in (chrom_sizes or {}).items() if n}
+    near = con.execute(f'SELECT chrom, start, "end" FROM read_parquet({lit(genes)}) ORDER BY chrom, start, id').fetchall()
+    near = [g for g in near if g[0] in sizes]
+    rows = []
+    for i in range(n):
+        kind = rng.choices(list(SV_TYPES), weights=list(SV_TYPES.values()))[0]
+        length = round(10 ** rng.uniform(*rng.choices(decades, weights=[50, 30, 15, 5])[0]))
+        if near and i % 2 == 0:
+            chrom, a, b = rng.choice(near)
+            start = rng.randint(max(1, a - 5000), b + 5000)
+        else:
+            chrom = rng.choices(list(sizes), weights=list(sizes.values()))[0]
+            start = rng.randint(1, sizes[chrom])
+        span = 1 if kind == "INS" else min(length, sizes[chrom] - start + 1)
+        rows.append((chrom, start, start + span - 1, kind, length if kind == "INS" else "", f"syn_sv_{i + 1:04d}"))
+    rows.sort(key=lambda r: (int(r[0]) if r[0].isdigit() else 999, r[0], r[1]))
+    Path(target).parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "w") as f:
+        f.write("# SYNTHETIC structural variants, made by snpdata build (synthetic_svs): not real data\n"
+                "chrom\tstart\tend\tsvtype\tsvlen\tid\n")
+        f.writelines("\t".join(map(str, r)) + "\n" for r in rows)
+    return Path(target)
 
 
 def publish(release_dir, site, layers_yaml=None, data_dir=None):

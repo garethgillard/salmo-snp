@@ -101,7 +101,7 @@ class LocusTest(SimpleTestCase):
         self.assertIn("Ss4R block, duplicated on chr21", page)  # the chromosome: the block around the window
         self.assertIn("504-fish panel: MAF 0.48, alt AF 0.48", page)  # public variant at vgll3 Met54Thr (R1)
         self.assertIn("AQUA-FAANG 12 fish: alt AF 0.67, imputation DR2 1.00", page)  # Public SNPs: a row per dataset
-        self.assertIn("Synchrosmolt: MAF", page)  # the 108 Synchrosmolt parents
+        self.assertIn("Synchrosmolt: MAF", page)  # the Synchrosmolt parents
         self.assertIn('class="sp-set-synchrosmolt_af"', page)  # in the group's legend
         self.assertIn("vgll3_Met54Thr", page)
         self.assertNotIn("g-bgee", page)  # no Bgee expression on the locus browser

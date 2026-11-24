@@ -31,7 +31,7 @@ weights:  # whole numbers (tier_score is an integer)
                        # until G sets it (docs/DECISIONS.md #54; eQTL lead SNPs are in it 1.6 to 1.9 times as often
                        # as matched SNPs, docs/SCORING.md section 6)
   summit: 0            # near a strong ATAC summit (the `summit` rule below): shown in tier_terms, not scored until G
-                       # sets it (docs/DECISIONS.md #55; no measurable gain at eQTL leads so far)
+                       # sets it (docs/DECISIONS.md #58; no measurable gain at eQTL leads so far)
 
 # The ATAC summit rule (weights.summit; layers.yaml `summit`): a SNP has it when the nearest summit inside a robust peak
 # is at most max_distance bp away and that summit's rank (the share of its condition's peaks with a lower signal) is at

@@ -232,7 +232,7 @@ class PortalTest(SimpleTestCase):
     def test_examples_run_end_to_end(self):
         page = self.client.get(reverse("snpportal:upload")).content.decode()
         tabs = re.findall(r'role="tab"[^>]*>([^<]+)</a>', page)
-        self.assertEqual(tabs, ["Upload SNPs", "Paste positions", "Genes or regions", "GWAS"])
+        self.assertEqual(tabs, ["Upload SNPs", "Paste positions", "Genes or regions", "Structural variants", "GWAS"])
         self.assertIn('name="example" value="known_loci" title="Known loci: ', page)  # the examples under the tabs
         self.assertRegex(page, r'value="chip_demo_SYNTHETIC" title="SNP chip: synthetic, [\d,]+ SNPs">SNP chip <small>synthetic</small>')
         chip =self.client.post(reverse("snpportal:upload"), {"example": "chip_demo_SYNTHETIC"})

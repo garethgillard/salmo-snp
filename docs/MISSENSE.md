@@ -51,7 +51,7 @@ either is trusted.
    (`snpdata/prep/`, like the assembly alignment script), run from a clone on Orion; the alternative is a folder in
    salmo-chrombpnet. A separate repository is more than it needs.
 4. **Rainbow trout too?** The same script with the trout proteins. Proposed: yes, in the same run.
-5. **How will it count?** A decision for later, with the data in hand (DECISIONS #56). Until then it is shown and
+5. **How will it count?** A decision for later, with the data in hand (DECISIONS #59). Until then it is shown and
    counts nothing, like every variant score (weights.yaml `variant_scores: {}`).
 
 ## What to run
