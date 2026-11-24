@@ -12,7 +12,8 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - main is green on GitHub (tests, user-install). The NREC demo https://158.39.75.9/snp/ (test.salmobase.org/snp/
   redirected there from 2026-11-10 but answers 404 since 2026-11-16) runs what G last had deployed (the manual
   `deploy` workflow since 2026-11-06; merges no longer deploy; cloud sessions use https://158-39-75-9.sslip.io/snp/:
-  the bare IP didn't connect through their proxy). Since 2026-11-21 that is 66068dc (PRs #25 to #27: the new
+  the bare IP didn't connect through their proxy). Since 2026-11-24 that is 257cdf3 (PR #30: structural variants
+  scored by what they overlap; before it, from 2026-11-21, 66068dc: PRs #25 to #27, the new
   AQUA-FAANG gill and ImmunoMap tracks, scored; NCBI genes by default; tissue separators; the public pool from the
   504-fish panel's common sites, every pool rebuilt by the deploy), with release 2026-11-20
   (built, published and installed by the `species-data` workflow, 2026-11-20) and, in /srv/snpportal/releases/,
@@ -83,7 +84,9 @@ lines) on the Score page's Structural variants tab, each scored by what it overl
 sv`; a 1-bp SV scores as a SNP at that base), shown on the same Overview, Table, card, report and exports; the known
 loci gain 6 salmon SVs (Stenløkk 2022 inversions, Bertolotti 2020 farmed-vs-wild outliers) and 2 trout ones (the Omy05
 double inversion, the Omy17 inversion); examples Known SVs and SVs (synthetic, 300 made by the build). The catalogue
-and examples come with releases 2026-11-24 and trout-2026-11-24 (the `species-data` workflow). G's questions:
+and examples come with the next releases: trout-2026-11-24 (the `species-data` workflow, 2026-11-24) and the next
+salmon release, built on G's Mac with the Synchrosmolt whole-genome set (PR #31) and the evidence layers G is adding
+(G, 2026-11-24: the build waits for them; serve.py RELEASE stays 2026-11-20 until then). G's questions:
 DECISIONS #55-#57.
 
 Built outside Push 3 (G, 2026-11-14 and -15): the Locus browser moves and zooms with the mouse, with a margin and a
