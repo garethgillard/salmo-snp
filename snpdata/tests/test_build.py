@@ -29,7 +29,7 @@ def test_catalogue_text_is_for_users():
 
 def test_sites_only_drops_genotypes(tmp_path):
     """fetch streams the 504-fish VCF through sites_only: sample names and genotypes never reach the output."""
-    from snpdata.build import sites_only
+    from snpdata.build import fetch, sites_only
     src = tmp_path / "SYNTHETIC.vcf.gz"
     with gzip.open(src, "wt") as f:  # the last line has no newline
         f.write('##fileformat=VCFv4.2\n##INFO=<ID=AF,Number=A,Type=Float,Description="x">\n'
@@ -49,6 +49,13 @@ def test_sites_only_drops_genotypes(tmp_path):
                                                                         "AC=2;AN=4;NS=2;AF=0.5;MAF=0.5"]
     assert sum(x.startswith("##INFO=<ID=AF,") for x in lines) == 1  # the counted AF replaces the file's own
     assert not any(w in x for x in lines for w in ("fishA", "fishB", "0|1", "1|1"))
+    layers = tmp_path / "layers.yaml"  # an input that isn't online: `local`, a path under --data, processed the same way
+    layers.write_text("layers:\n- {name: x, file: x.sites.vcf.gz, local: ../SYNTHETIC.vcf.gz, "
+                      "sites_only: [AC, AN, NS, AF, MAF], count_gt: true}\n")
+    fetch(layers, tmp_path / "raw")
+    fetched = gzip.open(tmp_path / "raw" / "x.sites.vcf.gz", "rt").read().splitlines()
+    assert fetched[1] == "##snpdata=sites only (genotypes dropped) from ../SYNTHETIC.vcf.gz"  # not the builder's own path
+    assert fetched[2:] == lines[2:]
 
 
 def test_manifest(release):

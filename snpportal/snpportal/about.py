@@ -115,7 +115,7 @@ LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall
     "ss4r": ("Ss4R duplicate of the nearest gene (salmonid genome duplication)", "AQUA-FAANG"),
     "flank_variants": ("Public variants within 35 bp (probe flanks)", "504-fish panel"),
     "public_af": ("Allele frequencies in 504 public fish, pooled", "504-fish panel"),
-    "synchrosmolt_af": ("Allele frequencies in the 108 Synchrosmolt parents", "ENA PRJEB114348"),
+    "synchrosmolt_af": ("Allele frequencies in the Synchrosmolt parents, whole-genome sequenced", "Synchrosmolt (NMBU)"),
     "motif": ("TF motif changes at SNPs in robust ATAC peaks (879 vertebrate motifs)", "JASPAR 2024"),
     "axiom": ("SNPs on the Axiom array of the Complex Gill Disease study, with frequencies in 1,710 fish", "ENA PRJEB107807"),
     "molqtl": ("molQTL lead SNPs in 12 fish (display only)", "nf-RASQUAL"),

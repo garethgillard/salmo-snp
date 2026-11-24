@@ -70,6 +70,7 @@ molQTL leads at 0 (a lead SNP is weak evidence even at GTEx scale, and 12 fish i
 | 20 | Portal name, how to cite, contact, privacy statement, footer credit for AQUA-FAANG and salmobase | placeholders marked 'under review' | Write once with the AQUA-FAANG consortium |
 | 21 | Gene labels for genes unnamed in Ensembl | '~VGLL3' (human ortholog) | As is, or NCBI RefSeq names as a second source |
 | 21a | Ss4R duplicate of a gene (Known loci column, `ss4r_*` columns) | other salmon gene(s) of its AQUA-FAANG salmon-trout clade on the paired chromosome of the syntenic quartet; none when the clade has one salmon copy (six6a: its chr1 namesake is in another clade) | Keep; ask the table's authors whether 1:1 clades next to a split clade (six6a) should be joined |
+| 47 | The Synchrosmolt parents' whole-genome SNP set (G, 2026-11-24: 112 fish, 3,993,949 SNPs; replaces ENA PRJEB114348 from the next release): may its frequencies be published, and how is it cited? | Publishing decided (G, 2026-11-24): the frequencies go in the releases, their raw/ mirror, the demo and the test fixture; built from G's copy (`local` in layers.yaml: it isn't online); cited as NMBU, reads ENA PRJEB47441, and Saitou et al. 2025 | Once the VCF is deposited (ENA/EVA, as PRJEB114348 was), cite its accession and give the source its `url` |
 
 ## Platform and sharing
 

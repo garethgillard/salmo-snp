@@ -119,8 +119,11 @@ Decided:
 - Hubsmolt known loci (2026-10-20, G asked): the chromosome 14 hub SNP ssa14_50815335 and its two high-LD cis-eQTL SNPs
   (ssa14_50820817, ssa14_50852463) from the Synchrosmolt preprint (Saitou et al. 2025, Fig. 4) under smoltification;
   the paper gives no alleles, so the hub SNP's effect allele (A) is the Synchrosmolt parents' minor allele (caveat says so).
-- Synchrosmolt (2026-10-19): the 108 parents' frequencies only (the offspring were imputed from them). The CGD Axiom
-  VCF (PRJEB107807) waits: its positions are not Ssal_v3.1 (snpdata/README.md "Not added").
+- Synchrosmolt (2026-10-19): the parents' frequencies only (the offspring were imputed from them). From the next
+  release (G, 2026-11-24) the parents' whole-genome set, 112 fish and 3,993,949 SNPs, replaces ENA PRJEB114348's 108
+  fish and 411,908 SNPs; it isn't online, so layers.yaml reads it as `local` (snpdata/README.md), and its frequencies
+  may be published (G, 2026-11-24). The CGD Axiom VCF (PRJEB107807) waits: its positions are not Ssal_v3.1
+  (snpdata/README.md "Not added").
 - Industry users (2026-11-04): the plan is ROADMAP.md "Push 3" (I1-I20; boxes in TRACKER step 9), in G's order: ready
   to hand over (I1-I6), chip design (I7-I14), variant scores (I15-I16, G's DeepFARM and CADD-like data), genomes later
   (I17-I20). One user per install, who shares results as files: no accounts, no shared server (on hold). Chip tools

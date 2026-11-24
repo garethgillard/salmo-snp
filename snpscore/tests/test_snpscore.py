@@ -426,7 +426,9 @@ def test_read_snps_keeps_input_order(tmp_path):
 #   fixture genome is mostly N), so tiers are unchanged (checked by building with and without the layer).
 # - unified peaks v3 (2026-11-20, G: score gill and the ImmunoMap): 6 more chromatin_<condition> columns (gill, head
 #   kidney); 8 of the 2,519 fixture SNPs change tier or score, all through head kidney states (tier 4 -> 2 for two).
-GOLDEN = "accf65b1fcb3a535e82ae4734b98a6ec5a95b3a66201c3fd35665cb568821c2c"
+# - synchrosmolt_af from the parents' whole-genome set (G, 2026-11-24; 112 fish): only the seven synchrosmolt_af*
+#   columns change; 1,853 of the 2,528 fixture SNPs are sites instead of 287 (checked against the old fixture's build).
+GOLDEN = "b912ea5f5066950d741617ede3feb17840c3b73a6f66ecfc3964307014188744"
 
 
 def test_long_lists_are_written_in_sorted_parts(release, tmp_path, monkeypatch):

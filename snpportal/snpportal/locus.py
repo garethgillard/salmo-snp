@@ -703,7 +703,7 @@ def details(snp):
                     if snp.get("motif_changed") else "no motif change" if snp.get("motif")
                     else "not checked (outside a robust ATAC peak)" if not snp.get("chromatin") else "not checked"))
     if "synchrosmolt_af" in snp:
-        out.append(("Synchrosmolt parents (108 fish)", f"MAF {_fmt(snp.get('synchrosmolt_af_maf'))}, alt AF "
+        out.append(("Synchrosmolt parents", f"MAF {_fmt(snp.get('synchrosmolt_af_maf'))}, alt AF "
                     f"{_fmt(snp.get('synchrosmolt_af_af'))} ({snp.get('synchrosmolt_af_ns')} fish)" if snp.get("synchrosmolt_af") else
                     "a different variant at this position" if snp.get("synchrosmolt_af_alleles") == "other" else "not a site"))
     if "axiom" in snp:
