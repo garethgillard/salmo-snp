@@ -14,7 +14,9 @@
 # synthetic: true (test or stand-in data: labelled, and never counted in tiers), citation (shown on the methods page),
 # licence, population (who the frequencies describe).
 # Optional per source: sites_only: [INFO keys] (fetch streams the VCF and writes only its first 8 columns with these INFO
-# keys: genotypes never reach the disk).
+# keys: genotypes never reach the disk); max_gap (a bigWig url with a .bed file, e.g. an alignment depth track: fetch
+# writes the stretches with a value above 0, joined across gaps of up to max_gap bases).
+# A layer computed from built layers names them (within, sites): it comes after them in this list.
 
 assembly: Ssal_v3.1
 chromosomes: "1-29 (Ensembl/AQUA-FAANG naming)"
@@ -107,7 +109,7 @@ demo: [../demo/public_50k.vcf, ../synthetic/chip_demo_SYNTHETIC.tsv, synthetic/c
        ../synthetic/gwas_maturation_SYNTHETIC.tsv]
 
 # Choices in this file that G still has to confirm; listed in the release manifest with those from weights.yaml.
-provisional: [catalog.window, molqtl.max_bf]
+provisional: [catalog.window, molqtl.max_bf, pike.max_gap, summit.window, summit.max_distance]
 
 layers:
   - name: chromatin
@@ -120,6 +122,74 @@ layers:
     id: true
     description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 27 conditions (empty = no peak there)
     citation: AQUA-FAANG consortium, Atlantic salmon unified ATAC peaks and ChromHMM states (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
+
+  - name: summit
+    type: nearest
+    format: summits
+    within: chromatin  # only summits inside a robust peak are kept (those outside carried no signal: docs/SCORING.md)
+    window: 25         # PROVISIONAL: a summit stands for the summits within this many bp of it (see the description)
+    max_distance: 500  # PROVISIONAL: no summit is reported beyond this many bp
+    files:
+      - {condition: Brain_Immature_Female, file: narrowPeak/AtlanticSalmon_ATAC_Brain_Immature_Female.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Brain/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Brain_Immature_Female.mRp.clN_peaks.narrowPeak'}
+      - {condition: Brain_Immature_Male, file: narrowPeak/AtlanticSalmon_ATAC_Brain_Immature_Male.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Brain/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Brain_Immature_Male.mRp.clN_peaks.narrowPeak'}
+      - {condition: Brain_Mature_Female, file: narrowPeak/AtlanticSalmon_ATAC_Brain_Mature_Female.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Brain/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Brain_Mature_Female.mRp.clN_peaks.narrowPeak'}
+      - {condition: Brain_Mature_Male, file: narrowPeak/AtlanticSalmon_ATAC_Brain_Mature_Male.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Brain/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Brain_Mature_Male.mRp.clN_peaks.narrowPeak'}
+      - {condition: Gonad_Immature_Female, file: narrowPeak/AtlanticSalmon_ATAC_Gonad_Immature_Female.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Gonad/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Gonad_Immature_Female.mRp.clN_peaks.narrowPeak'}
+      - {condition: Gonad_Immature_Male, file: narrowPeak/AtlanticSalmon_ATAC_Gonad_Immature_Male.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Gonad/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Gonad_Immature_Male.mRp.clN_peaks.narrowPeak'}
+      - {condition: Gonad_Mature_Female, file: narrowPeak/AtlanticSalmon_ATAC_Gonad_Mature_Female.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Gonad/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Gonad_Mature_Female.mRp.clN_peaks.narrowPeak'}
+      - {condition: Gonad_Mature_Male, file: narrowPeak/AtlanticSalmon_ATAC_Gonad_Mature_Male.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Gonad/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Gonad_Mature_Male.mRp.clN_peaks.narrowPeak'}
+      - {condition: Liver_Immature_Female, file: narrowPeak/AtlanticSalmon_ATAC_Liver_Immature_Female.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Liver/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Liver_Immature_Female.mRp.clN_peaks.narrowPeak'}
+      - {condition: Liver_Immature_Male, file: narrowPeak/AtlanticSalmon_ATAC_Liver_Immature_Male.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Liver/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Liver_Immature_Male.mRp.clN_peaks.narrowPeak'}
+      - {condition: Liver_Mature_Female, file: narrowPeak/AtlanticSalmon_ATAC_Liver_Mature_Female.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Liver/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Liver_Mature_Female.mRp.clN_peaks.narrowPeak'}
+      - {condition: Liver_Mature_Male, file: narrowPeak/AtlanticSalmon_ATAC_Liver_Mature_Male.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Liver/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Liver_Mature_Male.mRp.clN_peaks.narrowPeak'}
+      - {condition: Muscle_Immature_Female, file: narrowPeak/AtlanticSalmon_ATAC_Muscle_Immature_Female.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Muscle/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Muscle_Immature_Female.mRp.clN_peaks.narrowPeak'}
+      - {condition: Muscle_Immature_Male, file: narrowPeak/AtlanticSalmon_ATAC_Muscle_Immature_Male.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Muscle/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Muscle_Immature_Male.mRp.clN_peaks.narrowPeak'}
+      - {condition: Muscle_Mature_Female, file: narrowPeak/AtlanticSalmon_ATAC_Muscle_Mature_Female.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Muscle/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Muscle_Mature_Female.mRp.clN_peaks.narrowPeak'}
+      - {condition: Muscle_Mature_Male, file: narrowPeak/AtlanticSalmon_ATAC_Muscle_Mature_Male.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Muscle/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Muscle_Mature_Male.mRp.clN_peaks.narrowPeak'}
+      - {condition: Gill_Immature_Female, file: narrowPeak/AtlanticSalmon_ATAC_Gill_Immature_Female.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Gill/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Gill_Immature_Female.mRp.clN_peaks.narrowPeak'}
+      - {condition: Gill_Immature_Male, file: narrowPeak/AtlanticSalmon_ATAC_Gill_Immature_Male.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Gill/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Gill_Immature_Male.mRp.clN_peaks.narrowPeak'}
+      - {condition: Gill_Mature_Male, file: narrowPeak/AtlanticSalmon_ATAC_Gill_Mature_Male.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/BodyMap/ATAC/Gill/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_Gill_Mature_Male.mRp.clN_peaks.narrowPeak'}
+      - {condition: HeadKidney_invivo_pbs, file: narrowPeak/AtlanticSalmon_ATAC_HeadKidney_invivo_pbs.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/ImmunoMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_HeadKidney_invivo_pbs.mRp.clN_peaks.narrowPeak'}
+      - {condition: HeadKidney_invivo_polyIC, file: narrowPeak/AtlanticSalmon_ATAC_HeadKidney_invivo_polyIC.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/ImmunoMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_HeadKidney_invivo_polyIC.mRp.clN_peaks.narrowPeak'}
+      - {condition: HeadKidney_invivo_vibrio, file: narrowPeak/AtlanticSalmon_ATAC_HeadKidney_invivo_vibrio.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/ImmunoMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_HeadKidney_invivo_vibrio.mRp.clN_peaks.narrowPeak'}
+      - {condition: LateBlastulation, file: narrowPeak/AtlanticSalmon_ATAC_LateBlastulation.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/DevMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_LateBlastulation.mRp.clN_peaks.narrowPeak'}
+      - {condition: MidGastrulation, file: narrowPeak/AtlanticSalmon_ATAC_MidGastrulation.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/DevMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_MidGastrulation.mRp.clN_peaks.narrowPeak'}
+      - {condition: EarlySomitogenesis, file: narrowPeak/AtlanticSalmon_ATAC_EarlySomitogenesis.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/DevMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_EarlySomitogenesis.mRp.clN_peaks.narrowPeak'}
+      - {condition: MidSomitogenesis, file: narrowPeak/AtlanticSalmon_ATAC_MidSomitogenesis.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/DevMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_MidSomitogenesis.mRp.clN_peaks.narrowPeak'}
+      - {condition: LateSomitogenesis, file: narrowPeak/AtlanticSalmon_ATAC_LateSomitogenesis.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/AtlanticSalmon/DevMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/AtlanticSalmon_ATAC_LateSomitogenesis.mRp.clN_peaks.narrowPeak'}
+    description: >-
+      Nearest ATAC-seq peak summit inside a robust peak, within 500 bp: distance (bp, 0 = at the summit), signal (MACS2
+      fold enrichment at the summit), rank (the share of that condition's peaks with a lower signal, 0 to 1, so that
+      conditions of different library quality read alike) and condition. Summits of the 27 conditions that lie within
+      25 bp of each other count as one: signal, rank and condition are those of the highest-ranked of them
+    citation: AQUA-FAANG consortium, nf-core/atacseq MACS2 peaks of the merged replicates per condition, Atlantic salmon (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
 
   - name: region
     type: interval
@@ -151,6 +221,19 @@ layers:
     keep: [score]
     description: GERP constrained elements from the Ensembl 116 65-fish alignment (fetch converts the bigBed to BED)
     citation: Ensembl Compara release 116, 65 fish GERP constrained elements (ensembl.org)
+
+  - name: pike
+    type: interval
+    format: bed
+    file: Ssal_A_to_Eluc.aligned.bed
+    url: https://salmobase.org/datafiles/datasets/Aqua-Faang/alignments/salmon-trout-pike/halAlignmentDepth/Ssal_A_to_Eluc.bw
+    max_gap: 50  # PROVISIONAL: alignment gaps of up to this many bp are closed by fetch (chosen from the eQTL test,
+                 # docs/SCORING.md section 6: SNPs in gaps of up to 50 bp are enriched like aligned ones, longer gaps not)
+    description: >-
+      Sequence that aligns to northern pike (Esox lucius), the closest relative without the salmonid genome duplication,
+      in the AQUA-FAANG salmon-trout-pike whole-genome alignment: the bases with alignment depth to pike, alignment
+      gaps of up to 50 bp closed (fetch converts the depth bigWig to these stretches)
+    citation: AQUA-FAANG consortium, salmon-trout-pike whole-genome alignment (HAL), alignment depth of Ssal_v3.1 to northern pike (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
 
   - name: blacklist
     type: interval

@@ -60,6 +60,8 @@
         {% elif col == 'molqtl' %}<td title="{{ r.molqtl.1 }}">{{ r.molqtl.0 }}</td>
         {% elif col == 'cm' %}<td class="sp-num">{{ r.cm }}</td>
         {% elif col == 'gerp' %}<td class="sp-num">{{ r.gerp }}</td>
+        {% elif col == 'pike' %}<td>{{ r.pike }}</td>
+        {% elif col == 'summit' %}<td class="sp-nowrap"{% if r.summit %} title="{{ r.summit.1 }}"{% endif %}>{{ r.summit.0 }}</td>
         {% elif col == 'regbuild' %}<td>{{ r.regbuild }}</td>
         {% elif col == 'scores' %}<td>{% for label, text, tip in r.scores %}<span class="sp-nowrap" title="{{ tip }}">{{ label }} {{ text }}</span>{% if not forloop.last %} &middot; {% endif %}{% endfor %}</td>
         {% elif col == 'maf' %}<td class="sp-num">{{ r.maf }}</td>

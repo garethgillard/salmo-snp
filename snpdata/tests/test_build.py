@@ -66,6 +66,49 @@ def test_manifest(release):
     assert aliases["nc_059466.1"] == aliases["ssa25"] == aliases["chr25"] == aliases["hg993284"] == "25"
 
 
+def test_pike_and_summit_layers(release):
+    """The pike-aligned stretches as fetch writes them (covered(): a depth bigWig's stretches above 0, short gaps
+    closed), and the ATAC summits: inside robust peaks only, one row per position, each with the signal, rank and
+    condition of the highest-ranked summit within `window` bp."""
+    from snpdata.build import covered
+
+    class Depth:  # what covered() reads of a bigWig: chromosome sizes and (start, end, value) runs
+        chroms = {"1": (0, 1000), "2": (1, 500)}
+
+        def values(self, chrom, start, end):
+            return {"1": [(0, 10, 0.0), (10, 20, 1.0), (20, 25, 0.0), (25, 40, 1.0), (40, 100, 0.0), (100, 120, 2.0)],
+                    "2": [(5, 8, 1.0)]}[chrom]
+
+    assert list(covered(Depth())) == [("1", 10, 20), ("1", 25, 40), ("1", 100, 120), ("2", 5, 8)]
+    assert list(covered(Depth(), 5)) == [("1", 10, 40), ("1", 100, 120), ("2", 5, 8)]
+    m = {l["name"]: l for l in json.loads((release / "manifest.json").read_text())["layers"]}
+    assert (m["pike"]["type"], m["pike"]["max_gap"], m["pike"]["columns"]) == ("interval", 50, [])
+    assert (m["summit"]["type"], m["summit"]["columns"], len(m["summit"]["urls"])) == ("nearest", ["signal", "rank", "condition"], 27)
+    assert {"pike.max_gap", "summit.window", "summit.max_distance"} <= set(json.loads((release / "manifest.json").read_text())["provisional"])
+    con = duckdb.connect()
+    summit, peaks = f"read_parquet('{release / 'summit.parquet'}')", f"read_parquet('{release / 'chromatin.parquet'}')"
+    n, positions, outside = con.execute(f"""
+        SELECT count(*), count(DISTINCT (chrom, start)),
+               count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM {peaks} p WHERE p.chrom = s.chrom AND s.start >= p.start AND s."end" <= p."end"))
+        FROM {summit} s""").fetchone()
+    assert n == positions > 100 and outside == 0
+    assert con.execute(f"SELECT min(rank) >= 0 AND max(rank) <= 1 AND min(signal) > 0 FROM {summit}").fetchone()[0]
+
+
+def test_summits_reader(tmp_path):
+    """Two conditions' peak files: summits within the window share the values of the highest-ranked one (rank = the
+    share of the condition's peaks with a lower signal, the one outside the robust peaks counted too)."""
+    from snpdata.build import read_summits
+    peak = "1\t{}\t{}\tp\t0\t.\t{}\t1\t1\t10\n"  # the summit is 10 bases after the start
+    (tmp_path / "a.narrowPeak").write_text(peak.format(90, 150, 5) + peak.format(190, 250, 10) + peak.format(990, 1050, 2))
+    (tmp_path / "b.narrowPeak").write_text(peak.format(100, 160, 8) + peak.format(290, 350, 4))
+    duckdb.sql(f"COPY (SELECT '1' AS chrom, 50 AS start, 400 AS \"end\") TO '{tmp_path / 'chromatin.parquet'}' (FORMAT parquet)")
+    layer = {"files": [{"condition": "A"}, {"condition": "B"}], "within": "chromatin", "window": 25}
+    sql = read_summits([tmp_path / "a.narrowPeak", tmp_path / "b.narrowPeak"], layer, tmp_path)
+    assert duckdb.sql(f"SELECT * FROM ({sql}) ORDER BY start").fetchall() == [
+        ("1", 100, 101, 8.0, 1.0, "B"), ("1", 110, 111, 8.0, 1.0, "B"), ("1", 200, 201, 10.0, 1.0, "A"), ("1", 300, 301, 4.0, 0.0, "B")]
+
+
 @pytest.mark.dev
 @pytest.mark.skipif(__import__("os").environ.get("SNPSCORE_DEV") != "1", reason="needs release/dev (SNPSCORE_DEV=1)")
 def test_dev_release_push2():
@@ -173,6 +216,7 @@ def test_rainbow_trout_release(tmp_path):
     conditions = [c for c in layers["chromatin"]["columns"] if c not in ("summary", "id")]  # 17 genome-wide; those with a peak here
     assert {"Brain_Mature_Male", "Liver_Immature_Female", "LateBlastulation"} <= set(conditions) and not any("Gonad" in c for c in conditions)
     assert m["catalog"]["rows"] == 11 and [d["file"] for d in m["demo"]] == ["demo/known_loci.tsv", "demo/public_50k.vcf"]
+    assert layers["pike"]["rows"] > 0 and layers["summit"]["rows"] > 0 and len(layers["summit"]["urls"]) == 17  # as for salmon
     again = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "again", reuse=out)
     reused = json.loads((again / "manifest.json").read_text())  # a rebuild that copies every unchanged layer
     assert [(l["name"], l["sha256"], l["rows"]) for l in reused["layers"]] == [(l["name"], l["sha256"], l["rows"]) for l in m["layers"]]

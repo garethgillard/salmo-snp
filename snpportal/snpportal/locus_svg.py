@@ -27,6 +27,8 @@ TERMS = {  # tier_terms term -> (state name or colour, label) for the 'why this 
     "regbuild": (palette.REGBUILD, "Ensembl regulatory"),
     "molqtl": (palette.TISSUES["Gonad"], "molQTL lead (display only)"),
     "motif": (palette.MOTIF, "TF motif change"),
+    "pike": (palette.GREY[700], "aligns to pike"),
+    "summit": ("Accessible_chromatin", "near a strong ATAC summit"),
 }
 EVIDENCE = {  # published-association marker by evidence kind (explore.evidence_kind): (colour, label)
     "missense": (palette.GREY[900], "missense"), "gwas": (palette.ACCENT, "GWAS lead"),

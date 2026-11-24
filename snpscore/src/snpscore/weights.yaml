@@ -4,7 +4,7 @@
 # Layers marked synthetic: true in the release manifest never count.
 
 # The blocks below that G still has to confirm; build lists them in the release manifest.
-provisional: [active_states, weak_states, weights, tiers, presets, assay, design, finemap, priors]
+provisional: [active_states, weak_states, weights, summit, tiers, presets, assay, design, finemap, priors]
 
 active_states: [Active_TSS, Active_enhancer]
 # Counted as weak evidence. Not counted at all: Repressed_polycomb, Quiescent, ZNF_genes_and_repeats, Unknown_1 and
@@ -27,6 +27,18 @@ weights:  # whole numbers (tier_score is an integer)
   molqtl: 0            # nf-RASQUAL caQTL/eQTL lead SNP (12 fish, lead SNPs only): shown in tier_terms, not scored
   motif: 1             # G (2026-10-19): inside a robust ATAC peak, one allele matches a JASPAR 2024 motif at p < 1e-5 and
                        # the other doesn't, with at least 4 bits between them (layers.yaml `motif`; about 15% of in-peak SNPs)
+  pike: 0              # sequence that aligns to northern pike (layers.yaml `pike`): shown in tier_terms, not scored
+                       # until G sets it (docs/DECISIONS.md #54; eQTL lead SNPs are in it 1.6 to 1.9 times as often
+                       # as matched SNPs, docs/SCORING.md section 6)
+  summit: 0            # near a strong ATAC summit (the `summit` rule below): shown in tier_terms, not scored until G
+                       # sets it (docs/DECISIONS.md #55; no measurable gain at eQTL leads so far)
+
+# The ATAC summit rule (weights.summit; layers.yaml `summit`): a SNP has it when the nearest summit inside a robust peak
+# is at most max_distance bp away and that summit's rank (the share of its condition's peaks with a lower signal) is at
+# least min_rank. PROVISIONAL: starting values chosen by Claude, G's to set.
+summit:
+  max_distance: 50     # bp from the summit
+  min_rank: 0.75       # the strongest quarter of a condition's peaks
 
 # Per-variant score layers (layers.yaml format variant_scores, ROADMAP I15: DeepFARM, a CADD-like score): a SNP counts
 # when its percentile among the scored variants is at least the value here, with the weight of the same name under

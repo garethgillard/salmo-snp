@@ -92,6 +92,8 @@ LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall
     "region": ("Genic region: CDS, splice region, UTR, exon or intron", "Ensembl"),
     "regbuild": ("Regulatory build: promoters, enhancers, open chromatin", "Ensembl"),
     "gerp": ("Constrained elements in a 65-fish alignment (GERP)", "Ensembl Compara"),
+    "pike": ("Sequence that aligns to northern pike (salmon-trout-pike alignment)", "AQUA-FAANG"),
+    "summit": ("ATAC-seq summits inside robust peaks: distance and signal strength", "AQUA-FAANG"),
     "blacklist": ("Regions where ATAC peaks can't be called", "AQUA-FAANG"),
     "lore": ("Late-rediploidized (LORe) regions", "AQUA-FAANG"),
     "gene": ("Nearest gene", "Ensembl"),
@@ -411,6 +413,8 @@ def methods_text(m, w):
             + (", Ensembl 116 genic region classes and the nearest gene" if "region" in layers else "")
             + (", the Ensembl regulatory build" if "regbuild" in layers else "")
             + (", GERP constrained elements from the Ensembl Compara 65-fish alignment" if "gerp" in layers else "")
+            + (", sequence aligned to northern pike in the AQUA-FAANG salmon-trout-pike alignment" if "pike" in layers else "")
+            + (", the nearest ATAC-seq summit and its signal" if "summit" in layers else "")
             + (" and allele frequencies of the 504-fish reference panel" if "public_af" in layers else "")
             + ". Each SNP's tier_score is the sum of the weights of its evidence over all conditions, and tiers "
               "are cut-offs on that score (rules in weights.yaml, sha256 given in each download; PROVISIONAL).")
