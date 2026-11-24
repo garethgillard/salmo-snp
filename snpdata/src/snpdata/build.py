@@ -363,7 +363,9 @@ def fetch(layers_yaml, data_dir, mirror=None):
     """Download every `url` in layers.yaml (layers, genome, aliases, rsid, synteny, bgee) that isn't in data_dir yet. A
     bigBed url with a .bed `file` is converted to BED; a `query` is sent as ?query=... (Ensembl BioMart); a source with
     `sites_only` is streamed through sites_only(). With `mirror` (a URL or folder made by `snpdata publish --raw`), every
-    file comes from <mirror>/raw/ instead, as published (already processed), checked against its SHA256SUMS."""
+    file comes from <mirror>/raw/ instead, as published (already processed), checked against its SHA256SUMS. A source
+    with `local` instead of `url` (an input that isn't online) is read from that path under data_dir, processed the same
+    way; when it isn't there, fetch says so and goes on."""
     data = Path(data_dir)
     data.mkdir(parents=True, exist_ok=True)
     cfg = load_yaml(layers_yaml)
@@ -371,13 +373,17 @@ def fetch(layers_yaml, data_dir, mirror=None):
         return fetch_mirror(raw_sources(cfg), data, mirror)
     for layer in raw_sources(cfg):
         target = data / layer["file"]
-        if layer.get("url") and not target.exists():
-            url = layer["url"] + ("?query=" + urllib.parse.quote(layer["query"]) if layer.get("query") else "")
-            print(f"downloading {layer['url']} -> {target}", flush=True)
+        if layer.get("local") and not target.exists() and not (data / layer["local"]).exists():
+            print(f"snpdata: {target.name} needs {data / layer['local']} (not online: see layers.yaml); skipped", flush=True)
+        elif (layer.get("url") or layer.get("local")) and not target.exists():
+            url = str(data / layer["local"]) if layer.get("local") else (
+                layer["url"] + ("?query=" + urllib.parse.quote(layer["query"]) if layer.get("query") else ""))
+            print(f"downloading {layer.get('url') or url} -> {target}", flush=True)
             target.parent.mkdir(parents=True, exist_ok=True)
             part = target.with_name(target.name + ".part")
             if layer.get("sites_only"):
-                sites_only(url, part, layer["sites_only"], layer.get("count_gt", False), layer.get("snps_only", False))
+                sites_only(url, part, layer["sites_only"], layer.get("count_gt", False), layer.get("snps_only", False),
+                           layer.get("local"))
             elif url.endswith(".bb") and target.suffix == ".bed":
                 with tempfile.NamedTemporaryFile(suffix=".bb") as bb:
                     download(url, Path(bb.name))
@@ -466,16 +472,17 @@ def gt_counts(fmt, samples):
             b"AF": None if af is None else round(af, 6), b"MAF": None if af is None else round(min(af, 1 - af), 6)}
 
 
-def sites_only(url, target, keys, count_gt=False, snps_only=False):
+def sites_only(url, target, keys, count_gt=False, snps_only=False, name=None):
     """Stream a gzipped VCF from `url` into a gzipped sites-only VCF at `target`: the first 8 columns, with only the INFO
     `keys`, and no sample names. The genotype columns are dropped as the file streams in, so they never reach the disk.
     With count_gt, the AC, AN, NS, AF and MAF among `keys` are counted from the genotypes first (gt_counts), replacing
     any the file has: only these per-site numbers are kept. With snps_only, lines whose REF and ALT are not one base
-    each (indels) are left out."""
+    each (indels) are left out. `name` is what the header says it came from (default: the url; a local path's would
+    be the builder's own)."""
     keys = {k.encode() for k in keys}
     counted = {k for k in GT_INFO if k in keys} if count_gt else set()
     with Resuming(url) as r, gzip.GzipFile(fileobj=r) as vcf, gzip.open(target, "wb", compresslevel=6) as out:
-        out.write(b"##fileformat=VCFv4.2\n##snpdata=sites only (genotypes dropped) from " + url.encode() + b"\n")
+        out.write(b"##fileformat=VCFv4.2\n##snpdata=sites only (genotypes dropped) from " + (name or url).encode() + b"\n")
         rest, n = b"", 0
         while True:
             chunk = vcf.read(1 << 24)

@@ -44,7 +44,7 @@ NCBI_GENE = "https://www.ncbi.nlm.nih.gov/gene/{}"  # NCBI isoforms link to thei
 ISOFORM_ROWS = 40  # rows of the expanded isoform tracks before '+N more transcripts: zoom in'
 SNP_SETS = [  # (set, row label, sub-label) of the public SNP datasets, in row order; colours: palette.SNP_SETS
     ("public_af", "504-fish panel", "wild and farmed, pooled"), ("aquafaang12", "AQUA-FAANG 12 fish", "imputed"),
-    ("synchrosmolt_af", "Synchrosmolt", "108 parents, WGS"), ("axiom", "Axiom array", "CGD study, 1,710 fish")]
+    ("synchrosmolt_af", "Synchrosmolt", "parents, WGS"), ("axiom", "Axiom array", "CGD study, 1,710 fish")]
 
 
 # ---- view state, links and the centre ----

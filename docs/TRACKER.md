@@ -59,7 +59,8 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
 1. **G's answers** (DECISIONS.md #25-#37 for Push 3, and #1-#5 for the tier rules, I6): every new threshold and preset
    is PROVISIONAL until then. #34 and #36 (chip placement by flank) are answered for now (G, 2026-11-05), to revisit.
 2. **A new release** (G's Mac): `snpdata build` and `bash prep/github_release.sh`: it adds liftover_icsasg_v2.parquet
-   (I19); no fSalSal1 alignment (postponed: build skips the fSalSal1 tables without its PAF). The I18
+   (I19) and the Synchrosmolt parents' whole-genome set (3,993,949 SNPs, 112 fish, replacing ENA PRJEB114348; its VCF
+   in `snpdata/data/private/` first; publishing it: DECISIONS #47); no fSalSal1 alignment (postponed: build skips the fSalSal1 tables without its PAF). The I18
    check against a real ICSASG_v2 Axiom manifest still waits for one; its counts settle DECISIONS #34 and #36.
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
 4. **Phase 3**: G's DeepFARM and CADD-like data as variant-score layers (I16).
@@ -361,6 +362,7 @@ First push = waves A-C (items marked **now**), then wave D (GWAS, M7). Ticked wh
 
 ### More public data (2026-10-19/20)
 - [x] Synchrosmolt parents' allele frequencies (`synchrosmolt_af`, ENA PRJEB114348; 108 WGS fish) and the locus browser's Public SNPs group (combined row, a row per dataset)
+- [x] (G, 2026-11-24) The parents' whole-genome set instead (112 fish, 3,993,949 SNPs; not online: layers.yaml `local`), from the next release
 - [x] TF motif evidence: JASPAR 2024 motif changes at SNPs in robust peaks (+1, G's rule), the card's TF motifs section (logos, both alleles' scores) and the browser's TF motifs group
 - [x] Known loci: the three chromosome 14 hubsmolt SNPs (Saitou et al. 2025 preprint, Fig. 4)
 - [x] Public demo at https://158.39.75.9/snp/ (deploy/nrec.sh with the IP and the sslip.io name)

@@ -422,7 +422,9 @@ def test_read_snps_keeps_input_order(tmp_path):
 #   (checked by building the fixture with and without the layer).
 # - motif layer and term (2026-10-19): six motif* columns after synchrosmolt_af; no fixture SNP changes a motif (the
 #   fixture genome is mostly N), so tiers are unchanged (checked by building with and without the layer).
-GOLDEN = "7ba0332580ca662d5b8179821ad8bcd55bf48e9585020190ee644d217b6604e6"
+# - synchrosmolt_af from the parents' whole-genome set (G, 2026-11-24; 112 fish): only the seven synchrosmolt_af*
+#   columns change; 1,853 of the 2,528 fixture SNPs are sites instead of 287 (checked against the old fixture's build).
+GOLDEN = "c55af56899fbf7eec3148eb677d7392acb42e847180727c437278cf5108452a8"
 
 
 def test_long_lists_are_written_in_sorted_parts(release, tmp_path, monkeypatch):
