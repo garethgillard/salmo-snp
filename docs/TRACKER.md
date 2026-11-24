@@ -60,7 +60,7 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
    is PROVISIONAL until then. #34 and #36 (chip placement by flank) are answered for now (G, 2026-11-05), to revisit.
 2. **A new release** (G's Mac): `snpdata build` and `bash prep/github_release.sh`: it adds liftover_icsasg_v2.parquet
    (I19) and the Synchrosmolt parents' whole-genome set (3,993,949 SNPs, 112 fish, replacing ENA PRJEB114348; its VCF
-   in `snpdata/data/private/` first; publishing it: DECISIONS #47); no fSalSal1 alignment (postponed: build skips the fSalSal1 tables without its PAF). The I18
+   in `snpdata/data/private/` first; publishing its frequencies agreed, G 2026-11-24); no fSalSal1 alignment (postponed: build skips the fSalSal1 tables without its PAF). The I18
    check against a real ICSASG_v2 Axiom manifest still waits for one; its counts settle DECISIONS #34 and #36.
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
 4. **Phase 3**: G's DeepFARM and CADD-like data as variant-score layers (I16).

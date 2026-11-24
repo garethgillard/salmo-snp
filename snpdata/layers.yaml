@@ -278,7 +278,7 @@ layers:
     citation: >-
       Synchrosmolt parent whole-genome SNP genotypes (NMBU; reads ENA PRJEB47441); Saitou M et al. 2025, bioRxiv
       doi:10.1101/2025.10.16.682803
-    licence: frequencies only, genotypes are never kept; publishing them is G's to confirm (DECISIONS #47)
+    licence: publishing the frequencies agreed (G, 2026-11-24); frequencies only, genotypes are never kept
 
   - name: motif
     type: point

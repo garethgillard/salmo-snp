@@ -94,7 +94,7 @@ shows their contents openly, and they will later be published on salmobase.org.
 | European Variation Archive (EMBL-EBI) release 9 | Variant IDs and the old-to-new assembly conversion | Not recorded |
 | Bgee 16.0 | Gene expression | Not recorded |
 | NCBI RefSeq annotation (Ssal_v3.1) | Second gene annotation | NCBI data, no use restrictions |
-| Synchrosmolt parents (NMBU; the whole-genome set from G, not online; ENA PRJEB114348 in releases up to 2026-11-05) | Allele frequencies only | ENA open data for PRJEB114348; the whole-genome set's to confirm (DECISIONS #47) |
+| Synchrosmolt parents (NMBU; the whole-genome set from G, not online; ENA PRJEB114348 in releases up to 2026-11-05) | Allele frequencies only | ENA open data for PRJEB114348; publishing the whole-genome set's frequencies agreed (G, 2026-11-24) |
 | JASPAR 2024 | Transcription factor motifs | CC BY 4.0 |
 | Brekke et al. 2023 linkage map (bioRxiv supplement) | Recombination map | CC BY 4.0 |
 
