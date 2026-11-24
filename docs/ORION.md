@@ -94,36 +94,54 @@ What was added for Orion on 2026-11-24 (tested on the fixture only):
 Times known: fetch about 7 minutes (salmon, by download); the salmon build about 5 hours on 4 cores and 7 GB, most
 of it the motif layer, which scales with cores; the pool a few minutes.
 
-## On Orion: what to set up, and what to find out
+## On Orion: what was found, what is done, what is next (2026-11-24, 23:15)
 
-Proposed places, as for salmo-chrombpnet (G to confirm): the repository in `~/git/salmo-snp/`, inputs and releases
-under `/mnt/project/ELIXIR/salmo-snp/` (`raw/`, `raw_trout/`, `private/`, `release/`), DuckDB's temp folder under
-`/mnt/ScratchProjects/ELIXIR/salmo-snp/`. Give the commands those folders with `--data` and `--out`; never commit
-them.
+The cloud session reaches Orion through G's Mac: G attaches the Mac's `git` folder to the session (Remote Control),
+and commands run there as `ssh orion '...'`, each approved by G at a prompt. Most of what follows was read from the
+notes of the ChromBPNet work on Orion (`~/git/salmo-chrombpnet/AGENTS.md`), which knows the cluster well.
 
-1. **To find out: where salmobase's data files are on Orion**, whether that folder is the one the web server shows
-   or a copy that is synced, and who may write to it. Its web layout is `datafiles/{genomes,datasets,TSV,...}`, and
-   `datasets/` holds `Aqua-Faang/`, `nf-rasqual-data/` and others. `SNPDATA_SALMOBASE` is the folder that holds
-   `genomes/` and `datasets/`.
-2. **To find out: do compute nodes reach the internet?** fetch still downloads from ftp.ensembl.org,
-   jun2026.archive.ensembl.org (BioMart), ftp.ebi.ac.uk (rs IDs), ftp.ncbi.nlm.nih.gov, jaspar.elixir.no,
-   www.bgee.org, www.biorxiv.org and raw.githubusercontent.com; trout also from ftp.sra.ebi.ac.uk. If only the login
-   node does, run fetch there (it is light with the salmobase files on disk) and build in a job.
-3. **The Synchrosmolt VCF**: `MOWI_synchro_phased_parents_wgs.vcf.gz` is on Orion (G has it). layers.yaml reads it
-   from `../private/` beside the data folder: link it there before fetch. Its genotypes never leave fetch.
-4. **Python**: 3.11 or newer, with `pip install -e snpscore -e snpdata -e snpportal` (or `conda env create -f
-   environment.yml`). No other tool is needed; minimap2 only for fSalSal1.
-5. **SLURM**: to find out: the account, partitions and limits. A build job wants 16 cores or more (the motif layer),
-   32 GB for salmon and 64 GB for trout to be safe, and a few hours. One job per species; fetch, build, pool and the
-   checks can be one script that stops at the first failure and keeps what is done (fetch keeps files; `build
-   --reuse <release>` copies unchanged layers from an earlier build).
-6. **Trout's allele frequencies** come from three ENA cohort VCFs of 7, 16 and 55 GB, which fetch streams (it keeps
-   three site files of about 300 MB). Two ways to skip the streaming: the site files of the workflow run of
-   2026-11-24 are GitHub artifacts until **2026-11-27** (`gh run download 45433800948 -R garethgillard/salmo-snp`,
-   then put the three `*.sites.vcf.gz` in the trout data folder: fetch keeps them); or check whether ENA is fast
-   from Orion, which it may well be.
-7. **Start from an empty data folder.** fetch never replaces a file, which is how a Mac's old unified peaks file
-   would have gone into a new release. On Orion the first fetch takes everything as it is that day.
+**Found**
+- **SLURM**: partition `orion` for CPU jobs, 6 nodes of 384 cores and 1.5 TB each; no time limits, and G's rule for
+  all Orion work is never to set one (`--time`). Accounts `nmbu` and `biovit_elixir`. Nothing heavy on a login node.
+- **Network**: login and compute nodes reach GitHub over HTTPS, salmobase.org, Ensembl and EBI, so fetch can run in
+  a job. Port 22 to github.com is blocked; salmo-snp is public, so clone it over HTTPS.
+- **Storage**: `/mnt/project/ELIXIR/` (group `elixir`: 2.9 of 5 TB used) and `/mnt/ScratchProjects/ELIXIR/`.
+- **Python**: conda and mamba in `/cluster/software/Miniconda3`; the default python3 is 3.8, so make an environment
+  with 3.12.
+- **salmobase**: `/mnt/project/ELIXIR/salmobase/datafiles` is Orion's copy of the server's datafiles folder. The
+  server has files the copy lacks, so fetch downloads from salmobase.org (leave `SNPDATA_SALMOBASE` unset unless a
+  file's checksum is compared first). Uploads go from a login node to the ssh alias `salmobase`
+  (web-05.orion.nmbu.no; `test.salmobase` is the test server), as `salmo-chrombpnet/scripts/08_salmobase_sync.sh`
+  does: stage in the copy, make the server folder over ssh, `rsync -rlt --chmod=D755,F644` and never `--delete`,
+  rerun when the login node cuts a long rsync (it does after 10 minutes), then check the server's files against
+  SHA256SUMS. A dry run first, and each upload only with G's go-ahead.
+- **G's Mac** (8 cores, 16 GB): the clone in `/Users/gagi/git/salmo-snp`, salmon inputs from early November, the
+  Synchrosmolt VCF, releases up to 2026-11-05 and trout-2026-11-13. No trout inputs.
+
+**Done**
+- Folders: `/mnt/project/ELIXIR/salmo-snp/` with `data/raw`, `data/private`, `data/rainbow_trout/raw`, `release`,
+  `logs`; `/mnt/ScratchProjects/ELIXIR/salmo-snp/`.
+- `data/private/MOWI_synchro_phased_parents_wgs.vcf.gz`, copied from the Mac (sha256 8d7e12fd...).
+- The three trout cohort site files of the workflow run of 2026-11-24, saved from GitHub before they expired
+  (2026-11-27): on the Mac in `snpdata/data/rainbow_trout/cohorts-2026-11-24/`, and on Orion in
+  `data/rainbow_trout/raw/` where fetch finds them and skips the 78 GB from ENA. sha256: G1023-03 f36d6985...,
+  G0424-02 7705bb24..., G0824-027 74ed2cdd....
+
+**Next** (no job has been submitted)
+1. Merge the pull request with the citation and `prep/build_release.sh` (#35).
+2. On Orion: `git clone https://github.com/garethgillard/salmo-snp.git ~/git/salmo-snp`; in `snpdata/`, link `data`
+   to `/mnt/project/ELIXIR/salmo-snp/data` and `release` to `/mnt/project/ELIXIR/salmo-snp/release`, so every
+   command keeps its default paths and the Synchrosmolt file is where layers.yaml looks (`../private/`).
+3. The environment, in a small job: `mamba create -y -p /mnt/project/ELIXIR/salmo-snp/env python=3.12 pip`, then
+   `pip install -e snpscore -e snpdata -e snpportal`, then `bash tools/check.sh`.
+4. For the diff: the manifests of the releases before (2026-11-20 is unpacked under
+   `/mnt/project/ELIXIR/salmo-chrombp/salmo-snp/`; trout-2026-11-13 is on the Mac in `snpdata/release/`).
+5. One job per species, 32 cores and 96 GB, no time limit, log in `/mnt/project/ELIXIR/salmo-snp/logs/`:
+   `MEMORY=64GB SPILL=/mnt/ScratchProjects/ELIXIR/salmo-snp/spill PREVIOUS=<manifest folder> bash
+   prep/build_release.sh salmon <date>` and the same for `trout trout-<date>`. The date is the day of the build.
+6. Hold each summary against the tables above. Then, with G's go-ahead: `snpdata publish release/<version> --to
+   /mnt/project/ELIXIR/salmobase/datafiles/datasets/salmo-snp`, and the upload to `salmobase` as described.
+7. The pull request that makes salmobase the default (below), and "deploy to NREC" when G says.
 
 ## Hosting on salmobase
 
@@ -165,24 +183,11 @@ The demo VM: 6.5 GB were free on 2026-11-24, a salmon release is about 0.45 GB w
 `/srv/snpportal/releases/` once the new ones are in (results on the server expire after 24 hours, so nothing needs
 them).
 
-## Order of work
-
-1. On Orion: find out points 1, 2 and 5 above; set up the clone and the Python environment; `bash tools/check.sh`.
-2. G decides the candidates (ChromBPNet now or later; the citation).
-3. Salmon: fetch, make_demo.sh, build, pool, the checks of the table, `snpscore diff`.
-4. Trout: the same, with the cohort site files or the streaming.
-5. Publish both to the salmobase folder; test `salmo-snp download --from` the address from another computer.
-6. The pull request of the table above, with `RELEASE` and `RELEASES`; G merges; "deploy to NREC".
-7. Record in docs/TRACKER.md what was built and how long it took, and turn the job script into a file in
-   `snpdata/prep/` once it has run.
-
-## Text to start the Orion chat
+## Text to start a new chat, if this one is not continued
 
 ```
-We are on Orion over SSH. Clone https://github.com/garethgillard/salmo-snp.git into ~/git/ if it is not there
-(else pull main), and read AGENTS.md, then docs/ORION.md: it is the brief for this chat. We build the next Atlantic
-salmon and rainbow trout data releases here with SLURM jobs and publish them to salmobase's data files. Start with
-its "On Orion: what to set up, and what to find out": tell me what you find and what you need from me, before any
-job runs. Large files go under /mnt/project/ELIXIR/salmo-snp/ and temporary ones under
-/mnt/ScratchProjects/ELIXIR/salmo-snp/, never into the repository.
+Read AGENTS.md, then docs/ORION.md: it says what the next Atlantic salmon and rainbow trout data releases contain,
+what is already done on Orion and what is next. Orion is reached through my Mac: attach its `git` folder to this
+session (Remote Control) and run `ssh orion '...'` from it. Go on from "Next" in docs/ORION.md; tell me before any
+job is submitted and before anything is published.
 ```
