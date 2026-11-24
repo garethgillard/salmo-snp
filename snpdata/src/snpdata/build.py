@@ -699,10 +699,9 @@ def catalogue_examples(catalog, folder):
     SNP example) and, when the catalogue has rows of type sv, known_svs.tsv (chrom, start, end, svtype, id, trait,
     locus: the SV example; start and end 1-based, as the catalogue gives them). Returns their paths."""
     import csv
-    with open(catalog, newline="") as f:
-        lines = [line for line in f if not line.startswith("#")]
-    rows = list(csv.DictReader(lines, delimiter="\t"))
-    header = lines[0].rstrip("\n").split("\t")
+    with open(catalog, newline="") as f:  # newline="": the csv module reads CRLF lines (a Windows checkout) too
+        reader = csv.DictReader((line for line in f if not line.startswith("#")), delimiter="\t")
+        rows, header = list(reader), reader.fieldnames
     out = [Path(folder) / "known_loci.tsv"]
     with open(out[0], "w", newline="") as f:
         writer = csv.DictWriter(f, header, delimiter="\t", lineterminator="\n")
