@@ -107,7 +107,9 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
    ICSASG_v2 Axiom manifest still waits for one; its counts settle DECISIONS #34 and #36.
    **Next release**: the Synchrosmolt parents' whole-genome set (`synchrosmolt_af`: 3,993,949 SNPs, 112 fish,
    replacing ENA PRJEB114348; publishing its frequencies agreed, G 2026-11-24). Its VCF isn't online: fetch reads
-   it from `snpdata/data/private/` (layers.yaml `local`).
+   it from `snpdata/data/private/` (layers.yaml `local`), so salmon releases are built on G's Mac (G, 2026-11-24):
+   the `species-data` workflow's runner lacks the file (fetch skips it, build fails). To build there, host the
+   sites file fetch makes (frequencies only) and give the source a `url`.
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
 4. **Phase 3**: variant-score layers (I16): ChromBPNet first (G, 2026-11-21), in its own repository on Orion
    (docs/CHROMBPNET.md); then DeepFARM retrained and a CADD-like score.
