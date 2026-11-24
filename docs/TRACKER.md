@@ -112,7 +112,39 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
    replacing ENA PRJEB114348; publishing its frequencies agreed, G 2026-11-24). Its VCF isn't online: fetch reads
    it from `snpdata/data/private/` (layers.yaml `local`), so salmon releases are built on G's Mac (G, 2026-11-24):
    the `species-data` workflow's runner lacks the file (fetch skips it, build fails). To build there, host the
-   sites file fetch makes (frequencies only) and give the source a `url`.
+   sites file fetch makes (frequencies only) and give the source a `url`, and drop that source's `sites_only` and
+   `count_gt`: counting genotypes in a file that has none writes every frequency as NULL without an error.
+   **Handover for the next releases (SV session, 2026-11-24). G builds the next salmon and trout releases locally
+   on his Mac (G, 2026-11-24):**
+   - What main already has (PRs #30-#32): SV scoring, live on the demo since the deploy of 257cdf3; the 6 salmon and
+     2 trout SV rows in the catalogues; and in every build, demo/known_svs.tsv (the catalogue's `type` sv rows) and
+     demo/svs_demo_SYNTHETIC.tsv (300 SVs, layers.yaml `demo_svs`). serve.py names salmon 2026-11-20 (#32; built
+     before them) and trout-2026-11-24 (not built yet). No GitHub data release data-2026-11-24 was made: the salmon
+     `species-data` run of 2026-11-24 was cancelled before publishing, to wait for the Synchrosmolt set and G's
+     new layers.
+   - Salmon, on G's Mac (after G's new layers are merged): `snpdata fetch`, then `snpdata build --out
+     release/<date>`. fetch keeps any file already in data/raw, so first check that the inputs are current,
+     e.g. the AQUA-FAANG unified peaks v3 of release 2026-11-20 under the same file name. Then `snpscore pool
+     --release release/<date> --memory 8GB` and `POOL=1 bash prep/github_release.sh release/<date>`.
+     Then bump serve.py RELEASE to <date>, merge and run `deploy`: deploy/species.sh fetches data-<date> and makes
+     it the default.
+   - Check the salmon release before publishing:
+     - manifest `catalog.rows` 46; demo/ holds known_loci.tsv (40 rows), known_svs.tsv (6) and
+       svs_demo_SYNTHETIC.tsv (300);
+     - synchrosmolt_af has 3,993,949 rows with ns 112;
+     - `snpscore diff <2026-11-20> release/<date>` lists only the intended changes;
+     - catalogue row `hubsmolt_ssa14_50815335` takes its effect allele (A) from the Synchrosmolt parents' minor
+       allele: check that A is still the minor allele in the 112-fish set.
+   - Trout, on G's Mac too: `snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw`
+     streams the three ENA cohort VCFs (7, 16 and 55 GB; frequencies kept), then build as above, with
+     `--out release/trout-<date>` (and the same layers file and data folder). Then bump RELEASES and deploy.
+     Memory: the `species-data` run of 2026-11-24 (rainbow_trout) failed on GitHub's runner. Its cohort jobs passed,
+     but the build ran out of memory: DuckDB hit its 12.4 GiB default (80% of the runner's RAM) reading the pooled
+     `public_af` cohorts, just after `flank_variants` (46,593,552 rows). That reader is unchanged since the passing
+     run of 2026-11-13, so the cause is the runner or a newer DuckDB 2.x.
+     - On the Mac, DuckDB's default is also 80% of RAM, so a Mac with 16 GB can fail the same way.
+     - The fix that lets it spill to disk: give build's connection a memory limit and a temp directory, and set
+       `preserve_insertion_order=false`. It is also needed before the runner can build trout again.
 3. **Phase 2 rest**: the vendor round trip with real Axiom files from a partner (I13); LD-aware thinning (I14, #19).
 4. **Phase 3**: variant-score layers (I16): ChromBPNet first (G, 2026-11-21), in its own repository on Orion
    (docs/CHROMBPNET.md); then DeepFARM retrained and a CADD-like score.
