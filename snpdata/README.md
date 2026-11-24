@@ -18,6 +18,12 @@ python prep/make_synthetic.py chip --scale fixture  # SYNTHETIC demo chip for th
 python -m pytest -q                              # tests run on the small regions in tests/fixture
 ```
 
+On a shared machine (NMBU's Orion, a SLURM job; [../docs/ORION.md](../docs/ORION.md) is the brief for building
+there): `SNPDATA_SALMOBASE=<folder>` makes fetch read every salmobase input from a copy of salmobase's datafiles
+folder on the disk instead of downloading it, and `snpdata build --memory 32GB --threads 16 --temp <folder>` keeps
+DuckDB inside what the job was given (its defaults are 80% of the machine's memory and every core). The motif layer
+uses the cores the job may use.
+
 Then score the public sites once per release and weights change: `snpscore pool --release release/2026-11-03
 --assay --memory 8GB` (../snpscore/README.md). A published release leaves the pool out (a cache of the current
 weights): `salmo-snp download` and `serve` build it from the release's own sites.

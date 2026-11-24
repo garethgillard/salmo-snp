@@ -18,7 +18,8 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 - `docs/`: TRACKER (what's next, then what's built), DECISIONS (questions for G, with options and a recommendation),
   ROADMAP (the spec of every roadmap item), LICENSING (the licences, the CLA, commercial permission, third-party
   data and software), SCORING (how other projects score variants, and the options for our starting point), CHROMBPNET
-  (the brief of the ChromBPNet repository), MISSENSE (the plan of the missense effect score); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
+  (the brief of the ChromBPNet repository), MISSENSE (the plan of the missense effect score), ORION (building the
+  releases on Orion and hosting them on salmobase: the brief for the chat there); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
   (the simplification plan of 2026-10-07, built).
 - `tools/`: check.sh (what CI runs), user_install_test.sh (a new user's install), get_data.sh (the data for real use),
   cloud_setup.sh (cloud sessions).
@@ -192,6 +193,12 @@ Decided:
   species and terms in weights.yaml with weight 0, shown and never counted until G sets them (DECISIONS #54, #58;
   what Claude chose in building them is under Provisional); the missense plan is docs/MISSENSE.md (DECISIONS #59).
   ChromBPNet allele effects are expected from the Orion repository at the end of that week.
+
+- Builds on Orion, releases on salmobase (G, 2026-11-24): releases are built on Orion from now on ("faster as we can
+  run slurm jobs, have access to salmobase data there"), the built snapshots are uploaded to salmobase's data files,
+  and the live app and installs retrieve them from there; the work continues in a chat on Orion over SSH. The brief,
+  with what the next build contains and what has to be found out there: docs/ORION.md. Until its pull request
+  changes serve.py DATA_URL and the deploy scripts, the GitHub data releases stay what installs and the demo read.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,

@@ -9,6 +9,7 @@ import hashlib
 import http.client
 import itertools
 import json
+import os
 import shutil
 import tempfile
 import time
@@ -383,6 +384,17 @@ def raw_sources(cfg):
     return [s for layer in cfg["layers"] for s in sources(layer)] + extra
 
 
+SALMOBASE = "https://salmobase.org/datafiles/"
+
+
+def on_disk(url):
+    """`url`, or the path of the same file in a local copy of salmobase's datafiles folder (the environment variable
+    SNPDATA_SALMOBASE, e.g. where NMBU's Orion mounts it) when it is there: fetch then reads it with no network."""
+    root = os.environ.get("SNPDATA_SALMOBASE")
+    path = Path(root, url[len(SALMOBASE):]) if root and url.startswith(SALMOBASE) else None
+    return str(path) if path and path.is_file() else url
+
+
 def fetch(layers_yaml, data_dir, mirror=None):
     """Download every `url` in layers.yaml (layers, genome, aliases, rsid, synteny, bgee) that isn't in data_dir yet. A
     bigBed url with a .bed `file` is converted to BED, a bigWig url with a .bed `file` to the stretches it covers
@@ -390,7 +402,8 @@ def fetch(layers_yaml, data_dir, mirror=None):
     `sites_only` is streamed through sites_only(). With `mirror` (a URL or folder made by `snpdata publish --raw`), every
     file comes from <mirror>/raw/ instead, as published (already processed), checked against its SHA256SUMS. A source
     with `local` instead of `url` (an input that isn't online) is read from that path under data_dir, processed the same
-    way; when it isn't there, fetch says so and goes on."""
+    way; when it isn't there, fetch says so and goes on. A salmobase url is read from the disk instead where
+    SNPDATA_SALMOBASE names a copy of its datafiles folder (on_disk())."""
     data = Path(data_dir)
     data.mkdir(parents=True, exist_ok=True)
     cfg = load_yaml(layers_yaml)
@@ -401,14 +414,14 @@ def fetch(layers_yaml, data_dir, mirror=None):
         if layer.get("local") and not target.exists() and not (data / layer["local"]).exists():
             print(f"snpdata: {target.name} needs {data / layer['local']} (not online: see layers.yaml); skipped", flush=True)
         elif (layer.get("url") or layer.get("local")) and not target.exists():
-            url = str(data / layer["local"]) if layer.get("local") else (
+            url = str(data / layer["local"]) if layer.get("local") else on_disk(
                 layer["url"] + ("?query=" + urllib.parse.quote(layer["query"]) if layer.get("query") else ""))
-            print(f"downloading {layer.get('url') or url} -> {target}", flush=True)
+            print(f"{'reading ' + url if '://' not in url else 'downloading ' + layer['url']} -> {target}", flush=True)
             target.parent.mkdir(parents=True, exist_ok=True)
             part = target.with_name(target.name + ".part")
-            if layer.get("sites_only"):
+            if layer.get("sites_only"):  # its header names the source: the local name, else the url (also when read from disk)
                 sites_only(url, part, layer["sites_only"], layer.get("count_gt", False), layer.get("snps_only", False),
-                           layer.get("local"))
+                           layer.get("local") or layer["url"])
             elif url.endswith(".bb") and target.suffix == ".bed":
                 with tempfile.NamedTemporaryFile(suffix=".bb") as bb:
                     download(url, Path(bb.name))
@@ -574,7 +587,7 @@ def hashes(paths):
     return md5.hexdigest(), sha.hexdigest()
 
 
-def build(layers_yaml, data_dir, out_dir, reuse=None):
+def build(layers_yaml, data_dir, out_dir, reuse=None, memory=None, threads=None, temp=None):
     """Write every layer as Parquet, plus alias.parquet, rsid.parquet, catalog/known_loci.tsv, the track registry
     (tracks.yaml next to layers.yaml) and manifest.json, which records versions, hashes,
     chromosome sizes, provisional rules and where the genome is (local path if present, else its URL) for sequence
@@ -587,6 +600,15 @@ def build(layers_yaml, data_dir, out_dir, reuse=None):
     old_layers, copied = {x["name"]: x for x in old.get("layers", [])}, set()
     out.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
+    # On a shared machine (a SLURM job) DuckDB's defaults are the whole node's: `memory` (e.g. '32GB'), `threads` and a
+    # `temp` folder to spill to keep the build inside what the job was given.
+    if memory:
+        con.execute(f"SET memory_limit = {lit(str(memory))}")
+    if threads:
+        con.execute(f"SET threads = {int(threads)}")
+    if temp:
+        Path(temp).mkdir(parents=True, exist_ok=True)
+        con.execute(f"SET temp_directory = {lit(str(temp))}")
     try:
         from importlib.metadata import version
         snpscore_version = version("snpscore")  # motif scoring and file readers come from snpscore

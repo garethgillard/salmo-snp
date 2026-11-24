@@ -102,6 +102,23 @@ def test_pike_and_summit_layers(release):
     assert con.execute(f"SELECT min(rank) >= 0 AND max(rank) <= 1 AND min(signal) > 0 FROM {summit}").fetchone()[0]
 
 
+def test_fetch_reads_salmobase_from_disk(tmp_path, monkeypatch):
+    """Where SNPDATA_SALMOBASE names a copy of salmobase's datafiles folder (NMBU's Orion mounts it), fetch reads
+    salmobase urls from it, processed as a download would be; a file the copy lacks still comes from its url."""
+    from snpdata.build import fetch, on_disk
+    copy = tmp_path / "datafiles"
+    (copy / "datasets" / "x").mkdir(parents=True)
+    (copy / "datasets" / "x" / "peaks.bed").write_text("1\t10\t20\n")
+    url = "https://salmobase.org/datafiles/datasets/x/peaks.bed"
+    (tmp_path / "layers.yaml").write_text(f"layers:\n  - {{name: x, type: interval, format: bed, file: peaks.bed, url: '{url}'}}\n")
+    assert on_disk(url) == url  # without the variable, and for other hosts, the url stays
+    monkeypatch.setenv("SNPDATA_SALMOBASE", str(copy))
+    assert on_disk(url) == str(copy / "datasets" / "x" / "peaks.bed")
+    assert on_disk(url.replace("peaks", "missing")) == url.replace("peaks", "missing") and on_disk("https://ftp.ensembl.org/a") == "https://ftp.ensembl.org/a"
+    fetch(tmp_path / "layers.yaml", tmp_path / "raw")
+    assert (tmp_path / "raw" / "peaks.bed").read_text() == "1\t10\t20\n"
+
+
 def test_summits_reader(tmp_path):
     """Two conditions' peak files: summits within the window share the values of the highest-ranked one (rank = the
     share of the condition's peaks with a lower signal, the one outside the robust peaks counted too)."""
@@ -216,7 +233,8 @@ def test_sha256sums(release):
 def test_rainbow_trout_release(tmp_path):
     """The second species (rainbow_trout/layers.yaml on tests/fixture/rainbow_trout): its own assembly, chromosomes (Y among
     them), conditions, catalogue and example list; frequencies pooled over the cohorts' site files; build --reuse."""
-    out = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "trout-test")
+    out = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "trout-test",
+                memory="2GB", threads=2, temp=tmp_path / "spill")  # the limits a SLURM job gives the build
     m = json.loads((out / "manifest.json").read_text())
     assert (m["species"]["key"], m["assembly"], list(m["chrom_sizes"])) == ("rainbow_trout", "USDA_OmykA_1.1", ["28", "Y"])
     layers = {l["name"]: l for l in m["layers"]}
