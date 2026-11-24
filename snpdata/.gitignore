@@ -1,5 +1,8 @@
 data/
 release/
+# the same names as links to another disk (Orion: docs/ORION.md)
+/data
+/release
 __pycache__/
 *.egg-info/
 .venv/
