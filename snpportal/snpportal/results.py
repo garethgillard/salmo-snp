@@ -83,6 +83,7 @@ TERM_SHORT = {"active": "active", "active_elsewhere": "active elsewhere", "weak"
 QUIET = ("unknown_chromosomes", "aliases_applied", "alias_warnings", "columns_renamed", "columns_dropped",
          "duplicates_merged", "indels", "multiallelic")  # upload QC lines left out when empty or zero
 REJECTS = {"unknown_chrom": "unknown chromosome", "missing_chrom": "no chromosome", "bad_pos": "no valid position",
+           "bad_end": "no valid end (or length)",
            "duplicate": "duplicates of an earlier row", "unknown_rsid": "rs IDs not in EVA release 9"}
 REF_CHECKS = {"ok": "match the Ssal_v3.1 reference", "mismatch": "mismatch it", "strand_flip": "match on the other strand",
               "swapped": "have ref and alt swapped", "not_checked": "not checked (no alleles or sequence)"}
@@ -96,11 +97,13 @@ REASONS = {  # snpscore.assay reasons without their numbers -> label (others are
     "chromosome not in the genome": "chromosome not in the genome",
     **{f"{b} run": f"long {b} run" for b in "ACGT"}}
 FORMAT_NAMES = {"vcf": "VCF", "text": "text table", "tsv": "tab-separated table", "csv": "comma-separated table", "bim": "PLINK .bim", "map": "PLINK .map", "illumina": "Illumina manifest",
-                "axiom": "Axiom annotation", "paste": "pasted positions", "rows": "public variants (genes or intervals)"}
+                "axiom": "Axiom annotation", "paste": "pasted positions", "rows": "public variants (genes or intervals)",
+                "bed": "BED", "regions": "chrom:start-end lines", "noheader": "table without a header"}
 STAGES = ["LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomitogenesis", "LateSomitogenesis"]
 STAGE_LABELS = figures.STAGE_LABELS
-SAMPLES = "brain, gonad, liver and muscle of 12 AquaGen fish (BodyMap); 5 embryo stages from embryo pools (DevMap)"
-NO_PEAK = f"No AQUA-FAANG peak in the 21 conditions sampled ({SAMPLES}). No immune tissue, gill or skin."
+SAMPLES = ("brain, gonad, liver, muscle and gill of 12 AquaGen fish (BodyMap); head kidney of juvenile fish after PBS, "
+           "poly I:C or Vibrio (ImmunoMap); 5 embryo stages from embryo pools (DevMap)")
+NO_PEAK = f"No AQUA-FAANG peak in the 27 conditions sampled ({SAMPLES}). No skin or intestine."
 CARD_SQL = "SELECT * FROM v WHERE file_row_number = ?"  # the card reads one row, never the whole result
 
 # Table columns, in display order: key -> (header, tooltip, columns (shown when any exists; () = always), sort [(SQL,
@@ -113,6 +116,8 @@ COLUMNS = {
               [("tier_score", False)]),
     "id": ("SNP locus", "SNP id, its position (Ssal_v3.1, 1-based) when the id doesn't say it, and alleles (ref > alt): "
            "click for its card", (), [("length(chrom)", True), ("chrom", True), ("pos", True)]),
+    "size": ("Size", "Bases of the genome the SV spans, start to end (an insertion: the junction's two bases; its "
+             "inserted length, when your file gives it, on hover)", ("length",), [("length", False)]),
     "p": ("p", "GWAS p value", ("neglog10p",), [("neglog10p", False)]),
     "beta": ("beta (se)", "GWAS effect of the alt allele (standard error)", ("beta",), [("beta", False)]),
     "pip": ("PIP", "Posterior inclusion probability, uniform → functional prior; one causal variant per locus, no LD. "
@@ -122,8 +127,9 @@ COLUMNS = {
              [("coalesce(gene_name, gene_ortholog_human, gene_id)", True)]),
     "region": ("Consequence", "Where the SNP falls in the nearest gene and, in coding sequence, its effect on the protein "
                "(Ensembl 116 gene models)", ("region_class",), [("region_class", True)]),
-    "chromatin": ("Chromatin", "AQUA-FAANG chromatin state in 21 conditions: Brain, Gonad, Liver, Muscle (immature F, M; "
-                  "mature F, M), then 5 embryo stages", ("chromatin",), []),
+    "chromatin": ("Chromatin", "AQUA-FAANG chromatin state in 27 conditions: Brain, Gill, Gonad, Liver, Muscle (immature "
+                  "F, M; mature F, M; gill has no mature F), head kidney (PBS, poly I:C, Vibrio), then 5 embryo stages",
+                  ("chromatin",), []),
     "known": ("Known locus", "A published locus of the known-loci catalogue within the window: this SNP, or one nearby (how "
               "far); * a caveat (hover)", ("known_locus",), [("known_locus_dist", True)]),
     "molqtl": ("molQTL", "Lead SNP of an eQTL (e) or caQTL (ca) in 12 fish; display only, never counted in tiers",
@@ -140,15 +146,17 @@ COLUMNS = {
               ("blacklist", "lore", "strand_ambiguous", "flank_variants"), []),
     "ref_check": ("Ref. check", "Input ref allele against the Ssal_v3.1 genome", ("ref_check",), [("ref_check", True)]),
 }  # in display order: the score, the SNP, where it is, what it is, then genotyping
-NUMERIC = ("score", "p", "beta", "pip", "gerp", "maf", "cm")  # right-aligned, header and cells
-DEFAULT_COLUMNS = ("tier", "score", "id", "gene", "region", "chromatin", "known", "maf", "assay", "flags")
+NUMERIC = ("score", "size", "p", "beta", "pip", "gerp", "maf", "cm")  # right-aligned, header and cells
+DEFAULT_COLUMNS = ("tier", "score", "id", "size", "gene", "region", "chromatin", "known", "maf", "assay", "flags")
 FILTER_COLUMNS = {"tier": "tier", "max_tier": "tier", "term": "score", "min_score": "score", "chrom": "id", "region": "region", "gene": "gene",
                   "tissue": "chromatin", "maturity": "chromatin", "sex": "chromatin", "act": "chromatin", "known": "known",
                   "molqtl": "molqtl", "min_maf": "maf", "max_maf": "maf", "assay": "assay", "hide_lore": "assay", "track": "id"}  # hide_*: flags
 GWAS_COLUMNS = ("tier", "score", "id", "p", "beta", "pip", "gene", "region", "chromatin")
-EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt"), "tier": ("tier_score", "tier_evidence", "tier_terms", "coding_hgvsp", "known_locus",
+EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt", "end", "svtype", "length"), "size": ("svtype", "svlen"), "tier": ("tier_score", "tier_evidence", "tier_terms", "coding_hgvsp", "known_locus",
                                                                 "known_locus_dist"), "known": ("known_locus_dist",),
-         "gene": ("gene_ortholog_human", "gene_distance"), "region": ("gene_distance", "coding_consequence", "coding_hgvsp", "coding_transcript", "coding_note"), "beta": ("se",), "pip": ("pip_functional",),
+         "gene": ("gene_ortholog_human", "gene_distance", "genes", "n_genes"),
+         "region": ("gene_distance", "coding_consequence", "coding_hgvsp", "coding_transcript", "coding_note", "region_classes"),
+         "beta": ("se",), "pip": ("pip_functional",),
          "assay": ("assay_reasons", "blacklist", "lore", "strand_ambiguous", "flank_variants"),
          "molqtl": ("molqtl_tissues", "molqtl_kinds", "molqtl_features"), "cm": ("cm_male",)}  # also fetched
 
@@ -187,7 +195,7 @@ def _open(request, key, write=False, chip=False):
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
     weights = jobs.weights(d)  # the job's snapshot, not the current release
-    trait = "all"  # tiers always count all 21 conditions (CLAUDE.md); the Table only filters after scoring
+    trait = "all"  # tiers always count all 27 conditions (CLAUDE.md); the Table only filters after scoring
     if weights:
         path, suffix = jobs.trait_tiers(d, weights, trait)
         stored = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet('{path}'))").fetchall()] if path else []
@@ -296,9 +304,10 @@ def filters(request, types, weights, d=None):
                     " OR ".join(f"({consequence_sql(x, types)})" for x in regions)))
     chrom, start, end = get("chrom", ""), get("start", ""), get("end", "")
     if re.fullmatch(r"[\w.]{1,40}", chrom):
-        if start.isdecimal() and end.isdecimal() and int(start) < int(end):  # start < pos <= end, as for layers
+        if start.isdecimal() and end.isdecimal() and int(start) < int(end):  # start < pos <= end, as for layers; SVs overlap
+            inside = (f'pos <= {int(end)} AND "end" > {int(start)}' if is_sv(types) else f"pos > {int(start)} AND pos <= {int(end)}")
             out.append(({"chrom": chrom, "start": start, "end": end}, f"{chrom}:{int(start):,}–{int(end):,}",
-                        f"chrom = {lit(chrom)} AND pos > {int(start)} AND pos <= {int(end)}"))
+                        f"chrom = {lit(chrom)} AND {inside}"))
         else:
             out.append(({"chrom": chrom}, f"Chromosome {chrom}", f"chrom = {lit(chrom)}"))
     from . import mytracks  # it imports views, which imports this module
@@ -310,12 +319,14 @@ def filters(request, types, weights, d=None):
     m = mytracks.meta(track) if track else None
     why = mytracks.usable(m, d) if m else "no longer available"
     if m and not why:  # inside one of the user's own BED tracks (start < pos <= end)
-        # sorted by chrom, start with max_end (mytracks.convert): one ASOF probe per SNP
-        out.append(({"track": m["id"]}, f"Inside my track: {m.get('name') or 'track'}",
-                    f"""file_row_number IN (SELECT s.file_row_number FROM r s ASOF JOIN read_parquet({lit(m['path'])}) t
-                        ON s.chrom = t.chrom AND s.pos > t.start WHERE s.pos <= t.max_end)"""))
+        # sorted by chrom, start with max_end (mytracks.convert): one ASOF probe per SNP; an SV: any interval it overlaps
+        sql = (f"""file_row_number IN (SELECT s.file_row_number FROM r s JOIN read_parquet({lit(m['path'])}) t
+                   ON s.chrom = t.chrom AND t.start < s."end" AND t."end" >= s.pos)""" if is_sv(types) else
+               f"""file_row_number IN (SELECT s.file_row_number FROM r s ASOF JOIN read_parquet({lit(m['path'])}) t
+                   ON s.chrom = t.chrom AND s.pos > t.start WHERE s.pos <= t.max_end)""")
+        out.append(({"track": m["id"]}, f"{'Overlaps' if is_sv(types) else 'Inside'} my track: {m.get('name') or 'track'}", sql))
     elif track_id:  # deleted, expired, not this job's or another assembly's: keep nothing and say so, rather than
-        out.append(({"track": track_id}, f"Inside my track: {why}", "false"))  # widen a saved selection to every SNP
+        out.append(({"track": track_id}, f"{'Overlaps' if is_sv(types) else 'Inside'} my track: {why}", "false"))  # widen a saved selection to every SNP
     gene = get("gene", "").strip()[:40]
     names = [c for c in ("gene_name", "gene_id", "gene_ortholog_human", "gene_ortholog_zebrafish") if c in types]
     if gene and names:
@@ -336,7 +347,7 @@ def filters(request, types, weights, d=None):
     if get("molqtl") == "1" and "molqtl" in types:
         out.append(({"molqtl": "1"}, "molQTL lead SNPs", "coalesce(molqtl, false)"))
     chromatin = chromatin_choice(request)
-    if chromatin and conditions_of(types):  # after scoring: tiers still count all 21 conditions
+    if chromatin and conditions_of(types):  # after scoring: tiers still count all 27 conditions
         tissues, maturity, sex, level = chromatin
         mine = [c for c in sorted(jobs.conditions_in(jobs.selection_prefixes(jobs.selection_key(tissues, maturity, sex))))
                 if f"chromatin_{c}" in types]
@@ -363,18 +374,19 @@ def filters(request, types, weights, d=None):
 # ---- conditions, labels ----
 
 def conditions_of(columns):
-    """Chromatin condition names, tissues first (alphabetical: immature F, M, mature F, M), then the embryo stages."""
+    """Chromatin condition names: the tissues in snpscore's order (brain, gonad, liver, muscle by immature F, M, mature
+    F, M; gill; head kidney by treatment), others alphabetically, then the embryo stages."""
     found = [c[len("chromatin_"):] for c in columns if c.startswith("chromatin_") and c not in snpscore.score.NOT_CONDITIONS]
-    return sorted(found, key=lambda c: (c in STAGES, STAGES.index(c) if c in STAGES else 0, c))
+    known = snpscore.score.CHROMATIN_CONDITIONS
+    return sorted(found, key=lambda c: (c in STAGES, STAGES.index(c) if c in STAGES else 0,
+                                        known.index(c) if c in known else len(known), c))
 
 
 def condition_groups(conditions):
-    """[(group, [(short label, condition)])]: one group per tissue, and 'Embryo' for the stages."""
+    """[(group, [(short label, condition)])]: one group per tissue (its key, e.g. HeadKidney), and 'Embryo' for the stages."""
     groups = {}
     for c in conditions:
-        tissue, _, rest = c.partition("_")
-        group, label = (tissue, " ".join([rest.split("_")[0][:3]] + [p[:1] for p in rest.split("_")[1:]])) if rest \
-            else ("Embryo", STAGE_LABELS.get(c, c[:8]))
+        group, label = figures.condition_label(c)
         groups.setdefault(group, []).append((label, c))
     return list(groups.items())
 
@@ -385,13 +397,11 @@ def trait_tip(weights, trait):
         return jobs.trait_label(trait)
     prefixes = list(((weights or {}).get("presets") or {}).get(trait) or [])
     if not prefixes:
-        text = "all 21 conditions"
+        text = "all 27 conditions"
     elif set(prefixes) <= set(STAGES):
         text = f"{len(prefixes)} embryo stages"
     else:
         text = ", ".join(prefixes) + (" only" if len(prefixes) == 1 else "")
-    if "disease" in trait:
-        text += " (no immune tissue, gill or skin sampled)"
     return f"{jobs.trait_label(trait)}: {text}"
 
 
@@ -411,7 +421,7 @@ def evidence_text(evidence, terms=None):
     out = []
     for x in parts:
         head, sep, items = x.partition(": ")
-        out.append(head + sep + ", ".join(STAGE_LABELS.get(i, i) for i in items.split(",")) if sep else x)
+        out.append(head + sep + ", ".join(STAGE_LABELS.get(i) or figures.tissue_name(i) for i in items.split(",")) if sep else x)
     return "; ".join(out)
 
 
@@ -452,8 +462,25 @@ def _chrom_key(chrom):
     return (0, int(chrom), "") if chrom.isdecimal() else (1, 0, chrom)
 
 
+def is_sv(columns):
+    """True for the result of an SV job (snpscore.sv): its rows have an end and a length."""
+    return "end" in columns and "length" in columns
+
+
 def _snp_name(g):
-    return g("id") if g("id") not in (None, ".") else f"{g('chrom')}:{g('pos')}"
+    if g("id") not in (None, "."):
+        return g("id")
+    return f"{g('chrom')}:{g('pos')}" + (f"-{g('end')}" if g("end") is not None and g("end") != g("pos") else "")
+
+
+def sv_size(g):
+    """('DEL 1.2 kb', tooltip) for an SV row: its type and the bases it spans; an insertion's stated length on hover."""
+    from .locus_svg import fmt_bp
+    span = g("length")
+    stated = g("svlen")
+    text = " ".join(x for x in (g("svtype") or "", fmt_bp(stated) if stated and g("svtype") == "INS" else fmt_bp(span) if span else "") if x)
+    tip = f"spans {span:,} bp of the genome" + (f"; length in your file {stated:,} bp" if stated else "") if span else ""
+    return text, tip
 
 
 def _alleles(g):
@@ -618,12 +645,13 @@ def table(request, key, job=None):
         dds.append({"kind": kind, "id": f"dd-{key}", "label": label, "summary": summary, "on": active, "tip": tip,
                     "anyon": not any(x[2 if len(x) > 2 else 1] for x in ticks), **more})  # 'Any' ticked: nothing else is
 
-    if conditions:  # chromatin activity in some conditions: a filter only, the tiers count all 21
+    if conditions:  # chromatin activity in some conditions: a filter only, the tiers count them all
         choice = chromatin_choice(request)
         tissues, maturity, sex, level = choice or ([], None, None, "peak")
         dd("active", "active", "Chromatin", chromatin_text(choice) if choice else "any", bool(choice),
            "SNPs in a robust ATAC peak, or an active state, in at least one of these conditions (filters the table only)",
-           tissues=[(x, x in tissues) for x in jobs.TISSUES],
+           tissues=[(x, figures.tissue_name(x), x in tissues) for x in jobs.TISSUES
+                    if any(figures.condition_label(c)[0] == x for c in conditions)],
            maturity=[("", "any", not maturity)] + [(x, x.lower(), x == maturity) for x in jobs.MATURITIES],
            sex=[("", "any", not sex)] + [(x, x.lower(), x == sex) for x in jobs.SEXES],
            levels=[(k, label, tip, k == level) for k, (label, tip) in ACTIVITY.items()], column="chromatin",
@@ -705,8 +733,9 @@ def table(request, key, job=None):
                         "many": f"Narrow the selection to at most {int(jobs.setting('SNPPORTAL_MAX_PANEL_SNPS', 50_000)):,} SNPs to add it to the panel.",
                         "release": "Your Design panel holds SNPs scored with another release: clear it, or save it as a project "
                                    "version, before adding these.",
+                        "sv": "Panels hold SNP markers: structural variants can't be added.",
                         }.get(get("panel_error", "")),
-        "dds": dds, "pick": pick, "n_selected": n_every - n_out, "n_out": n_out,
+        "dds": dds, "pick": pick, "n_selected": n_every - n_out, "n_out": n_out, "sv": is_sv(types),  # SVs: no panels
         "shown_tiers": [(x, k) for x, k in shown_tiers if x is not None and k],
 
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
@@ -764,8 +793,10 @@ def _dist(bp):
 
 def locus_note(g):
     """The SNP locus cell's grey note: the position when the id doesn't hold it, and the alleles when it doesn't
-    ('28_15139512_A_C' needs none; 'vgll3_Met54Thr' gets '25:28,996,360 · C>T')."""
+    ('28_15139512_A_C' needs none; 'vgll3_Met54Thr' gets '25:28,996,360 · C>T'); an SV's span (25:28,996,001–28,997,000)."""
     name, pos, ref, alt = g("id") if g("id") not in (None, ".") else "", g("pos"), g("ref"), g("alt")
+    if g("end") is not None and g("length") is not None:
+        return (f"{g('chrom')}:{pos:,}" + (f"–{g('end'):,}" if g("end") != pos else "")) if name else ""
     where = f"{g('chrom')}:{pos:,}" if name and str(pos) not in name else ""
     alleles = _alleles(g) if not (ref and alt and any(f"{ref}{s}{alt}" in name for s in "_>/:")) else ""
     return " · ".join(x for x in (where, alleles) if x)
@@ -805,6 +836,7 @@ def _row(r, groups, in_preset, active_states, caveats):
     g = r.get
     distance = g("gene_distance")
     out = {"n": r["file_row_number"], "id": g("id") if g("id") not in (None, ".") else None, "chrom": g("chrom"), "pos": g("pos"),
+           "end": g("end") if g("length") is not None else None,
            "alleles": _alleles(g), "tier": g("tier"), "score": g("tier_score"),
            "evidence": with_published(evidence_text(g("tier_evidence"), g("tier_terms")), g),  # the Tier cell's tooltip
            "known": g("known_locus"), "known_dist": g("known_locus_dist"), "caveat": caveats.get(g("known_locus")),
@@ -818,6 +850,10 @@ def _row(r, groups, in_preset, active_states, caveats):
            "p": p_text(g("neglog10p")), "beta": "" if g("beta") is None else f"{g('beta'):.3f}" + (f" ({g('se'):.3f})" if g("se") is not None else ""),
            "pip": "" if g("pip_uniform") is None else f"{g('pip_uniform'):.2f} → {g('pip_functional'):.2f}"}
     out["gene_tip"] = UNNAMED if out["gene"].startswith("~") else out["gene_id"]
+    if (g("n_genes") or 0) > 1:  # an SV over several genes: the one it overlaps most, +n, every one on hover
+        out["gene_more"], out["gene_tip"] = g("n_genes") - 1, f"{g('n_genes')} genes: {g('genes')}"
+    if g("length") is not None:
+        out["size"], out["size_tip"] = sv_size(g)
     out["scores"] = [score_text(s) for s in g("variant_scores") or []]
     if g("molqtl"):  # 'Brain, Gonad (e, ca)', the features as the tooltip
         out["molqtl"] = (f"{(g('molqtl_tissues') or '').replace(',', ', ')} ({(g('molqtl_kinds') or '').replace(',', ', ')})",
@@ -857,7 +893,9 @@ def region_text(g):
 
 def coding_tip(g):
     """'p.Thr46Met · ENSSSAT00000230965' for the Region cell's tooltip; 'amino-acid effect not computed: alleles
-    unknown · ENSSSAT…' for a CDS SNP without one; or ''."""
+    unknown · ENSSSAT…' for a CDS SNP without one; for an SV every region class it overlaps; or ''."""
+    if g("region_classes"):
+        return "Overlaps " + ", ".join(CLASS_LABELS.get(c, c) for c in g("region_classes").split(","))
     unknown = g("coding_consequence") == "coding_sequence_variant" or (g("region_class") == "CDS" and not g("coding_consequence"))
     why = ("amino-acid effect not computed" + (f": {g('coding_note')}" if g("coding_note") else "")) if unknown else None
     return " · ".join(x for x in (why, g("coding_hgvsp"), g("coding_transcript")) if x)
@@ -941,7 +979,7 @@ def top(request, key, job, n):
     con, types, where, chosen = open_result(request, key)
     gwas = job.get("input_kind") == "gwas" and "neglog10p" in types
     maf, _ = jobs.maf_sql(types)
-    cols = [c for c in ("chrom", "pos", "id", "ref", "alt", "tier", "tier_score", "tier_evidence", "tier_terms", "coding_hgvsp", "gene_name", "gene_id",
+    cols = [c for c in ("chrom", "pos", "end", "length", "svtype", "id", "ref", "alt", "tier", "tier_score", "tier_evidence", "tier_terms", "coding_hgvsp", "gene_name", "gene_id",
                         "gene_ortholog_human", "known_locus", "known_locus_dist", "assay_status",
                         "assay_reasons", "neglog10p", "lore", "blacklist", "strand_ambiguous", "flank_variants") if c in types]
     order = "neglog10p DESC NULLS LAST, " if gwas else \
@@ -957,7 +995,8 @@ def top(request, key, job, n):
         status = g("assay_status") or ("not_checked" if "assay_status" in types else None)
         rows.append({
             "url": f"{reverse('snpportal:card', args=[key, r['file_row_number']])}?{q}", "n": r["file_row_number"],
-            "snp": _snp_name(g), "position": f"{g('chrom')}:{g('pos'):,}", "alleles": _alleles(g),
+            "snp": _snp_name(g), "position": f"{g('chrom')}:{g('pos'):,}" + (f"–{g('end'):,}" if g("length") is not None and g("end") != g("pos") else ""),
+            "alleles": sv_size(g)[0] if g("length") is not None else _alleles(g),
             "tier": g("tier"), "score": g("tier_score"), "evidence": with_published(evidence_text(g("tier_evidence"), g("tier_terms")), g),
             "gene": gene_label(g("gene_name"), g("gene_id"), g("gene_ortholog_human")),
             "known": g("known_locus") or "", "known_dist": g("known_locus_dist"), "caveat": caveats.get(g("known_locus")),
@@ -1091,7 +1130,7 @@ def _fig_conditions(c, link, desc):
             fold = share / bg[cond] if bg.get(cond) else None
             out.append((label, cond, share, fold, False))  # all conditions count: none stands out
             tsv.append((cond, counts[cond], f"{share:.5f}", f"{bg[cond]:.5f}" if cond in bg else "", f"{fold:.3f}" if fold else ""))
-        rows.append((group, palette.TISSUES.get(group, palette.GREY[500]), out))
+        rows.append((figures.tissue_name(group), palette.TISSUES.get(group, palette.GREY[500]), out))
     svg = figures.heatmap(rows, "Active chromatin per condition", desc, c["synthetic"])  # no links: the Table filters after scoring
     return svg, ["condition", "snps_active", "share", "background_share", "fold"], tsv
 
@@ -1161,7 +1200,7 @@ def _fig_maf(c, link, desc):
 
 
 FIGURES = {  # name -> (card title, (i) definition, builder(context, link or None, desc) -> (svg, header, rows) or None)
-    "summary": ("Summary", "How the SNPs scored for all 21 conditions (tier 1 = strongest functional evidence, tier 4 = no "
+    "summary": ("Summary", "How the SNPs scored for all 27 conditions (tier 1 = strongest functional evidence, tier 4 = no "
                 "evidence found, not evidence of no effect), where they fall relative to genes, how many are near a "
                 "published locus and how they did in the assay design check. Thin bars: the same split for the release's "
                 "public sites, for comparison. Click a number, a part of a bar or its legend entry to list those SNPs.",
@@ -1169,7 +1208,7 @@ FIGURES = {  # name -> (card title, (i) definition, builder(context, link or Non
     "ideogram": ("Where the SNPs are", "Chromosomes to scale (Ssal_v3.1). Each 1 Mb bin holding SNPs is shaded: blue when "
                  "some are in tier 1–2 (darker = more of them), grey when none are. On the right: each chromosome's SNPs "
                  "and, as a bar, its tier 1–2 SNPs. Click a bin, chromosome or bar to list those SNPs.", _fig_ideogram),
-    "conditions": ("Active chromatin per condition", "Share of the SNPs in an active chromatin state in each of the 21 "
+    "conditions": ("Active chromatin per condition", "Share of the SNPs in an active chromatin state in each of the 27 "
                    "AQUA-FAANG conditions; × = fold over a background of public sites, when the release has one. "
                    "Click a cell to list those SNPs.", _fig_conditions),
     "regions": ("Genic region by tier", "SNPs per genic region class (Ensembl 116), split by tier; the black tick is "
@@ -1185,7 +1224,7 @@ OPEN = ("summary", "ideogram")  # side by side on the Overview (GWAS jobs: condi
 
 def _figure_context(key, job, trait, summary, d):
     return {"key": key, "job": job, "trait": trait, "preset": jobs.trait_label(trait), "s": summary, "weights": jobs.weights(d),
-            "manifest": jobs.manifest(d), "background": background(),
+            "manifest": jobs.manifest(d), "background": {} if job.get("input_kind") == "sv" else background(),  # public SNPs: not SVs' peers
             "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers")),
             "chip": jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}}
 
@@ -1295,8 +1334,9 @@ def qc_line(v):
     rejected = sum(x for x in (v.get("rejected") or {}).values() if isinstance(x, int))
     verdict = (v.get("assembly") or {}).get("verdict")
     parts = [f"{v['rows_read']:,} rows read" if isinstance(v.get("rows_read"), int) else None,
-             f"{v['snps_kept']:,} scored" if isinstance(v.get("snps_kept"), int) else None, f"{rejected:,} rejected",
-             {"ok": "Ssal_v3.1 confirmed", "warning": "check the assembly"}.get(verdict, "assembly not checked")]
+             f"{v['snps_kept']:,} scored" if isinstance(v.get("snps_kept"), int) else None,
+             f"{v['svs_kept']:,} scored" if isinstance(v.get("svs_kept"), int) else None, f"{rejected:,} rejected",
+             None if "svs_kept" in v else {"ok": "Ssal_v3.1 confirmed", "warning": "check the assembly"}.get(verdict, "assembly not checked")]
     return " · ".join(x for x in parts if x)
 
 
@@ -1307,7 +1347,8 @@ def qc_problem(v):
         return False
     rsid, ref = v.get("rsid") or {}, v.get("ref_check") or {}
     rejected = sum(x for x in (v.get("rejected") or {}).values() if isinstance(x, int))
-    fewer = isinstance(v.get("rows_read"), int) and isinstance(v.get("snps_kept"), int) and v["snps_kept"] < v["rows_read"]
+    kept = v.get("snps_kept", v.get("svs_kept"))
+    fewer = isinstance(v.get("rows_read"), int) and isinstance(kept, int) and kept < v["rows_read"]
     return bool(fewer or rejected or v.get("duplicates_merged") or v.get("indels") or v.get("multiallelic")
                 or v.get("unknown_chromosomes") or v.get("alias_warnings") or rsid.get("unknown") or rsid.get("moved_from_icsasg_v2")
                 or (v.get("assembly") or {}).get("verdict") == "warning"
@@ -1353,7 +1394,9 @@ def qc(validation):
 
     words = {
         "format": ("File format", lambda x: FORMAT_NAMES.get(x, x)),
-        "rows_read": ("Rows read", n), "snps_kept": ("SNPs scored", n),
+        "rows_read": ("Rows read", n), "snps_kept": ("SNPs scored", n), "svs_kept": ("SVs scored", n),
+        "svtypes": ("SV types", lambda x: counts(x)),
+        "length": ("Span (bp)", lambda x: f"{n(x.get('min'))} to {n(x.get('max'))}, median {n(x.get('median'))}"),
         "rejected": ("Rows rejected", lambda x: counts(x, REJECTS)),
         "unknown_chromosomes": ("Unknown chromosomes", moves),
         "aliases_applied": ("Chromosome names translated", moves),

@@ -3,6 +3,7 @@
 /snpscore/src/snpscore/weights.yaml   @garethgillard
 /snpdata/layers.yaml                  @garethgillard
 /snpdata/tracks.yaml                  @garethgillard
+/snpportal/snpportal/lib/tracks_added.yaml @garethgillard
 /snpdata/catalog/                     @garethgillard
 /docs/DECISIONS.md                    @garethgillard
 /AGENTS.md                            @garethgillard

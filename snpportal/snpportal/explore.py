@@ -25,6 +25,7 @@ import snpscore
 from snpscore.formats import lit, q
 
 from . import figures, jobs, palette, results, search, views
+from .lib.locus import MAX_WINDOW
 
 FLANKS = (0, 10_000, 20_000, 50_000, 100_000, 250_000)  # gene page and candidate-list flank choices (bp)
 FLANK, LOCUS_FLANK = 50_000, 20_000  # default flank for candidates; flank of the embedded locus view
@@ -39,7 +40,9 @@ SALMOBASE_GENE = "https://salmobase.org/genes/id/{}?assembly=Ssal_v3.1"
 TRAITS = {"age_at_maturity": "Age at maturity", "flesh_colour": "Flesh colour", "ipn_resistance": "IPN resistance",
           "pd_resistance": "PD resistance", "cms_resistance": "CMS resistance", "sea_lice_resistance": "Sea lice resistance",
           "smoltification": "Smoltification", "migration_timing": "Migration timing", "bcwd_resistance": "BCWD resistance",
-          "ihn_resistance": "IHNV resistance", "sex_determination": "Sex determination"}  # catalogue trait -> heading, in page order
+          "ihn_resistance": "IHNV resistance", "sex_determination": "Sex determination", "anadromy": "Anadromy",
+          "fillet_yield": "Fillet yield", "local_adaptation": "Local adaptation",
+          "domestication": "Domestication"}  # catalogue trait -> heading, in page order (the last four: structural variants)
 CAVEATS = [  # (word in the catalogue's evidence or caveat, badge): why a row needs care
     ("suggestive", "suggestive"), ("not genome-wide", "suggestive"), ("strain", "strain-specific"),
     ("disputed", "disputed"), ("position", "position inferred"), ("A/B alleles", "A/B alleles only"),
@@ -79,8 +82,11 @@ def _aliases(path, mtime):
 
 
 def evidence_kind(row):
-    """'missense', 'gwas' (GWAS lead or top SNP), 'marker' (QTL marker or other candidate) or 'region' (not a SNP), from
-    the catalogue's evidence text; the published-associations lane and the badges use it."""
+    """'missense', 'gwas' (GWAS lead or top SNP), 'marker' (QTL marker or other candidate), 'region' (not a SNP) or
+    'sv' (a structural variant: type sv), from the catalogue's evidence text; the published-associations lane and the
+    badges use it."""
+    if row.get("type") == "sv":
+        return "sv"
     text = (row.get("evidence") or "").lower()
     if "not a snp" in text or text.startswith("gene region"):
         return "region"
@@ -91,7 +97,7 @@ def badges(row):
     """[(css class suffix, text, tooltip)] for a catalogue row: its evidence kind, whether the effect allele is stated,
     and caveats (suggestive, strain-specific, inferred position, ...) from its evidence and caveat text."""
     kind = row.get("kind") or evidence_kind(row)
-    text = {"missense": "missense", "gwas": "GWAS lead", "marker": "QTL marker", "region": "gene region"}[kind]
+    text = {"missense": "missense", "gwas": "GWAS lead", "marker": "QTL marker", "region": "gene region", "sv": "structural variant"}[kind]
     out = [(kind, text, row.get("evidence") or "")]
     if row.get("effect_allele"):
         out.append(("allele", f"effect allele {row['effect_allele']}", row.get("effect") or ""))
@@ -115,26 +121,43 @@ def catalogue_counts(rows=None):
     """The one count of the known-loci catalogue (Known loci header and intro): {entries, traits, snps,
     regions (gene regions and intervals), alleles (effect allele stated), caveats, window (bp, the known-locus badge)}."""
     rows = catalogue() if rows is None else rows
-    regions = sum(1 for r in rows if r["kind"] == "region" or not (r.get("pos") or "").isdecimal())
-    return {"entries": len(rows), "traits": len(by_trait(rows)), "snps": len(rows) - regions, "regions": regions,
+    svs = sum(1 for r in rows if r["kind"] == "sv")
+    regions = sum(1 for r in rows if r["kind"] == "region" or not (r.get("pos") or "").isdecimal()) - svs
+    return {"entries": len(rows), "traits": len(by_trait(rows)), "snps": len(rows) - regions - svs, "regions": regions, "svs": svs,
             "alleles": sum(1 for r in rows if r.get("effect_allele")), "caveats": sum(1 for r in rows if r.get("caveat")),
             "window": (jobs.manifest().get("catalog") or {}).get("window", 50_000)}
 
 
-def nearby(chrom, pos, window=None):
-    """Catalogue rows within `window` (the release's catalog.window) of a position, nearest first, with distance."""
+def nearby(chrom, pos, window=None, end=None):
+    """Catalogue rows within `window` (the release's catalog.window) of a position, nearest first, with distance; for
+    an SV (`end`), of its span pos..end, also the rows with a start and end (structural variants, QTL windows) by their
+    extent, at distance 0 when they overlap it."""
     window = (jobs.manifest().get("catalog") or {}).get("window", 50_000) if window is None else window
-    found = [dict(r, dist=abs(int(r["pos"]) - int(pos))) for r in catalogue()
-             if r.get("chrom") == str(chrom) and (r.get("pos") or "").isdecimal() and abs(int(r["pos"]) - int(pos)) <= window]
+    found = []
+    for r in catalogue():
+        if r.get("chrom") != str(chrom):
+            continue
+        if (r.get("pos") or "").isdecimal():
+            a = b = int(r["pos"])
+        elif end is not None and (r.get("start") or "").isdecimal() and (r.get("end") or "").isdecimal():
+            a, b = int(r["start"]), int(r["end"])
+        else:
+            continue
+        dist = max(0, a - int(end or pos), int(pos) - b) if end is not None else abs(a - int(pos))
+        if dist <= window:
+            found.append(dict(r, dist=dist))
     return sorted(found, key=lambda r: (r["dist"], r.get("id") or ""))
 
 
 def public_source():
-    """Where candidate public variants come from: the release pool's VCF, else the 504-fish panel sites (public_af)."""
+    """Where candidate public variants come from: the release pool (its common 504-fish panel sites, the 12 AQUA-FAANG
+    fish's or a VCF's), else every 504-fish panel site (public_af)."""
     if (jobs.release() / "pool" / "pool.parquet").exists():
         source = jobs.read_json(jobs.release() / "pool" / "background.json").get("source") or ""
+        maf = ((jobs.weights() or {}).get("design") or {}).get("min_maf", 0)
         return ("sites of the 12 AQUA-FAANG fish (release pool)" if source.startswith("12_samples") or "aquafaang12" in source
-                else "sites of the 504-fish reference panel (release pool)" if source.startswith("ALL_chrome") or "panel" in source
+                else f"common sites (MAF at least {maf:g}) of the 504-fish panel (release pool)" if "(panel)" in source
+                else "sites of the 504-fish reference panel (release pool)" if source.startswith("ALL_chrome")
                 else "the release pool of public sites")
     return "sites of the 504-fish reference panel"
 
@@ -221,13 +244,14 @@ def known_loci(request):
     for r in rows:
         r["gene"] = genes.get(r.get("ensembl_gene"))
         r["ss4r"] = duplicates.get(r.get("ensembl_gene"))
-        r["interval"] = r.get("type") == "qtl_interval" or not r.get("pos")
+        r["interval"] = r.get("type") == "qtl_interval" or not r.get("pos") and r["kind"] != "sv"
         if r.get("chrom") and (r.get("pos") or "").isdecimal():
             pos = int(r["pos"])
             r["locus_url"] = search.locus_url(r["chrom"], max(1, pos - FLANK), pos + FLANK)
             r["variant_url"] = search.variant_url(r["chrom"], pos)
         elif r.get("chrom") and (r.get("start") or "").isdecimal() and (r.get("end") or "").isdecimal():
-            r["locus_url"] = search.locus_url(r["chrom"], int(r["start"]), int(r["end"]))
+            a, b = int(r["start"]), int(r["end"])  # wider than the Locus browser draws (an inversion): its first breakpoint
+            r["locus_url"] = search.locus_url(r["chrom"], a, b) if b - a < MAX_WINDOW else search.locus_url(r["chrom"], max(1, a - FLANK), a + FLANK)
         r["salmobase"] = SALMOBASE_GENE.format(r["ensembl_gene"]) if r.get("ensembl_gene") else None
         r["flags"] = [b for b in r["badges"] if b[0] == "caveat"]  # the evidence badge leads its cell; caveats get their own
     groups = by_trait(rows)
@@ -372,15 +396,7 @@ def elements(g, window):
         r["tss"] = "at TSS" if r["start"] < tss <= r["end"] else f"{sign * (mid - tss) / 1000:+.1f} kb"
         r["states"] = [(c, r[c], palette.state(r[c])[2]) for c in conditions]
         rows.append(r)
-    return rows, [(c, "Embryo" if c in STAGES else c.split("_")[0], _short(c)) for c in conditions]
-
-
-def _short(condition):
-    """Column label: 'Imm F' for Brain_Immature_Female, 'Blastula' for LateBlastulation (figures.STAGE_LABELS)."""
-    if condition in STAGES:
-        return figures.STAGE_LABELS.get(condition, condition)
-    _, maturity, sex = (condition.split("_") + ["", ""])[:3]
-    return f"{maturity[:3]} {sex[:1]}"
+    return rows, [(c, *figures.condition_label(c)) for c in conditions]  # (condition, tissue, 'Imm F' or 'PBS' or 'Blastula')
 
 
 def gene(request, gene_id):
@@ -390,7 +406,7 @@ def gene(request, gene_id):
     g = gene_rows([gene_id]).get(gene_id)
     if g is None:
         raise Http404("No such gene in this release")
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     flank = request.GET.get("flank", "")
     flank = int(flank) if flank.isdecimal() and int(flank) in FLANKS else FLANK
     sort = request.GET.get("sort", "tier")
@@ -452,6 +468,7 @@ def _groups(head):
     """[(tissue or 'Embryo', number of columns)] for the element table's header."""
     groups = []
     for _, group, _ in head:
+        group = figures.tissue_name(group)
         if groups and groups[-1][0] == group:
             groups[-1] = (group, groups[-1][1] + 1)
         else:
@@ -515,7 +532,7 @@ def candidate_job(request):
     text = request.POST.get("targets", "")[:20_000]
     flank = request.POST.get("flank", "")
     flank = int(flank) if flank.isdecimal() and int(flank) <= max(FLANKS) else FLANK
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     try:
         windows, labels = targets(text, flank)
         rows = public_rows(windows)
@@ -546,7 +563,7 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
     # the crop.
     {"slug": "overview", "title": "Find SNPs with functional evidence",
      "text": "Each SNP gets a tier from 1 (strongest) to 4 (no evidence found, not evidence of no effect), counted over all "
-             "21 AQUA-FAANG sample conditions. Results open with an overview of the whole list.",
+             "27 AQUA-FAANG sample conditions. Results open with an overview of the whole list.",
      "alt": "Overview of the known-loci example: key numbers, SNPs per tier, gene region, known loci and assay check, and "
             "where the SNPs fall in the genome.",
      "callouts": [("Click a number or bar to list those SNPs", "#fig-summary svg a[href$='tier=1-2']"),

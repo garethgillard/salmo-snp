@@ -26,11 +26,13 @@ from . import explore, figures, jobs, palette, search, serve
 # AQUA-FAANG's ChromHMM states have no written definitions: the emission figure is the only one (docs/RESEARCH.md section 6),
 # so the Methods table gives each state's label and model, and links the figure (one-line definitions: G to supply).
 EMISSIONS = "https://salmobase.org/datafiles/datasets/Aqua-Faang/figures/chromHMM.png"
-STATE_MODELS = {"Bivalent": "DevMap only", "Poised_enhancer_2": "BodyMap only"}  # BodyMap and DevMap: separate 12-state models
+STATE_MODELS = {"Bivalent": "DevMap only", "Poised_enhancer_2": "BodyMap only", "Unknown_2": "gill only",  # separate models
+                "Bivalent_or_mixed_active/polycomb": "ImmunoMap only", "Active_TSS_or_enhancer": "ImmunoMap tracks only",
+                "Flanking_TSS_or_poised_enhancer": "ImmunoMap tracks only"}
 TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.scored)
-    "active": "An active state (Active TSS or Active enhancer) in at least one of the 21 conditions.",
+    "active": "An active state (Active TSS or Active enhancer) in at least one of the 27 conditions.",
     "active_elsewhere": "An active state only outside the chosen conditions (snpscore's --trait; never in the portal, "
-                        "which counts all 21).",
+                        "which counts all 27).",
     "weak": "A weak state in at least one condition, and no active state in any.",
     "coding": "A CDS change to the protein (missense, stop gained or lost, start lost) or of unknown effect.",
     "synonymous": "A synonymous CDS change (or stop retained): no amino-acid change (weight under review).",
@@ -57,6 +59,11 @@ GLOSSARY = [  # (anchor, term, definition)
      "AQUA-FAANG salmon-trout clades; also called its ohnolog."),
     ("coordinates", "Coordinates", "Ssal_v3.1, chromosomes 1–29. Layers use BED intervals; a SNP at 1-based pos is inside "
      "one when start < pos ≤ end."),
+    ("sv", "Structural variant (SV)", "A deletion, duplication, inversion, insertion or any region, scored on the Structural "
+     "variants tab by what it overlaps: per condition the strongest state of the peaks it overlaps, its most severe gene "
+     "region, any GERP element or Ensembl feature; each kind counts once with the SNP weights, so an SV of one base scores "
+     "as a SNP there. Coding consequences, motif changes and the assay check need a single base and are left out. "
+     "Inversions count over their whole span (provisional)."),
     ("motif", "TF motif change", "One allele of a SNP in a robust ATAC peak matches a transcription factor motif "
      "(JASPAR 2024, p < 1e-5) and the other doesn't, at least 4 bits apart; motifs are predicted binding, not proof of it."),
     ("synthetic", "Synthetic", "Built from synthetic test data: not real results, never counted in tiers."),
@@ -79,6 +86,16 @@ FORMATS = [  # (anchor, format, what is read, example built from the published v
      "and that has no chromosome and position columns). Each is placed at its Ssal_v3.1 position from EVA release 9 (the "
      "results' position_source column says rsid). rs IDs that are not in the release's table, or sit on several Ssal_v3.1 "
      "positions, are rejected as unknown_rsid and listed in the upload QC.", "id\nrs863754587\nrs863785818"),
+    ("sv", "Structural variants (the Structural variants tab)", "Deletions, duplications, inversions, insertions or any regions, "
+     "each scored by the functional evidence it overlaps, with the same weights as a SNP (each kind counted once; an SV of one "
+     "base scores as a SNP there). A VCF of SVs (END, SVLEN and SVTYPE in INFO, symbolic alleles such as <DEL>, or sequence "
+     "alleles; the padding base before an event is left out, an insertion or breakend is the two bases of its junction); a BED "
+     "file (0-based start); a table whose header names chrom, start and end (or svlen), optionally id and svtype; or lines of "
+     "'chrom:start-end [type] [id]' or 'chrom start end [type] [id]', 1-based and inclusive (also the paste box: commas and "
+     "kb/Mb allowed). Coding consequences, TF motif changes, the assay check and allele frequencies need a single base and "
+     "are left out.",
+     "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n25\t28996000\tdel1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=28997000\n"
+     "\nor\n25:28,996,001-28,997,000 DEL del1"),
     ("gwas", "GWAS summary statistics", "GCTA-fastGWA, PLINK2 .glm, regenie, BOLT-LMM or GEMMA output, or a table with chrom, "
      "pos and p (optionally alleles, beta, se, af and n). Alleles are turned to the Ssal_v3.1 reference (alt = effect allele) "
      "using the genome, else the 504-fish panel sites; p values are read as text, so p = 1e-400 stays 400 on the -log10 scale.",
@@ -86,7 +103,7 @@ FORMATS = [  # (anchor, format, what is read, example built from the published v
 ]
 STANDARD = ("provisional", "active_states", "weak_states", "weights", "tiers", "presets")  # weights.yaml blocks shown as tables
 LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall back to their manifest description
-    "chromatin": ("Chromatin state in 21 tissues and stages, inside robust ATAC peaks", "AQUA-FAANG"),
+    "chromatin": ("Chromatin state in 27 tissues and stages, inside robust ATAC peaks", "AQUA-FAANG"),
     "region": ("Genic region: CDS, splice region, UTR, exon or intron", "Ensembl"),
     "regbuild": ("Regulatory build: promoters, enhancers, open chromatin", "Ensembl"),
     "gerp": ("Constrained elements in a 65-fish alignment (GERP)", "Ensembl Compara"),
@@ -114,7 +131,9 @@ BENCH_AXIS = (1 / 8, 64)  # enrichment axis (log2); intervals beyond it end in a
 ENA = "https://www.ebi.ac.uk/ena/browser/view/{}"
 AQUAFAANG_PROJECTS = [  # (atlas, assay, ENA project); docs/RESEARCH.md section 6
     ("BodyMap", "RNA-seq", "PRJEB47409"), ("BodyMap", "ATAC-seq", "PRJEB47408"), ("BodyMap", "ChIP-seq", "PRJEB55063"),
-    ("DevMap", "RNA-seq", "PRJEB51855"), ("DevMap", "ATAC-seq", "PRJEB51854"), ("DevMap", "ChIP-seq", "PRJEB53399")]
+    ("DevMap", "RNA-seq", "PRJEB51855"), ("DevMap", "ATAC-seq", "PRJEB51854"), ("DevMap", "ChIP-seq", "PRJEB53399"),
+    ("ImmunoMap", "RNA-seq", "PRJEB50076"), ("ImmunoMap", "ATAC-seq", "PRJEB50077"), ("ImmunoMap", "ChIP-seq", "PRJEB56698")]
+# The 2026 gill ATAC-seq is not in ENA yet (AQUA-FAANG README on salmobase, 2026-11-20)
 BODYMAP_FISH = [("Immature female", "J8, J9, J10"), ("Immature male", "J15, J16, J18"), ("Mature female", "A14, A15, A24"),
                 ("Mature male", "A19, A20, A22")]
 CITATIONS = [  # (what, reference, DOI or URL): wording provisional (author lists to confirm)

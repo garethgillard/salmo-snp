@@ -26,6 +26,17 @@ def main():
     a.add_argument("--place-by-flank", action="store_true", help="the positions are on another assembly (e.g. an ICSASG_v2 "
                    "chip manifest): place the SNPs by their flank sequences (Flank, SourceSeq or TopGenomicSeq column)")
 
+    s = sub.add_parser("sv", help="annotate structural variants or any regions (VCF with END/SVLEN/SVTYPE, BED, or a "
+                                  "table of chrom, start, end): each scored by what it overlaps")
+    s.add_argument("svs")
+    s.add_argument("--release", required=True)
+    s.add_argument("--trait", default="all", help="trait preset from weights.yaml (default: all, as the portal)")
+    s.add_argument("-o", "--out", default="annotated_svs.tsv",
+                   help="TSV, .csv or .parquet; <stem>.validation.json and <stem>.rejects.tsv go next to it")
+    s.add_argument("--threads", type=int, default=4)
+    s.add_argument("--memory", default="4GB", help="DuckDB memory limit")
+    s.add_argument("--max-svs", type=int, help="refuse files with more SVs than this")
+
     m = sub.add_parser("benchmark", help="positives vs controls matched on gene distance and public MAF, per layer, "
                                          "evidence term, region class, consequence and tier, with 95%% intervals")
     m.add_argument("--release", required=True)
@@ -55,11 +66,12 @@ def main():
     o.add_argument("--release", required=True)
     o.add_argument("--background", help="public sites as a VCF (default: the release's own public_af sites, --sites)")
     o.add_argument("--sites", choices=("aquafaang12", "panel"), default=None,
-                   help="which of the release's public sites: the 12 AQUA-FAANG fish's (default) or the whole 504-fish panel")
+                   help="which of the release's public sites: an even sample of at most 2,000,000 (default; salmon: of the "
+                        "504-fish panel) or the 12 AQUA-FAANG fish's (salmon)")
     o.add_argument("--if-stale", action="store_true",
                    help="only if the release has no pool, or one made with other weights or another snpscore version")
     o.add_argument("--assay", action="store_true",
-                   help="also run the sequence and assay checks (1.6M sites: about 80 s with --memory 8GB; 4GB is too little)")
+                   help="also run the sequence and assay checks (needs --memory 8GB: 4GB is too little)")
     o.add_argument("--threads", type=int, default=4)
     o.add_argument("--memory", default="4GB", help="DuckDB memory limit")
 
@@ -108,6 +120,23 @@ def main():
             print("warning: " + report["assembly"]["message"])
         if report.get("assay"):
             print("assay QC (PROVISIONAL rules): " + ", ".join(f"{n} {status}" for status, n in report["assay"].items()))
+    elif args.cmd == "sv":
+        from .release import check
+        from .sv import annotate_svs
+        if check(args.release):
+            sys.exit(f"snpscore: {args.release} can't be used:\n  " + "\n  ".join(check(args.release)))
+        try:
+            annotate_svs(args.svs, args.release, args.out, args.trait, threads=args.threads, memory_limit=args.memory,
+                         max_svs=args.max_svs)
+        except InputError as e:
+            sys.exit(f"snpscore: {e}")
+        out = Path(args.out)
+        report = json.loads((out.parent / f"{out.stem}.validation.json").read_text())
+        rejected = ", ".join(f"{n} {reason}" for reason, n in report["rejected"].items()) or "none"
+        types = ", ".join(f"{n} {t}" for t, n in report["svtypes"].items())
+        print(f"{report['svs_kept']} of {report['rows_read']} rows annotated ({report['format']}; {types}); rejected: {rejected}")
+        for w in report.get("alias_warnings", []):
+            print(f"warning ({w['rows']} rows): {w['message']}")
     elif args.cmd == "rsid":
         for rs in args.rs:
             print(json.dumps(rsid(args.release, rs) or {"rs": rs, "found": False}))

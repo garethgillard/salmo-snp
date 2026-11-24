@@ -1,7 +1,7 @@
 # salmo-snp
 
 Which of your Atlantic salmon SNPs are likely to matter? salmo-snp scores SNPs (assembly Ssal_v3.1) against public
-functional data: open chromatin and active regulatory elements in 21 AQUA-FAANG tissues and stages, protein-coding
+functional data: open chromatin and active regulatory elements in 27 AQUA-FAANG tissues and stages, protein-coding
 changes, conserved sequence, TF motifs and published associations. Each SNP gets a tier from 1 (strongest evidence)
 to 4 (none found), with the evidence behind it. The portal also shows each SNP's evidence card and a locus browser,
 fine-maps GWAS summary statistics with a functional prior, and designs marker panels with vendor-ready files.
@@ -34,11 +34,11 @@ You need:
    salmobase it is a GitHub Release of this repository, named after the release this version of salmo-snp expects
    (`salmo-snp info` names it):
    ```bash
-   curl -LO https://github.com/garethgillard/salmo-snp/releases/download/data-2026-11-05/salmo-snp-data-2026-11-05.tar       # ~300 MB
-   curl -LO https://github.com/garethgillard/salmo-snp/releases/download/data-2026-11-05/salmo-snp-genome-Ssal_v3.1.tar      # ~800 MB
-   tar -xf salmo-snp-data-2026-11-05.tar && tar -xf salmo-snp-genome-Ssal_v3.1.tar
+   curl -LO https://github.com/garethgillard/salmo-snp/releases/download/data-2026-11-20/salmo-snp-data-2026-11-20.tar       # ~300 MB
+   curl -LO https://github.com/garethgillard/salmo-snp/releases/download/data-2026-11-20/salmo-snp-genome-Ssal_v3.1.tar      # ~800 MB
+   tar -xf salmo-snp-data-2026-11-20.tar && tar -xf salmo-snp-genome-Ssal_v3.1.tar
    salmo-snp download --from site      # checks every file, copies it into the data folder and scores the public
-                                       # sites for comparison (about a minute); then delete site/
+                                       # sites for comparison (a minute or two); then delete site/
    ```
    In a clone of the repository, `bash tools/get_data.sh` does the same. Once the data is hosted online,
    `salmo-snp download` alone will do (or `--from <address>`; a copy of the published folder on a disk or a share

@@ -90,6 +90,9 @@ catalog:
 
 # An example input beside the catalogue: an even sample of the public sites.
 demo_sample: {layer: public_af, n: 50000, file: public_50k.vcf}  # build cuts it from the built layer
+# Structural variants for the portal's SV tab: build makes a SYNTHETIC set of n (synthetic_svs: a fixed seed, half of
+# them in or near genes of the gene layer); the catalogue's rows of type sv become a second example (demo/known_svs.tsv).
+demo_svs: {file: svs_demo_SYNTHETIC.tsv, n: 300}
 
 provisional: [catalog.window, public_af.min_maf, public_af.min_an]
 

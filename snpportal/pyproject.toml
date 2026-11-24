@@ -13,7 +13,7 @@ salmo-snp = "snpportal.serve:main"
 include = ["snpportal*", "snpsite*"]
 
 [tool.setuptools.package-data]
-snpportal = ["templates/snpportal/*.html", "static/snpportal/*", "static/snpportal/*/*"]
+snpportal = ["templates/snpportal/*.html", "static/snpportal/*", "static/snpportal/*/*", "lib/*.yaml"]
 snpsite = ["templates/salmobase/*.html"]
 
 [build-system]

@@ -1,13 +1,14 @@
 # snpscore
 
-Annotates any Atlantic salmon SNP list against a release built by ../snpdata, and gives each SNP a tier.
-Layers so far: AQUA-FAANG chromatin states (21 conditions), genic region class and the coding consequence (VEP-lite),
+Annotates any Atlantic salmon SNP list against a release built by ../snpdata, and gives each SNP a tier; structural
+variants (or any regions) are scored the same way by what they overlap (`snpscore sv`, "Structural variants" below).
+Layers so far: AQUA-FAANG chromatin states (27 conditions; 21 before release 2026-11-20), genic region class and the coding consequence (VEP-lite),
 Ensembl regulatory build, GERP constrained elements, blacklist, late-rediploidized (LORe) regions, nearest gene (with
 description, expression per tissue, human and zebrafish ortholog names and its Ss4R duplicate), known variants within
 35 bp (probe flank), allele frequencies (the public 504-fish panel, the Synchrosmolt parents), TF motif changes
 (JASPAR 2024, in robust ATAC peaks), nf-RASQUAL caQTL/eQTL lead SNPs, genetic map position (cM), and the known-loci
 catalogue. rs IDs (EVA release 9) place SNP lists that have only rs IDs or ICSASG_v2 positions. Each SNP gets a tier
-from the rules in `src/snpscore/weights.yaml` (provisional until G agrees them): for all 21 conditions by default, as
+from the rules in `src/snpscore/weights.yaml` (provisional until G agrees them): for all 27 conditions by default, as
 the portal always counts them, or for a trait preset (`--trait`).
 On top of that: assay designability QC, the public background pool, a benchmark against known loci, and GWAS summary
 statistics (loci and fine-mapping with a functional prior). The panel designer, chip comparison and vendor exports are
@@ -24,6 +25,7 @@ snpscore pool --release $R --if-stale           # public background pool, a cach
 snpscore benchmark --release $R -o $R/benchmark.tsv   # known loci; controls from the pool
 snpscore benchmark --release $R --positives molqtl:ca molqtl:e --by-tissue -o $R/benchmark_molqtl.tsv
 snpscore gwas sumstats.tsv --release $R --trait maturation -o gwas_out/   # loci.tsv, finemap.tsv
+snpscore sv my_svs.vcf.gz --release $R -o my_svs_annotated.tsv   # structural variants, scored by what they overlap
 python -m pytest -q                              # tests run on the small regions in ../snpdata/tests/fixture
 ```
 
@@ -190,19 +192,67 @@ prefixes (e.g. `maturation: [Brain, Gonad]`). Weights are whole numbers, so `tie
 marked `synthetic: true` never count. All of this is provisional:
 see "Biology decisions" in ../AGENTS.md and `provisional` in the manifest.
 
+## Structural variants
+
+`snpscore sv SVS --release R [--trait T] -o OUT` (`snpscore.annotate_svs`, `src/snpscore/sv.py`) scores structural
+variants, or any genomic regions, the way annotate scores SNPs, except for what needs a single base: each SV gets the
+evidence of everything it overlaps, and its tier comes from the same weights.yaml rules (`score.scored`, unchanged), so
+each kind of evidence counts once however many elements an SV overlaps, and an SV of one base scores exactly as a SNP
+without alleles at that base (tested).
+
+Input (`sv.detect`; `validation.json` `format`):
+
+| Input | Read as |
+| --- | --- |
+| VCF of SVs | CHROM, POS, ID, REF, ALT and INFO's END, SVLEN and SVTYPE (genotypes never read). A symbolic allele (`<DEL>`, `<DUP>`, `<INV>`, `<CNV>`) or sequence alleles sharing a first base start after that padding base: `pos` = POS + 1, `end` = END (else POS + SVLEN, else POS + length(REF) - 1). Insertions and breakends (`<INS>`, `N[2:3000[`) are the two bases of their junction, POS and POS + 1. Without SVTYPE the type comes from the allele (`<DEL>`) or the allele lengths (DEL, INS, SNV, MNV) |
+| BED (`.bed`, `.bed.gz`) | chrom, 0-based start, end, name (id); a zero-length interval is an insertion point (its junction) |
+| table with a header (TSV/CSV/spaces) | `chrom` (CHR, Chromosome, seqnames), `start` (Pos, Position, Begin, chromStart), `end` (Stop, chromEnd) or `svlen` (Length, Size) instead of end, optionally `id` (Name) and `svtype` (Type: DEL, DUP, INV, INS, CNV, BND, or deletion, duplication, ...); 1-based and inclusive. Other columns are kept as `in_<name>` |
+| lines without a header | `chrom start end [type] [id]`, or `chrom:start-end [type] [id]` (commas allowed), 1-based and inclusive |
+
+Rejected rows (`rejects.tsv`, with `start`, `end` and `svtype` as read): `missing_chrom`, `bad_pos`, `bad_end` (no
+end or length, or an end before the start), `unknown_chrom`, `duplicate` (same chrom, pos, end and type).
+
+Output, one row per kept SV in input order: `chrom`, `pos` (first base), `end` (last base), `length` (end - pos + 1:
+the bases of the reference the SV spans; 2 for an insertion), `svtype`, `id`, `svlen` (the input's stated length,
+when it has one: an insertion's inserted bases), the input's other columns, then per layer:
+- `chromatin`, `peaks` (robust ATAC peaks overlapped) and `chromatin_<condition>`: per condition the strongest state of
+  the peaks the SV overlaps (weights.yaml active_states in their order, then weak_states, then any other state)
+- `region`, `region_class` (the first of the layer's `classes` the SV overlaps: CDS, splice region, UTR, non-coding
+  exon, intron) and `region_classes` (all it overlaps, in that order)
+- `genes` (the genes it overlaps, names else ids, by start), `n_genes` and the `gene_*` columns of the gene it overlaps
+  most (`gene_distance` 0), else of the nearest gene within max_distance of either end; the gene-keyed layers
+  (orthologs, Ss4R, expression) follow that gene
+- other interval layers: `<layer>` = any overlap; a number column its largest value (`gerp_score`), text the distinct
+  values (at most 10: `regbuild_type` 'enhancer, promoter'); an interpolated layer (the genetic map) at `pos`
+- `molqtl` and its columns for the nf-RASQUAL lead SNPs inside the SV (count, tissues, kinds, best BF, features)
+- `known_locus`, `known_locus_dist`: the nearest catalogue entry within `catalog.window` of the SV (0 inside it;
+  catalogue rows with `start` and `end`, such as its structural variants, by their extent)
+- the tier columns. The regbuild term counts only for SVs that overlap no AQUA-FAANG peak, as for SNPs.
+
+Left out, as they need one base and its alleles: the sequence and assay checks, coding consequences, motif changes,
+public allele frequencies, flank-variant counts and per-variant scores. Overlaps are one IEJoin per layer on
+genome-wide coordinates (chromosome k at k x 10^10): 100,000 SVs, some of them Mb long, annotate in about 25 s with 2
+threads and 2 GB. What is provisional (G to confirm; DECISIONS #55): inversions and translocations scored over their
+whole span rather than at their breakpoints, and the strongest state per condition.
+
 ## Public background pool
 
 `snpscore pool --release R [--sites aquafaang12|panel] [--background VCF] [--assay] [--if-stale]`
-(`snpscore.pool.build_pool`) annotates public sites taken from the release itself: by default every site of the 12
-AQUA-FAANG fish (`public_af` rows with `aquafaang12_af`, the 1.6M sites of their VCF, all of them 504-panel sites;
-`--sites panel`: all 7.6M panel sites; `snpscore.pool.SITES`, DECISIONS #15), or the sites of a VCF. Sequence and assay
-checks run only with `--assay`, which needs `--memory 8GB` for the 1.6M sites and takes about 100 s; the default run
-takes about 35-40 s with 4 threads and 4 GB. It writes, under `R/pool/`:
+(`snpscore.pool.build_pool`) annotates public sites taken from the release itself, or the sites of a VCF. By default
+(`--sites panel`, `snpscore.pool.SITES`; G, 2026-11-21, DECISIONS #15) it takes the common ones, with a public MAF of
+at least the panel designer's `design.min_maf` (0.05), because the designer picks its candidates from the pool: for
+salmon the 3,436,671 such sites of the 504-fish panel's 7.6M, on all 29 chromosomes; above `MAX_SITES` (4,000,000) an
+even sample, the same sites every time (rainbow trout: 3.37M of its 13.5M). `--sites aquafaang12` takes the 1.6M
+sites of the 12 AQUA-FAANG fish's VCF instead, the pool until 2026-11-21 (only 70 on chromosome 10, none past 105 Mb
+on chromosome 1). Annotation runs in parts of whole chromosomes of at most `CHUNK` (1.5M) sites, so 4 GB is enough:
+release 2026-11-20 takes about 80 s with 4 threads (85 MB). Sequence and assay checks run only with `--assay`, which
+needs `--memory 8GB`. It writes, under `R/pool/`:
 - `pool.parquet`: the annotate columns (tiers for the `all` preset), then `tier__<preset>` and `tier_score__<preset>`
   for every preset in weights.yaml (wide, one row per site, in genome order).
 - `background.json`: `n_sites`, `rows_read`, `rejected`, `release`, `created`, `source`, `assay_checked`, `seconds`,
-  `weights_sha256` and `snpscore_version` (`stale()`: no pool, or one made for another release version, other weights
-  or another snpscore; `--if-stale` builds only then, as `salmo-snp download` and `serve` and the NREC deploys do);
+  `weights_sha256`, `snpscore_version` and `sites_rule` (`stale()`: no pool, or one made for another release version,
+  other weights, another snpscore or another site rule; `--if-stale` builds only then, as `salmo-snp download` and
+  `serve` and the NREC deploys do);
   categories as {key: {`n`, `share`}} whose shares sum to 1: `tiers` {preset: {tier}}, `region_class` (NULL =
   `intergenic`), `maf_histogram` (public MAF in bins of 0.05, `0.00-0.05` ... `0.45-0.50`), `assay_status` (with
   `--assay`); independent shares (share of sites): `active_by_condition` {condition: share with an active state},

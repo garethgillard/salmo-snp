@@ -67,7 +67,7 @@ def test_manifest(release):
     layers = {l["name"]: l for l in m["layers"]}
     assert "Bertolotti" in layers["public_af"]["population"] and "European farmed" not in json.dumps(m)
     assert layers["molqtl"]["licence"].startswith("redistribution agreed") and len(layers["molqtl"]["urls"]) == 9
-    assert m["rsid"]["rows"] > 0 and m["catalog"]["rows"] == 40
+    assert m["rsid"]["rows"] > 0 and m["catalog"]["rows"] == 46
     assert m["duckdb_version"] == duckdb.__version__ and list(m["files"]) == ["tracks.yaml"]
     aliases = dict(duckdb.sql(f"SELECT alias, chrom FROM read_parquet('{release / 'alias.parquet'}')").fetchall())
     assert aliases["nc_059466.1"] == aliases["ssa25"] == aliases["chr25"] == aliases["hg993284"] == "25"
@@ -124,7 +124,7 @@ chromatin_states/AtlanticSalmon/DevMap/AtlanticSalmon_LateBlastulation.bb
 
 def test_parse_trackdb():
     gill, rna, chip = trackhub.parse_trackdb(TRACKDB, trackhub.HUB + "BodyMap/", "BodyMap")
-    assert gill["id"] == "ATAC_Gill_Mature_Male_R2" and gill["chromatin_condition"] is None
+    assert gill["id"] == "ATAC_Gill_Mature_Male_R2" and gill["chromatin_condition"] == "chromatin_Gill_Mature_Male"  # scored since v3
     assert (gill["tissue"], gill["maturity"], gill["sex"], gill["replicate"]) == ("Gill", "Mature", "Male", "R2")
     assert gill["url"] == trackhub.HUB + "BodyMap/ATAC/bigWig/AtlanticSalmon_ATAC_Gill_Mature_Male_R2.mLb.clN.bigWig"
     assert rna["strand"] == "-" and rna["chromatin_condition"] == "chromatin_Liver_Immature_Female"
@@ -135,6 +135,20 @@ def test_parse_trackdb():
         "ChromHMM_Brain_Immature_Female", "BodyMap", "bigBed", "chromatin_Brain_Immature_Female")
     assert (blast["tissue"], blast["stage"]) == ("Embryo", "LateBlastulation")
     assert blast["url"] == "https://salmobase.org/datafiles/datasets/Aqua-Faang/" + CHROMHMM.split()[1]
+    # the ImmunoMap (2026): head kidney after immune stimulation; the condition names the treatment, R is the fish
+    imm, = trackhub.parse_trackdb("track a\ntype bigWig\nbigDataUrl ATAC/bigWig/AtlanticSalmon_ATAC_HeadKidney_invivo_polyIC"
+                                  "_R4.mLb.clN.bigWig\n", trackhub.HUB + "ImmunoMap/", "ImmunoMap")
+    assert (imm["id"], imm["tissue"], imm["maturity"], imm["sex"], imm["condition"], imm["chromatin_condition"]) == (
+        "ATAC_HeadKidney_invivo_polyIC_R4", "HeadKidney", None, None, "HeadKidney_invivo_polyIC", "chromatin_HeadKidney_invivo_polyIC")
+    gill, hk = trackhub.parse_bigbeds("chromatin_states/AtlanticSalmon/BodyMap/AtlanticSalmon_Gill_Mature_Male.bb\n"
+                                      "chromatin_states/AtlanticSalmon/ImmunoMap/AtlanticSalmon_HeadKidney_invivo_pbs.bb",
+                                      "https://salmobase.org/x/", with_states={"Brain_Immature_Female"})
+    assert (gill["chromatin_condition"], hk["source"], hk["tissue"]) == (None, "ImmunoMap", "HeadKidney")
+    # added(): what a release's registry lacks, for the portal's tracks_added.yaml
+    new = {"generated": "2026-11-20", "hub": trackhub.HUB, "tracks": [imm], "chromhmm": [brain, gill], "peaks": []}
+    extra = trackhub.added(new, {"generated": "2026-10-08", "tracks": [], "chromhmm": [brain]})
+    assert [t["id"] for k in ("tracks", "chromhmm", "peaks") for t in extra[k]] == [imm["id"], gill["id"]]
+    assert (extra["since"], extra["hosts"]) == ("2026-10-08", ["salmobase.org"])
 
 
 def test_ncbi_transcripts(release):
@@ -165,7 +179,8 @@ def test_rainbow_trout_release(tmp_path):
     layers = {l["name"]: l for l in m["layers"]}
     conditions = [c for c in layers["chromatin"]["columns"] if c not in ("summary", "id")]  # 17 genome-wide; those with a peak here
     assert {"Brain_Mature_Male", "Liver_Immature_Female", "LateBlastulation"} <= set(conditions) and not any("Gonad" in c for c in conditions)
-    assert m["catalog"]["rows"] == 11 and [d["file"] for d in m["demo"]] == ["demo/known_loci.tsv", "demo/public_50k.vcf"]
+    assert m["catalog"]["rows"] == 13 and [d["file"] for d in m["demo"]] == ["demo/known_loci.tsv", "demo/known_svs.tsv", "demo/svs_demo_SYNTHETIC.tsv",
+                                                                                 "demo/public_50k.vcf"]
     again = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "again", reuse=out)
     reused = json.loads((again / "manifest.json").read_text())  # a rebuild that copies every unchanged layer
     assert [(l["name"], l["sha256"], l["rows"]) for l in reused["layers"]] == [(l["name"], l["sha256"], l["rows"]) for l in m["layers"]]

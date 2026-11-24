@@ -7,9 +7,12 @@
 provisional: [active_states, weak_states, weights, tiers, presets, assay, design, finemap, priors]
 
 active_states: [Active_TSS, Active_enhancer]
-# Counted as weak evidence. Not counted at all: Repressed_polycomb, Quiescent, ZNF_genes_and_repeats, Unknown_1.
+# Counted as weak evidence. Not counted at all: Repressed_polycomb, Quiescent, ZNF_genes_and_repeats, Unknown_1 and
+# Unknown_2 (the gill model's).
+# Bivalent_or_mixed_active/polycomb: the ImmunoMap's head kidney label (H3K27me3 with ATAC-seq and/or H3K27ac), weak like
+# Bivalent (G, 2026-11-20).
 weak_states: [Primed_enhancer, Poised_enhancer_1, Poised_enhancer_2, Bivalent, Flanking_upstream, Flanking_downstream,
-              Accessible_chromatin]
+              Accessible_chromatin, Bivalent_or_mixed_active/polycomb]
 
 weights:  # whole numbers (tier_score is an integer)
   active: 3            # active state in at least one condition of the preset
@@ -34,17 +37,20 @@ variant_scores: {}
 # e.g. tier 1 = active + constrained, or CDS + constrained; tier 2 = active, or CDS; tier 3 = any weaker evidence.
 tiers: [5, 3, 1]
 
-# Trait presets -> chromatin conditions. Each entry is a prefix of condition names; [] = all 21 conditions.
+# Trait presets -> chromatin conditions. Each entry is a prefix of condition names; [] = all conditions.
+# disease_resistance: head kidney (the ImmunoMap), gill and liver (G, 2026-11-20; it was liver alone before them).
 presets:
   all: []
   maturation: [Brain, Gonad]
   growth_and_fillet: [Muscle, Liver]
-  disease_resistance: [Liver]
+  disease_resistance: [HeadKidney, Gill, Liver]
   development: [LateBlastulation, MidGastrulation, EarlySomitogenesis, MidSomitogenesis, LateSomitogenesis]
   brain: [Brain]
   gonad: [Gonad]
   liver: [Liver]
   muscle: [Muscle]
+  gill: [Gill]
+  head_kidney: [HeadKidney]
 
 # Assay designability QC (annotate, with the genome): pass / warn / fail per SNP. PROVISIONAL: chosen by Claude so the
 # prototype works; to confirm with the genotyping lab or vendor. fail = a ref_check below or any N in the 71-mer.

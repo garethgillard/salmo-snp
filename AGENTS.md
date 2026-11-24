@@ -10,13 +10,15 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 - `snpdata/`: collects the public sources and builds a versioned release (Parquet tables, manifest.json, tracks.yaml,
   the known-loci catalogue): `snpdata fetch`, `snpdata build`, `snpdata tracks`. Its README's "Release format" is the
   contract with the other two. One layer registry per species: `layers.yaml` (salmon), `rainbow_trout/layers.yaml`.
-- `snpscore/`: scores a SNP list against a release (`snpscore annotate`), plus `rsid`, `pool`, `benchmark` and `gwas`.
+- `snpscore/`: scores a SNP list against a release (`snpscore annotate`), structural variants by what they overlap
+  (`snpscore sv`), plus `rsid`, `pool`, `benchmark` and `gwas`.
   The tier rules (weights.yaml) live here, not in the release.
 - `snpportal/`: the Django web portal; reads a release and calls snpscore. `snpportal/lib/` holds its plain-Python
   parts (locus data, panel design, exports, the track registry; `python -m snpportal.lib.cli panel|export|compare`).
 - `docs/`: TRACKER (what's next, then what's built), DECISIONS (questions for G, with options and a recommendation),
   ROADMAP (the spec of every roadmap item), LICENSING (the licences, the CLA, commercial permission, third-party
-  data and software); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
+  data and software), SCORING (how other projects score variants, and the options for our starting point), CHROMBPNET
+  (the brief of the ChromBPNet repository); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
   (the simplification plan of 2026-10-07, built).
 - `tools/`: check.sh (what CI runs), user_install_test.sh (a new user's install), get_data.sh (the data for real use),
   cloud_setup.sh (cloud sessions).
@@ -100,7 +102,8 @@ Decided:
 - No phenotypic traits in the portal (2026-10-09): it names sample conditions only (tissues, maturity, sex, embryo
   stages), never maturation, growth and so on; users map conditions to traits themselves. weights.yaml presets stay as
   snpscore's CLI names and the portal's cache of precomputed condition sets (to rename to tissue names later).
-- All conditions (2026-10-11, replaces 'Trait = Active in'): the portal's tiers always count all 21 conditions (Table,
+- All conditions (2026-10-11, replaces 'Trait = Active in'): the portal's tiers always count all 27 conditions (21 until
+  release 2026-11-20: see the AQUA-FAANG 2026 entry below) (Table,
   card, Overview, GWAS functional prior, gene page, variant page); there is no Active in and no condition picker. The
   Table only filters after scoring: its Chromatin column filter keeps SNPs in a robust ATAC peak (or an active state) in
   at least one chosen condition (tissues, maturity, sex) and changes no tier, Overview or card. One SNP's card opens in
@@ -149,12 +152,47 @@ Decided:
 - Rainbow trout chromosome Y is kept (G, 2026-11-14): scored, shown and in the ideogram (sdY and 3,928 AQUA-FAANG
   peaks are on it).
 
+- New AQUA-FAANG salmon data (G, 2026-11-20): the gill ATAC-seq re-made in 2026 (gill states and peaks) and the
+  ImmunoMap (head kidney after PBS, poly I:C or Vibrio) are Locus browser tracks ("integrated into the app now as new
+  tracks to see") and are scored ("include gill and immunomap in the scoring"): the chromatin layer is the unified
+  peaks v3, 27 conditions (gill: immature female and male, mature male; head kidney: three in vivo treatments), from
+  release 2026-11-20. The ImmunoMap's new label Bivalent_or_mixed_active/polycomb counts as weak, like Bivalent; the
+  disease_resistance preset is head kidney, gill and liver, and gill and head_kidney presets were added. The release
+  is built and published by the `species-data` workflow (G chose it over his Mac). Claude's display choices:
+  DECISIONS #48.
+- NCBI RefSeq is the Locus browser's default gene lane (G, 2026-11-20), one isoform per gene (the most CDS bases);
+  Ensembl genes (their gene pages and Ss4R duplicates) and every isoform of both are one click away. Thin lines
+  separate the tissues, the ImmunoMap and the DevMap in the Chromatin states and Regulatory elements drop-downs (G,
+  2026-11-20).
+- Variant scores (I16; G, 2026-11-21): ChromBPNet first, one model per AQUA-FAANG condition trained on the ATAC-seq
+  read alignments (bigWigs can't be used), in its own repository run on Orion, where the data are; DeepFARM retraining
+  and a CADD-like score later. The starting brief, with the data, plan and hand-back format: docs/CHROMBPNET.md.
+- The public pool (DECISIONS #15; G, 2026-11-21): the Overview's public background, the benchmark's controls, the panel
+  designer's and chip comparison's public candidates and the gene pages' public variants all come from the 504-fish
+  panel's common sites (public MAF >= the designer's design.min_maf, 0.05): 3,436,671 sites on all 29 chromosomes in
+  release 2026-11-20, instead of the 1.6M sites of the 12 AQUA-FAANG fish's VCF (70 on chromosome 10). G chose the
+  common sites over a sample of all 7.6M, which are half rare. snpscore.pool.SITES; the README's "Public background pool".
+- Scoring first (G, 2026-11-21): after the data to visualise, the scoring of the SNPs is the most important thing. It
+  will be customisable but needs a good starting point, either real basic or learned from other functional genomics
+  projects (ENCODE, GTEx, GTEx for animals). The research and the options are docs/SCORING.md, its questions for G
+  DECISIONS #49-#53, the order of work TRACKER "Next" (S0-S8). The weights stay G's: the research gives an order of
+  evidence, not numbers. G, 2026-11-22: long research runs one thing at a time, the most important first, so that the
+  usage allowance doesn't run out mid-way; no large multi-agent runs unless G asks.
+
+- Structural variants (G, 2026-11-24): users can score structural variants (any list of regions: an SV VCF, BED, a
+  table, or pasted chrom:start-end lines) instead of SNPs, "scored in the same way, except ignoring anything that would
+  require a specific base position"; "any functional data that overlaps the SV region counts towards evidence of
+  function impact"; the results stay as close to the SNPs' as they can; published SVs join the known loci, with an
+  example set. Built as `snpscore sv` (sv.py) and the Score page's Structural variants tab; Claude's choices are under
+  Provisional and in docs/DECISIONS.md #55-#57.
+
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
-- Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin.
-  Not counted: repressed polycomb, quiescent, ZNF genes and repeats, Unknown_1.
+- Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
+  and the ImmunoMap's bivalent or mixed active/polycomb (G, 2026-11-20). Not counted: repressed polycomb, quiescent, ZNF
+  genes and repeats, Unknown_1 and Unknown_2 (gill's).
 - Trait presets (condition prefixes): maturation = Brain + Gonad; growth_and_fillet = Muscle + Liver;
-  disease_resistance = Liver (the only AQUA-FAANG tissue near immune function); development = the 5 DevMap stages;
-  plus one preset per tissue and `all`.
+  disease_resistance = HeadKidney + Gill + Liver (G, 2026-11-20; Liver alone before the ImmunoMap); development = the
+  5 DevMap stages; plus one preset per tissue (gill and head_kidney too) and `all`.
 - Weights and tier cut-offs: see weights.yaml (active 3, CDS/splice 3, constrained 2, weak/UTR/active elsewhere/Ensembl
   regulatory 1; tiers at 5, 3, 1). Ensembl regulatory features count only where AQUA-FAANG has no peak (68-86% overlap).
 - Benchmark controls matched on distance to the nearest gene and public MAF (0.05 bins), not LD.
@@ -201,7 +239,16 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     migration timing; six6, age at maturity; sdY) and QTL windows published on this assembly (BCWD resistance, 3; IHNV
     resistance, 4: those with a false-positive probability under 0.1). No SNP rows and no effect alleles yet, so
     uploads get a badge only near the four gene-region rows. The Locus browser opens at greb1l and rock1.
-  - The public pool: an even sample of at most 2,000,000 of the release's public sites (snpscore.pool.MAX_SITES).
+  - The public pool: since 2026-11-21 the salmon rule (Decided), so an even sample of at most 4,000,000 (MAX_SITES) of
+    the public sites with MAF >= 0.05: 3.37M of 13.5M (before: 2,000,000 of all 18.8M).
+- Structural variants (2026-11-24, DECISIONS #55-#57): each evidence term counts once however many elements an SV
+  overlaps (a 1-bp SV scores as a SNP at that base); per condition the strongest state of the peaks it overlaps; the
+  most severe gene region; Ensembl regulatory only without an AQUA-FAANG peak; insertions and breakends are their
+  junction's two bases; inversions and translocations count over their whole span. SV jobs have no panels, vendor
+  files, priors or public-SNP comparison. Catalogue rows of `type` sv (`start`, `end` 1-based, `svtype`): salmon 6
+  (Stenløkk 2022 chr18 and chr9 inversions, `local_adaptation`; Bertolotti 2020 farmed-vs-wild outliers,
+  `domestication`), trout 2 (Omy05, `anadromy`; Omy17, `fillet_yield`). Examples: Known SVs, and 300 SYNTHETIC SVs
+  that build makes (layers.yaml `demo_svs`).
 - Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
   counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
   priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).
@@ -217,9 +264,9 @@ Open (ask G; all collected with options and recommendations in docs/DECISIONS.md
   redistribution agreed, G 2026-11-10): which significance rule (paper: eigenMT BF < 0.1), which allele does pi refer to?
 - Public AF: the 504-fish panel is mostly Bertolotti 2020 (PRJEB38061) wild/farmed fish plus the 12 AQUA-FAANG fish (hosting
   derived AF agreed, G 2026-11-10): how should the population be described? (docs/RESEARCH.md section 4)
-- ImmunoMap regions; Enhancer-CNE source; vetting of the 40-row known-loci catalogue (docs/RESEARCH.md section 2).
-- Data gap: the public 12-fish VCF (pool, demo list, synthetic GWAS) has only 70 sites on chr10 and stops near 105 Mb on chr1,
-  while the 504-fish panel covers both; should the pool and demos use the 504-fish sites instead?
+- Enhancer-CNE source; vetting of the 40-row known-loci catalogue (docs/RESEARCH.md section 2).
+- Data gap: the public 12-fish VCF (demo list, synthetic GWAS) has only 70 sites on chr10 and stops near 105 Mb on chr1,
+  while the 504-fish panel covers both; should the demos use the 504-fish sites too? (The pool does: Decided.)
 - Assay QC: flank repeat shares are mostly 0 or 1, so ~55% of public SNPs warn on 'repeat' whatever the cut-off; should fully
   soft-masked flanks warn at all? (without it ~46% pass instead of ~20%)
 - Chip placement by flank (DECISIONS #34, #36): decided for now (see Decided); revisit with the first real ICSASG_v2
@@ -316,13 +363,18 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   A release that exists only on the VM (built by that workflow) goes on GitHub from G's Mac with
   `bash snpdata/prep/release_from_demo.sh [version] [ssh host]` (copies it, its pool and genome from the VM, then
   `GENOME=<its genome> POOL=1 bash prep/github_release.sh`); done for trout-2026-11-13 on 2026-11-14.
-  A new trout release, in short: bump serve.py RELEASES, merge, deploy, run `species-data` on main, then
-  `release_from_demo.sh` on the Mac.
+  A new trout release, in short: bump serve.py RELEASES, merge, deploy, run `species-data` on main.
+  Since 2026-11-20 the `species-data` workflow takes a species (rainbow_trout or atlantic_salmon): it builds the
+  release serve.py names (RELEASE for salmon) on GitHub's runner, publishes it as the GitHub data release
+  data-<version> itself (prep/github_release.sh with the workflow's token, POOL=1) and sends it to the VM; a salmon
+  release becomes /srv/snpportal/release there (deploy/species.sh), the one it replaces moving to
+  releases/<version> for the results made with it. A new salmon release, in short: bump serve.py RELEASE, merge,
+  deploy, run `species-data` (atlantic_salmon) on main; no Mac needed (deploy/nrec.sh still works).
 - Deploying the NREC demo (G, 2026-11-06): only when G asks in the chat ("deploy to NREC"), usually after several
   merged pull requests; never on your own initiative, and never a branch. Run the `deploy` workflow on main:
   `gh workflow run deploy.yml --ref main` (cloud sessions, REST only: `gh api -X POST
   repos/garethgillard/salmo-snp/actions/workflows/deploy.yml/dispatches -f ref=main`), or G uses Actions > deploy >
   Run workflow. It runs the tests, then `deploy/update.sh` on the VM (~20 s). Then check
   https://158-39-75-9.sslip.io/snp/health/ and tell G what went live (the merges since the last deploy run). A new
-  data release still needs `deploy/nrec.sh` from G's Mac; a stale public pool (after a weights.yaml or snpscore
+  data release goes up with the `species-data` workflow (above) or `deploy/nrec.sh` from G's Mac; a stale public pool (after a weights.yaml or snpscore
   change) is built on GitHub's runner and sent by the same workflow run (snpportal/README.md "Deploying the demo").

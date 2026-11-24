@@ -31,9 +31,11 @@ STAGES = {"LateCleavage": "L cleavage", "EarlyBlastulation": "E blastula", "MidB
           "LateGastrulation": "L gastrula", "EarlySomitogenesis": "E somit.", "EarlyMidSomitogenesis": "EM somit.",
           "MidSomitogenesis": "M somit.", "MidLateSomitogenesis": "ML somit.", "LateSomitogenesis": "L somit.",
           "EarlyEyed": "E eyed", "LateEyed": "L eyed"}  # embryo stages in developmental order
+TREATMENTS = {"pbs": "PBS", "polyIC": "poly I:C", "vibrio": "Vibrio"}  # ImmunoMap: HeadKidney_<invivo|invitro>_<treatment>
 STATE_ORDER = locus_svg.STATE_ORDER  # stacked bottom to top; Quiescent is not drawn
 LEGEND_STATES = ("Active_TSS", "Flanking_upstream", "Active_enhancer", "Primed_enhancer", "Poised_enhancer_1",
                  "Accessible_chromatin", "Bivalent", "Repressed_polycomb", "ZNF_genes_and_repeats", "Quiescent")
+IMMUNOMAP_STATES = ("Active_TSS_or_enhancer", "Flanking_TSS_or_poised_enhancer", "Bivalent_or_mixed_active/polycomb")
 ASSAYS = {"RNA": ("RNA-seq", "expression; + strand up, &#8722; down; conditions on a log scale"), "ATAC": ("ATAC-seq", "open chromatin"),
           "H3K27ac": ("ChIP-seq H3K27ac", "active enhancers and promoters"), "H3K4me3": ("ChIP-seq H3K4me3", "active promoters"),
           "H3K4me1": ("ChIP-seq H3K4me1", "enhancers, active and primed"), "H3K27me3": ("ChIP-seq H3K27me3", "polycomb repression"),
@@ -111,8 +113,16 @@ def plain(h, body):
     return mark_safe(f'<svg class="sp-trk-svg" viewBox="0 0 {W} {h}" width="{W}" height="{h}" role="img">{body}</svg>')
 
 
-def row(label, svg, sub="", tissue=None, dense=False):
-    return {"label": label, "sub": sub, "tissue": tissue, "svg": svg, "dense": dense}
+def row(label, svg, sub="", tissue=None, dense=False, title=""):
+    return {"label": label, "sub": sub, "tissue": tissue, "svg": svg, "dense": dense, "title": title}
+
+
+def separated(rows):
+    """`rows` with sep set on each row whose tissue differs from the row above (BodyMap tissues, the ImmunoMap's head
+    kidney, the DevMap's embryo stages): a thin line above it (G, 2026-11-20)."""
+    for above, r in zip([None] + rows, rows):
+        r["sep"] = above is not None and r["tissue"] != above["tissue"]
+    return rows
 
 
 def group(gid, title, note, rows, more=(), more_label="", open_=(), legend=None, kind="grp"):
@@ -124,19 +134,43 @@ def tissue_of(condition):
     return "Embryo" if condition in STAGES or "_" not in condition else condition.split("_")[0]
 
 
+def immuno(condition):
+    """(in vitro, treatment) of an ImmunoMap condition (HeadKidney_invivo_pbs), else None."""
+    _, _, rest = condition.partition("HeadKidney_inv")
+    where, _, treatment = rest.partition("_")
+    return (where == "itro", treatment) if where in ("ivo", "itro") else None
+
+
 def short(condition):
-    """'Brain Imm F', 'Head kidney Mat M', 'L blastula'."""
+    """'Brain Imm F', 'Head kidney Mat M', 'L blastula'; ImmunoMap: 'HK poly I:C' (in vivo), 'HK cells PBS' (in vitro)."""
     if "_" not in condition:
         return STAGES.get(condition, condition)
+    if im := immuno(condition):
+        return f"HK {'cells ' if im[0] else ''}{TREATMENTS.get(im[1], im[1])}"
     t, m, x = condition.split("_")
     return f"{TISSUE_NAMES.get(t, t)} {m[:3]} {x[0]}"
 
 
+def long(condition, assay):
+    """A row's hover text for the ImmunoMap and the gill ATAC-seq of 2026 (assay ATAC, states or peaks); else empty."""
+    if im := immuno(condition):
+        return (f"ImmunoMap: head kidney {'leukocytes in vitro' if im[0] else 'in vivo'}, "
+                f"{TREATMENTS.get(im[1], im[1])}{' (control)' if im[1] == 'pbs' else ''}")
+    if not condition.startswith("Gill_") or assay not in ("ATAC", "states", "peaks"):
+        return ""
+    text = "Gill ATAC-seq re-made in 2026: weaker than the other tissues"
+    if condition == "Gill_Immature_Female" and assay != "ATAC":  # the AQUA-FAANG README's note 3
+        text += "; these states use an H3K4me1 library mixed with another fish's gonad H3K4me3 (a fix will follow)"
+    return text
+
+
 def order(condition):
-    """Tissues in TISSUE_ORDER, then immature F, M, mature F, M; embryo stages in developmental order."""
-    t = tissue_of(condition)
+    """Tissues in TISSUE_ORDER, then immature F, M, mature F, M; embryo stages in developmental order; ImmunoMap
+    after the BodyMap head kidney, in vivo before in vitro, PBS first."""
+    t, im = tissue_of(condition), immuno(condition)
     return (TISSUE_ORDER.index(t) if t in TISSUE_ORDER else len(TISSUE_ORDER),
-            list(STAGES).index(condition) if condition in STAGES else 0, condition)
+            list(STAGES).index(condition) if condition in STAGES else 0,
+            (1 + im[0], list(TREATMENTS).index(im[1]) if im[1] in TREATMENTS else 9) if im else (0, 0), condition)
 
 
 # ---- the chromosome and the ruler ----
@@ -267,22 +301,32 @@ def genes_group(request, s, ax, data, open_=()):
                         f'stroke-width="0.5"><title>{escape(m.get("title") or "")}</title></path>')
         rows.append(row("molQTL leads", trk(13, "".join(body)), "nf-RASQUAL, 12 fish"))
     duplicates(data.get("genes", []))
-    body = []
-    h = locus_svg._genes(body, ax, data.get("genes", []), 0, lambda gid: reverse("snpportal:gene", args=[gid]), 8, noop)
+    gene_page = lambda gid: reverse("snpportal:gene", args=[gid])  # noqa: E731
+    ensembl = []
+    h = locus_svg._genes(ensembl, ax, data.get("genes", []), 0, gene_page, 8, noop)
+    ensembl = (ensembl, h, "Ensembl 116, one isoform each")
+    ncbi = sl.ncbi_genes(jobs.release(), s["chrom"], s["start"], s["end"])  # the default lane (G, 2026-11-20)
+    if ncbi is not None:
+        body = []
+        h = locus_svg._genes(body, ax, ncbi, 0, NCBI_GENE.format, 8, noop, sl.ISOFORMS["ncbi"][1])
+        default = (body, h, "NCBI RefSeq, one isoform each")  # its version: the isoform row below
+    else:
+        default = ensembl
+    body, h, sub = default
     lore = "".join(f'<rect x="{ax.x(b["start"]):.1f}" y="0" width="{ax.x(b["end"]) - ax.x(b["start"]):.1f}" height="{h}" '
                    f'fill="url(#sp-lore)" fill-opacity="0.25"><title>LORe region {escape(str(b.get("label") or ""))}: the duplicate '
                    'copies are still nearly identical</title></rect>' for b in data.get("lore", []))
     defs = locus_svg._hatch("sp", "lore", locus_svg.LORE, -45) if lore else ""  # id sp-lore
-    rows.append(row("Genes", trk(h, (f"<defs>{defs}</defs>" if defs else "") + lore + "".join(body)),
-                    "Ensembl 116, one isoform each"))
-    more = []  # every isoform of both annotations, one transcript per line
+    rows.append(row("Genes", trk(h, (f"<defs>{defs}</defs>" if defs else "") + lore + "".join(body)), sub))
+    # opened: the Ensembl genes (their gene pages and Ss4R duplicates) under the NCBI lane, then every isoform of both
+    more = [row("Ensembl genes", trk(ensembl[1], "".join(ensembl[0])), ensembl[2])] if default is not ensembl else []
     links = {"ensembl": lambda gid: reverse("snpportal:gene", args=[gid]), "ncbi": NCBI_GENE.format}
     for key, models in sl.isoforms(jobs.release(), s["chrom"], s["start"], s["end"], data.get("genes", [])).items():
         body = []
         h = locus_svg._genes(body, ax, models, 0, links[key], ISOFORM_ROWS, noop, sl.ISOFORMS[key][1], "transcripts")
         more.append(row(f"{'Ensembl' if key == 'ensembl' else 'NCBI RefSeq'} isoforms", trk(h, "".join(body)),
                         f"{sl.ISOFORMS[key][1]}, {len(models)} transcript{'s' * (len(models) != 1)}"))
-    return group("genes", "Genes and variants", "", rows, more, "All isoforms", open_)
+    return group("genes", "Genes and variants", "", rows, more, "Ensembl genes and all isoforms" if ncbi is not None else "All isoforms", open_)
 
 
 # ---- public SNPs ----
@@ -382,12 +426,15 @@ def peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes):
         segs = found[c]
         parts = [state_rect(ax, a, e, 2, 9, st, short(c)) for a, e, st in segs or ()] if segs is not None else [
             f'<rect x="{-W}" y="2" width="{3 * W}" height="9" fill="{G[200]}"><title>{escape(short(c))}: peaks unavailable</title></rect>']
-        more.append(row(short(c), trk(13, "".join(parts)), tissue=tissue_of(c), dense=True))
+        more.append(row(short(c), trk(13, "".join(parts)), tissue=tissue_of(c), dense=True, title=long(c, "peaks")))
     if any(v is None for v in found.values()):
         notes.append("Some per-condition peak tracks did not load in time (grey rows); reload to try again.")
-    return group("peaks", "Regulatory elements", "AQUA-FAANG robust ATAC peaks, coloured by chromatin state",
+    note = "AQUA-FAANG robust ATAC peaks, coloured by chromatin state"
+    if set(found) - set(conditions):
+        note += f" · Combined: the {len(conditions)} conditions the tiers count; the gill and head kidney (HK) rows are shown only"
+    return group("peaks", "Regulatory elements", note,
                  [row("Combined", trk(32, "".join(body)), f"n/{len(conditions)}: conditions with the peak")],
-                 more, f"{len(more)} conditions", open_)
+                 separated(more), f"{len(more)} conditions", open_)
 
 
 def motifs_group(s, ax, data):
@@ -504,10 +551,15 @@ def hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes):
             parts = [f'<rect x="{-W}" y="1" width="{3 * W}" height="11" fill="{G[200]}"><title>{escape(short(c))}: ChromHMM unavailable</title></rect>']
         else:
             parts = [state_rect(ax, a, e, 1, 11, st, short(c)) for a, e, st in segs.get(c) or ()]
-        more.append(row(short(c), trk(13, "".join(parts)), tissue=tissue_of(c), dense=True))
+        more.append(row(short(c), trk(13, "".join(parts)), tissue=tissue_of(c), dense=True, title=long(c, "states")))
     legend = [(f"st-{x}", x.replace("_", " ").replace(" 1", "")) for x in LEGEND_STATES]
+    if any(immuno(c) for c in conditions):  # the ImmunoMap's 6-state model has three combined labels
+        legend += [(f"st-{x}", x.replace("_", " ")) for x in IMMUNOMAP_STATES]
+        note += " · head kidney (HK): the ImmunoMap's own 6-state model"
+    if any(c.startswith("Gill_") for c in conditions):
+        note += " · gill: its own model of weaker 2026 data"
     return group("hmm", "Chromatin states", note, [row("Combined", trk(h + 2, "".join(body)), f"conditions per state, 0–{total}")],
-                 more, f"{len(more)} conditions", open_, legend)
+                 separated(more), f"{len(more)} conditions", open_, legend)
 
 
 # ---- functional assays (RNA-seq, ATAC-seq, ChIP-seq): one request per assay ----
@@ -596,8 +648,8 @@ def assay_group(s, assay, open_):
                 parts.append(polygon(xs, [22 - 21 * min(1, x / vmax) for x in v], [22] * len(xs), colour))
         parts.append(f'<line x1="{-W}" x2="{2 * W}" y1="{12 if rna else 22}" y2="{12 if rna else 22}" stroke="{G[300]}" stroke-width="0.6"/>')
         reps = max(found[c, st][1] for st in strands if (c, st) in found)
-        more.append(row(short(c), trk(24, "".join(parts)), tissue=tissue[c]))
-        more[-1]["title"] = f"mean of {reps} replicate{'s' if reps > 1 else ''}"
+        more.append(row(short(c), trk(24, "".join(parts)), tissue=tissue[c],
+                        title=" · ".join(x for x in (long(c, assay), f"mean of {reps} {'fish' if immuno(c) else 'replicate' + ('s' if reps > 1 else '')}") if x)))
     scale = f"conditions on a log scale, 0–{vmax:.0f} RPM" if rna else f"conditions 0–{vmax:.2f} RPM"
     note = f"{what.split(';')[0]}{'; + strand up, &#8722; down' if rna else ''} · {scale}"
     if failed:

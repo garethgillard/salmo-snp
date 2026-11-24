@@ -27,7 +27,9 @@ from django.views.decorators.http import require_POST
 from . import jobs, results as result_views, tools
 
 SUFFIXES = (".vcf.gz", ".vcf", ".tsv.gz", ".tsv", ".csv.gz", ".csv", ".txt.gz", ".txt", ".bim", ".map")
+SV_SUFFIXES = (".vcf.gz", ".vcf", ".bed.gz", ".bed", ".tsv.gz", ".tsv", ".csv.gz", ".csv", ".txt.gz", ".txt")  # structural variants
 PASTE_LINES = 10_000
+SV_PASTE_LINES = 10_000  # pasted regions (structural variants)
 TABS = ("overview", "table", "panel", "export")  # panel: the automatic designer, unlinked (testing only; the Design panel page is curated)
 CURRENT = "snpportal_current"  # cookie: the results this browser last opened
 MINE = "snpportal_results"  # cookie: the results this browser opened, newest first: the Score page lists them
@@ -37,9 +39,13 @@ EXAMPLES = {  # the release's demo/ files (name without extension) -> (title, wh
     "chip_demo_SYNTHETIC": ("SNP chip", "synthetic, {n:,} SNPs"),
     "gwas_maturation_SYNTHETIC": ("GWAS", "synthetic, maturation"),  # posted to association.score with trait=maturation
     "public_50k": ("Public SNPs", "{n:,} sites, an even sample"),  # on the Score page only when a release has no other example
+    "known_svs": ("Known SVs", "{n:,} published structural variants"),  # SV examples: scored as SVs (sv=True below)
+    "svs_demo_SYNTHETIC": ("SVs", "synthetic, {n:,} structural variants"),
 }
-TRY = ("known_loci", "chip_demo_SYNTHETIC", "gwas_maturation_SYNTHETIC")  # the Score page's 'Try it' box, in this order
-INPUTS = {"file": "Upload SNPs", "paste": "Paste positions", "regions": "Genes or regions", "gwas": "GWAS"}  # Score tabs
+TRY = ("known_loci", "chip_demo_SYNTHETIC", "gwas_maturation_SYNTHETIC", "known_svs", "svs_demo_SYNTHETIC")  # the Score page's examples
+SV_EXAMPLES = ("known_svs", "svs_demo_SYNTHETIC")
+INPUTS = {"file": "Upload SNPs", "paste": "Paste positions", "regions": "Genes or regions", "sv": "Structural variants",
+          "gwas": "GWAS"}  # Score tabs
 
 
 class PrivateReports(SafeExceptionReporterFilter):
@@ -103,8 +109,8 @@ class UploadToResults(FileUploadHandler):
             Path(path).unlink(missing_ok=True)
 
 
-def accepted_suffix(name):
-    return next((s for s in SUFFIXES if name.lower().endswith(s)), None)
+def accepted_suffix(name, suffixes=SUFFIXES):
+    return next((s for s in suffixes if name.lower().endswith(s)), None)
 
 
 def examples():
@@ -114,7 +120,7 @@ def examples():
     files = sorted((release / "demo").iterdir()) if (release / "demo").is_dir() else []
     found = {}
     for p in files + [release / "catalog" / "known_loci.tsv"]:
-        suffix = accepted_suffix(p.name)
+        suffix = accepted_suffix(p.name, SV_SUFFIXES if p.name.startswith(SV_EXAMPLES) else SUFFIXES)
         name = suffix and p.name[:-len(suffix)]
         if name and name not in found and p.is_file():
             title, what = EXAMPLES.get(name, (name.replace("_", " "), ""))
@@ -122,7 +128,7 @@ def examples():
                 what = what.format(n=_rows(p, p.stat().st_mtime_ns))
             synthetic = "SYNTHETIC" in p.name
             found[name] = {"title": title, "what": what, "label": f"{title} (synthetic)" if synthetic else title,
-                           "path": p, "suffix": suffix, "synthetic": synthetic}
+                           "path": p, "suffix": suffix, "synthetic": synthetic, "sv": name in SV_EXAMPLES}
     return found
 
 
@@ -144,6 +150,7 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
         "nav": "score", "title": "Score SNPs by functional evidence", "error": error, "tabs": INPUTS.items(), "tab": tab, "mine": listed,
         "tries": [dict(found[name], name=name, gwas=name.startswith("gwas_"))  # a release without them: its public sample
                   for name in (TRY if any(n in found for n in TRY) else ("public_50k",)) if name in found],
+        "sv_lines": SV_PASTE_LINES,
         "targets": targets, "flanks": FLANKS, "flank": FLANK, "paste_lines": PASTE_LINES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}",
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(),
@@ -180,7 +187,7 @@ def score(request):
 @csrf_protect
 @sensitive_post_parameters()
 def _score(request):
-    tab = "paste" if request.POST.get("paste") else "file"
+    tab = "sv" if request.POST.get("kind") == "sv" else "paste" if request.POST.get("paste") else "file"
     try:
         key, preset = start_job(request)
     except jobs.InputError as e:
@@ -196,14 +203,16 @@ def _score(request):
 
 def start_job(request):
     """Create the job for a POSTed example, file or paste. Returns (key, preset)."""
-    preset = "all"  # tiers always count all 21 conditions
+    preset = "all"  # tiers always count all 27 conditions
     example, upload, paste = request.POST.get("example"), request.FILES.get("snps"), request.POST.get("paste", "").strip()
     if example:
         found = examples().get(example)
         if found is None:
             raise jobs.InputError("That example is not part of this release.")
-        return jobs.create(found["path"], found["suffix"], "snps", preset, f"Example: {found['label']}",
+        return jobs.create(found["path"], found["suffix"], "sv" if found["sv"] else "snps", preset, f"Example: {found['label']}",
                            synthetic=found["synthetic"], move=False), preset
+    if request.POST.get("kind") == "sv":
+        return start_sv_job(request, preset), preset
     if upload:
         suffix = accepted_suffix(upload.name)
         if suffix is None:
@@ -218,6 +227,24 @@ def start_job(request):
         rows = jobs.parse_paste(paste, PASTE_LINES)
         return jobs.create_from_rows(rows, f"Pasted {jobs.utc()}", preset, kind="snps", input_format="paste"), preset
     raise jobs.InputError("Choose a file, paste some positions or pick an example.")
+
+
+def start_sv_job(request, preset):
+    """Create the job for POSTed structural variants: a file (svs) or pasted regions (sv_paste). Returns the key."""
+    upload, paste = request.FILES.get("svs"), request.POST.get("sv_paste", "").strip()
+    if upload:
+        suffix = accepted_suffix(upload.name, SV_SUFFIXES)
+        if suffix is None:
+            raise jobs.InputError("This file type isn't accepted for structural variants. Upload a VCF (.vcf or .vcf.gz), a "
+                                  "BED file or a table (.tsv, .csv or .txt, optionally gzipped): see Format help.")
+        if not upload.size:
+            raise jobs.InputError("The uploaded file is empty.")
+        name = Path(upload.name or "").name[:80] or "Uploaded SVs"
+        return jobs.create(Path(upload.path), suffix, "sv", preset, name)
+    if paste:
+        rows = jobs.parse_sv_paste(paste, SV_PASTE_LINES)
+        return jobs.create_from_sv_rows(rows, f"Pasted SVs {jobs.utc()}", preset)
+    raise jobs.InputError("Choose a file of structural variants, or paste some regions.")
 
 
 def finished(key):
@@ -246,20 +273,21 @@ def results(request, key):
     if job is None:
         return render(request, "snpportal/expired.html", {"nav": "score", "title": "Results expired or deleted"}, status=404)
     gwas = job.get("input_kind") == "gwas"  # GWAS jobs: Association first (its own page), no Panel tab
+    sv = job.get("input_kind") == "sv"  # SV jobs: no Panel tab either (panels are SNP markers)
     if gwas and job["state"] == "done" and "tab" not in request.GET:
         return redirect(f"{reverse('snpportal:association', args=[key])}?{urlencode({'trait': request.GET.get('trait', 'all'), **result_views.gwas_settings(request)})}")
     tab = request.GET.get("tab", "overview")
-    tab = tab if tab in TABS and not (gwas and tab == "panel") else "overview"
+    tab = tab if tab in TABS and not ((gwas or sv) and tab == "panel") else "overview"
     synthetic = bool(job.get("synthetic_input") or job.get("synthetic_layers"))
     label = job.get("label") or "Results"
-    context = {"nav": "score", "job": job, "key": key, "tab": tab, "gwas": gwas,
+    context = {"nav": "score", "job": job, "key": key, "tab": tab, "gwas": gwas, "sv": sv,
                "title": " · ".join(x for x in [label + (" (synthetic data)" if synthetic and "synthetic" not in label.lower() else ""),
                                                f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None] if x),
                "meta": f"Deleted after {jobs.utc(jobs.expires(key))}" if jobs.expires(key) else "Kept on this computer until you delete it",
                "synthetic": synthetic}
     if job["state"] == "done":
         d = jobs.folder(key)
-        trait = "all"  # tiers always count all 21 conditions
+        trait = "all"  # tiers always count all 27 conditions
         settings = result_views.gwas_settings(request) if gwas else {}
         context.update(trait=trait, query=urlencode(settings), release_changed=jobs.release_changed(job))
         if tab == "table":
@@ -369,6 +397,7 @@ def mine(request):
             job = None
         if job:
             out.append({"key": key, "name": job.get("label") or "Results", "n": job.get("n_rows"), "when": job.get("created_utc"),
+                        "unit": "SVs" if job.get("input_kind") == "sv" else "SNPs",
                         "state": job.get("state"), "url": reverse("snpportal:results", args=[key]),
                         "current": not out})  # the one opened last
     return out

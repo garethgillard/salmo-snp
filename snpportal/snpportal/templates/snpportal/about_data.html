@@ -60,15 +60,19 @@
     {% if population %}<li>Public allele frequencies (MAF): {{ population }}; your strain can differ.</li>{% endif %}
   </ul>{% else %}
   <ul class="sp-small mt-2 mb-1 ps-3">
-    <li>Chromatin states, ATAC peaks, signal, molQTL and expression: 12 AquaGen commercial fish (AQUA-FAANG BodyMap: brain, gonad,
-      liver, muscle) and embryo pools at five stages (DevMap).</li>
+    <li>Chromatin states, ATAC peaks and signal: 12 AquaGen commercial fish (AQUA-FAANG BodyMap: brain, gonad, liver, muscle and
+      gill), head kidney of juvenile parr after PBS, poly I:C or Vibrio (ImmunoMap, 6 fish per treatment) and embryo pools at
+      five stages (DevMap). molQTL and expression: the 12 BodyMap fish.</li>
     <li>Allele frequencies (MAF): 504 public fish, wild and farmed, of European and North American descent, pooled; your strain can differ.</li>
   </ul>
   <details class="sp-more" id="aquafaang"><summary>Sample details and ENA projects</summary>
     <p class="sp-small mt-2"><strong>BodyMap</strong>: 12 AquaGen commercial (domesticated diploid) fish, born at the fish research
       centre of NMBU in &Aring;s and reared in fresh water in a closed recirculating system; immature fish (J) born January 2020,
       mature fish (A) March 2019, all sampled in September 2020 (BioSamples SAMEA9253105&ndash;116). Brain, gonad, liver and
-      muscle (gill RNA only). <strong>DevMap</strong>: embryo pools at five stages (Roslin Institute). Gill ATAC and CTCF ChIP were
+      muscle; gill RNA and ChIP, and gill ATAC re-made from the same fish in 2026 (the first libraries were discarded): a weaker
+      data set, with no usable mature female library. <strong>ImmunoMap</strong> (University of Aberdeen): head kidney of juvenile
+      parr, about 10 months old, after in vivo treatment with PBS, poly I:C or Vibrio, 6 fish per treatment (the in vitro
+      leukocyte samples are left out). <strong>DevMap</strong>: embryo pools at five stages (Roslin Institute). CTCF ChIP was
       discarded; histone ChIP has 2 of 3 replicates except in gonad.</p>
     {% if population %}<p class="sp-small">Public allele frequencies: {{ population }}. Other populations, for example North
       American salmon, can differ in karyotype and allele frequencies.</p>{% endif %}

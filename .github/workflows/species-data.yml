@@ -1,17 +1,26 @@
 name: species-data
-# Another species' data release on the NREC demo, without G's Mac: built here from the public sources and sent to the
-# VM through the deploy key (snpportal/deploy/update.sh `release <version>`, which checks every file before it puts
-# the release in place). Run it on main when G asks (Actions > species-data > Run workflow), after a deploy has
-# installed the code that names the release (serve.py RELEASES). Rainbow trout: the three cohorts of the public
-# frequencies are read from ENA in parallel jobs (7, 16 and 55 GB, as byte ranges: one stream is too slow; frequencies
-# kept, genotypes never written), then one
-# job fetches the rest, builds the release (the motif layer takes most of the time) and its public pool, and sends them.
+# A species' data release without G's Mac: built here from the public sources, published as this repository's GitHub
+# data release data-<version> (snpdata/prep/github_release.sh: what tools/get_data.sh and local installs download) and
+# sent to the NREC demo through the deploy key (snpportal/deploy/update.sh `release <version>`, which checks every file
+# before it puts the release in place; the default species' replaces /srv/snpportal/release). Run it on main when G
+# asks (Actions > species-data > Run workflow, choosing the species), after a deploy has installed the code that names
+# the release (serve.py RELEASE for Atlantic salmon, RELEASES for the others).
+# Rainbow trout: the three cohorts of the public frequencies are read from ENA in parallel jobs (7, 16 and 55 GB, as
+# byte ranges: one stream is too slow; frequencies kept, genotypes never written), then one job fetches the rest,
+# builds the release (the motif layer takes most of the time) and its public pool, and sends them. Atlantic salmon:
+# that one job alone.
 on:
   workflow_dispatch:
+    inputs:
+      species:
+        description: The species whose release (the version serve.py names) is built
+        type: choice
+        options: [rainbow_trout, atlantic_salmon]
+        default: rainbow_trout
 
 jobs:
   cohorts:
-    if: github.ref == 'refs/heads/main' && vars.NREC_HOST != ''
+    if: github.ref == 'refs/heads/main' && vars.NREC_HOST != '' && inputs.species == 'rainbow_trout'
     runs-on: ubuntu-latest
     timeout-minutes: 350
     strategy:
@@ -39,10 +48,17 @@ jobs:
 
   release:
     needs: cohorts
+    # after the trout cohorts, or straight away for salmon (cohorts skipped)
+    if: >-
+      always() && github.ref == 'refs/heads/main' && vars.NREC_HOST != '' &&
+      (needs.cohorts.result == 'success' || (inputs.species == 'atlantic_salmon' && needs.cohorts.result == 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 350
+    permissions:
+      contents: write  # the GitHub data release data-<version>
     env:
       HOST: ${{ vars.NREC_HOST }}
+      SPECIES: ${{ inputs.species }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -50,6 +66,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -q -e snpscore -e snpdata
       - uses: actions/download-artifact@v8
+        if: inputs.species == 'rainbow_trout'
         with:
           pattern: cohort-*
           merge-multiple: true
@@ -57,20 +74,32 @@ jobs:
       - name: Fetch the other sources, build the release and its pool
         working-directory: snpdata
         run: |
-          version=$(sed -n 's/^RELEASES = {.*"rainbow_trout": "\([^"]*\)".*/\1/p' ../snpportal/snpportal/serve.py)
+          if [ "$SPECIES" = atlantic_salmon ]; then
+            version=$(sed -n 's/^RELEASE = "\([^"]*\)".*/\1/p' ../snpportal/snpportal/serve.py)
+            layers=layers.yaml data=data/raw
+          else
+            version=$(sed -n "s/^RELEASES = {.*\"$SPECIES\": \"\([^\"]*\)\".*/\1/p" ../snpportal/snpportal/serve.py)
+            layers=$SPECIES/layers.yaml data=data/$SPECIES/raw
+          fi
+          [ -n "$version" ] || { echo "::error::serve.py names no release for $SPECIES"; exit 1; }
           echo "VERSION=$version" >> "$GITHUB_ENV"
           for try in 1 2 3 4 5; do  # Ensembl BioMart and EBI drop requests now and then: fetch keeps what it has
-            snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw && break
+            snpdata fetch --layers "$layers" --data "$data" && break
             [ "$try" = 5 ] && exit 1
             sleep 60
           done
-          snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out "release/$version"
+          snpdata build --layers "$layers" --data "$data" --out "release/$version"
           snpscore pool --release "release/$version" --memory 8GB
           snpdata publish "release/$version" --to out/site > /dev/null
           mkdir -p out/site/raw
           genome=$(python -c "import json, sys; print(json.load(open(sys.argv[1]))['genome']['path'])" "release/$version/manifest.json")
           cp "$genome" "$genome.fai" "$genome.gzi" out/site/raw/
           cp -r "release/$version/pool" out/pool
+      - name: Publish it as the GitHub data release
+        working-directory: snpdata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: POOL=1 bash prep/github_release.sh "release/$VERSION"
       - name: Send it to the demo
         shell: bash
         working-directory: snpdata

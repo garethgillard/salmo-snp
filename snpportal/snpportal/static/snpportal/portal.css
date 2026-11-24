@@ -480,6 +480,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp .sp-ev-gwas { border-color: var(--sp-accent); border-left-width: 4px; }
 .sp .sp-ev-marker { border-color: var(--sp-warn-border); border-left-width: 4px; }
 .sp .sp-ev-region { border-color: var(--sp-grey-500); border-left-width: 4px; }
+.sp .sp-ev-sv { border-color: var(--sp-grey-700); border-left-width: 4px; }
 .sp .sp-ev-allele { color: var(--sp-ok-text); background: var(--sp-ok-bg); border-color: var(--sp-ok-border); }
 .sp .sp-ev-caveat { color: var(--sp-warn-text); background: var(--sp-warn-bg); border-color: var(--sp-warn-border); }
 @media print {  /* every trait's table on paper, under its heading */
@@ -528,6 +529,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-tracks { overflow-x: auto; }
 .sp-trk { display: grid; grid-template-columns: 200px 1000px; align-items: center; width: 1200px; min-height: 14px; }
 .sp-trk-dense { min-height: 13px; }
+.sp-trk-sep { border-top: 1px solid var(--sp-grey-200); margin-top: 3px; padding-top: 2px; }  /* a new tissue or map below */
 .sp-trk-lab { font-size: 11.5px; text-align: right; padding-right: 10px; line-height: 1.15; white-space: nowrap; overflow: hidden; }
 .sp-trk-dense .sp-trk-lab { font-size: 10.5px; }
 .sp-trk-name { font-weight: 600; }

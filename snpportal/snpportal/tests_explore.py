@@ -112,7 +112,7 @@ class ExploreTest(SimpleTestCase):
         score = self.client.get(reverse("snpportal:upload"), {"input": "regions"})  # genes or regions: a tab on Score
         self.assertContains(score, f'action="{reverse("snpportal:candidates")}"')
         self.assertContains(score, 'class="tab-pane active" id="pane-regions"')
-        self.assertContains(self.client.get(reverse("snpportal:about_data")), "21 chromatin conditions")  # release facts
+        self.assertContains(self.client.get(reverse("snpportal:about_data")), "27 chromatin conditions")  # release facts
         page = self.client.get(reverse("snpportal:known_loci"))
         self.assertContains(page, "https://doi.org/10.1038/nature16062")
         self.assertContains(page, "T (Met54) = early maturation (1SW)")  # evidence and effect in one cell
@@ -157,7 +157,7 @@ class ExploreTest(SimpleTestCase):
         self.assertEqual(page.content.decode().count('<td class="sp-mono"><a href="/snp/variant/'), explore.SHOW_FIRST)  # the 10 best
         self.assertContains(page, "&amp;all=1#candidates", html=False)  # then 'Show all'
         self.assertContains(self.client.get(url, {"all": "1"}), reverse("snpportal:variant", args=["25-28996360"]))  # Met54Thr is public
-        self.assertEqual(page.content.decode().count('class="text-nowrap" title='), 21)  # 21 condition columns, in a closed section
+        self.assertEqual(page.content.decode().count('class="text-nowrap" title='), 27)  # 27 condition columns, in a closed section
         self.assertContains(page, '<details class="sp-more" id="elements">', html=False)
         self.assertContains(page, 'id="ohnolog"')  # its Ss4R duplicate, from the ss4r layer
         self.assertContains(page, f'href="{reverse("snpportal:gene", args=[VGLL3_CHR21])}" title="{VGLL3_CHR21}">vgll3</a> (chr21)', html=False)

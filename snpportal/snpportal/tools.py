@@ -330,7 +330,7 @@ def figure(request, key, name):
     if name not in FIGURES:
         raise Http404("No such figure")
     d, weights = jobs.folder(key), jobs.weights(jobs.folder(key))
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     con, view, types = _open(d, trait, weights, selected=True)
     c = _context(key, job, d, trait, con)
     if name.startswith("panel"):
@@ -639,7 +639,7 @@ def panel(request, key, job):
     The default panel is designed on the first visit; every parameter set is cached in the job folder."""
     d = jobs.folder(key)
     weights = jobs.weights(d)
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     con, view, types = _open(d, trait, weights, selected=True)
     chip = chip_info(d)
     c = _context(key, job, d, trait, con)
@@ -691,7 +691,7 @@ def design(request, key):
     _views().finished(key)
     d = jobs.folder(key)
     weights = jobs.weights(d)
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     con, view, types = _open(d, trait, weights, selected=True)
     ids = MUST.findall(request.POST.get("must", "")[:20_000])
     info = _design(con, view, d, trait, _params(request.POST, weights, types, ids), weights, chip_info(d))
@@ -800,7 +800,7 @@ def chip(request, key):
 @sensitive_post_parameters()
 def _chip(request, key):
     d = jobs.folder(key)
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     if request.POST.get("remove"):
         for path in [d / "chip.parquet", d / "chip.json", *d.glob("chip_rows_*.parquet")]:
             path.unlink(missing_ok=True)
@@ -881,7 +881,8 @@ def _scope(request, key, d, con, view, types, weights, job, scope=None):
 
 def _command(job, trait, tag, fmt="<format>"):
     name = jobs.cli_trait(trait) or "all"  # snpscore's name for these conditions (others: all, and the portal's tiers differ)
-    base = f"snpscore annotate <your list> --release <release {job.get('release')}> --trait {name} -o annotated.parquet"
+    base = (f"snpscore {'sv' if job.get('input_kind') == 'sv' else 'annotate'} <your list> --release <release {job.get('release')}> "
+            f"--trait {name} -o annotated.parquet")
     if tag and tag.startswith("panel-") and fmt != "priors":
         return base + f"; python -m snpportal.lib.cli panel annotated.parquet --release <release {job.get('release')}> --preset {name} (parameters in panels/{tag[6:]}.json of the job)"
     return base + f"; python -m snpportal.lib.cli export annotated.parquet --release <release {job.get('release')}> --preset {name} --format {fmt}"
@@ -896,9 +897,12 @@ def export(request, key, job, fmt):
     fmt, _, part = fmt.partition(".")
     if fmt not in EXPORTS or part not in ("", "provenance", "lookup") or part and fmt not in VENDORS:
         raise Http404("Unknown export format")
+    sv = job.get("input_kind") == "sv"
+    if sv and (fmt in VENDORS or fmt == "priors"):  # vendor files and genomic-prediction priors are for SNPs
+        raise Http404("Not an export of structural variants")
     d = jobs.folder(key)
     weights = jobs.weights(d)
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     con, view, types = _open(d, trait, weights, request=request)
     table, tag, filters, panel_hash, synthetic = _scope(request, key, d, con, view, types, weights, job,
                                                         "all" if fmt == "priors" else None)  # priors: every SNP
@@ -908,10 +912,12 @@ def export(request, key, job, fmt):
         return render(request, "snpportal/stub.html", {"nav": "score", "title": "Too many SNPs for a vendor file", "message":
                       f"Vendor files are for panels: this export has {n:,} SNPs, more than {cap:,}. Filter the Table "
                       "first, or add a selection to your Design panel, which makes vendor files for it."}, status=400)
-    formats = ["tsv", "bed"] + (list(VENDORS) if n <= cap else [])
+    formats = ["tsv", "bed"] + (list(VENDORS) if n <= cap and not sv else [])
     notes = {"vendor_files": f"left out above {cap:,} SNPs"} if fmt == "bundle" and n > cap else {}
     named = {k: ("one of your own tracks" if k == "track" else v) for k, v in filters.items()}  # a track by name, not its id
     meta = _meta(job, trait, synthetic, {**named, **notes}, panel_hash, _command(job, trait, tag, fmt))
+    if sv:
+        meta["sv"] = True
     saved = _saved(d, panel_hash) if panel_hash else None
     if saved and saved.get("params"):
         meta["panel_params"] = panel_params(saved["params"])
@@ -929,7 +935,7 @@ def export(request, key, job, fmt):
         if fmt == "bundle":
             snp_export.bundle_zip(tmp, con, jobs.release(), trait, meta, formats, _bundle_svgs(key, job, d, trait, con, panel_hash, synthetic),
                                   request.GET.get("include_failed") == "1", table=table, manifest=manifest, weights=wfile)
-            if n <= cap and jobs.manifest(d).get("genome"):  # the Export tab's per-file checks travel with the files
+            if n <= cap and jobs.manifest(d).get("genome") and not sv:  # the Export tab's per-file checks travel with the files
                 notes = _vendor_notes(con, table, n)
                 with zipfile.ZipFile(tmp, "a") as z:
                     z.writestr("vendor_checks.txt", "".join(f"{fmt}: {'; '.join(x for x in lines if x)}\n" for fmt, lines in notes.items()))
@@ -1020,9 +1026,10 @@ def exports(request, key, job):
     with their association files and one KASP row for the credible-set SNPs."""
     d = jobs.folder(key)
     weights = jobs.weights(d)
-    trait = "all"  # tiers always count all 21 conditions
+    trait = "all"  # tiers always count all 27 conditions
     con, view, types = _open(d, trait, weights)
     gwas = job.get("input_kind") == "gwas"
+    sv = job.get("input_kind") == "sv"  # structural variants: the table, BED and Parquet; no vendor files or priors
     settings = results.gwas_settings(request) if gwas else {}  # the loci and credible sets of the Association page's settings
     conds = results.filters(results.selection_request(results.selection(d)), types, weights, d) + [m for m in [results.manual(d)] if m]
     chosen = {k: v for params, _, _ in conds for k, v in params.items()}
@@ -1050,7 +1057,7 @@ def exports(request, key, job):
         scopes.append(("all", "All SNPs", total, view, view == "vc" and chip.get("synthetic")))
     value, label, n, rel, chip_synthetic = next((x for x in scopes if x[0] == wanted), scopes[0])
     cap = int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000))
-    genome = bool(jobs.manifest(d).get("genome"))  # vendor files need the genome
+    genome = bool(jobs.manifest(d).get("genome")) and not sv  # vendor files need the genome (and SNPs)
     query = {"trait": trait, "scope": value, **chosen, **settings}
     url = reverse("snpportal:download", args=[key])
 
@@ -1073,13 +1080,17 @@ def exports(request, key, job):
         for fmt, name, about in FORMATS:
             if fmt in VENDORS and fmt not in vendor:
                 continue
+            if sv and fmt == "bundle":
+                about = "The table and BED, with methods, provenance and figures."
             text = [x for x in notes.get(fmt, [about]) if x]
             if fmt in VENDORS and n > cap:
                 text = [f"Vendor files hold at most {cap:,} SNPs: filter the table or design a panel."]
             rows.append((name, text, None if fmt in VENDORS and not notes else href(fmt)))
     more = [(name.replace("priors", f"priors, all {total:,} SNPs") if fmt == "priors" else name, about,
              href(fmt, **({"scope": "all"} if fmt == "priors" else {})))  # priors need every genotyped SNP: never a subset
-            for fmt, name, about in MORE_FORMATS if fmt != "priors" or fmt in getattr(snp_export, "FORMATS", ())] + [("Table without # lines (TSV)", "for scripts", href("tsv", plain="1"))]
+            for fmt, name, about in MORE_FORMATS if fmt != "priors" or fmt in getattr(snp_export, "FORMATS", ()) and not sv]
+    more = [(n, "chrom, start − 1 and end of each SV, and its name, for genome browsers" if sv and "BED" in n else a, h)
+            for n, a, h in more] + [("Table without # lines (TSV)", "for scripts", href("tsv", plain="1"))]
     if notes:
         more += [(f"{fmt.upper() if fmt == 'kasp' else fmt.capitalize()}: keep SNPs that fail the assay check or are not checked, flagged", "",
                   href(fmt, include_failed="1")) for fmt in (("kasp",) if gwas else vendor)]
@@ -1088,7 +1099,7 @@ def exports(request, key, job):
                      for fmt in (("kasp",) if gwas else vendor) for part, tip in (("provenance", "how it was made"), ("lookup", "your ids, TOP/BOT and assay status"))]
     return {"query": urlencode({"trait": trait, **chosen, **settings}),
             "exports": {
-        "scopes": [(v, f"{lab} ({k:,})" if v != "credible" else lab, v == value) for v, lab, k, _, _ in scopes], "gwas": gwas,
+        "scopes": [(v, f"{lab} ({k:,})" if v != "credible" else lab, v == value) for v, lab, k, _, _ in scopes], "gwas": gwas, "sv": sv,
         "trait": trait, "hidden": sorted(chosen.items()), "rows": rows, "more": more, "n": n,
         "synthetic": bool(chip_synthetic) and not _synthetic(job), "panel_link": "?" + urlencode({"tab": "panel", "trait": trait}),
     }}

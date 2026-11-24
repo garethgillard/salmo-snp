@@ -15,7 +15,11 @@ NOT_CONDITIONS = ("chromatin_summary", "chromatin_id")  # chromatin_* columns th
 # Gill (ATAC and ChIP only), Sperm (ChIP only) and the RNA-only embryo stages have none.
 CHROMATIN_CONDITIONS = tuple(f"{t}_{m}_{s}" for t in ("Brain", "Gonad", "Liver", "Muscle")
                              for m in ("Immature", "Mature") for s in ("Female", "Male")) + (
+    "Gill_Immature_Female", "Gill_Immature_Male", "Gill_Mature_Male",  # gill ATAC-seq of 2026 (no usable Mature Female)
+    "HeadKidney_invivo_pbs", "HeadKidney_invivo_polyIC", "HeadKidney_invivo_vibrio",  # the ImmunoMap (2026)
     "LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomitogenesis", "LateSomitogenesis")
+# The salmon conditions in display order (unified peaks v3; release 2026-11-05 has the first 16 and the stages). Tiers
+# count whatever chromatin_<condition> columns a release has.
 
 
 WEIGHTS = Path(__file__).with_name("weights.yaml")  # the tier rules; a release holds data only

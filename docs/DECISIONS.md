@@ -3,8 +3,8 @@
 Everything the prototype currently does by a provisional rule, in one place, with the options and a recommendation.
 Each answer goes into ../AGENTS.md under "Decided" and, where it is a number, into snpscore's `weights.yaml` (then
 rebuild the pool with `snpscore pool`: the release holds no weights; a layer setting in layers.yaml needs a new release).
-Evidence sources: RESEARCH.md (section numbers below), the reviews of 2026-10-07 and 2026-11-04 and the benchmark in
-`release/dev`.
+Evidence sources: RESEARCH.md (section numbers below), the reviews of 2026-10-07 and 2026-11-04, the benchmark in
+`release/dev`, and for the scoring questions SCORING.md (how other projects score variants; the research of 2026-11-22).
 
 ## Scoring (changes tiers)
 
@@ -29,6 +29,23 @@ caQTL leads (n = 1,057) give 3-4x, but they are called on the same ATAC data, so
 | 4b | The v0.1 'benchmark passes thresholds set in advance': which threshold? | none | Lower 95% bound > 1 for tier <= 2 on eQTL leads (met today: 1.27) |
 | 4c | Score a one-tissue molQTL set with that tissue's preset, or always 'all'? | the tissue's preset | Tissue preset |
 
+**Questions from the scoring research** (G, 2026-11-21: the scoring is what matters most after the data to visualise,
+customisable, with a good starting point; [SCORING.md](SCORING.md) has the sources; † = from a paper's full text, not
+re-checked). The literature gives an order of evidence, not numbers: the numbers stay G's.
+
+| # | Question | Now (provisional) | What other projects found | Recommendation |
+|---|---|---|---|---|
+| 49 | Should an active promoter (Active_TSS) count more than an active enhancer? | both are 'active', weight 3 | Pig GWAS lead SNPs: 12-fold in active promoters against 2-fold in active enhancers†; pig molecular QTL most enriched in promoters†; part of this is detection bias towards large effects near genes | Measure both on our benchmark with controls matched on distance to the gene start, then G decides; Claude leans to separating them |
+| 50 | Where does constraint (GERP) sit against an active chromatin state? | 2 against 3 | Conservation ranked first in the cattle score (FAETH) and 16-fold† among fine-mapped human trait variants; but pig lead SNPs were less conserved than background†, and GERP from 65 fish of a duplicated genome is untested. Ours: 2.29x (1.19-4.40) at eQTL leads | Keep 2 until the upgraded benchmark gives its enrichment given the other layers |
+| 51 | The scale of the GWAS prior | exp(0.5 x tier_score): 4.5-fold prior odds at score 3, 12-fold at 5, 55-fold at 8 | Priors that improved fine-mapping were estimated per score bin and re-calibrated; ours is steeper than anything we measured (1.48x for tiers 1-2 at eQTL leads) | Estimate the enrichment per tier on the upgraded benchmark and use it; show the range; offer a flat prior and a cap |
+| 52 | Should distance to the gene start be evidence by itself? | not a term; the benchmark matches on gene distance | The strongest single predictor of fine-mapped eQTL variants†, but GWAS hits, unlike eQTL, do not cluster at gene starts | No: a matching variable, and the baseline the score must beat |
+| 53 | How do ChromBPNet scores and allelic imbalance count when they arrive? | shown, weight 0 (#33) | What orders SNPs inside one locus is evidence at the base; sequence-model annotations added little once coding, conserved and regulatory annotations were accounted for; allelic imbalance marked trait variants from 20 cell lines† | Weight 0 until each passes a test of what it adds among SNPs inside peaks; then a bonus for the top of the distribution, which G sets |
+
+For the older rows the research says: #2, do not drop weak states to 0 (low weight per SNP everywhere, and in a 2026
+shrimp study a bivalent state was the most useful for prediction; one study); #5, among fine-mapped human trait variants
+it is the nonsynonymous change that is enriched (51-fold†), so the recommendation of 1 for synonymous stands; #6, keep
+molQTL leads at 0 (a lead SNP is weak evidence even at GTEx scale, and 12 fish is below the sample sizes tested†).
+
 ## Assay and panel design (changes what goes on a chip)
 
 | # | Question | Now (provisional) | Options | Recommendation |
@@ -45,7 +62,7 @@ caQTL leads (n = 1,057) give 3-4x, but they are called on the same ATAC data, so
 |---|---|---|---|
 | 13 | May we redistribute rows derived from the nf-RASQUAL tables (no licence on the repo)? Which significance rule (paper: eigenMT BF < 0.1)? Which allele does pi refer to? | used locally, BF < 0.1, no direction shown | Ask the authors (Nguyen, Sandve, Lien, Grønvold); also ask for full per-SNP outputs (needed for colocalisation) |
 | 14 | How to describe the 504-fish AF panel; may we host derived frequencies? | "504-fish panel: mostly wild and farmed fish from Bertolotti et al. 2020 plus the 12 AQUA-FAANG fish" | Confirm wording and permission; consider a European / North American split from the Bertolotti metadata |
-| 15 | Public SNP list for the background pool, demos and default panels: the 12-fish VCF has 70 sites on chr10 and stops near 105 Mb on chr1 | 12-fish VCF; no install has a pool today (TRACKER step 8), so the answer also sets what `salmo-snp download` builds from the release | Switch to the 504-fish panel sites (7.57M, frequencies only); the pool then takes longer to build than the 1.6M 12-fish sites' ~40 s (not measured) |
+| 15 | Public SNP list for the background pool, demos and default panels: the 12-fish VCF has 70 sites on chr10 and stops near 105 Mb on chr1 | Pool decided (G, 2026-11-21): the 504-fish panel's common sites (public MAF >= design.min_maf, 0.05), 3,436,671 in release 2026-11-20 on all 29 chromosomes (snpscore.pool.SITES; not a sample of all 7.6M, which are half rare). The demo list and synthetic GWAS still use the 12-fish VCF | Demos: the same sites |
 | 16 | Known-loci catalogue: vet the 40 rows and effect alleles | 40 rows (incl. the 3 hubsmolt SNPs), 13 with an effect allele; bco1l A (+ strand) = red flesh | Vet; add QTL intervals for IPN and sea lice |
 | 17 | Fine-mapping defaults | prior SD 0.2, functional lambda 0.5, 95% sets, 5e-8 / 1e-5, 1 Mb clumping | Keep as labelled defaults; add the LD reference (#19) before using credible sets for decisions |
 | 18 | Chromatin colours | portal palette by default, AQUA-FAANG itemRgb as a viewer option | Make itemRgb the default (matches the papers and JBrowse), but note: with deuteranopia its Bivalent (counted) and Repressed_polycomb (not counted) look alike (CIEDE2000 5.4); cells carry 'Biv'/'Pc' text, browser lanes rely on colour and tooltips |
@@ -93,3 +110,29 @@ Claude made on the way; each works as it is and is G's to confirm or replace.
 | 44 | Expression and molQTL layers for trout | none (no nf-RASQUAL analysis; the AQUA-FAANG RNA-seq counts are on salmobase under nfcore/RainbowTrout but not as one table per tissue) | Add an expression layer from the AQUA-FAANG trout RNA-seq when G points to the count tables |
 | 45 | How the pages word things for another species | written for salmon, turned into the release's wording in one place (`jobs.wording`: assembly, conditions, chromosome names, plus pairs in layers.yaml `species.wording`); the guided tour still shows salmon screenshots | Fine for two species; with a third, move the species-specific sentences into the release |
 | 46 | A user's own BED tracks (G, 2026-11-15) | Decided: shown near the top of the Locus browser (names on hover, the file's own colours only), a Table filter, never scored; global locally, private and expiring on a server; 50 MB and 1,000,000 intervals a file | Claude's display limits (20 tracks, 5,000 intervals drawn per track, 4 lanes) are provisional |
+
+## New AQUA-FAANG data (salmobase, November 2026; G, 2026-11-20: show it as tracks now)
+
+The AQUA-FAANG README (salmobase, 2026-11-20) adds, for Atlantic salmon, gill ATAC-seq re-made in 2026 (with gill
+chromatin states from a gill-only 12-state model and gill robust peaks) and the ImmunoMap (head kidney after PBS, poly
+I:C or Vibrio, 6 fish each, University of Aberdeen; a 6-state model from ATAC-seq, H3K27ac and H3K27me3). G asked for
+them as tracks in the Locus browser, then (the same day) for them to be scored.
+
+| # | Question | Now | Recommendation |
+|---|---|---|---|
+| 47 | Should the tiers count gill and the ImmunoMap (unified robust peaks v3: 328,894 peaks, 27 conditions, against v1's 319,718 and 21)? | Decided (G, 2026-11-20: "include gill and immunomap in the scoring"): from release 2026-11-20 the chromatin layer is v3 and tiers count the 27 conditions; Bivalent_or_mixed_active/polycomb is weak, like Bivalent; disease_resistance = head kidney, gill and liver, plus gill and head_kidney presets; built and published by the species-data workflow | - |
+| 48 | How the Locus browser shows them | Claude's choices (separator lines between tissues and maps: G, 2026-11-20): the gill ATAC-seq replicates the README says were used (Immature Female R2, R3; Immature Male R1-R3; Mature Male R3), and not the gill H3K4me1 Immature Female R2 (mixed with a gonad H3K4me3, its note 3); ImmunoMap rows 'HK PBS', 'HK poly I:C', 'HK Vibrio' (in vivo) and 'HK cells ...' (in vitro leukocytes, RNA-seq only), each the mean of 6 fish, after the BodyMap head kidney; colours for the ImmunoMap's three combined states (portal palette: between the states they merge; AQUA-FAANG palette: its itemRgb); shown from snpportal's `lib/tracks_added.yaml` until a release carries them (2026-11-20 does); on the card a head kidney row of three treatments and a blank cell for gill's mature females | As is; drop the H3K4me1 exclusion when AQUA-FAANG publishes the corrected library |
+
+## Structural variants (G, 2026-11-24: score SVs as SNPs are scored, by what they overlap)
+
+G asked for structural variants (any list of regions) to be scored as SNPs are, leaving out what needs a specific
+base, with any functional data the SV overlaps counting as evidence; results kept as close to the SNPs' as they can
+be; published SVs added to the known loci; and an example set. Built as `snpscore sv` and the Score page's
+Structural variants tab (snpscore README "Structural variants"). These are Claude's choices on the way.
+
+| # | Question | Now | Recommendation |
+|---|---|---|---|
+| 55 | How evidence over a span becomes the SNP terms | Each term counts once, as for a SNP, however many elements the SV overlaps (so a 1-bp SV scores as a SNP at that base). Per condition, the strongest state of the peaks it overlaps (weights.yaml active_states, then weak_states), so active and weak follow; the most severe gene region (CDS, then splice region, UTR, non-coding exon, intron) gives coding, splice or UTR (no synonymous: no alleles); Ensembl regulatory counts only when the SV overlaps no AQUA-FAANG peak; GERP when it overlaps a constrained element. Insertions and breakends are the two bases of their junction; a VCF's padding base is left out. Inversions and translocations are scored over their whole span. Most SVs over about 100 kb reach tier 1 | Keep the once-per-term rule (the tiers stay comparable with SNPs). For inversions and translocations, consider scoring only their breakpoints (the genes and elements they break), as their middle is moved, not lost; and a term for 'deletes a whole gene or CDS' if G wants deletions ranked above duplications |
+| 56 | The published SVs in the catalogues (catalogue columns `type` sv, `start`, `end` 1-based, `svtype`) | Atlantic salmon, 6 rows: the chr18 and chr9 inversions of Stenløkk et al. 2022 (Ssal_v3.1 breakpoints from its Data S1; genotype-environment associations, `local_adaptation`) and four farmed-vs-wild SV outliers of Bertolotti et al. 2020 (myrip and nr1d2 duplications, the slc38a10-tepsin fusion, the nrxn2 inversion; ICSASG_v2 converted with the release's EVA blocks, two ends approximate; `domestication`). Rainbow trout, 2 rows: the Omy05 double inversion (Pearse 2019; USDA_OmykA_1.1 ends from Wells 2026, rounded to 1 kb; `anadromy`) and the Omy17 inversion of the wild-origin lines (Ali 2026; a candidate over a fillet-yield QTL window; `fillet_yield`). Left out: the North American Ssa01p/Ssa23 translocation and Ssa08/Ssa29 fusion (no breakpoint coordinates), Stenløkk's other nine inversions (no association), Bertolotti's other 28 outliers, the Omy20 inversion (no USDA_OmykA_1.1 breakpoints) | Vet the rows and the trait names; consider the 11 Stenløkk inversions as a Locus browser track rather than catalogue rows; add the Ssa01p/Ssa23 translocation once its breakpoints are on Ssal_v3.1 (an alignment of the North American assembly) |
+| 57 | The SV examples | 'Known SVs' (the catalogue's SV rows, demo/known_svs.tsv) and 'SVs (synthetic)': 300 SVs that snpdata build makes from the gene layer with a fixed seed (DEL 55%, INS 20%, DUP 15%, INV 10%; half 50 bp-1 kb, 30% to 10 kb, 15% to 100 kb, 5% to 1 Mb; half in or near genes) | A public SV call set on Ssal_v3.1 (e.g. from the AQUA-FAANG or Synchrosmolt long reads) when there is one |
+

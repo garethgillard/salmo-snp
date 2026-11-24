@@ -106,6 +106,9 @@ catalog:
 # --scale fixture` the test chip.
 demo: [../demo/public_50k.vcf, ../synthetic/chip_demo_SYNTHETIC.tsv, synthetic/chip_demo_SYNTHETIC.tsv,
        ../synthetic/gwas_maturation_SYNTHETIC.tsv]
+# Structural variants for the portal's SV tab: build makes a SYNTHETIC set of n (synthetic_svs: a fixed seed, half of
+# them in or near genes of the gene layer); the catalogue's rows of type sv become a second example (demo/known_svs.tsv).
+demo_svs: {file: svs_demo_SYNTHETIC.tsv, n: 300}
 
 # Choices in this file that G still has to confirm; listed in the release manifest with those from weights.yaml.
 provisional: [catalog.window, molqtl.max_bf]
@@ -115,9 +118,11 @@ layers:
     type: interval
     format: aquafaang_peaks
     file: AtlanticSalmon_unified_peaks.bed
+    # v3 (2026-11-18): the 21 published conditions plus gill (2026) and the ImmunoMap, scored since G's answer of
+    # 2026-11-20 (docs/DECISIONS.md #47). Release 2026-11-05 was built from v1 (archive/v1/).
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/robust_ATAC_peaks/unified_annotated_peaks/AtlanticSalmon_unified_peaks.bed
     id: true
-    description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 21 conditions (empty = no peak there)
+    description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 27 conditions (empty = no peak there)
     citation: AQUA-FAANG consortium, Atlantic salmon unified ATAC peaks and ChromHMM states (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
 
   - name: region

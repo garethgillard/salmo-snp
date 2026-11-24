@@ -127,7 +127,7 @@ class ResultsTest(SimpleTestCase):
             self.assertEqual(sum(sum(b[2:]) for b in s["bins"][preset]), n)
             self.assertEqual(sum(sum(t.values()) for t in s["region_tiers"][preset].values()), n)
             self.assertEqual(sum(sum(t.values()) for t in s["chrom_tiers"][preset].values()), n)
-        self.assertEqual(len(s["conditions"]), 21)
+        self.assertEqual(len(s["conditions"]), 27)
         self.assertEqual(sum(s["maf"]["bins"]) + s["maf"]["missing"], n)
         self.assertEqual(s["counts"]["known"], self.direct("known_locus IS NOT NULL"))
         if "assay_status" in self.columns:
@@ -293,10 +293,11 @@ class ResultsTest(SimpleTestCase):
         self.assertEqual(rows, 100)
         self.assertEqual(page.count('class="sp-bc"'), rows)  # a barcode on every row
         barcode = re.search(r'<span class="sp-bc".*?</span></span>', page, re.S).group(0)
-        self.assertEqual(barcode.count("<i "), 21)
+        self.assertEqual(barcode.count("<i "), 27)
         self.assertNotIn(' in"', barcode)  # tiers count all conditions: none is underlined
         headers = re.findall(r'<th scope="col"[^>]*><span class="sp-th">(?:<a [^>]*>|<span [^>]*>)([^<&]+)', page)
-        self.assertEqual([h.strip() for h in headers], ["+/"] + [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS])  # the selector, then 9
+        self.assertEqual([h.strip() for h in headers], ["+/"] + [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS
+                                                                if k != "size"])  # the selector, then 9 (Size: SV jobs only)
         self.assertIn('aria-sort="ascending"', page)  # tier, the default
         head = page[page.index("<thead"):page.index("</thead>")]  # each filter on its column; the others above the table
         self.assertTrue(all(f'id="dd-{d}"' in head for d in ("tier", "region", "gene", "active", "assay")))  # active: Chromatin
@@ -404,7 +405,7 @@ class ResultsTest(SimpleTestCase):
         near = {"coding_hgvsp": "p.Thr46Met", "known_locus": "vgll3_Met54Thr", "known_locus_dist": 120}.get
         self.assertEqual(results.with_published("missense p.Thr46Met", near), "missense p.Thr46Met")
         groups = results.condition_groups(results.conditions_of(["chromatin_" + c for c in self.summary["conditions"]]))
-        self.assertEqual([g for g, _ in groups], ["Brain", "Gonad", "Liver", "Muscle", "Embryo"])
+        self.assertEqual([g for g, _ in groups], ["Brain", "Gonad", "Liver", "Muscle", "Gill", "HeadKidney", "Embryo"])
         self.assertEqual([label for label, _ in groups[0][1]], ["Imm F", "Imm M", "Mat F", "Mat M"])
         mark = figures.hbars([{"label": "x", "segments": [(3, "#08519C", "t", None)]}], "T", synthetic=True)
         self.assertIn("SYNTHETIC", mark)

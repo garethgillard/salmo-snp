@@ -22,16 +22,23 @@ TIERS = {1: ("#08519C", WHITE), 2: ("#2171B5", WHITE), 3: ("#C6DBEF", BLACK), 4:
 # active one.
 ABBR = {"Active_TSS": "TSS", "Flanking_upstream": "Fl", "Flanking_downstream": "Fl", "Active_enhancer": "Enh",
         "Primed_enhancer": "Pri", "Poised_enhancer_1": "Poi", "Poised_enhancer_2": "Poi", "Accessible_chromatin": "Acc",
-        "Bivalent": "Biv", "Repressed_polycomb": "Pc", "ZNF_genes_and_repeats": "ZNF", "Quiescent": "Q", "Unknown_1": "?"}
+        "Bivalent": "Biv", "Repressed_polycomb": "Pc", "ZNF_genes_and_repeats": "ZNF", "Quiescent": "Q", "Unknown_1": "?",
+        # the ImmunoMap model's combined labels and the gill model's second unknown state (salmobase, 2026)
+        "Active_TSS_or_enhancer": "Act", "Flanking_TSS_or_poised_enhancer": "Fl/P", "Bivalent_or_mixed_active/polycomb": "Mix",
+        "Unknown_2": "?"}
 STATE_PALETTES = {
     "portal": {"Active_TSS": "#B2182B", "Flanking_upstream": "#F4A582", "Flanking_downstream": "#F4A582",
                "Active_enhancer": "#E66101", "Primed_enhancer": "#FEE08B", "Poised_enhancer_1": "#92C5DE",
                "Poised_enhancer_2": "#92C5DE", "Accessible_chromatin": "#2166AC", "Bivalent": "#762A83",
-               "Repressed_polycomb": "#878787", "ZNF_genes_and_repeats": "#BABABA", "Quiescent": "#F0F0F0", "Unknown_1": "#DDDDDD"},
+               "Repressed_polycomb": "#878787", "ZNF_genes_and_repeats": "#BABABA", "Quiescent": "#F0F0F0", "Unknown_1": "#DDDDDD",
+               "Active_TSS_or_enhancer": "#D6604D", "Flanking_TSS_or_poised_enhancer": "#FDB863",
+               "Bivalent_or_mixed_active/polycomb": "#C2A5CF", "Unknown_2": "#DDDDDD"},
     "aquafaang": {"Active_TSS": "#BF2026", "Flanking_upstream": "#E81E25", "Flanking_downstream": "#E81E25",
                   "Active_enhancer": "#F99B1F", "Primed_enhancer": "#FFD078", "Poised_enhancer_1": "#F9E700",
                   "Poised_enhancer_2": "#F9F291", "Accessible_chromatin": "#7CD3F6", "Bivalent": "#9C247F",
-                  "Repressed_polycomb": "#006367", "ZNF_genes_and_repeats": "#50BE96", "Quiescent": "#FFFFFF", "Unknown_1": "#C0C0C0"},
+                  "Repressed_polycomb": "#006367", "ZNF_genes_and_repeats": "#50BE96", "Quiescent": "#FFFFFF", "Unknown_1": "#C0C0C0",
+                  "Active_TSS_or_enhancer": "#DC5D22", "Flanking_TSS_or_poised_enhancer": "#F0885B",
+                  "Bivalent_or_mixed_active/polycomb": "#C47CB2", "Unknown_2": "#C0C0C0"},
 }
 STATE_PALETTE_NAMES = {"portal": "portal palette", "aquafaang": "AQUA-FAANG itemRgb"}
 COOKIE = "snpportal_palette"  # a viewer's choice of state palette
@@ -158,11 +165,12 @@ def _css(active):
     for tier, (fill, text) in TIERS.items():
         props[f"tier-{tier}"] = fill
         rules.append(f".sp-tier-{tier}{{background:var(--sp-tier-{tier});color:{text}}}")
+    sel = lambda name: name.replace("/", "\\/")  # Bivalent_or_mixed_active/polycomb: '/' is escaped in a selector
     for name in STATES:
         fill, text, _ = state(name)
-        rules.append(f".st-{name}{{background:{fill};color:{text}}}")
+        rules.append(f".st-{sel(name)}{{background:{fill};color:{text}}}")
     for scheme, colours in STATE_PALETTES.items():
-        rules += [f".stp-{scheme}-{name}{{background:{fill};color:{text_on(fill)}}}" for name, fill in colours.items()]
+        rules += [f".stp-{scheme}-{sel(name)}{{background:{fill};color:{text_on(fill)}}}" for name, fill in colours.items()]
     for tissue, colour in TISSUES.items():
         rules.append(f".sp-tissue-{tissue}{{color:{colour}}}")
     for name, colour in SNP_SETS.items():
