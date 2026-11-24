@@ -6,7 +6,7 @@
 {% block main %}
 <p class="sp-lead">Upload Atlantic salmon SNPs (positions on {{ rel.assembly|default:"Ssal_v3.1" }}{% if rel.several %}, release {{ rel.version }}{% endif %}) to see which lie in open chromatin or an active regulatory element in
   27 AQUA-FAANG tissues and stages, change a protein, or sit in conserved sequence. Each SNP gets a tier from 1 (strongest) to
-  4 (no evidence found), with the evidence behind it.</p>
+  4 (no evidence found), with the evidence behind it. Structural variants are scored the same way, by what they overlap.</p>
 <div class="row g-4 align-items-start">
 <div class="col-lg-7 sp-stack">
 {% if error %}<div class="sp-status sp-status-fail" role="alert"><strong>&#9888; {% if tab == 'gwas' %}Can't analyse these summary statistics.{% else %}Can't score this list.{% endif %}</strong> {{ error }}</div>{% endif %}
@@ -16,7 +16,7 @@
   <h2 id="mine-h">Your results</h2>
   <ul class="sp-mine">{% for r in mine %}<li{% if r.current %} class="sp-mine-current"{% endif %}>
     <a class="sp-mine-name" href="{{ r.url }}">{{ r.name }}</a>
-    <span class="sp-small sp-muted text-nowrap">{% if r.state == 'done' %}{{ r.n|thousands }} SNPs{% elif r.state == 'failed' %}failed{% else %}scoring&hellip;{% endif %} &middot; {{ r.when }}</span>
+    <span class="sp-small sp-muted text-nowrap">{% if r.state == 'done' %}{{ r.n|thousands }} {{ r.unit }}{% elif r.state == 'failed' %}failed{% else %}scoring&hellip;{% endif %} &middot; {{ r.when }}</span>
     <form method="post" action="{% url 'snpportal:delete' r.key %}" data-confirm="Delete {{ r.name }}? This can't be undone." data-confirm-ok="Delete">{% csrf_token %}<input type="hidden" name="next" value="score">
       <button class="btn btn-sm btn-link sp-mine-del" type="submit" title="Delete these results" aria-label="Delete {{ r.name }}">Delete</button></form>
   </li>{% endfor %}</ul>
@@ -24,7 +24,7 @@
 
 {% if tries %}<div class="sp-try" id="try-it"><span class="sp-try-h">Examples</span>
   {% for ex in tries %}<form method="post" action="{% if ex.gwas %}{% url 'snpportal:gwas_score' %}{% else %}{% url 'snpportal:upload' %}{% endif %}">{% csrf_token %}
-    {% if ex.gwas %}<input type="hidden" name="trait" value="all">{% endif %}
+    {% if ex.gwas %}<input type="hidden" name="trait" value="all">{% endif %}{% if ex.sv %}<input type="hidden" name="kind" value="sv">{% endif %}
     <button class="btn btn-sm btn-outline-primary" type="submit" name="example" value="{{ ex.name }}" title="{{ ex.title }}: {{ ex.what }}">{{ ex.title }}{% if ex.synthetic %} <small>synthetic</small>{% endif %}</button>
   </form>{% endfor %}
 </div>{% endif %}
@@ -70,6 +70,22 @@
           <select class="form-select form-select-sm w-auto" name="flank">
             {% for f in flanks %}<option value="{{ f }}"{% if f == flank %} selected{% endif %}>&plusmn; {{ f|thousands }} bp</option>{% endfor %}
           </select></label></div>
+    </form>
+    <form class="tab-pane{% if tab == 'sv' %} active{% endif %}" id="pane-sv" role="tabpanel" aria-labelledby="tab-sv" method="post" action="{% url 'snpportal:upload' %}" enctype="multipart/form-data">
+      {% csrf_token %}<input type="hidden" name="kind" value="sv">
+      <div class="sp-drop" data-drop-for="sv-file">
+        <svg class="sp-drop-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <path d="M24 31V9M15 18l9-9 9 9"/><path d="M8 29v8a3 3 0 0 0 3 3h26a3 3 0 0 0 3-3v-8"/></svg>
+        <div class="flex-grow-1"><label for="sv-file" class="form-label" data-drop-label>Drop a file here or choose one</label>
+          <input class="form-control" id="sv-file" type="file" name="svs" accept=".vcf,.bed,.gz,.tsv,.csv,.txt" aria-describedby="sv-help"></div>
+      </div>
+      <label class="visually-hidden" for="sv-paste">Or paste regions, one per line</label>
+      <textarea class="form-control sp-paste mt-2" id="sv-paste" name="sv_paste" rows="3" aria-describedby="sv-help"
+                placeholder="or paste regions: 25:28,996,001-28,997,000 DEL&#10;9 23837001 23839000 DUP my_dup"></textarea>
+      <p class="sp-hint" id="sv-help">Deletions, duplications, inversions, insertions or any regions: an SV VCF (END, SVLEN, SVTYPE), BED or a
+        chrom, start, end table; each is scored by the functional evidence it overlaps; up to {{ max_mb }} MB or {{ sv_lines|thousands }} lines &middot;
+        <a href="{% url 'snpportal:help' %}#format-sv">Format help</a></p>
+      <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
     <form class="tab-pane{% if tab == 'gwas' %} active{% endif %}" id="pane-gwas" role="tabpanel" aria-labelledby="tab-gwas" method="post" action="{% url 'snpportal:gwas_score' %}" enctype="multipart/form-data">
       {% csrf_token %}

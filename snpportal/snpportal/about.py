@@ -59,6 +59,11 @@ GLOSSARY = [  # (anchor, term, definition)
      "AQUA-FAANG salmon-trout clades; also called its ohnolog."),
     ("coordinates", "Coordinates", "Ssal_v3.1, chromosomes 1–29. Layers use BED intervals; a SNP at 1-based pos is inside "
      "one when start < pos ≤ end."),
+    ("sv", "Structural variant (SV)", "A deletion, duplication, inversion, insertion or any region, scored on the Structural "
+     "variants tab by what it overlaps: per condition the strongest state of the peaks it overlaps, its most severe gene "
+     "region, any GERP element or Ensembl feature; each kind counts once with the SNP weights, so an SV of one base scores "
+     "as a SNP there. Coding consequences, motif changes and the assay check need a single base and are left out. "
+     "Inversions count over their whole span (provisional)."),
     ("motif", "TF motif change", "One allele of a SNP in a robust ATAC peak matches a transcription factor motif "
      "(JASPAR 2024, p < 1e-5) and the other doesn't, at least 4 bits apart; motifs are predicted binding, not proof of it."),
     ("synthetic", "Synthetic", "Built from synthetic test data: not real results, never counted in tiers."),
@@ -81,6 +86,16 @@ FORMATS = [  # (anchor, format, what is read, example built from the published v
      "and that has no chromosome and position columns). Each is placed at its Ssal_v3.1 position from EVA release 9 (the "
      "results' position_source column says rsid). rs IDs that are not in the release's table, or sit on several Ssal_v3.1 "
      "positions, are rejected as unknown_rsid and listed in the upload QC.", "id\nrs863754587\nrs863785818"),
+    ("sv", "Structural variants (the Structural variants tab)", "Deletions, duplications, inversions, insertions or any regions, "
+     "each scored by the functional evidence it overlaps, with the same weights as a SNP (each kind counted once; an SV of one "
+     "base scores as a SNP there). A VCF of SVs (END, SVLEN and SVTYPE in INFO, symbolic alleles such as <DEL>, or sequence "
+     "alleles; the padding base before an event is left out, an insertion or breakend is the two bases of its junction); a BED "
+     "file (0-based start); a table whose header names chrom, start and end (or svlen), optionally id and svtype; or lines of "
+     "'chrom:start-end [type] [id]' or 'chrom start end [type] [id]', 1-based and inclusive (also the paste box: commas and "
+     "kb/Mb allowed). Coding consequences, TF motif changes, the assay check and allele frequencies need a single base and "
+     "are left out.",
+     "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n25\t28996000\tdel1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=28997000\n"
+     "\nor\n25:28,996,001-28,997,000 DEL del1"),
     ("gwas", "GWAS summary statistics", "GCTA-fastGWA, PLINK2 .glm, regenie, BOLT-LMM or GEMMA output, or a table with chrom, "
      "pos and p (optionally alleles, beta, se, af and n). Alleles are turned to the Ssal_v3.1 reference (alt = effect allele) "
      "using the genome, else the 504-fish panel sites; p values are read as text, so p = 1e-400 stays 400 on the -log10 scale.",

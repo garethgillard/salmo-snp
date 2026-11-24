@@ -480,6 +480,7 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp .sp-ev-gwas { border-color: var(--sp-accent); border-left-width: 4px; }
 .sp .sp-ev-marker { border-color: var(--sp-warn-border); border-left-width: 4px; }
 .sp .sp-ev-region { border-color: var(--sp-grey-500); border-left-width: 4px; }
+.sp .sp-ev-sv { border-color: var(--sp-grey-700); border-left-width: 4px; }
 .sp .sp-ev-allele { color: var(--sp-ok-text); background: var(--sp-ok-bg); border-color: var(--sp-ok-border); }
 .sp .sp-ev-caveat { color: var(--sp-warn-text); background: var(--sp-warn-bg); border-color: var(--sp-warn-border); }
 @media print {  /* every trait's table on paper, under its heading */

@@ -16,7 +16,7 @@
   <span class="spinner-border sp-spin htmx-indicator" id="tf-busy" role="status" aria-label="Loading"></span>
   <span class="ms-auto d-flex flex-wrap align-items-center gap-2">
     {% if download and matching %}<a href="{{ download }}">Download these {{ n_selected|thousands }} (TSV)</a>{% if vendor %} · <a href="{{ vendor }}" hx-boost="true">Vendor files for these {{ n_selected|thousands }} &rarr;</a>{% endif %}{% endif %}
-    {% if n_selected %}<button class="btn btn-sm btn-primary" type="submit" form="add-panel" title="Copy this selection (the + rows) into your Design panel">Add to panel ({{ n_selected|thousands }})</button>{% endif %}
+    {% if n_selected and not sv %}<button class="btn btn-sm btn-primary" type="submit" form="add-panel" title="Copy this selection (the + rows) into your Design panel">Add to panel ({{ n_selected|thousands }})</button>{% endif %}
     <details class="sp-dd" id="dd-cols"><summary class="btn btn-sm btn-outline-secondary">Columns</summary>
       <div class="sp-dd-panel sp-dd-right"><div class="sp-dd-head"><span>Columns to show</span>{% if columns_default %}<a href="{{ columns_default }}" hx-boost="true">Default</a>{% endif %}</div>
         <fieldset class="sp-dd-list"><legend class="visually-hidden">Columns to show</legend><input type="hidden" name="cols" value="1">
@@ -47,14 +47,15 @@
           title="{% if r.out %}Taken out of the selection: click to put it back{% else %}In the selection: click to take it out{% endif %}"
           aria-label="{% if r.out %}Put back into the selection{% else %}Take out of the selection{% endif %}"><span class="sp-pick-now" aria-hidden="true">{% if r.out %}&minus;{% else %}+{% endif %}</span><span class="sp-pick-next" aria-hidden="true">{% if r.out %}+{% else %}&minus;{% endif %}</span></a></td>
         {% for col in shown %}{% if col == 'id' %}
-        <td class="sp-clip sp-wide"><a class="sp-snp" href="{{ r.href }}" hx-get="{{ r.href }}">{% if r.id %}{{ r.id }}{% else %}{{ r.chrom }}:{{ r.pos }}{% endif %}</a>{% if r.note %} <span class="sp-muted">&middot; {{ r.note }}</span>{% endif %}</td>
+        <td class="sp-clip sp-wide"><a class="sp-snp" href="{{ r.href }}" hx-get="{{ r.href }}">{% if r.id %}{{ r.id }}{% else %}{{ r.chrom }}:{{ r.pos }}{% if r.end and r.end != r.pos %}-{{ r.end }}{% endif %}{% endif %}</a>{% if r.note %} <span class="sp-muted">&middot; {{ r.note }}</span>{% endif %}</td>
+        {% elif col == 'size' %}<td class="sp-num sp-nowrap" title="{{ r.size_tip }}">{{ r.size }}</td>
         {% elif col == 'p' %}<td class="sp-num">{{ r.p }}</td>
         {% elif col == 'beta' %}<td class="sp-num">{{ r.beta }}</td>
         {% elif col == 'pip' %}<td class="sp-num">{{ r.pip }}</td>
         {% elif col == 'tier' %}<td class="sp-ctr" title="{{ r.evidence|default:'no evidence found' }}">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
         {% elif col == 'score' %}<td class="sp-num">{{ r.score|default_if_none:"" }}</td>
-        {% elif col == 'known' %}<td class="sp-clip">{% if r.known %}<span class="sp-known" title="{% if r.known_dist == 0 %}This SNP is{% else %}{{ r.known_dist|thousands }} bp from{% endif %} the published SNP {{ r.known }}{% if r.caveat %}; caveat: {{ r.caveat }}{% endif %}">&#9733; {% if r.known_dist == 0 %}this SNP{% else %}{{ r.known }} <span class="sp-muted">&middot; {{ r.known_where }}</span>{% endif %}{% if r.caveat %} <span class="sp-muted">*</span>{% endif %}</span>{% endif %}</td>
-        {% elif col == 'gene' %}<td class="sp-clip" title="{{ r.gene_tip }}">{{ r.gene }}{% if r.distance %} <span class="sp-muted">&middot; {{ r.distance }}</span>{% endif %}</td>
+        {% elif col == 'known' %}<td class="sp-clip">{% if r.known %}<span class="sp-known" title="{% if r.end %}{% if r.known_dist == 0 %}This SV overlaps{% else %}This SV is {{ r.known_dist|thousands }} bp from{% endif %} the known locus{% elif r.known_dist == 0 %}This SNP is the published SNP{% else %}{{ r.known_dist|thousands }} bp from the published SNP{% endif %} {{ r.known }}{% if r.caveat %}; caveat: {{ r.caveat }}{% endif %}">&#9733; {% if r.known_dist == 0 and not r.end %}this SNP{% elif r.known_dist == 0 %}{{ r.known }} <span class="sp-muted">&middot; inside</span>{% else %}{{ r.known }} <span class="sp-muted">&middot; {{ r.known_where }}</span>{% endif %}{% if r.caveat %} <span class="sp-muted">*</span>{% endif %}</span>{% endif %}</td>
+        {% elif col == 'gene' %}<td class="sp-clip" title="{{ r.gene_tip }}">{{ r.gene }}{% if r.gene_more %} <span class="sp-muted">+{{ r.gene_more }}</span>{% endif %}{% if r.distance %} <span class="sp-muted">&middot; {{ r.distance }}</span>{% endif %}</td>
         {% elif col == 'region' %}<td{% if r.region_tip %} title="{{ r.region_tip }}"{% endif %}>{{ r.region }}</td>
         {% elif col == 'chromatin' %}<td>{% if r.barcode %}<span class="sp-bc" role="img" aria-label="{{ r.barcode_label }}">{% for cells in r.barcode %}<span>{% for cls, title in cells %}<i class="{{ cls }}" title="{{ title }}"></i>{% endfor %}</span>{% endfor %}</span>{% endif %}</td>
         {% elif col == 'molqtl' %}<td title="{{ r.molqtl.1 }}">{{ r.molqtl.0 }}</td>

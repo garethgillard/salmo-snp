@@ -296,7 +296,8 @@ class ResultsTest(SimpleTestCase):
         self.assertEqual(barcode.count("<i "), 27)
         self.assertNotIn(' in"', barcode)  # tiers count all conditions: none is underlined
         headers = re.findall(r'<th scope="col"[^>]*><span class="sp-th">(?:<a [^>]*>|<span [^>]*>)([^<&]+)', page)
-        self.assertEqual([h.strip() for h in headers], ["+/"] + [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS])  # the selector, then 9
+        self.assertEqual([h.strip() for h in headers], ["+/"] + [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS
+                                                                if k != "size"])  # the selector, then 9 (Size: SV jobs only)
         self.assertIn('aria-sort="ascending"', page)  # tier, the default
         head = page[page.index("<thead"):page.index("</thead>")]  # each filter on its column; the others above the table
         self.assertTrue(all(f'id="dd-{d}"' in head for d in ("tier", "region", "gene", "active", "assay")))  # active: Chromatin

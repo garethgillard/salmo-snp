@@ -2,9 +2,11 @@
 {% load snpportal_tags %}
 {% block main %}
 {% if groups %}
-<p class="sp-lead">{{ counts.entries }} published entries for {{ counts.traits }} traits: {{ counts.snps }} SNPs{% if counts.regions %} and
+<p class="sp-lead">{{ counts.entries }} published entries for {{ counts.traits }} traits: {{ counts.snps }} SNPs{% if counts.svs %},
+  {{ counts.svs }} structural variant{{ counts.svs|pluralize }}{% endif %}{% if counts.regions %} and
   {{ counts.regions }} gene region{{ counts.regions|pluralize }}{% endif %}. Effect alleles are stated for {{ counts.alleles }}, on the
-  Ssal_v3.1 forward strand. Your SNPs within {% widthratio counts.window 1000 1 %} kb of one get a known-locus badge. Hover a
+  Ssal_v3.1 forward strand. Your SNPs within {% widthratio counts.window 1000 1 %} kb of one get a known-locus badge{% if counts.svs %},
+  and your structural variants within {% widthratio counts.window 1000 1 %} kb of any entry{% endif %}. Hover a
   badge for the paper&rsquo;s wording.</p>
 
 {# one tab per trait (?tab= without JavaScript) #}
@@ -24,7 +26,7 @@
     <tbody>{% for r in items %}<tr>
       <th scope="row" class="fw-normal">{{ r.locus }}{% if r.interval %} {% include 'snpportal/_badges.html' with kind='flag' value='under review' %}{% endif %}</th>
       <td>{{ r.id }}{% if r.rsid %}<br><a class="sp-mono" href="{% url 'snpportal:search' %}?q={{ r.rsid }}" title="EVA rs ID">{{ r.rsid }}</a>{% endif %}</td>
-      <td class="sp-mono">{% if r.variant_url %}<a href="{{ r.variant_url }}">{{ r.chrom }}:{{ r.pos }}</a>{% else %}{{ r.chrom }}:{{ r.start }}-{{ r.end }}{% endif %}
+      <td class="sp-mono">{% if r.variant_url %}<a href="{{ r.variant_url }}">{{ r.chrom }}:{{ r.pos }}</a>{% else %}{{ r.chrom }}:{{ r.start }}-{{ r.end }}{% if r.svtype %} <span class="sp-muted">{{ r.svtype }}</span>{% endif %}{% endif %}
         {% if r.ref %}<span class="sp-muted">{{ r.ref }}{% if r.alt %}/{{ r.alt }}{% endif %}</span>{% endif %}</td>
       <td>{% if r.gene %}<a href="{% url 'snpportal:gene' r.gene.id %}">{{ r.gene.label }}</a>
         <br><a href="{{ r.salmobase }}" rel="noreferrer noopener" target="_blank">SalmoBase</a>{% else %}{{ r.ensembl_gene }}{% endif %}</td>
