@@ -140,7 +140,9 @@ def effects(windows, meme, p_value=P_VALUE, min_delta=MIN_DELTA, processes=None,
     batch = []
     # spawned, not forked: a fork of a process running DuckDB's threads can deadlock its children (a CI run hung
     # 2026-11-08); macOS and Windows spawn anyway
-    with ProcessPoolExecutor(processes or os.cpu_count() or 1, mp_context=multiprocessing.get_context("spawn"),
+    # the cores this process may use (a SLURM job's share of its node), where the system says; else all of them
+    cores = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
+    with ProcessPoolExecutor(processes or cores, mp_context=multiprocessing.get_context("spawn"),
                              initializer=_start, initargs=(str(meme), p_value, min_delta)) as pool:
         futures = []
         for item in windows:

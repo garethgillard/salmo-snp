@@ -18,6 +18,9 @@ def main():
     b.add_argument("--data", default="data/raw")
     b.add_argument("--out", required=True, help="release folder, named by the date, e.g. release/2026-11-03")
     b.add_argument("--reuse", help="an earlier release folder: layers with the same settings and inputs are copied from it")
+    b.add_argument("--memory", help="DuckDB's memory limit, e.g. 32GB (default: 80%% of the machine's; set it in a SLURM job)")
+    b.add_argument("--threads", type=int, help="DuckDB's threads (default: every core of the machine)")
+    b.add_argument("--temp", help="a folder DuckDB may spill to when the memory limit is reached")
 
     u = sub.add_parser("publish", help="lay out a release (and with --raw the input files) as the folder that goes online")
     u.add_argument("release", help="release folder, e.g. release/2026-11-03")
@@ -38,7 +41,7 @@ def main():
     elif args.cmd == "publish":
         print(publish(args.release, args.to, *((args.layers, args.data) if args.raw else ())))
     else:
-        build(args.layers, args.data, args.out, args.reuse)
+        build(args.layers, args.data, args.out, args.reuse, args.memory, args.threads, args.temp)
 
 
 if __name__ == "__main__":
