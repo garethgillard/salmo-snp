@@ -226,7 +226,7 @@ class ExploreTest(SimpleTestCase):
         self.assertContains(data, "population scope")
         self.assertContains(data, "Bertolotti et al. 2020")  # public_af's population (R1)
         self.assertContains(data, 'id="cite"')  # R8: citation block and ENA projects
-        self.assertContains(data, "https://doi.org/10.64898/2025.12.18.695160")
+        self.assertContains(data, "https://doi.org/10.1038/s41559-026-03171-6")  # the AQUA-FAANG paper (the preprint until 2026-11-24)
         self.assertContains(data, "https://www.ebi.ac.uk/ena/browser/view/PRJEB47409")
         self.assertContains(data, "rsid.parquet")
 

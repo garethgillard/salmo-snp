@@ -105,8 +105,9 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
       keeps the old public background after an edit, the Design panel and saved projects stating the wrong rules hash
       (a saved version's download was re-tiered silently), the README's update command overwriting an edited file,
       and snpscore outputs that do not name their rules
-- [ ] S8 What the pages tell users about the score (SCORING.md section 5); the AQUA-FAANG citation (the salmonid paper
-      is published: Nat Ecol Evol 2026, doi:10.1038/s41559-026-03171-6; layers.yaml still cites the preprint)
+- [ ] S8 What the pages tell users about the score (SCORING.md section 5). Done from it: the AQUA-FAANG citation is
+      the published paper in both layer registries and on the Data page (G, 2026-11-24: Baudement et al., Nat Ecol
+      Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6); releases carry it from the next build
 Queued behind it, to run only when G says (cut off twice by the usage limit): a survey of other work (stale texts and
 the guided tour, the live demo for both species, speed with the larger pool, handover, unused public data, bugs in
 the week's changes).

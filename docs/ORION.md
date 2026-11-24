@@ -15,6 +15,17 @@ Marked **to find out** are the things nobody could check from a cloud session: t
   from there. This is plan 5 of AGENTS.md: the publishing code exists (`snpdata publish`, `salmo-snp download`,
   `serve.py DATA_URL`); it has only ever pointed at GitHub Releases.
 - The salmon build waited for the new layers (PR #29, merged 2026-11-24). Nothing holds it now.
+- What goes into this build (G, 2026-11-24, on the list below): the ChromBPNet scores can wait for a later build; the
+  AQUA-FAANG citation is updated to the published paper (done: Nat Ecol Evol 2026;10:1959-1981); no benchmark files
+  in the snapshot ("aim for only data used in the portal or package tool"); no pool with coding consequences; the
+  fSalSal1 conversion can be made on Orion later and is skipped for now; no missense score yet.
+- The place on salmobase is `datafiles/datasets/salmo-snp/`.
+- Where to build (G asked Claude to choose, 2026-11-24): on Orion, started over `ssh orion` from G's Mac, which the
+  cloud session can use once G attaches its `git` folder. Orion's nodes have 384 cores and 1.5 TB each against the
+  Mac's 8 cores and 16 GB (the trout build needs more than 12 GB); salmobase's files are on its disk; and the upload
+  to salmobase goes from Orion anyway. The Mac's inputs are from early November (its unified peaks file is an old
+  version), so Orion fetches everything fresh, which takes minutes there, and takes from the Mac only what is not
+  online: the Synchrosmolt VCF. One command builds a release: `bash prep/build_release.sh <species> <version>`.
 
 ## The next build: what is in it
 
@@ -44,33 +55,31 @@ serve.py on main already names `trout-2026-11-24`, which was never built: the ru
 | Examples | `known_loci.tsv`, `known_svs.tsv` (2), `svs_demo_SYNTHETIC.tsv` (300), `public_50k.vcf` (cut from `public_af` by the build) | All four in `demo` |
 | Unchanged | The other layers: `chromatin` 194,002, `public_af` 18,801,055, `flank_variants` 46,593,552, `motif` 1,029,347 | `snpscore diff` |
 
-### Not in it unless G adds it
+### Left out of this build (G, 2026-11-24)
 
-| Candidate | State | To decide |
-|---|---|---|
-| ChromBPNet allele effects, 27 conditions | Expected from the Orion repository at the end of the week of 2026-11-24 (docs/CHROMBPNET.md says how they come back) | Wait for them, or build now and again when they are in. They are variant-score layers, weight 0 |
-| The AQUA-FAANG citation | layers.yaml and the release cite the preprint; the paper is out (Nat Ecol Evol 2026, doi:10.1038/s41559-026-03171-6). A release carries its citations, so the text should change before the build | G's OK: layers.yaml is a biology file |
-| Benchmark files in the snapshot | `snpscore benchmark` writes them in seconds; no install has them, so Methods shows no benchmark | Add as a build step |
-| A pool with coding consequences | `snpscore pool --assay` reads the genome. Without it the pool has no coding consequences, which blocks DECISIONS #5 | Try it on Orion, where memory is no limit |
-| fSalSal1 position conversion | Postponed by G (2026-11-06) until I20; it needs one minimap2 run, which is easy on Orion | Leave, unless G wants it now |
-| A missense effect score | Planned only (docs/MISSENSE.md), also for Orion | A later release |
-| The input files as a mirror (`publish --raw`) | Lets anyone rebuild, and is the only way to pass on the Synchrosmolt site frequencies. Needs one fix first (below) | After the first release is up |
+| Candidate | Decision |
+|---|---|
+| ChromBPNet allele effects, 27 conditions | A later build: they can wait (expected from the Orion repository at the end of the week; variant-score layers, weight 0) |
+| Benchmark files in the snapshot | No: a snapshot holds only data the portal or the package uses |
+| A pool with coding consequences (`snpscore pool --assay`) | Not now. It still blocks DECISIONS #5 |
+| fSalSal1 position conversion | Can be made on Orion (one minimap2 run); skipped for now |
+| A missense effect score | Not yet (docs/MISSENSE.md) |
+| The input files as a mirror (`publish --raw`) | After the first release is up, and after the fix below. It is the only way to pass on the Synchrosmolt site frequencies |
 
 ## How a build runs
 
-The commands are the ones snpdata/README.md gives; nothing is special to a machine. In `snpdata/`:
+One command per release, in `snpdata/`, the same on any machine (`prep/build_release.sh`, tried on the test data):
 
 ```bash
-snpdata fetch                                  # the inputs into data/raw; a file already there is kept
-bash prep/make_demo.sh                         # the three example inputs (salmon); needs data/raw
-snpdata build --out release/<date> --memory 32GB --threads 16 --temp <scratch>/duckdb
-snpscore pool --release release/<date> --memory 16GB
-snpscore diff <the release before> release/<date>     # the changelog: only the intended changes
-snpdata publish release/<date> --to <the salmobase folder>
+MEMORY=64GB PREVIOUS=<the release before> bash prep/build_release.sh salmon <date>
+MEMORY=64GB PREVIOUS=<the release before> bash prep/build_release.sh trout trout-<date>
+snpdata publish release/<version> --to <the salmobase folder>      # only after the checks, with G's go-ahead
 ```
 
-Trout: the same with `--layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw` and `--out
-release/trout-<date>`; no make_demo.sh.
+It runs, and stops at the first that fails: `snpdata fetch` (a file already there is kept), for salmon
+`prep/make_demo.sh` (the three example inputs: the step release 2026-11-20 missed), `snpdata build` with DuckDB's
+limits, `snpscore pool`, `snpscore verify`, `snpscore diff` against the release before, and a summary of row counts,
+catalogue rows, examples and pool tiers to hold against the tables above.
 
 What was added for Orion on 2026-11-24 (tested on the fixture only):
 - `SNPDATA_SALMOBASE=<folder>`: fetch reads every `https://salmobase.org/datafiles/...` input from that folder when
