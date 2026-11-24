@@ -52,20 +52,21 @@ def norm(name):
     return re.sub(r"[^a-z0-9]+", "_", name.strip().lstrip("#").lower()).strip("_")
 
 
-def column_names(header, fixed=None):
+def column_names(header, fixed=None, aliases=None, reserved=RESERVED):
     """Output name per header field (None = not read): aliases -> reserved names, other reserved names as they are,
-    the first MAX_EXTRA other fields as in_<slug>. `fixed` maps field index -> name decided by the caller."""
+    the first MAX_EXTRA other fields as in_<slug>. `fixed` maps field index -> name decided by the caller; `aliases`
+    and `reserved` default to the SNP ones (sv.py passes its own)."""
     normed = [norm(h) for h in header]
     names = [(fixed or {}).get(i) for i in range(len(header))]
-    for target, aliases in ALIASES.items():
-        hits = [i for i, n in enumerate(normed) if n in aliases and names[i] is None]
+    for target, known in (aliases or ALIASES).items():
+        hits = [i for i, n in enumerate(normed) if n in known and names[i] is None]
         if hits:
             names[([i for i in hits if normed[i] == target] or hits)[0]] = target
     used, extra = set(names), 0
     for i, field in enumerate(header):
         if names[i] or not field.strip():
             continue
-        if normed[i] in RESERVED and normed[i] not in used:
+        if normed[i] in reserved and normed[i] not in used:
             names[i] = normed[i]
         elif extra < MAX_EXTRA:
             slug = base = "in_" + re.sub("[^A-Za-z0-9_]", "_", field)[:40]
