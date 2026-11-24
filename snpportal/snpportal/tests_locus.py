@@ -117,6 +117,7 @@ class LocusTest(SimpleTestCase):
 
         wide = self.get(f"{reverse('snpportal:locus')}?r=25:28.88-29.2Mb")
         self.assertIn("GERP constrained element", wide)
+        self.assertIn("Aligns to northern pike: ", wide)  # the pike lane (releases with the layer)
         self.assertIn("molQTL lead (nf-RASQUAL, 12 fish): Brain ca 25:28963213-28965045", wide)  # the molQTL lane (R4)
         self.assertIn("AQUA-FAANG blacklist", wide)
         self.assertIn("LORe region", self.get(f"{reverse('snpportal:locus')}?r=26:19.1-19.2Mb"))

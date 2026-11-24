@@ -180,7 +180,11 @@ parquets are zstd-compressed.
 | `gene` | one row per `gene_id` (`build` checks) | `<layer>_<column>` for the SNP's nearest gene |
 | `features` | overlapping features for the viewers | nothing (never annotated) |
 
-Layers today: `chromatin` (interval with `chromatin_id`), `region`, `regbuild`, `gerp`, `blacklist`, `lore` (interval),
+Layers today: `chromatin` (interval with `chromatin_id`), `region`, `regbuild`, `gerp`, `pike` (interval: the sequence
+aligned to northern pike in the AQUA-FAANG salmon-trout-pike alignment, gaps of up to `max_gap` 50 bp closed; `fetch`
+converts the depth bigWig to these stretches), `blacklist`, `lore` (interval), `summit` (nearest, within 500 bp: signal,
+rank, condition; the summits of the conditions' MACS2 peaks that lie inside a robust peak, each with the values of the
+highest-ranked summit within `window` 25 bp, rank being the share of that condition's peaks with a lower signal),
 `gene` (nearest: strand, id, name, biotype, description), `transcripts` and `transcripts_ncbi` (features),
 `gene_ortholog` (gene: human, zebrafish), `ss4r` (gene: ohnolog, ohnolog_chrom, class; AQUA-FAANG Ss4R duplicates), `flank_variants` (count, 504-fish panel sites), `public_af` (point: af, maf, ac, an, ns, aquafaang12_af,
 aquafaang12_dr2), `synchrosmolt_af` (point: af, maf, ac, an, ns), `motif` (point: changed, n, tfs, delta; JASPAR 2024 motif changes at

@@ -25,6 +25,9 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
   533,163 motif sites (512,745) and more in-peak evidence: of the 1,622,674 public sites, 8,145 gain evidence and
   none lose any; 8,026 move up a tier (tier 1: 7,190 -> 7,591; tier 2: 103,732 -> 110,358), 7,260 of them with an
   active state in head kidney or gill. data-2026-11-05 stays for installs that name it.
+- Since 2026-11-23 salmobase's unified peaks are v5 (gill and head kidney states from retrained models; the same
+  peaks), and the Locus browser's state tracks show them, while release 2026-11-20 scores with v3: the next release
+  closes the gap (Next, S3c).
 - Work happens in cloud sessions, on a branch with a pull request (AGENTS.md "Cloud sessions"); G merges.
 
 ## Rainbow trout (2026-11-12, G: a second species, with a species bar)
@@ -71,11 +74,23 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
       as matched SNPs (0.95-2.33), carried by coding sequence (2.65, 1.50-4.42), not chromatin state (0.81). The
       prior slope fitted to the GWAS is 0.05 to 0.15, and 0.5 fits worse than a flat prior. Array tags, so it cannot
       test the chromatin weights. The fitting script is the prototype of S7's report from a user's own GWAS
-- [ ] S3b Next layers of evidence, in order (SCORING.md section 7): conservation with pike as a release layer
-      (measured: 14% of SNPs, 1.4 to 1.7 at eQTL leads; DECISIONS #54), then its stricter per-base version; allelic
-      imbalance in the 12 fish and the ChromBPNet scores from Orion (S6); a missense effect score for coding SNPs;
-      summit distance and signal strength of the ATAC peaks; the large gill eQTL set, if its authors share it
-- [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52), then weights.yaml and
+- [x] S3b Two layers of evidence built (G, 2026-11-24; SCORING.md section 6; salmon and trout): `pike`, the sequence
+      aligned to northern pike with alignment gaps of up to 50 bp closed (16% of public SNPs; eQTL leads 1.6 to 1.9
+      times; the tests of the base itself, of identity and of the duplicate copies improved nothing, closing short
+      gaps did), and `summit`, the nearest ATAC summit inside a robust peak with its distance, signal and rank (no
+      gain at eQTL leads over the peak itself). Both are terms with weight 0: in the Table, the card and (pike) the
+      Locus browser, never counted, until G sets them (DECISIONS #54, #55). They reach the data with the next release
+- [ ] S3c A new release of both species (when G says: bump serve.py RELEASE and RELEASES, merge, deploy, run
+      `species-data` for each). It brings the two layers, and for salmon the unified peaks v5: salmobase replaced the
+      gill and head kidney states on 2026-11-23 (retrained models, the same 328,894 peaks; Gill Immature Female
+      changes in 4,224 of 7,919 peaks), so the demo scores with v3 states while its browser tracks already show v5.
+      One build can also take the ChromBPNet scores if it waits for them
+- [ ] S3d A missense effect score, on Orion: the plan is [MISSENSE.md](MISSENSE.md) (a protein language model on one
+      GPU, SIFT 4G as the cross-check; 80,820 public missense SNPs; checked against rarity in the 504 fish);
+      G's choices: DECISIONS #56
+- [ ] S3e Still to ask or get: allelic imbalance in the 12 fish from the Orion repository (the truth set the summit
+      rule and the ChromBPNet scores need); the large gill eQTL set, if its authors share it
+- [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52, #54, #55), then weights.yaml and
       the pools. Before #5 changes anything: the pool needs coding consequences (it is built without the genome, so
       the synonymous weight would apply to uploads but not to the public background)
 - [ ] S5 The GWAS prior calibrated per tier, its range shown, with a flat prior and a cap (#51)

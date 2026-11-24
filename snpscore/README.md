@@ -183,7 +183,11 @@ condition of the preset, active only elsewhere, a weak state, a CDS change to th
 (`coding`), a synonymous CDS change or stop retained (`synonymous`; PROVISIONAL, weighted as `coding` until G decides; a
 weights.yaml without the key falls back to the coding weight), splice region, UTR, GERP constrained element, and an
 Ensembl regulatory feature where AQUA-FAANG has no peak, and an nf-RASQUAL molQTL lead (`molqtl`, weight 0: listed in
-`tier_terms` and `tier_evidence`, never scored until G decides). `tier_evidence` names the coding consequence
+`tier_terms` and `tier_evidence`, never scored until G decides). Two more terms are listed the same way, with weight 0
+until G sets them (2026-11-24): `pike`, sequence that aligns to northern pike, and `summit`, a SNP within
+`summit.max_distance` bp of an ATAC summit whose rank among its condition's peaks is at least `summit.min_rank`
+(the `summit` block of weights.yaml; `summit_distance`, `summit_signal`, `summit_rank` and `summit_condition` are in
+the output whatever the rule). `tier_evidence` names the coding consequence
 ('missense p.Thr46Met', 'synonymous p.Thr46=', 'splice donor'), or 'CDS' / 'splice region' when it was not computed.
 Tiers are score cut-offs. A preset is a list of condition
 prefixes (e.g. `maturation: [Brain, Gonad]`). Weights are whole numbers, so `tier_score` is always an integer. Layers
@@ -211,7 +215,7 @@ needs `--memory 8GB`. It writes, under `R/pool/`:
   categories as {key: {`n`, `share`}} whose shares sum to 1: `tiers` {preset: {tier}}, `region_class` (NULL =
   `intergenic`), `maf_histogram` (public MAF in bins of 0.05, `0.00-0.05` ... `0.45-0.50`), `assay_status` (with
   `--assay`); independent shares (share of sites): `active_by_condition` {condition: share with an active state},
-  `flags` {chromatin, regbuild, gerp, blacklist, lore, public_af, strand_ambiguous}; `assay_reasons` (with `--assay`)
+  `flags` {chromatin, regbuild, gerp, pike, blacklist, lore, public_af, strand_ambiguous}; `assay_reasons` (with `--assay`)
   {reason: {`n`, `share`}}: warn and fail reasons by name as in validation.json, share = of all sites.
 
 ## GWAS summary statistics and fine-mapping

@@ -116,8 +116,10 @@ layers:
     type: interval
     format: aquafaang_peaks
     file: AtlanticSalmon_unified_peaks.bed
-    # v3 (2026-11-18): the 21 published conditions plus gill (2026) and the ImmunoMap, scored since G's answer of
-    # 2026-11-20 (docs/DECISIONS.md #47). Release 2026-11-05 was built from v1 (archive/v1/).
+    # The 21 published conditions plus gill (2026) and the ImmunoMap, scored since G's answer of 2026-11-20
+    # (docs/DECISIONS.md #47). The file changes on salmobase (its VERSION.md): release 2026-11-05 was built from v1,
+    # release 2026-11-20 from v3 (2026-11-18, now archive/v3/); v5 (2026-11-23) has the same 328,894 peaks with the
+    # gill and head kidney states of retrained models, so the next release differs in those six conditions' states.
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/robust_ATAC_peaks/unified_annotated_peaks/AtlanticSalmon_unified_peaks.bed
     id: true
     description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 27 conditions (empty = no peak there)

@@ -7,8 +7,8 @@
 provisional: [active_states, weak_states, weights, summit, tiers, presets, assay, design, finemap, priors]
 
 active_states: [Active_TSS, Active_enhancer]
-# Counted as weak evidence. Not counted at all: Repressed_polycomb, Quiescent, ZNF_genes_and_repeats, Unknown_1 and
-# Unknown_2 (the gill model's).
+# Counted as weak evidence. Not counted at all: Repressed_polycomb, Quiescent, ZNF_genes_and_repeats, Unknown_1 (the
+# published models') and Unknown_2 (the first gill model's; gone from the unified peaks since their v4 of 2026-11-23).
 # Bivalent_or_mixed_active/polycomb: the ImmunoMap's head kidney label (H3K27me3 with ATAC-seq and/or H3K27ac), weak like
 # Bivalent (G, 2026-11-20).
 weak_states: [Primed_enhancer, Poised_enhancer_1, Poised_enhancer_2, Bivalent, Flanking_upstream, Flanking_downstream,

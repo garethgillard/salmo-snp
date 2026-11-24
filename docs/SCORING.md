@@ -43,8 +43,11 @@ Our own measurements on release 2026-11-20 are in section 6 (added 2026-11-22).
   age-at-maturity signals are in tiers 1 and 2 1.5 times as often as matched SNPs, carried by coding sequence and not
   by chromatin state, and the prior slope the GWAS itself supports is 0.05 to 0.15 per score point, not 0.5.
 - **Conservation can do much more than it does.** The GERP layer has the highest odds of any term but touches 0.2%
-  of SNPs. Sequence that still aligns to pike covers 14% of SNPs and is enriched at eQTL leads as strongly as an
-  active chromatin state (section 6).
+  of SNPs. Sequence that still aligns to pike covers 16% of SNPs and is enriched at eQTL leads more strongly than an
+  active chromatin state (1.6 to 1.9 times; section 6). It is a layer since 2026-11-24, shown and not yet counted.
+- **Two more layers, 2026-11-24.** The distance to the nearest ATAC summit and its signal strength are a layer too;
+  at eQTL leads they add nothing to the peak itself so far. A missense effect score is planned for Orion
+  ([MISSENSE.md](MISSENSE.md)).
 
 ## 2. What other projects do
 
@@ -303,9 +306,82 @@ coding sequence. It has the highest odds ratio of any term at eQTL leads and the
 - **The GWAS does not confirm it and cannot refute it:** 62 of 112 lead SNPs align to pike, against 55.8% of matched
   array SNPs (0.98, 0.67 to 1.46). The array is already four times richer in pike-aligned sequence than the public
   sites, which also shows that the flag goes with sequence that is easy to genotype.
-- Still to do before it could count: the same test with the base itself conserved in pike and both trout copies (the
-  MAF files allow it), and on allelic imbalance when that exists. Whether and how it counts is G's decision
-  (DECISIONS #54).
+- Whether and how it counts is G's decision (DECISIONS #54). The layer is in the code since 2026-11-24 (`pike`,
+  weight 0: shown, not counted); the tests that shaped it follow.
+
+### The pike layer: what improves it (2026-11-24)
+
+G asked for the layer and for tests to improve it. All on the 7.57 million public sites and the eQTL leads, designs S
+and T as above (T also matched on imputation quality). The alignment's MAF files give the aligned base in pike, in
+the trout ortholog and in the salmon and trout duplicate copies.
+
+| Version of the flag | Share of public SNPs | Design S | Design T |
+|---|---|---|---|
+| The SNP's base aligns to pike (the depth track) | 13.8% | 1.74 (1.55-1.95) | 1.47 (1.32-1.65) |
+| ... and the pike base is the salmon reference base | 7.7% | 1.69 (1.45-1.97) | 1.37 (1.18-1.58) |
+| ... and the pike base differs | 5.3% | 1.54 (1.31-1.81) | 1.39 (1.19-1.61) |
+| 90 to 100% of the 50 flanking bases identical in pike | 0.7% | 2.10 (1.39-3.05) | 1.64 (1.10-2.37) |
+| 70 to 79% identical | 3.1% | 1.38 (1.09-1.73) | 1.15 (0.92-1.43) |
+| Aligned, under 50% identical | 6.1% | 1.57 (1.32-1.84) | 1.46 (1.24-1.72) |
+| Aligned to the trout ortholog but not to pike | 37% | 1.14 | 1.03 (0.93-1.14) |
+| The salmon duplicate copy 70% identical or more, pike not aligned | 10.0% | 1.12 (0.94-1.32) | 1.10 (0.93-1.28) |
+| Aligned to none of the four | 42% | 0.58 | 0.72 (0.64-0.81) |
+| In an alignment gap of 1 to 20 bp | 1.6% | 2.01 (1.52-2.61) | 1.80 (1.37-2.32) |
+| In a gap of 21 to 50 bp | 0.6% | 2.38 (1.56-3.48) | 2.10 (1.38-3.07) |
+| In a gap of 51 to 100 bp | 0.7% | 0.86 (0.41-1.58) | 0.95 (0.47-1.71) |
+| Within 25 bp of aligned sequence, in a gap of over 50 bp | 2.6% | 1.04 (0.75-1.39) | 1.05 (0.78-1.40) |
+| **The layer as built: aligned, gaps of up to 50 bp closed** | **16.0%** | **1.92 (1.72-2.14)** | **1.61 (1.45-1.79)** |
+
+- **Depth of conservation is what matters.** Sequence shared with trout alone carries nothing; neither does the
+  salmon duplicate copy without pike. Pike is the layer.
+- **The base itself adds nothing, and identity little.** A SNP whose reference base is the pike base is no likelier
+  to be a lead than one where they differ. Windows 90 to 100% identical do better, but they are 0.7% of SNPs and 56%
+  of them coding; outside coding sequence, high identity gives no more than plain alignment (SNPs with no tier
+  evidence: 1.16, 0.90 to 1.47, for windows 70% identical or more, against 1.44 for aligned windows under 50%).
+  So the release needs the 90 MB depth track, not the 2 GB of alignments.
+- **Short alignment gaps belong to the conserved stretch.** SNPs in gaps of up to 50 bp are leads at least as often
+  as aligned SNPs; in longer gaps and just outside the edges they are not. Closing gaps of up to 50 bp is the one
+  change that improved the layer, and it is `max_gap: 50` in layers.yaml (PROVISIONAL).
+- **As built:** 563 Mb in 1,226,940 stretches, 16.0% of public SNPs and 18.5% of the pool's: 71% of its coding
+  SNPs, 54% of those in splice regions, 42 to 44% in UTRs, 18% of intronic and 13.5% of intergenic ones. Outside
+  coding sequence, UTRs and splice regions the leads are still enriched (1.83 and 1.54), as among SNPs with no tier
+  evidence (1.84 and 1.55); 79% of the pool SNPs in the layer are outside robust peaks. Rainbow trout gets the same
+  layer from the same alignment (547 Mb), untested: trout has no eQTL set.
+- **A check that does not use the eQTL leads:** in unique sequence the 504 fish have 2.37 public SNPs per kb where no
+  flanking base is identical in pike, then 2.19, 2.07 and 1.77 as identity rises, and 1.24 where 90 to 100% are
+  identical. Fewer variants where conservation is higher is what selection against changes would leave (the share of
+  rare variants changes little, 46.0 to 48.5%).
+
+### ATAC summits: distance and signal strength (2026-11-24)
+
+G asked for a layer of scoring from the distance to the ATAC summit and the signal strength. The nf-core MACS2 peak
+files of the 27 conditions on salmobase give 4.6 million significant summits, 3.0 million of them inside robust
+peaks. A robust peak holds several: its summits span 151 bp at the median. Fold enrichment differs between
+conditions (median 3.1 to 6.5, 90th percentile 5.9 to 18.6), so the layer also gives each summit's rank among its own
+condition's peaks.
+
+| SNPs | Share of pool | Design S | Design T |
+|---|---|---|---|
+| In a robust peak (for comparison) | 7.96% | 1.31 (1.11-1.55) | 1.24 (1.05-1.45) |
+| Within 50 bp of a summit | 3.53% | 1.39 (1.09-1.75) | 1.38 (1.10-1.71) |
+| Within 50 bp of a summit in the strongest quarter of its condition (the rule) | 1.04% | 1.07 (0.62-1.71) | 1.07 (0.64-1.67) |
+| Within 50 bp of a summit in the weaker half | 1.48% | 1.58 (1.10-2.18) | 1.54 (1.11-2.09) |
+| Inside robust peaks only: within 50 bp of a summit against the rest of the peak | | 1.08 (0.78-1.49) | 1.18 (0.86-1.59) |
+| Inside robust peaks only: the rule | | 0.77 (0.43-1.29) | 0.83 (0.48-1.36) |
+| caQTL leads, inside robust peaks only: the rule | | 1.68 (1.24-2.25) | 1.71 (1.27-2.27) |
+| caQTL leads, inside robust peaks only: within 50 bp of any summit | | 1.07 (0.84-1.35) | 1.11 (0.88-1.39) |
+
+- **Distance to a summit says about what the peak says.** Being within 50 bp of a summit is no better at eQTL leads
+  than being in the peak, and inside peaks the difference from the rest of the peak is within noise (163 to 178 leads).
+- **Strength is not supported by the eQTL leads.** Leads are not more often at strong summits; if anything at weak
+  ones. Strong peaks are often shared, promoter-like elements, where a lead found in 12 fish is less likely.
+- **The caQTL leads do support it,** 1.7 times, but a strong peak is also where a caQTL is easiest to detect in 12
+  fish, so this cannot be told from detection.
+- Summits outside robust peaks carried nothing in the first test (0.84 and 0.98), so the layer keeps those inside.
+- **As built:** `summit` gives every SNP within 500 bp of a summit its distance, the signal, the rank and the
+  condition; 98.7% of pool SNPs in a robust peak get them. The rule (weights.yaml `summit`: within 50 bp, rank 0.75
+  or more) has weight 0. It needs evidence at the base to be judged: allelic imbalance in the 12 fish, and the
+  ChromBPNet effects. DECISIONS #55.
 
 ### What a user can customise today
 
@@ -339,9 +415,9 @@ adds given the layers already there.
 |---|---|---|---|
 | ChromBPNet allele effects, per condition | Evidence at the base: the kind that orders SNPs inside a peak or locus | Running on Orion (docs/CHROMBPNET.md) | Good test results so far (G, 2026-11-24) |
 | Allelic imbalance in the 12 fish's ATAC and RNA reads | Measured, variant-level evidence, and a truth set for everything else | A by-product of the ChromBPNet evaluation on Orion | To ask of the Orion repository |
-| Conservation with pike (salmon-trout-pike alignment) | Broad conservation for 14% of SNPs; 1.4 to 1.7 at eQTL leads | Small: one 90 MB track on salmobase | Measured (section 6); DECISIONS #54 |
-| A missense effect score for coding SNPs | Separates damaging from harmless protein changes; coding is the one class both truth sets support, and all of it scores alike today | Medium: a protein language model run on a GPU for about 81,000 missense sites, or SIFT | Not started |
-| Distance to the ATAC summit, and signal strength | Graded accessibility in place of a yes-or-no state | Small: the nf-core peak files on salmobase | Not started; value unknown |
+| Conservation with pike (salmon-trout-pike alignment) | Broad conservation for 16% of SNPs; 1.6 to 1.9 at eQTL leads | Small: one 90 MB track on salmobase | Built 2026-11-24 (layer `pike`, salmon and trout; weight 0); in the data with the next release; DECISIONS #54 |
+| A missense effect score for coding SNPs | Separates damaging from harmless protein changes; coding is the one class both truth sets support, and all of it scores alike today | A protein language model on one GPU on Orion for a few hours, SIFT 4G as the cross-check | Planned: [MISSENSE.md](MISSENSE.md); DECISIONS #56 |
+| Distance to the ATAC summit, and signal strength | Graded accessibility in place of a yes-or-no state | Small: the nf-core peak files on salmobase | Built 2026-11-24 (layer `summit`, salmon and trout; weight 0); no gain at eQTL leads (section 6); DECISIONS #55 |
 | A large fine-mapped eQTL set (the gill study of about 3,000 fish) | The strongest regulatory truth set in salmon | Depends on the authors' data | To ask |
 
 Tested and set aside: per-base GERP scores (section 6). Looked at and not a per-SNP layer: salmobase's TFBS folder,

@@ -17,7 +17,7 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 - `docs/`: TRACKER (what's next, then what's built), DECISIONS (questions for G, with options and a recommendation),
   ROADMAP (the spec of every roadmap item), LICENSING (the licences, the CLA, commercial permission, third-party
   data and software), SCORING (how other projects score variants, and the options for our starting point), CHROMBPNET
-  (the brief of the ChromBPNet repository); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
+  (the brief of the ChromBPNet repository), MISSENSE (the plan of the missense effect score); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
   (the simplification plan of 2026-10-07, built).
 - `tools/`: check.sh (what CI runs), user_install_test.sh (a new user's install), get_data.sh (the data for real use),
   cloud_setup.sh (cloud sessions).
@@ -155,7 +155,8 @@ Decided:
   release 2026-11-20. The ImmunoMap's new label Bivalent_or_mixed_active/polycomb counts as weak, like Bivalent; the
   disease_resistance preset is head kidney, gill and liver, and gill and head_kidney presets were added. The release
   is built and published by the `species-data` workflow (G chose it over his Mac). Claude's display choices:
-  DECISIONS #48.
+  DECISIONS #48. Release 2026-11-20 was built from the unified peaks v3; salmobase has had v5 since 2026-11-23 (gill
+  and head kidney states from retrained models, the same peaks), which the next release takes.
 - NCBI RefSeq is the Locus browser's default gene lane (G, 2026-11-20), one isoform per gene (the most CDS bases);
   Ensembl genes (their gene pages and Ss4R duplicates) and every isoform of both are one click away. Thin lines
   separate the tissues, the ImmunoMap and the DevMap in the Chromatin states and Regulatory elements drop-downs (G,
@@ -175,10 +176,18 @@ Decided:
   evidence, not numbers. G, 2026-11-22: long research runs one thing at a time, the most important first, so that the
   usage allowance doesn't run out mid-way; no large multi-agent runs unless G asks.
 
+- More layers of evidence (G, 2026-11-24: "Add the pike layer, and do any testing to improve this data layer. Add a
+  layer of scoring based on ATAC summit distance and signal strength. Add a plan for Missense effect score (run on
+  orion?)"; the weights are settled after more data is gathered): `pike` and `summit` are release layers of both
+  species and terms in weights.yaml with weight 0, shown and never counted until G sets them (DECISIONS #54, #55;
+  what Claude chose in building them is under Provisional); the missense plan is docs/MISSENSE.md (DECISIONS #56).
+  ChromBPNet allele effects are expected from the Orion repository at the end of that week.
+
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
   and the ImmunoMap's bivalent or mixed active/polycomb (G, 2026-11-20). Not counted: repressed polycomb, quiescent, ZNF
-  genes and repeats, Unknown_1 and Unknown_2 (gill's).
+  genes and repeats, Unknown_1 (the published models') and Unknown_2 (the first gill model's; gone from the unified
+  peaks since their v4 of 2026-11-23).
 - Trait presets (condition prefixes): maturation = Brain + Gonad; growth_and_fillet = Muscle + Liver;
   disease_resistance = HeadKidney + Gill + Liver (G, 2026-11-20; Liver alone before the ImmunoMap); development = the
   5 DevMap stages; plus one preset per tissue (gill and head_kidney too) and `all`.
@@ -212,6 +221,16 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   IDs with one offset (layers.yaml liftover); fSalSal1 from same-chromosome minimap2 asm5 alignments, mapq >= 5,
   overlapping blocks dropped (DECISIONS #37; the alignment postponed, G 2026-11-06: no fSalSal1
   tables in a release until I20).
+- The pike and summit layers (2026-11-24, DECISIONS #54, #55; docs/SCORING.md section 6 has the tests):
+  - `pike`: the bases with alignment depth to northern pike in AQUA-FAANG's salmon-trout-pike alignment, alignment
+    gaps of up to 50 bp closed (layers.yaml `max_gap`; chosen from the eQTL test: SNPs in gaps of up to 50 bp are
+    lead SNPs as often as aligned ones, in longer gaps not). Trout: the same rule, untested there.
+  - `summit`: the summits of each condition's nf-core MACS2 peaks (merged replicates) that lie inside a robust peak;
+    summits within 25 bp of each other count as one, with the values of the highest-ranked (`window`); none is
+    reported beyond 500 bp (`max_distance`); strength is the rank among the condition's own peaks, because fold
+    enrichment differs between conditions (median 3.1 to 6.5).
+  - The summit rule (weights.yaml `summit`): within 50 bp of a summit in the strongest quarter of its condition.
+    Weights: pike 0, summit 0. Recommended to G: pike 1; summit 0 until allelic imbalance or ChromBPNet can test it.
 - Rainbow trout release (2026-11-12, DECISIONS #38-#45; the tier rules are salmon's weights.yaml, unchanged):
   - Layers: AQUA-FAANG unified peaks and ChromHMM states (17 conditions: brain, liver, muscle by maturity and sex, five
     embryo stages; no gonad states), blacklist, LORe regions, Ss4R duplicates (the same salmon-trout table, its Omyk
