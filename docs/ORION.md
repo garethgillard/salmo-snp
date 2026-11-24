@@ -15,6 +15,17 @@ Marked **to find out** are the things nobody could check from a cloud session: t
   from there. This is plan 5 of AGENTS.md: the publishing code exists (`snpdata publish`, `salmo-snp download`,
   `serve.py DATA_URL`); it has only ever pointed at GitHub Releases.
 - The salmon build waited for the new layers (PR #29, merged 2026-11-24). Nothing holds it now.
+- What goes into this build (G, 2026-11-24, on the list below): the ChromBPNet scores can wait for a later build; the
+  AQUA-FAANG citation is updated to the published paper (done: Nat Ecol Evol 2026;10:1959-1981); no benchmark files
+  in the snapshot ("aim for only data used in the portal or package tool"); no pool with coding consequences; the
+  fSalSal1 conversion can be made on Orion later and is skipped for now; no missense score yet.
+- The place on salmobase is `datafiles/datasets/salmo-snp/`.
+- Where to build (G asked Claude to choose, 2026-11-24): on Orion, started over `ssh orion` from G's Mac, which the
+  cloud session can use once G attaches its `git` folder. Orion's nodes have 384 cores and 1.5 TB each against the
+  Mac's 8 cores and 16 GB (the trout build needs more than 12 GB); salmobase's files are on its disk; and the upload
+  to salmobase goes from Orion anyway. The Mac's inputs are from early November (its unified peaks file is an old
+  version), so Orion fetches everything fresh, which takes minutes there, and takes from the Mac only what is not
+  online: the Synchrosmolt VCF. One command builds a release: `bash prep/build_release.sh <species> <version>`.
 
 ## The next build: what is in it
 
@@ -44,33 +55,31 @@ serve.py on main already names `trout-2026-11-24`, which was never built: the ru
 | Examples | `known_loci.tsv`, `known_svs.tsv` (2), `svs_demo_SYNTHETIC.tsv` (300), `public_50k.vcf` (cut from `public_af` by the build) | All four in `demo` |
 | Unchanged | The other layers: `chromatin` 194,002, `public_af` 18,801,055, `flank_variants` 46,593,552, `motif` 1,029,347 | `snpscore diff` |
 
-### Not in it unless G adds it
+### Left out of this build (G, 2026-11-24)
 
-| Candidate | State | To decide |
-|---|---|---|
-| ChromBPNet allele effects, 27 conditions | Expected from the Orion repository at the end of the week of 2026-11-24 (docs/CHROMBPNET.md says how they come back) | Wait for them, or build now and again when they are in. They are variant-score layers, weight 0 |
-| The AQUA-FAANG citation | layers.yaml and the release cite the preprint; the paper is out (Nat Ecol Evol 2026, doi:10.1038/s41559-026-03171-6). A release carries its citations, so the text should change before the build | G's OK: layers.yaml is a biology file |
-| Benchmark files in the snapshot | `snpscore benchmark` writes them in seconds; no install has them, so Methods shows no benchmark | Add as a build step |
-| A pool with coding consequences | `snpscore pool --assay` reads the genome. Without it the pool has no coding consequences, which blocks DECISIONS #5 | Try it on Orion, where memory is no limit |
-| fSalSal1 position conversion | Postponed by G (2026-11-06) until I20; it needs one minimap2 run, which is easy on Orion | Leave, unless G wants it now |
-| A missense effect score | Planned only (docs/MISSENSE.md), also for Orion | A later release |
-| The input files as a mirror (`publish --raw`) | Lets anyone rebuild, and is the only way to pass on the Synchrosmolt site frequencies. Needs one fix first (below) | After the first release is up |
+| Candidate | Decision |
+|---|---|
+| ChromBPNet allele effects, 27 conditions | A later build: they can wait (expected from the Orion repository at the end of the week; variant-score layers, weight 0) |
+| Benchmark files in the snapshot | No: a snapshot holds only data the portal or the package uses |
+| A pool with coding consequences (`snpscore pool --assay`) | Not now. It still blocks DECISIONS #5 |
+| fSalSal1 position conversion | Can be made on Orion (one minimap2 run); skipped for now |
+| A missense effect score | Not yet (docs/MISSENSE.md) |
+| The input files as a mirror (`publish --raw`) | After the first release is up, and after the fix below. It is the only way to pass on the Synchrosmolt site frequencies |
 
 ## How a build runs
 
-The commands are the ones snpdata/README.md gives; nothing is special to a machine. In `snpdata/`:
+One command per release, in `snpdata/`, the same on any machine (`prep/build_release.sh`, tried on the test data):
 
 ```bash
-snpdata fetch                                  # the inputs into data/raw; a file already there is kept
-bash prep/make_demo.sh                         # the three example inputs (salmon); needs data/raw
-snpdata build --out release/<date> --memory 32GB --threads 16 --temp <scratch>/duckdb
-snpscore pool --release release/<date> --memory 16GB
-snpscore diff <the release before> release/<date>     # the changelog: only the intended changes
-snpdata publish release/<date> --to <the salmobase folder>
+MEMORY=64GB PREVIOUS=<the release before> bash prep/build_release.sh salmon <date>
+MEMORY=64GB PREVIOUS=<the release before> bash prep/build_release.sh trout trout-<date>
+snpdata publish release/<version> --to <the salmobase folder>      # only after the checks, with G's go-ahead
 ```
 
-Trout: the same with `--layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw` and `--out
-release/trout-<date>`; no make_demo.sh.
+It runs, and stops at the first that fails: `snpdata fetch` (a file already there is kept), for salmon
+`prep/make_demo.sh` (the three example inputs: the step release 2026-11-20 missed), `snpdata build` with DuckDB's
+limits, `snpscore pool`, `snpscore verify`, `snpscore diff` against the release before, and a summary of row counts,
+catalogue rows, examples and pool tiers to hold against the tables above.
 
 What was added for Orion on 2026-11-24 (tested on the fixture only):
 - `SNPDATA_SALMOBASE=<folder>`: fetch reads every `https://salmobase.org/datafiles/...` input from that folder when
@@ -85,36 +94,69 @@ What was added for Orion on 2026-11-24 (tested on the fixture only):
 Times known: fetch about 7 minutes (salmon, by download); the salmon build about 5 hours on 4 cores and 7 GB, most
 of it the motif layer, which scales with cores; the pool a few minutes.
 
-## On Orion: what to set up, and what to find out
+## On Orion: what was found, what is done, what is next (2026-11-24, 23:15)
 
-Proposed places, as for salmo-chrombpnet (G to confirm): the repository in `~/git/salmo-snp/`, inputs and releases
-under `/mnt/project/ELIXIR/salmo-snp/` (`raw/`, `raw_trout/`, `private/`, `release/`), DuckDB's temp folder under
-`/mnt/ScratchProjects/ELIXIR/salmo-snp/`. Give the commands those folders with `--data` and `--out`; never commit
-them.
+The work goes on in a chat that runs on Orion itself over SSH (G, 2026-11-24), as the ChromBPNet work does. A cloud
+session can reach Orion too, through G's Mac: G attaches the Mac's `git` folder to it (Remote Control), and commands
+run there as `ssh orion '...'`. That is how the following was found and prepared. Much of it was read from the
+notes of the ChromBPNet work (`~/git/salmo-chrombpnet/AGENTS.md`), which knows the cluster well.
 
-1. **To find out: where salmobase's data files are on Orion**, whether that folder is the one the web server shows
-   or a copy that is synced, and who may write to it. Its web layout is `datafiles/{genomes,datasets,TSV,...}`, and
-   `datasets/` holds `Aqua-Faang/`, `nf-rasqual-data/` and others. `SNPDATA_SALMOBASE` is the folder that holds
-   `genomes/` and `datasets/`.
-2. **To find out: do compute nodes reach the internet?** fetch still downloads from ftp.ensembl.org,
-   jun2026.archive.ensembl.org (BioMart), ftp.ebi.ac.uk (rs IDs), ftp.ncbi.nlm.nih.gov, jaspar.elixir.no,
-   www.bgee.org, www.biorxiv.org and raw.githubusercontent.com; trout also from ftp.sra.ebi.ac.uk. If only the login
-   node does, run fetch there (it is light with the salmobase files on disk) and build in a job.
-3. **The Synchrosmolt VCF**: `MOWI_synchro_phased_parents_wgs.vcf.gz` is on Orion (G has it). layers.yaml reads it
-   from `../private/` beside the data folder: link it there before fetch. Its genotypes never leave fetch.
-4. **Python**: 3.11 or newer, with `pip install -e snpscore -e snpdata -e snpportal` (or `conda env create -f
-   environment.yml`). No other tool is needed; minimap2 only for fSalSal1.
-5. **SLURM**: to find out: the account, partitions and limits. A build job wants 16 cores or more (the motif layer),
-   32 GB for salmon and 64 GB for trout to be safe, and a few hours. One job per species; fetch, build, pool and the
-   checks can be one script that stops at the first failure and keeps what is done (fetch keeps files; `build
-   --reuse <release>` copies unchanged layers from an earlier build).
-6. **Trout's allele frequencies** come from three ENA cohort VCFs of 7, 16 and 55 GB, which fetch streams (it keeps
-   three site files of about 300 MB). Two ways to skip the streaming: the site files of the workflow run of
-   2026-11-24 are GitHub artifacts until **2026-11-27** (`gh run download 45433800948 -R garethgillard/salmo-snp`,
-   then put the three `*.sites.vcf.gz` in the trout data folder: fetch keeps them); or check whether ENA is fast
-   from Orion, which it may well be.
-7. **Start from an empty data folder.** fetch never replaces a file, which is how a Mac's old unified peaks file
-   would have gone into a new release. On Orion the first fetch takes everything as it is that day.
+**Found**
+- **SLURM**: partition `orion` for CPU jobs, 6 nodes of 384 cores and 1.5 TB each; no time limits, and G's rule for
+  all Orion work is never to set one (`--time`). The account is `biovit_elixir`, as for the ChromBPNet jobs. Nothing
+  heavy on a login node.
+- **Network**: login and compute nodes reach GitHub over HTTPS, salmobase.org, Ensembl and EBI, so fetch can run in
+  a job. Port 22 to github.com is blocked; salmo-snp is public, so clone it over HTTPS.
+- **Storage**: `/mnt/project/ELIXIR/` (group `elixir`: 2.9 of 5 TB used) and `/mnt/ScratchProjects/ELIXIR/`.
+- **Python**: conda and mamba in `/cluster/software/Miniconda3`; the default python3 is 3.8, so make an environment
+  with 3.12.
+- **salmobase**: `/mnt/project/ELIXIR/salmobase/datafiles` is Orion's copy of the server's datafiles folder. The
+  server has files the copy lacks, so fetch downloads from salmobase.org (leave `SNPDATA_SALMOBASE` unset unless a
+  file's checksum is compared first). Uploads go from a login node to the ssh alias `salmobase`
+  (web-05.orion.nmbu.no; `test.salmobase` is the test server), as `salmo-chrombpnet/scripts/08_salmobase_sync.sh`
+  does: stage in the copy, make the server folder over ssh, `rsync -rlt --chmod=D755,F644` and never `--delete`,
+  rerun when the login node cuts a long rsync (it does after 10 minutes), then check the server's files against
+  SHA256SUMS. A dry run first, and each upload only with G's go-ahead.
+- **G's Mac** (8 cores, 16 GB): the clone in `/Users/gagi/git/salmo-snp`, salmon inputs from early November, the
+  Synchrosmolt VCF, releases up to 2026-11-05 and trout-2026-11-13. No trout inputs.
+
+**Done**
+- Folders: `/mnt/project/ELIXIR/salmo-snp/` with `data/raw`, `data/private`, `data/rainbow_trout/raw`, `release`,
+  `logs`; `/mnt/ScratchProjects/ELIXIR/salmo-snp/`.
+- `data/private/MOWI_synchro_phased_parents_wgs.vcf.gz`, copied from the Mac (sha256 8d7e12fd...).
+- The three trout cohort site files of the workflow run of 2026-11-24, saved from GitHub before they expired
+  (2026-11-27): on the Mac in `snpdata/data/rainbow_trout/cohorts-2026-11-24/`, and on Orion in
+  `data/rainbow_trout/raw/` where fetch finds them and skips the 78 GB from ENA. sha256: G1023-03 f36d6985...,
+  G0424-02 7705bb24..., G0824-027 74ed2cdd....
+- The manifests of the releases before, for the diff: `/mnt/project/ELIXIR/salmo-snp/previous/2026-11-20/` and
+  `previous/trout-2026-11-13/`.
+
+**Next** (no job has been submitted)
+1. On Orion: `git clone https://github.com/garethgillard/salmo-snp.git ~/git/salmo-snp` (or pull main). In
+   `snpdata/`: `ln -s /mnt/project/ELIXIR/salmo-snp/data data` and `ln -s /mnt/project/ELIXIR/salmo-snp/release
+   release`, so every command keeps its default paths and the Synchrosmolt file is where layers.yaml looks
+   (`../private/` beside `data/raw`).
+2. The environment, in a small job and not on the login node: `mamba create -y -p
+   /mnt/project/ELIXIR/salmo-snp/env python=3.12 pip`, then with that environment's `bin` first on PATH, in the
+   clone: `pip install -e "snpscore[test]" -e snpdata -e snpportal` and `bash tools/check.sh`.
+3. One job per species, from `snpdata/` (32 cores, 96 GB, no time limit; the log goes to
+   `/mnt/project/ELIXIR/salmo-snp/logs/`). The date is the day of the build:
+   `sbatch --job-name=salmon-<date> prep/orion_build.sbatch salmon <date> 2026-11-20` and
+   `sbatch --job-name=trout-<date> prep/orion_build.sbatch trout trout-<date> trout-2026-11-13`.
+   The job script has not run yet: expect to fix small things in it.
+4. If a download fails in fetch (it reads from Ensembl, EBI, NCBI, JASPAR, Bgee, bioRxiv and GitHub besides
+   salmobase): rerun the job, as fetch keeps what it has. Failing that, G's Mac has every input that is not
+   salmobase's, all of fixed versions, in `~/git/salmo-snp/snpdata/data/raw/`: from the Mac, `rsync -t <file>
+   orion:/mnt/project/ELIXIR/salmo-snp/data/raw/`. Never take the Mac's `AtlanticSalmon_unified_peaks.bed`: it is
+   an old version.
+5. Hold each job's summary against the tables above: row counts, catalogue rows, the six salmon examples, the pool
+   tiers, and a diff that lists only the intended changes.
+6. Then, with G's go-ahead: `snpdata publish release/<version> --to
+   /mnt/project/ELIXIR/salmobase/datafiles/datasets/salmo-snp`, and the upload to `salmobase` as described above
+   (a dry run first). From another computer: `salmo-snp download <version> --from
+   https://salmobase.org/datafiles/datasets/salmo-snp`.
+7. The pull request that makes salmobase the default (below), and "deploy to NREC" when G says. Write into this
+   file and docs/TRACKER.md what was built, how long it took and what had to be fixed.
 
 ## Hosting on salmobase
 
@@ -156,24 +198,11 @@ The demo VM: 6.5 GB were free on 2026-11-24, a salmon release is about 0.45 GB w
 `/srv/snpportal/releases/` once the new ones are in (results on the server expire after 24 hours, so nothing needs
 them).
 
-## Order of work
-
-1. On Orion: find out points 1, 2 and 5 above; set up the clone and the Python environment; `bash tools/check.sh`.
-2. G decides the candidates (ChromBPNet now or later; the citation).
-3. Salmon: fetch, make_demo.sh, build, pool, the checks of the table, `snpscore diff`.
-4. Trout: the same, with the cohort site files or the streaming.
-5. Publish both to the salmobase folder; test `salmo-snp download --from` the address from another computer.
-6. The pull request of the table above, with `RELEASE` and `RELEASES`; G merges; "deploy to NREC".
-7. Record in docs/TRACKER.md what was built and how long it took, and turn the job script into a file in
-   `snpdata/prep/` once it has run.
-
-## Text to start the Orion chat
+## Text to start the chat on Orion
 
 ```
-We are on Orion over SSH. Clone https://github.com/garethgillard/salmo-snp.git into ~/git/ if it is not there
-(else pull main), and read AGENTS.md, then docs/ORION.md: it is the brief for this chat. We build the next Atlantic
-salmon and rainbow trout data releases here with SLURM jobs and publish them to salmobase's data files. Start with
-its "On Orion: what to set up, and what to find out": tell me what you find and what you need from me, before any
-job runs. Large files go under /mnt/project/ELIXIR/salmo-snp/ and temporary ones under
-/mnt/ScratchProjects/ELIXIR/salmo-snp/, never into the repository.
+We are on Orion over SSH. Clone https://github.com/garethgillard/salmo-snp.git into ~/git/ if it is not there (else
+pull main), and read AGENTS.md, then docs/ORION.md: it says what the next Atlantic salmon and rainbow trout data
+releases contain, what is already prepared here and what is next. Go on from "Next" in its section "On Orion".
+Tell me before any job is submitted and before anything is published; never set a SLURM time limit.
 ```

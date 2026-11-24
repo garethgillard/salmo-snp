@@ -104,7 +104,7 @@ layers:
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/robust_ATAC_peaks/unified_annotated_peaks/RainbowTrout_unified_peaks.bed
     id: true
     description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 17 conditions (brain, liver and muscle by maturity and sex, and five embryo stages; empty = no peak there)
-    citation: AQUA-FAANG consortium, rainbow trout unified ATAC peaks and ChromHMM states (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
+    citation: AQUA-FAANG consortium, rainbow trout unified ATAC peaks and ChromHMM states (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Developmental contexts of gene-regulatory evolution following whole genome duplication in salmonids. Nat Ecol Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6
 
   - name: summit
     type: nearest
@@ -152,7 +152,7 @@ layers:
       fold enrichment at the summit), rank (the share of that condition's peaks with a lower signal, 0 to 1, so that
       conditions of different library quality read alike) and condition. Summits of the 17 conditions that lie within
       25 bp of each other count as one: signal, rank and condition are those of the highest-ranked of them
-    citation: AQUA-FAANG consortium, nf-core/atacseq MACS2 peaks of the merged replicates per condition, rainbow trout (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
+    citation: AQUA-FAANG consortium, nf-core/atacseq MACS2 peaks of the merged replicates per condition, rainbow trout (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Developmental contexts of gene-regulatory evolution following whole genome duplication in salmonids. Nat Ecol Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6
 
   - name: region
     type: interval
@@ -195,7 +195,7 @@ layers:
       Sequence that aligns to northern pike (Esox lucius), the closest relative without the salmonid genome duplication,
       in the AQUA-FAANG salmon-trout-pike whole-genome alignment: the bases with alignment depth to pike, alignment
       gaps of up to 50 bp closed (fetch converts the depth bigWig to these stretches)
-    citation: AQUA-FAANG consortium, salmon-trout-pike whole-genome alignment (HAL), alignment depth of USDA_OmykA_1.1 to northern pike (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
+    citation: AQUA-FAANG consortium, salmon-trout-pike whole-genome alignment (HAL), alignment depth of USDA_OmykA_1.1 to northern pike (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Developmental contexts of gene-regulatory evolution following whole genome duplication in salmonids. Nat Ecol Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6
 
   - name: blacklist
     type: interval
@@ -203,7 +203,7 @@ layers:
     file: RainbowTrout_blacklist.bed
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/blacklist/RainbowTrout_blacklist.bed
     description: AQUA-FAANG blacklist; no peak here means "can't tell", not "no function"
-    citation: AQUA-FAANG consortium, rainbow trout blacklist (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
+    citation: AQUA-FAANG consortium, rainbow trout blacklist (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Developmental contexts of gene-regulatory evolution following whole genome duplication in salmonids. Nat Ecol Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6
 
   - name: lore
     type: interval
@@ -212,7 +212,7 @@ layers:
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/tables/Omyk_late_rediploidized_regions.tsv
     columns: [label]
     description: Late-rediploidized (LORe) regions, where the two Ss4R copies are near-identical
-    citation: AQUA-FAANG tables, Omyk_late_rediploidized_regions.tsv (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv preprint 2025, v2 of 2025-12-23, not peer reviewed, doi:10.64898/2025.12.18.695160
+    citation: AQUA-FAANG tables, Omyk_late_rediploidized_regions.tsv (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Developmental contexts of gene-regulatory evolution following whole genome duplication in salmonids. Nat Ecol Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6
 
   - name: gene
     type: nearest

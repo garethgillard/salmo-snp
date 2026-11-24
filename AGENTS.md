@@ -199,6 +199,12 @@ Decided:
   and the live app and installs retrieve them from there; the work continues in a chat on Orion over SSH. The brief,
   with what the next build contains and what has to be found out there: docs/ORION.md. Until its pull request
   changes serve.py DATA_URL and the deploy scripts, the GitHub data releases stay what installs and the demo read.
+  The same day G set the build's contents (docs/ORION.md has the list): the ChromBPNet scores wait for a later
+  build; the AQUA-FAANG citation becomes the published paper; a snapshot holds "only data used in the portal or
+  package tool" (no benchmark files); no pool with coding consequences, no fSalSal1 tables and no missense score
+  yet; the place on salmobase is `datafiles/datasets/salmo-snp/`. Asked to choose where to start it, Claude chose
+  Orion over `ssh orion` from G's Mac (attached to the cloud session), with the Mac giving only the inputs that are
+  not online. G's rule for all Orion work (2026-11-20): never set a SLURM time limit.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,

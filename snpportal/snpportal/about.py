@@ -140,8 +140,8 @@ BODYMAP_FISH = [("Immature female", "J8, J9, J10"), ("Immature male", "J15, J16,
                 ("Mature male", "A19, A20, A22")]
 CITATIONS = [  # (what, reference, DOI or URL): wording provisional (author lists to confirm)
     ("AQUA-FAANG chromatin states, ATAC peaks and signal", "Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, "
-     "Macqueen DJ. Salmonids reveal principles of regulatory evolution following autotetraploidization. bioRxiv 2025 (v2, "
-     "2025-12-23; not yet peer reviewed).", "https://doi.org/10.64898/2025.12.18.695160"),
+     "Macqueen DJ. Developmental contexts of gene-regulatory evolution following whole genome duplication in salmonids. "
+     "Nat Ecol Evol 2026;10:1959-1981.", "https://doi.org/10.1038/s41559-026-03171-6"),
     ("504-fish panel allele frequencies, molQTL and expression", "Nguyen DT, Sandve SR, Lien S, Grønvold L. BMC Genomics "
      "2025;26:1070.", "https://doi.org/10.1186/s12864-025-12302-5"),
     ("Samples of most of the 504-fish panel", "Bertolotti et al. 2020 (ENA PRJEB38061).", ENA.format("PRJEB38061")),

@@ -18,6 +18,9 @@ python prep/make_synthetic.py chip --scale fixture  # SYNTHETIC demo chip for th
 python -m pytest -q                              # tests run on the small regions in tests/fixture
 ```
 
+`bash prep/build_release.sh salmon <date>` (or `trout trout-<date>`) runs a whole release in one go: fetch,
+make_demo.sh, build, the public pool, `snpscore verify`, and a summary to check; it publishes nothing.
+
 On a shared machine (NMBU's Orion, a SLURM job; [../docs/ORION.md](../docs/ORION.md) is the brief for building
 there): `SNPDATA_SALMOBASE=<folder>` makes fetch read every salmobase input from a copy of salmobase's datafiles
 folder on the disk instead of downloading it, and `snpdata build --memory 32GB --threads 16 --temp <folder>` keeps
