@@ -66,8 +66,15 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
       distance-only baseline; held-out chromosomes; enrichment per tier and per layer; a locus-level test; a
       random-annotation control. And benchmark files in every install: none has them, so Methods shows no benchmark
       (a run takes 5 to 38 s and at most 38 kB, so it can be built with the pool)
-- [ ] S3 An independent test: the age-at-maturity GWAS (Sinclair-Waters 2020; 512,397 SNPs on ICSASG_v2, moved to
-      Ssal_v3.1 with liftover_icsasg_v2): tier enrichment near its 116 signals; does the prior narrow credible sets?
+- [x] S3 An independent test: the age-at-maturity GWAS (Sinclair-Waters 2020; SCORING.md section 6; 2026-11-24).
+      94% of its 512,397 SNPs moved to Ssal_v3.1. Lead SNPs of the 116 signals are in tiers 1-2 1.51 times as often
+      as matched SNPs (0.95-2.33), carried by coding sequence (2.65, 1.50-4.42), not chromatin state (0.81). The
+      prior slope fitted to the GWAS is 0.05 to 0.15, and 0.5 fits worse than a flat prior. Array tags, so it cannot
+      test the chromatin weights. The fitting script is the prototype of S7's report from a user's own GWAS
+- [ ] S3b Next layers of evidence, in order (SCORING.md section 7): conservation with pike as a release layer
+      (measured: 14% of SNPs, 1.4 to 1.7 at eQTL leads; DECISIONS #54), then its stricter per-base version; allelic
+      imbalance in the 12 fish and the ChromBPNet scores from Orion (S6); a missense effect score for coding SNPs;
+      summit distance and signal strength of the ATAC peaks; the large gill eQTL set, if its authors share it
 - [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52), then weights.yaml and
       the pools. Before #5 changes anything: the pool needs coding consequences (it is built without the genome, so
       the synonymous weight would apply to uploads but not to the public background)
