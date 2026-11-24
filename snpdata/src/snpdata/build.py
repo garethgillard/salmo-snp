@@ -658,8 +658,12 @@ def build(layers_yaml, data_dir, out_dir, reuse=None):
         shutil.copy(here / catalog["file"], target)
         manifest["catalog"] = {**catalog, "file": f"catalog/{target.name}", "sha256": hashes([target])[1],
                                "rows": sum(1 for line in target.read_text().splitlines()[1:] if line.strip())}
-    demo = [here / catalog["file"]] if catalog and (here / catalog["file"]).exists() else []
+    demo = catalogue_examples(here / catalog["file"], Path(tempfile.mkdtemp())) if catalog and (here / catalog["file"]).exists() else []
     demo += [data / f for f in cfg.get("demo", []) if (data / f).is_file()]
+    svs = cfg.get("demo_svs")  # a SYNTHETIC set of structural variants for the portal's SV tab, from the built gene layer
+    if svs and (out / "gene.parquet").exists():
+        demo.append(synthetic_svs(con, out / "gene.parquet", manifest["chrom_sizes"], Path(tempfile.mkdtemp()) / svs["file"],
+                                  int(svs.get("n", 300))))
     sample = cfg.get("demo_sample")  # an example cut from a built point layer: an even sample of its sites, as a VCF
     if sample and (out / f"{sample['layer']}.parquet").exists():
         table = f"read_parquet({lit(out / (sample['layer'] + '.parquet'))})"
@@ -685,6 +689,63 @@ def build(layers_yaml, data_dir, out_dir, reuse=None):
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
     write_sums(out)
     return out
+
+
+SV_TYPES = {"DEL": 0.55, "INS": 0.2, "DUP": 0.15, "INV": 0.1}  # synthetic_svs: shares of each type
+
+
+def catalogue_examples(catalog, folder):
+    """The portal's examples from the known-loci catalogue, in `folder`: known_loci.tsv (the rows with a position: the
+    SNP example) and, when the catalogue has rows of type sv, known_svs.tsv (chrom, start, end, svtype, id, trait,
+    locus: the SV example; start and end 1-based, as the catalogue gives them). Returns their paths."""
+    import csv
+    with open(catalog, newline="") as f:  # newline="": the csv module reads CRLF lines (a Windows checkout) too
+        reader = csv.DictReader((line for line in f if not line.startswith("#")), delimiter="\t")
+        rows, header = list(reader), reader.fieldnames
+    out = [Path(folder) / "known_loci.tsv"]
+    with open(out[0], "w", newline="") as f:
+        writer = csv.DictWriter(f, header, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(r for r in rows if (r.get("pos") or "").isdecimal())
+    svs = [r for r in rows if r.get("type") == "sv" and (r.get("start") or "").isdecimal() and (r.get("end") or "").isdecimal()]
+    if svs:
+        out.append(Path(folder) / "known_svs.tsv")
+        with open(out[1], "w") as f:
+            f.write("chrom\tstart\tend\tsvtype\tid\ttrait\tlocus\n")
+            f.writelines("\t".join(r.get(k) or "" for k in ("chrom", "start", "end", "svtype", "id", "trait", "locus")) + "\n" for r in svs)
+    return out
+
+
+def synthetic_svs(con, genes, chrom_sizes, target, n=300, seed=2026):
+    """A SYNTHETIC example of n structural variants (the same file for the same release: a fixed seed): types in the
+    SV_TYPES shares; sizes log-uniform within decades: half 50 bp to 1 kb, 30% to 10 kb, 15% to 100 kb, 5% to 1 Mb; half placed in or near a gene of
+    the built gene layer (`genes`), half anywhere on the chromosomes. Insertions are points (start = end) with their
+    inserted length in svlen. Returns the file (a table of chrom, start, end, svtype, svlen, id; 1-based)."""
+    decades = [(1.7, 3), (3, 4), (4, 5), (5, 6)]  # 50 bp-1 kb, 1-10 kb, 10-100 kb, 100 kb-1 Mb: most SVs are short
+    import random
+    rng = random.Random(seed)
+    sizes = {c: n for c, n in (chrom_sizes or {}).items() if n}
+    near = con.execute(f'SELECT chrom, start, "end" FROM read_parquet({lit(genes)}) ORDER BY chrom, start, id').fetchall()
+    near = [g for g in near if g[0] in sizes]
+    rows = []
+    for i in range(n):
+        kind = rng.choices(list(SV_TYPES), weights=list(SV_TYPES.values()))[0]
+        length = round(10 ** rng.uniform(*rng.choices(decades, weights=[50, 30, 15, 5])[0]))
+        if near and i % 2 == 0:
+            chrom, a, b = rng.choice(near)
+            start = rng.randint(max(1, a - 5000), b + 5000)
+        else:
+            chrom = rng.choices(list(sizes), weights=list(sizes.values()))[0]
+            start = rng.randint(1, sizes[chrom])
+        span = 1 if kind == "INS" else min(length, sizes[chrom] - start + 1)
+        rows.append((chrom, start, start + span - 1, kind, length if kind == "INS" else "", f"syn_sv_{i + 1:04d}"))
+    rows.sort(key=lambda r: (int(r[0]) if r[0].isdigit() else 999, r[0], r[1]))
+    Path(target).parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "w") as f:
+        f.write("# SYNTHETIC structural variants, made by snpdata build (synthetic_svs): not real data\n"
+                "chrom\tstart\tend\tsvtype\tsvlen\tid\n")
+        f.writelines("\t".join(map(str, r)) + "\n" for r in rows)
+    return Path(target)
 
 
 def publish(release_dir, site, layers_yaml=None, data_dir=None):

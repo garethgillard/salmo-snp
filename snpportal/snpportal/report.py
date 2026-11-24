@@ -36,7 +36,8 @@ def methods(job, d, trait, finemap=None):
         from .lib.export import methods_text
         weights = d / "weights.yaml"
         text = methods_text(d / "manifest.json", weights if weights.exists() else None, trait,
-                            None if jobs.release_changed(job) else jobs.release(), **({"finemap": finemap} if finemap else {}))
+                            None if jobs.release_changed(job) else jobs.release(), **({"finemap": finemap} if finemap else {}),
+                            **({"sv": True} if job.get("input_kind") == "sv" else {}))
     except (ImportError, OSError, KeyError, TypeError, ValueError):
         return [], []
     body, _, refs = text.partition("\n\nReferences\n")
@@ -97,6 +98,7 @@ def report(request, key):
         "top": best, "filters": shown, "synthetic": synthetic,
         "table_url": f"{base}?{urlencode({'tab': 'table', 'trait': trait, **filters})}",
         "methods_url": request.build_absolute_uri(reverse("snpportal:methods")), "refs": references(refs),
+        "sv": job.get("input_kind") == "sv",
         "release": f"{m.get('version') or job.get('release')} ({m.get('assembly') or job.get('assembly', 'Ssal_v3.1')})",
         "provenance": [f"Release {job.get('release')} ({job.get('assembly', 'Ssal_v3.1')}); manifest {(job.get('manifest_sha256') or '')[:12]}; "
                        f"weights {(job.get('weights_sha256') or 'none')[:12]}; input {(job.get('input_sha256') or 'n/a')[:12]}",

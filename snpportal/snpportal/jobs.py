@@ -9,6 +9,8 @@ A job folder (0700, files 0600) holds:
 - weights.yaml and manifest.json copied from the release, so editing the release never changes an existing job
 - GWAS jobs (input_kind 'gwas'): sumstats.parquet, gwas.json (QC) and gwas.parquet (statistics with alleles turned to
   Ssal_v3.1, keyed by the result's file_row_number), read by association.py
+- SV jobs (input_kind 'sv'): structural variants or any regions, annotated by snpscore.annotate_svs (each scored by what
+  it overlaps); their pages say SVs where SNP pages say SNPs (sv_wording)
 
 Log lines carry an event name, job_ref (a hash of the key), counts and timings: never SNPs or file names."""
 from __future__ import annotations
@@ -219,7 +221,7 @@ def middleware(get_response):
             response = get_response(request)
             kind = response.get("Content-Type", "")
             if not response.streaming and kind.startswith(("text/html", "image/svg")) and not request.path.endswith("/releases/"):
-                pairs = wording()
+                pairs = wording() + sv_wording(request)
                 if pairs:
                     text = response.content.decode(response.charset or "utf-8")
                     for pattern, replacement in pairs:
@@ -229,6 +231,24 @@ def middleware(get_response):
         finally:
             _current.reset(token)
     return with_release
+
+
+SV_WORDING = [  # (pattern, replacement): an SV job's pages, written for SNPs; the site's name and other SNP things stay
+    (r"\ba SNP\b", "an SV"), (r"\bA SNP\b", "An SV"), (r"\bSNP locus\b", "SV"), (r"\bSNP's\b", "SV's"),
+    (r"(?<!published )(?<!Functional )(?<!public )(?<!score )\bSNPs\b(?! (?:portal|chip|panel))", "SVs"),
+    (r"(?<!published )(?<!Functional )\bSNP\b(?! (?:portal|chip|panel|list|names|ids?\b))", "SV")]
+
+
+def sv_wording(request):
+    """SV_WORDING for the pages of an SV job (/results/<key>/...), else []."""
+    m = JOB_URL.search(request.path)
+    if not m:
+        return []
+    try:
+        kind = read_json(folder(m.group(1)) / "job.json").get("input_kind")
+    except ValueError:
+        return []
+    return [(re.compile(a), b) for a, b in SV_WORDING] if kind == "sv" else []
 
 
 def results_dir():
@@ -704,8 +724,17 @@ def _annotate(src, d, progress):
     written) become validation.json and rejects.tsv."""
     params = inspect.signature(snpscore.annotate).parameters
     cap = int(setting("SNPPORTAL_MAX_SNPS", 3_000_000))
+    job = read_json(d / "job.json")
+    if job.get("input_kind") == "sv":  # structural variants: each scored by what it overlaps
+        try:
+            snpscore.annotate_svs(src, release(), d / "result.parquet", progress=progress, max_svs=cap, **limits())
+        finally:
+            for name in ("validation.json", "rejects.tsv"):
+                if (d / f"result.{name}").exists():
+                    os.replace(d / f"result.{name}", d / name)
+        return
     kwargs = {k: v for k, v in [("progress", progress), ("max_snps", cap), *limits().items()] if k in params}
-    positions = read_json(d / "job.json").get("positions")  # I18, I19: positions on another assembly
+    positions = job.get("positions")  # I18, I19: positions on another assembly
     if positions == "flank":
         kwargs["place_by_flank"] = True
     elif positions:
@@ -950,6 +979,59 @@ def parse_paste(text, limit):
     return rows
 
 
+SV_TYPES = re.compile(r"(?i)^<?(DEL|DUP|INV|INS|CNV|BND|TRA|deletion|duplication|inversion|insertion|translocation)(?:[:_]\w+)*>?$")
+SV_REGION = re.compile(r"^([\w.]+)\s*:\s*([\d.,]+)\s*(bp|kb|mb)?\s*(?:-|\.\.|–)\s*([\d.,]+)\s*(bp|kb|mb)?$", re.I)
+UNITS = {"": 1, "bp": 1, "kb": 1_000, "mb": 1_000_000}
+
+
+def parse_sv_paste(text, limit):
+    """Rows (chrom, start, end, svtype, id), 1-based and inclusive, from pasted lines 'chrom:start-end [type] [id]'
+    (commas and kb/Mb allowed: 26:14.5-15Mb) or 'chrom start end [type] [id]' (spaces, tabs or commas between)."""
+    rows = []
+    for number, line in enumerate(text.splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#") or line.split()[0].lower() in ("chrom", "chr", "chromosome", "#chrom"):
+            continue
+        first, *rest = line.split()
+        m = SV_REGION.match(first)
+        if m:
+            chrom, a, ua, b, ub = m.groups()
+            try:
+                start = round(float(a.replace(",", "")) * UNITS[(ua or ub or "").lower()])
+                end = round(float(b.replace(",", "")) * UNITS[(ub or ua or "").lower()])
+            except ValueError:
+                raise InputError(f"Line {number}: a position that is not a number.") from None
+        else:
+            fields = [f for f in re.split(r"[\s,;]+", line) if f]
+            if len(fields) < 3 or not fields[1].isdecimal() or not fields[2].isdecimal():
+                raise InputError(f"Line {number}: expected chrom:start-end or 'chrom start end', e.g. 25:28,996,001-28,997,000 DEL "
+                                 "or 25 28996001 28997000 DEL.")
+            chrom, start, end, rest = fields[0], int(fields[1]), int(fields[2]), fields[3:]
+        if start < 1 or end < start:
+            raise InputError(f"Line {number}: the end must be at or after the start, and the start at least 1.")
+        if len(rows) == limit:
+            raise InputError(f"Paste at most {limit:,} lines, or upload the list as a file.")
+        kind = next((t for t in rest if SV_TYPES.match(t)), None)
+        name = next((t for t in rest if t != kind), None)
+        rows.append((chrom, start, end, kind, name))
+    if not rows:
+        raise InputError("Paste at least one region, e.g. '25:28,996,001-28,997,000 DEL'.")
+    return rows
+
+
+def create_from_sv_rows(rows, label, preset="all", input_format="paste"):
+    """Make an SV job from rows of (chrom, start, end, svtype, id), 1-based and inclusive. Returns the key."""
+    fd, tmp = tempfile.mkstemp(dir=results_dir(), prefix=".rows-", suffix=".tsv")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write("chrom\tstart\tend\tsvtype\tid\n")
+            for row in rows:
+                f.write("\t".join("" if v is None else str(v).replace("\t", " ") for v in row) + "\n")
+        return create(Path(tmp), ".tsv", "sv", preset, label, input_format)
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+
+
 # ---- lifecycle ----
 
 def delete(key):
@@ -1009,6 +1091,9 @@ def provenance(job, trait=None, filters=None):
     if job.get("synthetic_input") or job.get("synthetic_layers"):
         lines.append("SYNTHETIC: built from synthetic test data, not real results")
     cli = cli_trait(trait)
-    lines.append(f"equivalent command: snpscore annotate <your list> --release <release {job.get('release')}> --trait "
+    sv = job.get("input_kind") == "sv"
+    if sv:
+        lines.insert(-1, "structural variants: each scored by the evidence it overlaps (snpscore sv), the weights as for SNPs")
+    lines.append(f"equivalent command: snpscore {'sv' if sv else 'annotate'} <your list> --release <release {job.get('release')}> --trait "
                  + (cli or f"all (the portal scored tiers for {trait_label(trait)}, which snpscore has no name for)"))
     return ["# " + line for line in lines]

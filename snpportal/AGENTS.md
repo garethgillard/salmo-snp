@@ -55,6 +55,10 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   say the rules are provisional. No PROVISIONAL or SYNTHETIC badges: a synthetic job's title says so.
 - Panels, filters, card sections and export columns render only when their column exists in the result.
 - `hx-boost` only on links and forms that stay on the same page (a boosted file or other-page link swaps in nothing; tested).
+- Structural variants (G, 2026-11-24): SV jobs (`input_kind` sv, `snpscore.annotate_svs`) use the SNP pages; their result
+  has `end` and `length` (`results.is_sv`), which the pages check. Write SNP wording plainly: `jobs.sv_wording` turns
+  "SNPs" into "SVs" on an SV job's pages (not "published SNP", "SNP chip", the site's name). No panels, vendor files or
+  priors for SVs.
 - Results tabs: Overview | Table | Export; GWAS jobs: Association | Overview | Table | Export. Tiers always count all 27
   conditions (no trait picker); the curated panel is its own page (Design panel, `panel.py`; `?tab=panel` is unlinked).
   View state lives in whitelisted GET parameters (GWAS links keep the fine-mapping settings); derived files are

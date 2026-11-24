@@ -94,8 +94,9 @@ def test_benchmark_covers_every_known_locus(release, tmp_path):
     assert rows["region_class = CDS"][3] > 0 and all(0 <= r[4] <= 1 for r in rows.values())
     out = annotate(DATA / "catalog" / "known_loci.tsv", release, tmp_path / "known.parquet")
     known = read(out)
-    # 40 catalogue rows; those on chromosomes 9, 25 and 26 are in the fixture, the rest are unknown chromosomes here
-    assert len(known) == 14 and report(out)["rejected"] == {"unknown_chrom": 26}
+    # 40 SNP rows of the catalogue: those on chromosomes 9, 25 and 26 are in the fixture, the rest are unknown chromosomes
+    # here; its 6 structural variants have no position (start and end instead): not a SNP list's rows
+    assert len(known) == 14 and report(out)["rejected"] == {"unknown_chrom": 26, "bad_pos": 6}
     outside = {"fbxo34like_SW2020", "itprid2_Lochy_25_27034108"}  # on fixture chromosomes, outside its regions
     assert all(r["gene_id"] and r["flank_variants"] is not None for r in known if r["id"] not in outside)
 
@@ -318,7 +319,8 @@ def test_known_loci(release, tmp_path):
     # bco1l: A on the Ssal_v3.1 + strand = red flesh (the paper's T, other strand); here A is the reference allele
     assert rows["bco1l_rs863785818"]["known_effect_allele"] == "A" and rows["bco1l_rs863785818"]["known_effect_note"] == "ref"
     catalog = list(__import__("csv").DictReader(open(DATA / "catalog" / "known_loci.tsv"), delimiter="\t"))
-    assert len(catalog) == 40 and len({r["trait"] for r in catalog}) == 8 and sum(bool(r["effect_allele"]) for r in catalog) == 13
+    assert len(catalog) == 46 and len({r["trait"] for r in catalog}) == 10 and sum(bool(r["effect_allele"]) for r in catalog) == 13
+    assert sum(r["type"] == "sv" for r in catalog) == 6
     f = tmp_path / "SYNTHETIC.tsv"
     f.write_text(SYNTHETIC + "chrom\tpos\tid\tref\talt\n25\t28996360\tswapped\tT\tC\n25\t28996460\tnear\tA\tG\n")
     rows = {r["id"]: r for r in read(annotate(f, release, tmp_path / "swapped.parquet"))}

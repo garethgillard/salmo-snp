@@ -10,7 +10,8 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 - `snpdata/`: collects the public sources and builds a versioned release (Parquet tables, manifest.json, tracks.yaml,
   the known-loci catalogue): `snpdata fetch`, `snpdata build`, `snpdata tracks`. Its README's "Release format" is the
   contract with the other two. One layer registry per species: `layers.yaml` (salmon), `rainbow_trout/layers.yaml`.
-- `snpscore/`: scores a SNP list against a release (`snpscore annotate`), plus `rsid`, `pool`, `benchmark` and `gwas`.
+- `snpscore/`: scores a SNP list against a release (`snpscore annotate`), structural variants by what they overlap
+  (`snpscore sv`), plus `rsid`, `pool`, `benchmark` and `gwas`.
   The tier rules (weights.yaml) live here, not in the release.
 - `snpportal/`: the Django web portal; reads a release and calls snpscore. `snpportal/lib/` holds its plain-Python
   parts (locus data, panel design, exports, the track registry; `python -m snpportal.lib.cli panel|export|compare`).
@@ -175,6 +176,13 @@ Decided:
   evidence, not numbers. G, 2026-11-22: long research runs one thing at a time, the most important first, so that the
   usage allowance doesn't run out mid-way; no large multi-agent runs unless G asks.
 
+- Structural variants (G, 2026-11-24): users can score structural variants (any list of regions: an SV VCF, BED, a
+  table, or pasted chrom:start-end lines) instead of SNPs, "scored in the same way, except ignoring anything that would
+  require a specific base position"; "any functional data that overlaps the SV region counts towards evidence of
+  function impact"; the results stay as close to the SNPs' as they can; published SVs join the known loci, with an
+  example set. Built as `snpscore sv` (sv.py) and the Score page's Structural variants tab; Claude's choices are under
+  Provisional and in docs/DECISIONS.md #55-#57.
+
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
   and the ImmunoMap's bivalent or mixed active/polycomb (G, 2026-11-20). Not counted: repressed polycomb, quiescent, ZNF
@@ -230,6 +238,14 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     uploads get a badge only near the four gene-region rows. The Locus browser opens at greb1l and rock1.
   - The public pool: since 2026-11-21 the salmon rule (Decided), so an even sample of at most 4,000,000 (MAX_SITES) of
     the public sites with MAF >= 0.05: 3.37M of 13.5M (before: 2,000,000 of all 18.8M).
+- Structural variants (2026-11-24, DECISIONS #55-#57): each evidence term counts once however many elements an SV
+  overlaps (a 1-bp SV scores as a SNP at that base); per condition the strongest state of the peaks it overlaps; the
+  most severe gene region; Ensembl regulatory only without an AQUA-FAANG peak; insertions and breakends are their
+  junction's two bases; inversions and translocations count over their whole span. SV jobs have no panels, vendor
+  files, priors or public-SNP comparison. Catalogue rows of `type` sv (`start`, `end` 1-based, `svtype`): salmon 6
+  (Stenløkk 2022 chr18 and chr9 inversions, `local_adaptation`; Bertolotti 2020 farmed-vs-wild outliers,
+  `domestication`), trout 2 (Omy05, `anadromy`; Omy17, `fillet_yield`). Examples: Known SVs, and 300 SYNTHETIC SVs
+  that build makes (layers.yaml `demo_svs`).
 - Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
   counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
   priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).

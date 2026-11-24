@@ -105,6 +105,9 @@ catalog:
 # --scale fixture` the test chip.
 demo: [../demo/public_50k.vcf, ../synthetic/chip_demo_SYNTHETIC.tsv, synthetic/chip_demo_SYNTHETIC.tsv,
        ../synthetic/gwas_maturation_SYNTHETIC.tsv]
+# Structural variants for the portal's SV tab: build makes a SYNTHETIC set of n (synthetic_svs: a fixed seed, half of
+# them in or near genes of the gene layer); the catalogue's rows of type sv become a second example (demo/known_svs.tsv).
+demo_svs: {file: svs_demo_SYNTHETIC.tsv, n: 300}
 
 # Choices in this file that G still has to confirm; listed in the release manifest with those from weights.yaml.
 provisional: [catalog.window, molqtl.max_bf]

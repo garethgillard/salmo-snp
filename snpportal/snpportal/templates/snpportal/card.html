@@ -20,6 +20,7 @@
   {% if ev.mini or ev.no_peak or ev.molqtl or locus_url %}<details class="sp-cs" id="cs-locus" open><summary><h3 class="sp-cs-h">Functional evidence at the locus</h3>
       {% if locus_url %}<a class="sp-cs-act" href="{{ locus_url }}" data-locus>Open locus browser &rarr;</a>{% endif %}</summary>
     {% if ev.mini %}<div class="sp-figure mb-2">{{ ev.mini }}</div>{% endif %}
+    {% if ev.too_wide %}<p class="mb-2">{{ ev.too_wide }}</p>{% endif %}
     {% if ev.no_peak %}<p class="mb-2">{{ ev.no_peak }}</p>{% endif %}
 
     {% if ev.molqtl %}<h4 class="sp-cs-h4">molQTL leads (nf-RASQUAL, 12 fish)</h4>
@@ -66,7 +67,7 @@
       <dl class="sp-dl mb-0">{% for name, v in ev.yours %}<dt>{{ name }}</dt><dd>{{ v|default_if_none:"" }}</dd>{% endfor %}</dl></details>{% endif %}
 
     <details class="sp-more"><summary>Details and links</summary>
-      {% if ev.gene %}<dl class="sp-dl mb-1"><dt>Nearest gene</dt><dd><a href="{{ ev.gene.url }}">{{ ev.gene.label }}</a> <span class="sp-mono">{{ ev.gene.id }}</span>{% if ev.gene.biotype %}, {{ ev.gene.biotype }}, {{ ev.gene.strand }} strand{% endif %}; {{ ev.gene.where }}{% if ev.gene.description %}: {{ ev.gene.description }}{% endif %}</dd>
+      {% if ev.gene %}<dl class="sp-dl mb-1"><dt>{{ ev.gene.heading|default:"Nearest gene" }}</dt><dd><a href="{{ ev.gene.url }}">{{ ev.gene.label }}</a> <span class="sp-mono">{{ ev.gene.id }}</span>{% if ev.gene.biotype %}, {{ ev.gene.biotype }}, {{ ev.gene.strand }} strand{% endif %}; {{ ev.gene.where }}{% if ev.gene.description %}: {{ ev.gene.description }}{% endif %}</dd>
         {% if ev.gene.human or ev.gene.zebrafish %}<dt>Orthologs</dt><dd>{% if ev.gene.human %}human {{ ev.gene.human }}{% endif %}{% if ev.gene.human and ev.gene.zebrafish %}, {% endif %}{% if ev.gene.zebrafish %}zebrafish <em>{{ ev.gene.zebrafish }}</em>{% endif %}</dd>{% endif %}</dl>{% endif %}
       {% if ev.details %}<dl class="sp-dl mb-1">{% for label, value in ev.details %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
       <p class="mb-1">Chromatin: {{ ev.samples }}. <a href="{% url 'snpportal:about_data' %}">About the data &rarr;</a></p>

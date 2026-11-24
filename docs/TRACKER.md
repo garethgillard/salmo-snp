@@ -78,6 +78,14 @@ Queued behind it, to run only when G says (cut off twice by the usage limit): a 
 the guided tour, the live demo for both species, speed with the larger pool, handover, unused public data, bugs in
 the week's changes).
 
+Structural variants (G, 2026-11-24): users score SVs (any regions: an SV VCF, BED, a table or pasted chrom:start-end
+lines) on the Score page's Structural variants tab, each scored by what it overlaps with the SNPs' rules (`snpscore
+sv`; a 1-bp SV scores as a SNP at that base), shown on the same Overview, Table, card, report and exports; the known
+loci gain 6 salmon SVs (Stenløkk 2022 inversions, Bertolotti 2020 farmed-vs-wild outliers) and 2 trout ones (the Omy05
+double inversion, the Omy17 inversion); examples Known SVs and SVs (synthetic, 300 made by the build). The catalogue
+and examples come with releases 2026-11-24 and trout-2026-11-24 (the `species-data` workflow). G's questions:
+DECISIONS #55-#57.
+
 Built outside Push 3 (G, 2026-11-14 and -15): the Locus browser moves and zooms with the mouse, with a margin and a
 marker line that pins to a base (PR #18); the user's own BED tracks in the Locus browser and as a Table filter,
 never scored (mytracks.py). New AQUA-FAANG data (G, 2026-11-20): the salmon gill ATAC-seq of 2026 and the ImmunoMap

@@ -60,7 +60,7 @@ def test_manifest(release):
     layers = {l["name"]: l for l in m["layers"]}
     assert "Bertolotti" in layers["public_af"]["population"] and "European farmed" not in json.dumps(m)
     assert layers["molqtl"]["licence"].startswith("redistribution agreed") and len(layers["molqtl"]["urls"]) == 9
-    assert m["rsid"]["rows"] > 0 and m["catalog"]["rows"] == 40
+    assert m["rsid"]["rows"] > 0 and m["catalog"]["rows"] == 46
     assert m["duckdb_version"] == duckdb.__version__ and list(m["files"]) == ["tracks.yaml"]
     aliases = dict(duckdb.sql(f"SELECT alias, chrom FROM read_parquet('{release / 'alias.parquet'}')").fetchall())
     assert aliases["nc_059466.1"] == aliases["ssa25"] == aliases["chr25"] == aliases["hg993284"] == "25"
@@ -172,7 +172,8 @@ def test_rainbow_trout_release(tmp_path):
     layers = {l["name"]: l for l in m["layers"]}
     conditions = [c for c in layers["chromatin"]["columns"] if c not in ("summary", "id")]  # 17 genome-wide; those with a peak here
     assert {"Brain_Mature_Male", "Liver_Immature_Female", "LateBlastulation"} <= set(conditions) and not any("Gonad" in c for c in conditions)
-    assert m["catalog"]["rows"] == 11 and [d["file"] for d in m["demo"]] == ["demo/known_loci.tsv", "demo/public_50k.vcf"]
+    assert m["catalog"]["rows"] == 13 and [d["file"] for d in m["demo"]] == ["demo/known_loci.tsv", "demo/known_svs.tsv", "demo/svs_demo_SYNTHETIC.tsv",
+                                                                                 "demo/public_50k.vcf"]
     again = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "again", reuse=out)
     reused = json.loads((again / "manifest.json").read_text())  # a rebuild that copies every unchanged layer
     assert [(l["name"], l["sha256"], l["rows"]) for l in reused["layers"]] == [(l["name"], l["sha256"], l["rows"]) for l in m["layers"]]
