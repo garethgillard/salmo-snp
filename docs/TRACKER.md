@@ -5,7 +5,17 @@ sections after it record what was built (ticked when built and tested), and thei
 Specs: [ROADMAP.md](ROADMAP.md). Questions only G can answer: [DECISIONS.md](DECISIONS.md) (ask, don't decide).
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
-## Where things stand (2026-11-20)
+## Where things stand (2026-11-25)
+- **The demo since 2026-11-25** (G: "make a working deployment to NREC"): main at 2e61590 (PRs #31 to #36) with
+  releases 2026-11-24 and trout-2026-11-24, built on Orion and fetched from salmobase by the deploy itself
+  (https://salmobase.org/datafiles/datasets/salmo-snp; every file checked on the VM, each release with its pool).
+  Checked on the live site: both species' releases, the five salmon examples (2026-11-20 had one), a Known loci run
+  with the Pike and ATAC summit columns, the Known SVs run, the pike lane in the Locus browser of both species, the
+  published AQUA-FAANG citation on the Data page. The run's last step failed, harmlessly: it tried to rebuild the
+  stale pools of the three older releases still on the VM (2026-11-20, 2026-11-05, trout-2026-11-13), which are not on
+  salmobase; the workflow now leaves pools of releases the code no longer names. The VM has 4.9 GB free, under the
+  5 GB species.sh asks for before fetching a release: the older releases have to go before the next one.
+  The bullets below describe the state before that deploy.
 - Phase: feature work on the local install, the main product (AGENTS.md plan 4, G 2026-11-03); the live site moves
   to salmobase later. Two species since 2026-11-14: Atlantic salmon (the default) and rainbow trout (AGENTS.md Plan 7;
   the section below), finished and accepted by G; the next work is Push 3 (Next).
