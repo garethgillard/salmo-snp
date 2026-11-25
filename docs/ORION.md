@@ -112,6 +112,51 @@ against releases 2026-11-24 and trout-2026-11-24 in a cloud session. The questio
 | A missense effect score | Not yet (docs/MISSENSE.md; DECISIONS #59) |
 | The input files as a mirror (`publish --raw`) | After the fix under Hosting on salmobase. It is the only way to pass on the Synchrosmolt site frequencies |
 
+### Who does what, in order (2026-11-25)
+
+G, 2026-11-25: "coordinate the new planned build better [between] the snp and bpnet chats. The build will run in an
+Orion chat." Three chats take part, and each step names the one that does it:
+
+- **bpnet**: the salmo-chrombpnet chat on Orion (`~/git/salmo-chrombpnet`). It owns the models, their scores and
+  their uploads to `datasets/chrombpnet/`.
+- **snp (cloud)**: a salmo-snp session in the Claude app. It makes the pull request before the build.
+- **Orion build**: the salmo-snp chat on Orion (`~/git/salmo-snp`). It builds, checks and publishes the releases.
+
+| # | Who | Step | Waits for |
+|---|---|---|---|
+| 1 | G | Answer DECISIONS #60 to #64. #60 also ends salmo-chrombpnet's "stop before scoring the public SNPs" (G will add to the SNP set first): its recommended set is that addition | - |
+| 2 | bpnet | Score the #60 set with the Gill model (the handover below), keep the full table on Orion, write the score file, test it with salmo-snp's reader, a dry run of the upload | 1 |
+| 3 | snp (cloud) | The pull request of "What it needs first", 3, with the score file's address in `chrombpnet_gill`; tests on the fixture | 1 (the address can be set before the file exists) |
+| 4 | G | Go-ahead for the score file's upload; bpnet uploads it and checks the server's copy against its checksum | 2 |
+| 5 | G | Merge the pull request of step 3 (it touches CODEOWNERS files: layers.yaml, maybe weights.yaml) | 3, 4 |
+| 6 | Orion build | Pull main, then one job per species (How a build runs); the checks of the two tables above | 4, 5 |
+| 7 | Orion build | `MODE=dry` publish; with G's go-ahead `MODE=run`; the server's copy checked | 6 |
+| 8 | snp (cloud) | Pull request: serve.py `RELEASE` and `RELEASES` name the new releases; the NREC deploy only when G asks | 7 |
+
+Vibrio's summits (#64) are skipped unless G asks for the merged MACS2 call: neither chat has a ready script for trout,
+and the summit term counts nothing yet (#58). If G asks, the Orion build chat makes it before step 6 with nf-core's
+MACS2 command as `salmo-chrombpnet/scripts/02_call_peaks.sbatch` runs it (container and options), and the trout
+`summit` entry reads that file instead of salmobase's.
+
+**The handover from bpnet (step 2)**, what the build reads:
+
+- The set: the sites of release 2026-11-24 on Orion, `/mnt/project/ELIXIR/salmo-snp/release/2026-11-24/`,
+  `public_af.parquet` and (with #60's recommendation) `synchrosmolt_af.parquet`: chrom, `end` as the 1-based pos, ref,
+  alt, exactly as they are; the union, one row per (chrom, pos, ref, alt): 9,288,186 rows. The next release keeps
+  these sites (both layers are unchanged).
+- The score: |logFC| (or #60's answer), each SNP by the Gill fold model that held its chromosome out, from release
+  v1 of the models. A SNP that can't be scored is left out, and the count is reported.
+- The file: `chrombpnet_gill.tsv.gz`, header `chrom pos ref alt score`, chromosomes "1" to "29", sorted by chrom and
+  pos, with a sha256. It goes to `datasets/chrombpnet/AtlanticSalmon/v1/Gill/scores/` on salmobase, a new folder, so
+  the model files and their SHA256SUMS stay as published. A changed file gets a new name (fetch keeps a file it
+  already has).
+- The check before the upload: salmo-snp's reader (`snpdata.build.read_variant_scores`) reads it with no rejected
+  row, as `reports/step7_scorer.md` did for 9 SNPs.
+- Back to the snp chats: the address, the sha256, the row count, the model version and commit, and the text of the
+  `description`, `citation` and `licence` lines of its layers.yaml entry (scored set and fold rule named).
+- GPU: about 35 GPU-hours at 13.5 ms a SNP, one job per fold (each fold's test chromosomes), inside the project's
+  limit of 6 GPUs at once while the tissue models train.
+
 ## How a build runs
 
 One command per release, in `snpdata/`, the same on any machine (`prep/build_release.sh`, tried on the test data):
@@ -319,6 +364,7 @@ code no longer names, once nothing kept on the server was made with them ("Next"
 ```
 We are on Orion over SSH. Clone https://github.com/garethgillard/salmo-snp.git into ~/git/ if it is not there (else
 pull main), and read AGENTS.md, then docs/ORION.md: it says what the next Atlantic salmon and rainbow trout data
-releases contain ("The next build"), what they need first, and how the builds before were run here ("On Orion").
+releases contain ("The next build"), what they need first, who does which step ("Who does what, in order"), and
+how the builds before were run here ("On Orion").
 Tell me before any job is submitted and before anything is published; never set a SLURM time limit.
 ```
