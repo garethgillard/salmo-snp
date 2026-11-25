@@ -16,7 +16,7 @@ COPY snpscore /src/snpscore
 COPY snpportal /src/snpportal
 RUN --mount=type=secret,id=ca,required=false \
     if [ -f /run/secrets/ca ]; then export PIP_CERT=/run/secrets/ca; fi; \
-    pip install --no-cache-dir /src/snpscore /src/snpportal gunicorn \
+    pip install --no-cache-dir /src/snpscore "/src/snpportal[chrombpnet]" gunicorn \
     && install -m 755 /src/snpportal/deploy/container.sh /usr/local/bin/salmo-snp-container \
     && rm -rf /src \
     && DJANGO_SECRET_KEY=build python -m django collectstatic --noinput -v 0 \

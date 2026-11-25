@@ -37,6 +37,8 @@ class HealthTest(SimpleTestCase):
                 h = self.client.get(reverse("snpportal:health")).json()
                 self.assertEqual((h["status"], h["release"]["ok"], h["results"]["writable"]), ("ok", True, True))
                 self.assertEqual(h["queue"]["queued"], 0)
+                self.assertEqual(h["predict"]["models"], ["chrombpnet_gill"])  # the card's Predict button: this assembly's models,
+                self.assertIn(h["predict"]["packages"], (True, False))  # and whether numpy and onnxruntime are installed here
                 call_command("check")  # an intact release passes
                 handler, root = Collect(), logging.getLogger()
                 root.addHandler(handler)

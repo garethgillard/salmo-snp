@@ -48,11 +48,17 @@ You need:
    ```
    The Score page has examples to try; Help lists the input formats (VCF, tables, PLINK, chip manifests, rs IDs,
    GWAS summary statistics) and the guided tour shows the rest.
+4. Optional: so that a SNP's card can run the gill ChromBPNet model for that SNP ('Predict with ChromBPNet Gill':
+   what each allele is predicted to do to open chromatin in gill), add two packages to the environment:
+   ```bash
+   pip install numpy onnxruntime
+   ```
+   The model's files (about 130 MB in all) are fetched from salmobase as they are first needed.
 
 - **Where things are kept**: one data folder, shown by `salmo-snp info`: `~/Library/Application Support/salmo-snp`
   (macOS), `~/.local/share/salmo-snp` (Linux) or `%LOCALAPPDATA%\salmo-snp` (Windows); set `SALMO_SNP_HOME` to use
-  another. It holds `releases/`, `genome/` and `results/`. Results stay until you delete them (Delete in the portal,
-  or remove the folder).
+  another. It holds `releases/`, `genome/` and `results/` (and `models/`, once a card has run a model). Results stay
+  until you delete them (Delete in the portal, or remove the folder).
 - **What leaves your computer**: nothing you upload or score. The portal fetches public data only: AQUA-FAANG signal
   and chromatin tracks for the region you view in the locus browser (from salmobase). With `--no-genome`, sequence
   checks also read the genome from salmobase, near your SNPs' positions; the default download avoids that. The
@@ -98,6 +104,8 @@ expires: everything stays until you delete it.
   that is itself confidential.
 - Only if the genome was not downloaded (`--no-genome`): sequence checks read the genome from salmobase near your
   SNPs' positions.
+- The SNP card's Predict button (with the optional packages of step 4): the model's files, once, from salmobase.org.
+  The model then runs on your computer; the SNP is not sent anywhere.
 - Nothing else. Pages and their scripts are served by the portal itself, and links to Ensembl, salmobase or papers are
   only followed when you click them, without telling those sites which page you came from.
 

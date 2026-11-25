@@ -6,6 +6,10 @@ requires-python = ">=3.11"
 license = "PolyForm-Noncommercial-1.0.0"  # LICENSE in the salmo-snp repository
 dependencies = ["snpscore", "django>=5.2,<6", "duckdb>=2.0,<3"]  # snpscore: ../snpscore (pip install it first)
 
+[project.optional-dependencies]
+# the SNP card's 'Predict' button (a ChromBPNet model run for one SNP): not needed for anything else
+chrombpnet = ["numpy>=2", "onnxruntime>=1.19"]
+
 [project.scripts]
 salmo-snp = "snpportal.serve:main"
 

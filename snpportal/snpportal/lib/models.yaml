@@ -1,0 +1,17 @@
+# Sequence models the portal can run for one SNP at a time (the SNP card's 'Predict' button; lib/predict.py), by
+# assembly: a model is for one genome. `url` is the model's release folder (its scorer/ files and SHA256SUMS are
+# fetched from it on first use, into the install's models folder under <name>/<version>/). `direction` says what the
+# alt allele is predicted to be when the effect is above and below zero; `what` completes "predicted ... in".
+# A model's release is published apart from the data releases, so this file is the portal's, not a release's.
+Ssal_v3.1:
+  - name: chrombpnet_gill
+    label: ChromBPNet Gill
+    version: v1
+    url: https://salmobase.org/datafiles/datasets/chrombpnet/AtlanticSalmon/v1/Gill/
+    what: ATAC-seq accessibility in gill
+    direction: [more accessible, less accessible]
+    reference: 100,000 random public SNPs
+    citation: >-
+      salmo-chrombpnet Gill v1 (NMBU; salmobase.org datafiles/datasets/chrombpnet); Pampari A et al. ChromBPNet.
+      bioRxiv 2024, doi:10.1101/2024.12.25.630221; trained on AQUA-FAANG gill ATAC-seq
+    licence: PolyForm Noncommercial 1.0.0, NMBU

@@ -93,6 +93,10 @@ it, about 3 minutes) and sends it with the same key (`update.sh pool [version]`,
 only if it fits the deployed release, weights and snpscore. This covers every species' release on the VM: update.sh
 names each release whose pool is stale, and the job builds each from its release on salmobase.
 
+A change to what update.sh installs arrives one deploy late, because a deploy runs the update.sh that is already on
+the VM. So after the `chrombpnet` extra of 2026-11-25 (numpy and onnxruntime, for the card's Predict button), deploy
+twice, and see `predict.packages` in `/snp/health/` turn true.
+
 ## salmobase container
 
 The live installation (later) is a container of a tagged version behind salmobase's Apache at `/snp/`, linked from
@@ -360,6 +364,33 @@ in the job folder that is removed as soon as it is opened. Every export carries 
 weights sha256, preset, filters, panel hash, PROVISIONAL rules, SYNTHETIC inputs or chip, the equivalent `snpscore`
 command): `#` lines in text files (`?plain=1` drops them), Parquet key-value metadata, `provenance.txt` in the bundle.
 Vendor files say 'layout to confirm against the vendor's current template'.
+
+## Predictions on demand
+
+G, 2026-11-25: "see the effect with a button in the snp card ... on demand from the server". The SNP card (the
+Table's drawer and the variant page) has a section 'Predicted allele effect' with a button per sequence model of the
+release's assembly (`lib/models.yaml`: the gill ChromBPNet model for Ssal_v3.1; none for rainbow trout yet). The
+button runs the model for that one SNP where the portal runs, and the result replaces it: whether the alt allele is
+predicted more or less accessible, the log2 fold change of the predicted counts, its rank among the model's 100,000
+random public SNPs, how much the profile's shape changes, and a figure of the predicted signal with each allele (the
+model's 1,000 bp as an 11-bp running mean, and 75 bp either side of the SNP base by base). It is shown, never
+counted in a tier, and works for any SNP, in the release's score layer or not.
+
+- **The model's rules** are its release's own (`lib/predict.py`, after the release's `scorer/chrombpnet_predict.py`):
+  both alleles in a 2,114-bp window, both strands averaged, the fold model that never saw the SNP's chromosome. The
+  effect is the row's alt allele against its ref allele, whichever of the two the genome has; alleles written on
+  the other strand are read on the genome's. `predict.self_test` compares it with the release's 200 test SNPs (the
+  largest difference of the effect was 0.000005 on 2026-11-25).
+- **It needs numpy and onnxruntime**, which the base install does not have: `pip install numpy onnxruntime` (the
+  extra `salmo-snp[chrombpnet]`). Without them the card says so instead of offering the button. The demo's
+  `deploy/update.sh` and the container install them.
+- **The model's files** are fetched from the model's release on salmobase the first time they are needed (a manifest,
+  two small reference files, and 25 MB for each of the five fold models, by the SNP's chromosome), checked against
+  the release's SHA256SUMS, and kept in `models/` beside the results folder (`SNPPORTAL_MODELS_DIR`). The SNP goes
+  nowhere, and a job's SNP is named in the button's address by its job and row only.
+- **Cost**: about a second on one core and 150 MB while it runs; one prediction at a time in a process. The last
+  results stay in the process's memory, nothing is written. `/snp/health/` says under `predict` which models the
+  assembly has and whether the packages are installed.
 
 ## Breeder tools: assay QC, panel designer, chip comparison, exports
 

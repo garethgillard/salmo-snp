@@ -133,8 +133,15 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
   - [x] The repository prepared (one pull request): the `chrombpnet_gill` layer in the salmon registry; the trout
         registry's 19 conditions, PBS's peak file, wording and samples; `rainbow_trout/tracks.yaml` regenerated; the
         new state's weight, colour and legend; both fixtures and the tests
-  - [ ] The score file, from the ChromBPNet work on Orion (the request is in ORION.md): the salmon build cannot
-        start without it
+  - [x] Predictions on demand (G, 2026-11-25: "see the effect with a button in the snp card ... on demand from the
+        server"): the SNP card's button runs the gill model for that one SNP and shows the effect and the two
+        predicted profiles; numpy and onnxruntime as an optional extra; the model's files from salmobase on first
+        use (snpportal/README.md "Predictions on demand"). The predictor matches the model's 200 published test
+        SNPs. On the demo after two deploys: the first brings the new update.sh, the second the packages
+  - [x] A release builds without the score file when it is not published yet (fetch says so, build leaves the
+        layer out): G, 2026-11-25, the build "might not include chrombpnet scores"
+  - [ ] The score file, from the ChromBPNet work on Orion (the request is in ORION.md): the release built after it
+        is published has the layer
   - [ ] The builds on Orion, the checks of ORION.md's tables, publishing, then serve.py names the releases
 - [ ] S3e Still to ask or get: allelic imbalance in the 12 fish from the Orion repository (the truth set the summit
       rule and the ChromBPNet scores need); the large gill eQTL set, if its authors share it

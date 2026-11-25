@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import about, association, browser, explore, health, locus, mytracks, panel, panel_report, projects, report, search, tools, views
+from . import about, association, browser, explore, health, locus, mytracks, panel, panel_report, predict, projects, report, search, tools, views
 
 app_name = "snpportal"
 urlpatterns = [
@@ -33,6 +33,7 @@ urlpatterns = [
     path("locus/svg/", locus.locus_svg_view, name="locus_svg"),
     path("gene/<str:gene_id>/", explore.gene, name="gene"),
     path("variant/<str:spec>/", locus.variant, name="variant"),
+    path("variant/<str:spec>/predict/<slug:name>/", predict.variant, name="predict_variant"),
     path("about/data/", about.data, name="about_data"),
     path("about/methods/", about.methods, name="methods"),
     path("help/", about.help_page, name="help"),
@@ -44,6 +45,7 @@ urlpatterns = [
     path("results/<uuid:key>/", views.results, name="results"),
     path("results/<uuid:key>/status/", views.status, name="status"),
     path("results/<uuid:key>/snp/<int:row>/", locus.card, name="card"),
+    path("results/<uuid:key>/snp/<int:row>/predict/<slug:name>/", predict.job, name="predict_job"),
     path("results/<uuid:key>/figure/<slug:name>.svg", views.figure, name="figure"),
     path("results/<uuid:key>/download/", views.download, name="download"),
     path("results/<uuid:key>/chip/", tools.chip, name="chip"),

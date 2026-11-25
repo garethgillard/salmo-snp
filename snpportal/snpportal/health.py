@@ -14,6 +14,7 @@ from django.core import checks
 from django.http import JsonResponse
 
 from . import jobs
+from .lib import predict
 
 _TRACKS = {}  # host -> (checked, reachable): track hosts asked at most every 5 minutes
 
@@ -73,7 +74,9 @@ def health(request):
            "results": {"writable": writable, "free_gb": round(free / 1e9, 1), "local": jobs.local()},
            "queue": {"queued": len(jobs._queued), "running": len(jobs._running), "max_queued": jobs.MAX_QUEUED},
            "pool": (release / "pool" / "pool.parquet").exists(),
-           "genome": "none" if not where else "remote" if where.startswith("http") else "local"}
+           "genome": "none" if not where else "remote" if where.startswith("http") else "local",
+           # the card's Predict button: the models of this assembly, and whether their packages are installed here
+           "predict": {"models": [x["name"] for x in predict.models(m.get("assembly", ""))], "packages": not predict.missing_packages()}}
     if request.GET.get("tracks") == "1" and (release / "tracks.yaml").exists():
         import yaml
         hosts = (yaml.safe_load((release / "tracks.yaml").read_text()) or {}).get("hosts") or []

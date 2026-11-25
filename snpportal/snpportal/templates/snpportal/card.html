@@ -6,7 +6,8 @@
    and caveats. Then sections that fold under a
    grey header like the locus browser's groups (portal.js keeps a fold from card to card): the functional evidence
    at the locus (its header links to the locus browser; a mini locus browser with the SNP's peak per condition under
-   it; molQTL); as a marker (assay and flank, duplicates, the Design panel); context (published
+   it; molQTL); the predicted allele effect (predict: a button per sequence model of the assembly, which runs the
+   model for this SNP, predict.py; its htmx attributes undo the results page's hx-select, which the drawer inherits); as a marker (assay and flank, duplicates, the Design panel); context (published
    association; expression, the user's own columns and details closed). Parts render only when their columns exist.
    The drawer and variant.html give the heading.{% endcomment %}
 {% if hx and crumbs %}{% include 'snpportal/_crumbs.html' with oob=1 %}{% endif %}
@@ -36,6 +37,15 @@
       <span class="sp-as sp-as-plain" title="The SNP is inside a robust ATAC peak and one allele matches these motifs (p &lt; 1e-5) while the other doesn't, at least 4 bits apart">JASPAR 2024</span></summary>
     <div class="sp-figure mb-1">{{ ev.motifs.svg }}</div>
     <p class="sp-muted mb-2">Logos on the + strand, letter height = information content; the SNP's column is outlined.{% if ev.motifs.more %} {{ ev.motifs.more }} more motif{{ ev.motifs.more|pluralize }} in Details.{% endif %} Predicted binding, not proof of it.</p>
+  </details>{% endif %}
+
+  {% if predict %}<details class="sp-cs" id="cs-predict" open><summary><h3 class="sp-cs-h">Predicted allele effect</h3>
+      <span class="sp-as sp-as-plain" title="A sequence model, run for this SNP when you ask: what it predicts with each allele. Not counted in the tier">on demand</span></summary>
+    {% for m in predict %}<div id="predict-{{ m.name }}" class="mb-2">{% if m.missing %}<p class="sp-muted mb-1">{{ m.label }} ({{ m.what }}) {{ m.missing }}</p>
+      {% else %}<button type="button" class="btn btn-sm btn-outline-primary" hx-get="{{ m.url }}" hx-target="#predict-{{ m.name }}" hx-swap="innerHTML"
+              hx-select="unset" hx-select-oob="unset" hx-push-url="false" hx-indicator="#predict-busy-{{ m.name }}" hx-disabled-elt="this">Predict with {{ m.label }}</button>
+      <span class="sp-muted ms-1">{{ m.what }}, with each allele: a second or two (longer the first time, when the model's files are fetched)</span>
+      <span class="spinner-border sp-spin htmx-indicator" id="predict-busy-{{ m.name }}" role="status" aria-label="Predicting"></span>{% endif %}</div>{% endfor %}
   </details>{% endif %}
 
   {% if ev.assay or ev.duplicates or ev.marker or panel %}<details class="sp-cs" id="cs-marker" open><summary><h3 class="sp-cs-h">As a marker</h3>

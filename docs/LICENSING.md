@@ -103,8 +103,8 @@ stays on the user's computer. On the public demo, uploaded files are deleted aft
 
 ## Third-party software
 
-The software bundles two front-end libraries and installs three Python libraries. All five are under permissive
-licences that allow commercial use and require only that their notices are kept.
+The software bundles two front-end libraries and installs three Python libraries, and two more are optional. All
+seven are under permissive licences that allow commercial use and require only that their notices are kept.
 
 | Software | How it is used | Licence |
 | --- | --- | --- |
@@ -113,5 +113,9 @@ licences that allow commercial use and require only that their notices are kept.
 | Django 5.2 | Installed with the package | BSD-3-Clause |
 | DuckDB 2 | Installed with the package | MIT |
 | PyYAML 6 | Installed with the package | MIT |
+| NumPy 2 | Optional, for the SNP card's Predict button (`pip install numpy onnxruntime`) | BSD-3-Clause |
+| ONNX Runtime | Optional, as NumPy | MIT |
 
-The public demo server also runs gunicorn and Caddy; these are not distributed to users.
+The public demo server also runs gunicorn and Caddy; these are not distributed to users. The Predict button runs
+the salmo-chrombpnet models (NMBU; PolyForm Noncommercial 1.0.0, as this software), which the portal fetches from
+salmobase when first used and does not distribute.

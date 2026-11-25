@@ -39,6 +39,8 @@ if os.environ.get("SNPPORTAL_RELEASES_DIR"):  # salmo-snp serve: the data folder
 elif (Path(SNPSCORE_RELEASE).parent / "releases").is_dir():  # a server: the other species' releases beside the default
     SNPPORTAL_RELEASES_DIR = str(Path(SNPSCORE_RELEASE).parent / "releases")  # one (/srv/snpportal/release, releases/)
 SNPPORTAL_LOCAL = os.environ.get("SNPPORTAL_LOCAL") == "1"  # salmo-snp serve: nothing expires, the pages say it is local
+# where a sequence model's files are kept once fetched (the card's Predict button); default: models/ beside the results
+SNPPORTAL_MODELS_DIR = os.environ.get("SNPPORTAL_MODELS_DIR", "")
 SNPPORTAL_MAX_UPLOAD_MB = 300  # checked on Content-Length before the body is read
 SNPPORTAL_MAX_SNPS = 3_000_000
 SNPPORTAL_DUCKDB_THREADS = int(os.environ.get("SNPPORTAL_DUCKDB_THREADS", 2))  # per job; deploy/nrec.sh sizes them to the VM

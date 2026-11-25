@@ -20,7 +20,8 @@ jobs:
                 | grep -v '^snpdata/tests/fixture/' || true)
           big=$(git ls-files -z | xargs -0 du -k | awk '$1 > 1024 {print $2}')
           if [ -n "$bad$big" ]; then echo "Not allowed outside snpdata/tests/fixture, or over 1 MB:"; echo "$bad $big"; exit 1; fi
-      - run: pip install -e "snpscore[test]" -e snpdata -e snpportal  # the newest versions the packages allow, as deploys get
+      # the newest versions the packages allow, as deploys get; chrombpnet: the optional packages of the card's Predict button
+      - run: pip install -e "snpscore[test]" -e snpdata -e "snpportal[chrombpnet]"
       - name: pyflakes and the four test suites
         run: bash tools/check.sh  # the same command developers and cloud sessions run before pushing
 

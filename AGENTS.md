@@ -73,7 +73,9 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
 - Never commit breeder data (genotypes, GWAS results, array manifests): not in fixtures, tests or docs either.
   `data/`, `release/` and results folders are never committed. Never edit files in snpdata/data/raw by hand.
 - Keep it small: few files, little code, readable over clever. Don't add tests for every edge case.
-- Dependencies: duckdb and pyyaml (plus Django for the portal). Ask G before adding any. No pandas.
+- Dependencies: duckdb and pyyaml (plus Django for the portal). Ask G before adding any. No pandas. Optional, for
+  the SNP card's Predict button only (G asked for it, 2026-11-25): numpy and onnxruntime, the `chrombpnet` extra of
+  salmo-snp. The base install and everything else run and are tested without them.
 - Versions (G, 2026-11-04: the newest that suit): Python 3.11 or newer (`requires-python`; 3.10 reached its end of
   life on 2026-10-01; CI, the NREC demo and cloud sessions run 3.12), Django 5.2 LTS (fixes to 2028-04-30; 6.x needs
   Python 3.12), DuckDB 2 (`duckdb>=2.0,<3`). The pyproject.toml files are the one place they are set: CI, deploys
@@ -220,14 +222,24 @@ Decided:
   - "Can we make sure we have that useful track from chrombpnet to show effects": the Locus browser's score rows
     show the direction of each effect as the scorer's own browser track does (up and red: the alt allele predicted
     more accessible; down and blue: less). A score file may carry `effect` (signed) and `percentile` columns for it.
-  - A user's own SNPs outside the scored set show 'not scored' in this build. Scoring them in the install (numpy
-    and onnxruntime) is for later, and still G's call.
+  - A user's own SNPs outside the scored set show 'not scored' in the Table. Their cards can run the model for
+    one SNP at a time (Predictions on demand, below).
   - Trout head kidney (the ImmunoMap's PBS and Vibrio) counts in the tiers, as salmon's does: the trout release is
     built from the unified peaks v6 (19 conditions).
   - `Weak_accessible_chromatin` (the trout PBS model's ATAC-only state with weak emission) is a weak state, as
     Accessible_chromatin.
   - Vibrio's summits: from a MACS2 call on its four good fish's merged reads if that is quick to make with the
     AQUA-FAANG files, else the build goes without them.
+
+- Predictions on demand (G, 2026-11-25: "we do have the gill model online. Can we add the feature to see the effect
+  with a button in the snp card? on demand from the server?"): the SNP card's 'Predict with ChromBPNet Gill' button
+  runs the gill model for that one SNP where the portal runs (the demo's server, or the user's computer) and shows
+  what it predicts with each allele: the direction, the log2 fold change, its rank among the model's 100,000 random
+  public SNPs and the two predicted profiles. Shown, never counted. It needs numpy and onnxruntime, an optional
+  extra, installed on the demo, in the container, in CI and in cloud sessions; the model's files are fetched from
+  salmobase when first needed and checked. The models are listed in snpportal/lib/models.yaml, apart from the data
+  releases, so it works with any salmon release. How: snpportal/README.md "Predictions on demand". Also that day: a
+  release builds without a score file that is not published yet ("It might not include chrombpnet scores").
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
@@ -407,7 +419,10 @@ info` says where); then `salmo-snp serve`. A new release is built and published 
   `training_peaks.narrowPeak.gz` from salmobase laid out as in its release, and an uncompressed FASTA of the
   chromosomes needed, cut from the bgzipped genome (`zcat` and a filter on the record names; the scorer accepts a
   subset). Run one chromosome per process: 0.3 to 0.5 s a SNP on 4 cores, about 1 GB. Its scores of the model's
-  test SNPs matched the published ones to 0.00001.
+  test SNPs matched the published ones to 0.00001. The portal's own predictor (snpportal/lib/predict.py, the card's
+  Predict button) is checked the same way: `SNPPORTAL_MODEL_TEST=<a folder for the model's files>
+  SNPPORTAL_MODEL_GENOME=<the Ssal_v3.1 fa.gz> python -m pytest -q tests/test_predict.py` in snpportal/ (it fetches
+  what the folder lacks). cloud_setup.sh installs numpy and onnxruntime, so the button works in a session's portal.
 - Checking pages without a browser: fetch them with curl from a `salmo-snp serve` in the background;
   `bash tools/user_install_test.sh` checks the whole user path.
 - Merging (G, 2026-11-04): features collect on the session's branch and its pull request, and go live only when G

@@ -317,6 +317,46 @@ def histogram(bars, title, desc="", synthetic=False, axis=None):
     return svg(width, top + height + 40, title, desc, "".join(parts), synthetic)
 
 
+def profiles(ref, alt, ref_allele, alt_allele, colour, title, desc="", zoom=75, smooth=11, width=580):
+    """A sequence model's predicted signal around a SNP with each allele: the ref allele as a grey area and the alt
+    allele as a line in `colour`. Left: the model's whole output window (the SNP at its middle, marked), as a running
+    mean over `smooth` bases, since base-by-base cut predictions are too spiky to compare at that width. Right: `zoom`
+    bp either side of the SNP, base by base. Each panel has its own scale. ref, alt: predicted cuts per base."""
+    n, mid, top, height = len(ref), len(ref) // 2, 24, 84
+    grey = palette.GREY[500]
+    body = [_legend([(palette.GREY[300], f"ref allele {ref_allele}"), (colour, f"alt allele {alt_allele}")], 44, 2),
+            _text(width - 6, 11.5, "predicted Tn5 cuts per base", "end", font_size=11, fill=palette.GREY[700])]
+
+    def mean(values):  # a centred running mean, shorter at the two ends
+        h = smooth // 2
+        return [sum(values[max(0, i - h):i + h + 1]) / len(values[max(0, i - h):i + h + 1]) for i in range(len(values))]
+
+    def panel(x0, w, a, b, caption, ticks, running=False):
+        r, v = (mean(ref)[a:b], mean(alt)[a:b]) if running else (ref[a:b], alt[a:b])
+        peak = max(max(r), max(v), 1e-9)
+        px = lambda i: x0 + w * (i + 0.5) / len(r)
+        py = lambda y: top + height - height * y / peak
+        area = " ".join(f"{px(i):.1f},{py(y):.1f}" for i, y in enumerate(r))
+        line = " ".join(f"{px(i):.1f},{py(y):.1f}" for i, y in enumerate(v))
+        out = [f'<polygon points="{x0:.1f},{top + height} {area} {x0 + w:.1f},{top + height}" fill="{palette.GREY[300]}"/>',
+               f'<polyline points="{line}" fill="none" stroke="{colour}" stroke-width="1.3"/>',
+               f'<line x1="{x0}" x2="{x0 + w}" y1="{top + height}" y2="{top + height}" stroke="{grey}"/>',
+               f'<line x1="{px(mid - a):.1f}" x2="{px(mid - a):.1f}" y1="{top - 2}" y2="{top + height + 4}" stroke="{palette.GREY[900]}" '
+               f'stroke-width="0.8" stroke-dasharray="3 2"><title>the SNP</title></line>',
+               _text(x0 - 4, top + 8, f"{peak:.2g}", "end", font_size=10, fill=palette.GREY[700]),
+               _text(x0 - 4, top + height + 3, "0", "end", font_size=10, fill=palette.GREY[700])]
+        for offset in ticks:
+            x = px(mid + offset - a)
+            out.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{top + height}" y2="{top + height + 4}" stroke="{grey}"/>'
+                       + _text(x, top + height + 15, "SNP" if not offset else f"{offset:+d}", "middle", font_size=10, fill=palette.GREY[700]))
+        out.append(_text(x0 + w / 2, top + height + 30, caption, "middle", font_size=11, fill=palette.GREY[700]))
+        return "".join(out)
+    left = width - 44 - 36 - 190
+    body.append(panel(44, left, 0, n, f"the model's {n:,} bp around the SNP ({smooth}-bp running mean)", (-400, -200, 0, 200, 400), True))
+    body.append(panel(44 + left + 36, 190, mid - zoom, mid + zoom + 1, f"{zoom} bp either side, base by base", (-zoom + 25, 0, zoom - 25)))
+    return svg(width, top + height + 38, title, desc, "".join(body))
+
+
 def nice_ceiling(x):
     """The smallest 1, 2 or 5 x 10^k (an int) at least x: axis maxima such as 10,000 instead of 8,117.64."""
     k = 1
