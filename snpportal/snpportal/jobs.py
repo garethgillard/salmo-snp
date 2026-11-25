@@ -109,11 +109,16 @@ def species(where=None):
 
 def species_releases():
     """{species key: release folder} for the species bar: per species the default release (SNPSCORE_RELEASE) when it
-    is that species', else the newest installed one (by build date, then version)."""
+    is that species', else the release this code names for it (serve.RELEASES) when that is installed, else the
+    newest installed one (by build date, then version). So a server that reads the folder where releases are
+    published shows the releases its version names, not one that was published since."""
+    from .serve import RELEASES
     out, found = {}, installed()
     default = next(iter(found.values()))
-    for folder in [default] + sorted((f for f in found.values() if f != default),
-                                     key=lambda f: (manifest(f).get("created") or "", f.name), reverse=True):
+    named = [found[v] for v in RELEASES.values() if v in found and found[v] != default]
+    newest = sorted((f for f in found.values() if f != default and f not in named),
+                    key=lambda f: (manifest(f).get("created") or "", f.name), reverse=True)
+    for folder in [default, *named, *newest]:
         out.setdefault(species(folder)["key"], folder)
     return out
 

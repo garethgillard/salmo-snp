@@ -16,10 +16,20 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   runner when the VM's is stale (README "Deploying the demo"); merging to main deploys nothing. A new data release goes up with `bash deploy/nrec.sh nrec
   158.39.75.9 158-39-75-9.sslip.io`, which needs G's Mac (the VM's SSH key and the release folder); always pass the IP
   address, as the script rewrites the Caddy sites and allowed hosts from the names it is given.
-- salmobase later: a container installing a tagged version (../AGENTS.md plan 4): `deploy/Dockerfile`, README
-  "salmobase container" (Apache proxies /snp/ to it; it serves its own static files under /snp/static/). In a cloud
-  session `dockerd &` starts Docker; build with `--secret id=ca,src=/root/.ccr/ca-bundle.crt` and the proxy as build
-  args (HTTPS_PROXY), so pip trusts the session's proxy.
+- salmobase, being prepared (G, 2026-11-25; ../docs/SALMOBASE.md is the brief for the chat on Orion, which installs
+  and updates it): `deploy/server.sh` in a container (`deploy/Dockerfile`) or from a virtual environment, behind
+  Apache at /snp/ (it serves its own static files under /snp/static/). `SNPSCORE_SALMOBASE` names the server's
+  datafiles folder: settings.py finds the releases folder and the default release there, and snpscore reads tracks,
+  genomes and model files from it (`bbi.local`). Nothing may write under it (tests_server.py). In a cloud session
+  `dockerd &` starts Docker; build with `--secret id=ca,src=/root/.ccr/ca-bundle.crt --network host` and the proxy
+  as build args (HTTPS_PROXY), so pip trusts the session's proxy.
+- Run `python -m django ...` from snpportal/ or from outside the repository, never from its root: there the
+  `snpportal/` folder hides the installed package, and Django finds no management command (server.sh changes to its
+  data folder for this).
+- The demo's deploy scripts (2026-11-25): `deploy/update.sh` checks the commit out and then runs that commit's own
+  steps (so a change to them needs one deploy, not two), and `deploy/species.sh` fetches only the files of a new
+  release that no release on the VM holds with the same sha256, and no genome it has. Both are tried on a mock of
+  the VM's folders (tests/test_deploy.py; `SNPPORTAL_ROOT`).
 - Old releases on the demo (G, 2026-11-25): at each deploy `deploy/species.sh` removes from /srv/snpportal/releases/
   a release the code no longer names, once no job, Design panel or saved project kept there was made with it; it
   never touches the default release or the genomes, and removes nothing when it could not look (tests/test_deploy.py).
@@ -107,7 +117,7 @@ salmo-snp serve                   # as users run it (snpportal/serve.py), with t
 salmo-snp serve --release ../snpdata/release/dev   # or a release you built; the environment: ../AGENTS.md
 python manage.py runserver        # with autoreload: needs a release (SNPSCORE_RELEASE or ../snpdata/release/dev)
 python -m pytest -q tests         # snpportal.lib
-SNPPORTAL_WORKERS=0 python manage.py test snpportal   # the pages, jobs run inline
+SNPPORTAL_WORKERS=0 python manage.py test snpportal --parallel   # the pages, jobs run inline; a class per core
 python manage.py snpportal_cleanup
 python manage.py screenshots /snp/ /snp/known-loci/ --out shots   # full-page PNGs of a running portal's pages
 ```

@@ -14,6 +14,8 @@
 #   species.sh cleanup          only the cleanup below.
 # The pool comes with the release, as the VM's 2 GB RAM can't build it. Nothing here stops a deploy: a release that
 # can't be fetched is reported and the portal keeps the species it has.
+# Only what changed is fetched: a file that a release here already holds with the same sha256 (most layers, from one
+# release to the next) is copied from it, and a genome file here with the manifest's sha256 is kept.
 # Cleanup (G, 2026-11-25), before and after fetching: a release in /srv/snpportal/releases/ that this code no longer
 # names is removed once no job, Design panel or saved project kept on the server was made with it (results expire, so
 # usually a day after it was replaced). The default release's folder and the genomes are never touched, and a
@@ -42,6 +44,8 @@ if not problems and json.loads((release / "manifest.json").read_text()).get("ver
 genome = json.loads((release / "manifest.json").read_text())["genome"] if not problems else {}
 for ext, want in (genome.get("sha256") or {}).items():
     path = site / "raw" / (genome["file"] + ("" if ext == "fa.gz" else ext))
+    if not path.exists():  # not fetched: the VM's own copy had this sha256 (the fetch below)
+        continue
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for block in iter(lambda: f.read(1 << 20), b""):
@@ -51,7 +55,9 @@ for ext, want in (genome.get("sha256") or {}).items():
 sys.exit("\n".join(problems) if problems else 0)
 PY
   mkdir -p "$ROOT/releases" "$ROOT/genome"
-  mv "$T"/site/raw/*.fa.gz* "$ROOT/genome/" || return 1
+  for f in "$T"/site/raw/*.fa.gz*; do
+    [ ! -e "$f" ] || mv "$f" "$ROOT/genome/" || return 1
+  done
   [ -d "$T/pool" ] && mv "$T/pool" "$T/site/releases/$v/pool"
   chmod -R a+rX "$T/site/releases/$v"
   if [ "$v" = "$(default_version)" ]; then  # the default species' new release replaces /srv/snpportal/release
@@ -68,6 +74,18 @@ PY
   rm -rf "$ROOT/releases/.old-$v"
   [ -d "$ROOT/releases/$v" ] && mv "$ROOT/releases/$v" "$ROOT/releases/.old-$v"
   mv "$T/site/releases/$v" "$ROOT/releases/$v" && rm -rf "$ROOT/releases/.old-$v"
+}
+
+sha() { sha256sum < "$1" | cut -d' ' -f1; }
+
+held() {  # the file with sha256 $1 in a release that is here (by its SHA256SUMS, then checked), or nothing
+  local sums f
+  for sums in "$ROOT"/release/SHA256SUMS "$ROOT"/releases/*/SHA256SUMS; do
+    [ -f "$sums" ] || continue
+    f=$(dirname "$sums")/$(awk -v s="$1" '$1 == s { sub(/^[^ ]+ +[*]?/, ""); print; exit }' "$sums")
+    [ -f "$f" ] && [ "$(sha "$f")" = "$1" ] && { echo "$f"; return; }
+  done
+  return 0
 }
 
 named() {  # the versions serve.py names: RELEASE (the default species'), then those of RELEASES
@@ -137,14 +155,19 @@ for v in $(named); do
     base=$DATA_URL/releases/$v site=$T/site/releases/$v
     mkdir -p "$site" "$T/site/raw" "$T/pool"
     curl -fsSL --retry 3 -o "$site/SHA256SUMS" "$base/SHA256SUMS"
-    while read -r _ name; do  # install_site checks each file against these sums
+    while read -r sum name; do  # install_site checks each file against these sums
       case $name in /*|*..*) echo "release $v: unexpected file name in SHA256SUMS: $name" >&2; exit 1 ;; esac
       mkdir -p "$(dirname "$site/$name")"
-      curl -fsSL --retry 3 -o "$site/$name" "$base/$name"
+      same=$(held "$sum")
+      if [ -n "$same" ]; then cp "$same" "$site/$name"; else curl -fsSL --retry 3 -o "$site/$name" "$base/$name"; fi
     done < "$site/SHA256SUMS"
-    read -r url file < <("$ROOT/venv/bin/python" -c 'import json, sys; g = json.load(open(sys.argv[1]))["genome"]
-print(g["url"], g["file"])' "$site/manifest.json")
-    for ext in "" .fai .gzi; do curl -fsSL --retry 3 -o "$T/site/raw/$file$ext" "$url$ext"; done
+    while read -r url name sum; do  # the genome's three files, each unless the VM has it with the manifest's sha256
+      [ -f "$ROOT/genome/$name" ] && [ "$(sha "$ROOT/genome/$name")" = "$sum" ] && continue
+      curl -fsSL --retry 3 -o "$T/site/raw/$name" "$url"
+    done < <("$ROOT/venv/bin/python" -c 'import json, sys
+g = json.load(open(sys.argv[1]))["genome"]
+for ext in ("", ".fai", ".gzi"):
+    print(g["url"] + ext, g["file"] + ext, (g.get("sha256") or {}).get(ext or "fa.gz", "-"))' "$site/manifest.json")
     for f in pool.parquet background.json; do  # without a published pool the VM says it is stale: deploy.yml builds it
       curl -fsSL --retry 3 -o "$T/pool/$f" "$base/pool/$f" || { rm -rf "$T/pool"; break; }
     done

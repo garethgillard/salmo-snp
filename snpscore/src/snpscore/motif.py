@@ -15,6 +15,7 @@ import multiprocessing
 import os
 import re
 from concurrent.futures import ProcessPoolExecutor
+from itertools import islice
 
 P_VALUE = 1e-5  # a window matches below this p-value (G, 2026-10-19; FIMO's default is 1e-4)
 MIN_DELTA = 4  # bits between the alleles' scores (16-fold) for a change to count (G, 2026-10-19)
@@ -132,25 +133,23 @@ def _chunk(job):
 
 def effects(windows, meme, p_value=P_VALUE, min_delta=MIN_DELTA, processes=None, chunk=2000):
     """Yield (key, (changed, n, tfs, delta)) for (key, seq, w, ref, alt) windows. With processes=1 in this process
-    (annotate, inside a web worker); otherwise on every CPU core (build), the motifs read once per worker process."""
-    if processes == 1:
+    (annotate, inside a web worker), and so are windows that fit one batch (a pool would only cost its start, and a
+    test runner's worker process may not start one); otherwise on every CPU core (build), the motifs read once per
+    worker process."""
+    windows = iter(windows)
+    batch = list(islice(windows, chunk))
+    if processes == 1 or len(batch) < chunk:
         _start(str(meme), p_value, min_delta)
-        yield from _chunk(list(windows))
+        yield from _chunk(batch + list(windows))
         return
-    batch = []
     # spawned, not forked: a fork of a process running DuckDB's threads can deadlock its children (a CI run hung
     # 2026-11-08); macOS and Windows spawn anyway
     # the cores this process may use (a SLURM job's share of its node), where the system says; else all of them
     cores = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
     with ProcessPoolExecutor(processes or cores, mp_context=multiprocessing.get_context("spawn"),
                              initializer=_start, initargs=(str(meme), p_value, min_delta)) as pool:
-        futures = []
-        for item in windows:
-            batch.append(item)
-            if len(batch) == chunk:
-                futures.append(pool.submit(_chunk, batch))
-                batch = []
-        if batch:
+        futures = [pool.submit(_chunk, batch)]
+        while batch := list(islice(windows, chunk)):
             futures.append(pool.submit(_chunk, batch))
         for f in futures:
             yield from f.result()

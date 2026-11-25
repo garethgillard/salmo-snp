@@ -1,10 +1,44 @@
 # Building the data releases on Orion and hosting them on salmobase: brief (2026-11-24)
 
-This brief is for the chat that builds the releases on Orion, NMBU's HPC cluster, over SSH. It holds what G decided,
-what the latest build contains (releases 2026-11-25 and trout-2026-11-25, planned and built on 2026-11-25) and what
-is left for the next, how a build runs, what the first builds there found and made (releases 2026-11-24 and
-trout-2026-11-24), and how a release reaches salmobase and the live app. Keep it up to date as the work goes on.
+This brief is for the chat that builds the releases on Orion, NMBU's HPC cluster, over SSH. It starts with the plan
+of the next build and the steps of every build, which is all a build needs. The rest is the record: what G decided,
+what the latest build contains (releases 2026-11-25 and trout-2026-11-25, planned and built on 2026-11-25), how a
+build runs, what the first builds there found and made (releases 2026-11-24 and trout-2026-11-24), how a release
+reaches salmobase and the live app, and what would make all of it faster. Keep it up to date as the work goes on.
 Read [../AGENTS.md](../AGENTS.md) first: its rules apply here too.
+
+## The next build: the plan and the steps
+
+G, 2026-11-25: "From now, the builds will run on orion in a separate orion ssh chat, using a build plan it pulls
+from the repo and serve the data by syncing it to salmobase."
+
+**The plan.** None yet: G says what the next releases contain, and it is written here as a table per species (what
+changes, and the check after the build), as "The latest build" below was. The candidates are under "Left for the
+next build".
+
+**The steps**, the same for every build (the commands are for `snpdata/` in the clone `~/git/salmo-snp`):
+
+1. Pull main, while no build runs (the jobs run the clone's code). If a `pyproject.toml` changed since the last
+   build: `sbatch prep/orion_env.sbatch`.
+2. Tell G, then submit one job per species; the date is the day of the build, and a name that was published is
+   never built again:
+   `sbatch --job-name=salmon-<date> prep/orion_build.sbatch salmon <date>` and
+   `sbatch --job-name=trout-<date> prep/orion_build.sbatch trout trout-<date>`.
+   Each fetches what is missing or has changed on salmobase, copies the unchanged layers from the release before,
+   builds the rest and the pool, and checks every file ("How a build runs").
+3. Read the end of each log (`/mnt/project/ELIXIR/salmo-snp/logs/`): `changes since` must list the layers the plan
+   names and no other, and the summary's rows must be the plan's. Then test the two releases together:
+   `sbatch --job-name=test-<date> prep/orion_test.sbatch <date> trout-<date>` starts the portal on them as a user
+   runs it and scores every example of both species through the job queue (`prep/release_test.sh`; two to three
+   minutes); its log must end with `release test: ok`. Anything else is a finding: stop and tell G.
+4. `MODE=dry bash prep/orion_publish.sh <date> trout-<date>` on a login node, and with G's go-ahead `MODE=run`
+   ("Hosting on salmobase").
+5. Hand back to the chat that works on the code: the two versions, the `changes since` and summary lines of both
+   logs, and anything that was not as planned. That chat names the releases in serve.py (a pull request, which G
+   merges).
+6. When G says, the portal is updated to the version that names them: on the salmobase server by this chat
+   ([SALMOBASE.md](SALMOBASE.md), which is the brief for installing and updating the portal there), and on the NREC
+   demo, while it lasts, by GitHub's `deploy` workflow.
 
 ## Decided (G, 2026-11-24)
 
@@ -169,23 +203,38 @@ and trout-2026-11-24.
 One command per release, in `snpdata/`, the same on any machine (`prep/build_release.sh`, tried on the test data):
 
 ```bash
-MEMORY=64GB PREVIOUS=<the release before> bash prep/build_release.sh salmon <date>
-MEMORY=64GB PREVIOUS=<the release before> bash prep/build_release.sh trout trout-<date>
+MEMORY=64GB bash prep/build_release.sh salmon <date>
+MEMORY=64GB bash prep/build_release.sh trout trout-<date>
 MODE=dry bash prep/orion_publish.sh <date> trout-<date>      # only after the checks; then MODE=run, with G's go-ahead
 ```
 
 On Orion these run as SLURM jobs (`prep/orion_build.sbatch`, "On Orion" below); elsewhere `snpdata publish
 release/<version> --to <a folder>` lays out the same folder by copying.
 
-Two things to do by hand, both met on 2026-11-25. `snpdata fetch` downloads only the files that are missing, so an
-input that changed under the same address (the unified peaks, v5 to v6) is not fetched again: move the old file
-aside before the build. And `orion_publish.sh` writes the first version it is given into `latest.json`: give the
-salmon release first.
+It runs, and stops at the first that fails: `snpdata fetch`, for salmon `prep/make_demo.sh` (the three example
+inputs: the step release 2026-11-20 missed), `snpdata build` with DuckDB's limits, `snpscore pool`, `snpscore
+verify`, `snpscore diff` against the release before, and a summary of row counts, catalogue rows, examples and pool
+tiers to hold against the plan's tables.
 
-It runs, and stops at the first that fails: `snpdata fetch` (a file already there is kept), for salmon
-`prep/make_demo.sh` (the three example inputs: the step release 2026-11-20 missed), `snpdata build` with DuckDB's
-limits, `snpscore pool`, `snpscore verify`, `snpscore diff` against the release before, and a summary of row counts,
-catalogue rows, examples and pool tiers to hold against the plan's tables.
+Nothing is left to do by hand (G, 2026-11-25: "Yes if it's changed you can fetch again. Yes reuse where you can to
+save time between releases"); the two steps the builds of 2026-11-25 needed are gone:
+
+- **A changed input is fetched again.** `snpdata fetch` keeps a file that is there, except salmobase's, which
+  change under the same address (the unified peaks: v3, v5, v6): it asks the server for each one's size and date,
+  compares them with what it noted when it fetched the file (`.fetched.json` in the data folder), and downloads the
+  file again when they differ, saying so. Files of other hosts are named by their release and are fetched once.
+- **An unchanged layer is copied, not computed.** The build takes the release before (the newest of the species in
+  `release/`; `PREVIOUS=<folder>` names another) and copies from it every layer whose settings and input checksums
+  are the same, byte for byte (`snpdata build --reuse`). Only from a release built by the same code: the manifest
+  records checksums of the build's source (`code`), and after a change to it every layer is computed again, so a
+  layer never keeps what an older reader made of its input. `FRESH=1` computes everything whatever is there.
+- **The same input gives the same bytes.** Layers are written in a full row order (`ORDER BY ALL`), so a layer that
+  is computed again from the same input has the same checksum: `snpscore diff` lists only what changed, and an
+  install that updates downloads only that (`transcripts` and `transcripts_ncbi` differed between the builds of
+  2026-11-24 and 2026-11-25 for the order of rows that share a start; rewritten in a full order the two are equal).
+- **The log says where the time goes**: each step's line ends with its seconds (`chromatin: 328894 rows (12 s)`).
+- `orion_publish.sh` writes the salmon release into `latest.json` wherever it stands among the versions given, and
+  leaves the file alone when only a trout release is published.
 
 What was added for Orion on 2026-11-24 (tested on the fixture only):
 - `SNPDATA_SALMOBASE=<folder>`: fetch reads every `https://salmobase.org/datafiles/...` input from that folder when
@@ -199,7 +248,10 @@ What was added for Orion on 2026-11-24 (tested on the fixture only):
 
 Times known: fetch about 7 minutes (salmon, by download); the salmon build about 5 hours on 4 cores and 7 GB, most
 of it the motif layer, which scales with cores; the pool a few minutes. On Orion (2026-11-25, 32 cores): the whole
-salmon job 18 minutes and 6.1 GB, the trout job 15 minutes and 11 GB (below).
+salmon job 18 minutes and 6.1 GB, the trout job 15 minutes and 11 GB with every input fetched (below); with the
+inputs there, 7 and 11 minutes. With the layers of the release before copied, what is left is the checksums of the
+inputs, the tables that are always made again (rs IDs, flank keys, position conversion) and the pool (half a
+minute): the next log's seconds will say how long.
 
 ## On Orion: what was found, what is done, what is next (2026-11-25, 01:53)
 
@@ -288,18 +340,16 @@ things stand"). The installer was also run from a cloud session against the addr
 matched its checksum.
 
 **Next**
-0. The next build: "Left for the next build" above. The NREC demo takes releases 2026-11-25 and trout-2026-11-25
-   at its next deploy, when G says (twice, for the Predict button's packages: snpportal/README.md "Deploying the demo").
+0. The next build: "Left for the next build" above. The NREC demo runs releases 2026-11-25 and trout-2026-11-25
+   since 2026-11-25 (G: "Ok to merge and deploy"; docs/TRACKER.md "Where things stand" has what was checked live).
 1. The older releases on the VM (2026-11-05, trout-2026-11-13, and 2026-11-20 a day after the deploy) go at the
    next deploy: species.sh now removes a release the code no longer names once nothing kept on the server was made
    with it (G, 2026-11-25), before it fetches, so the room counts (4.9 GB were free, under the 5 GB a fetch asks for).
-2. So that `snpscore diff` lists only real changes: write positional layers in a full order (every column after
-   `chrom, start`), which gives the same bytes on any number of threads. Two questions for G from the builds of
-   2026-11-25, neither changed yet:
-   - Should `fetch` download a file again when salmobase's copy has changed (its size or Last-Modified)? Today a
-     changed input is used only if the old file is moved aside. Recommended: yes, for salmobase's files, saying so.
-   - Should `build_release.sh` pass `--reuse <the release before>`? Every layer is computed again today; with it an
-     unchanged layer is copied byte for byte, and the diff lists only real changes. Recommended: yes.
+2. Done on 2026-11-25, after G's answers to the two questions of that day's builds ("Yes if it's changed you can
+   fetch again. Yes reuse where you can to save time between releases"): `fetch` downloads a changed salmobase file
+   again, the build copies unchanged layers from the release before, and layers are written in a full row order
+   ("How a build runs"). The first build after it computes everything once more (the releases of 2026-11-25 carry
+   no record of the code that built them), and its `transcripts` layers get their new order.
 3. Before anyone uses `salmo-snp download latest` or `snpdata publish --raw` for both species: the first two
    faults below.
 
@@ -310,11 +360,12 @@ matched its checksum.
   clone; a second run installs and checks again.
 - One job per species, from `snpdata/` (32 cores, 96 GB, no time limit; the log goes to
   `/mnt/project/ELIXIR/salmo-snp/logs/`). The date is the day of the build, and a name that was published is never
-  built again: `sbatch --job-name=salmon-<date> prep/orion_build.sbatch salmon <date> <the release before>` and
-  `sbatch --job-name=trout-<date> prep/orion_build.sbatch trout trout-<date> <the trout release before>`. The
-  release before is a folder in `release/`, or in `/mnt/project/ELIXIR/salmo-snp/previous/` with its manifest.json.
+  built again: `sbatch --job-name=salmon-<date> prep/orion_build.sbatch salmon <date>` and
+  `sbatch --job-name=trout-<date> prep/orion_build.sbatch trout trout-<date>`. The release before is the newest of
+  the species in `release/`; a third argument names another (a folder in `release/`, or in
+  `/mnt/project/ELIXIR/salmo-snp/previous/` with its manifest.json, which gives the diff alone).
 - Then publishing: `MODE=dry bash prep/orion_publish.sh <salmon version> <trout version>`, and `MODE=run` with G's
-  go-ahead (Hosting on salmobase).
+  go-ahead (Hosting on salmobase). Pull main first: the scripts changed on 2026-11-25.
 - While a build runs, leave the clone as it is (no pull, no branch switch): the jobs run its code.
 - If a download fails in fetch (it reads from Ensembl, EBI, NCBI, JASPAR, Bgee, bioRxiv and GitHub besides
   salmobase): rerun the job, as fetch keeps what it has. Failing that, G's Mac has every input that is not
@@ -377,12 +428,90 @@ The demo VM: 4.9 GB were free on 2026-11-25, a salmon release is about 0.5 GB wi
 1 GB, and species.sh refuses to fetch under 5 GB free. Since 2026-11-25 species.sh itself removes the releases the
 code no longer names, once nothing kept on the server was made with them ("Next", 1), before it fetches.
 
+## Faster and simpler builds, tests and deploys (2026-11-25)
+
+G, 2026-11-25: "Look for ways for in the next releases to speed up and simply the building, testing and deploying.
+From now, the builds will run on orion in a separate orion ssh chat, using a build plan it pulls from the repo and
+serve the data by syncing it to salmobase. For now we deploy to NREC, but soon we'll move the app to the salmobase
+server. There we can use the same data that's deployed on salmobase."
+
+**Where the time went**, measured that day:
+
+| Step | Time | What it was |
+|---|---|---|
+| A build on Orion (32 cores) | 7 minutes (salmon), 11 (trout); 18 and 15 with every input fetched | The motif layer and the large tables; the pool is half a minute, the upload 22 seconds |
+| The tests (`tools/check.sh`) | 8 minutes in a cloud session (4 cores), 4 on GitHub's runner | Four suites one after the other on one core; the page tests alone 62% of it |
+| A deploy to NREC | 4.5 minutes of tests, then 4 on the VM | The tests run a second time; the VM fetched each new release whole and its genome again (1:45 a release); a change to update.sh needed a second deploy |
+| An install's update to a new release | 436 MB (salmon), 903 MB (trout) | Every file again, though 91% and 95% of the bytes were the files of the release before |
+| The work around a build | Hours, in two chats | Reading this file, moving an input aside, checking counts by eye, a hand-off pasted between the chats, the same checks made again in the cloud session |
+
+**Done in one pull request** (each tried as said):
+
+- The build: a changed salmobase input is fetched again, unchanged layers are copied from the release before, layers
+  are written in a full row order, the log times each step, `latest.json` no longer depends on the order of the
+  arguments ("How a build runs"). The whole script was run twice on the test data: the second build copied all 21
+  layers and `snpscore diff` reported no change.
+- The tests: `tools/check.sh` runs the four suites side by side and the page tests on every core: 2 minutes 15 in
+  a cloud session instead of 8, and 1 minute 46 on GitHub's runner instead of about 4. For that the motif layer scores a single batch of SNPs in its own process (as a
+  test's small release has), and the page tests' worker processes are spawned, not forked.
+- An update downloads only what changed: `salmo-snp download` copies a file that another installed release holds
+  with the same sha256 instead of fetching it. From 2026-11-24 to 2026-11-25: 5 files fetched and 32 copied, 49
+  seconds in a cloud session where the whole download took minutes, every file checked as before.
+- The NREC deploy: update.sh runs the steps of the commit it has just checked out, so a change to them takes effect
+  in the deploy that brings it (no second deploy); species.sh copies unchanged files from a release the VM holds and
+  keeps a genome that has the manifest's checksum. Tried on a mock of the VM that held 2026-11-24: 8 requests to
+  salmobase (the checksums, 5 changed files, the pool) instead of 43, and no genome.
+
+**Then** (G, 2026-11-25: "we should prepare to setup the deployment option to salmobase server. Then we can work on
+feature development in this chat, and then hand off building and deploying releases to salmobase in the orion ssh
+chat"), in the same pull request:
+
+1. **The app on salmobase reads the published data in place**: built, and tried on a mock of the server's folders;
+   [SALMOBASE.md](SALMOBASE.md) is the brief for installing it there. One read-only mount of the server's datafiles
+   folder and one setting naming it (`SNPSCORE_SALMOBASE`); an address under `https://salmobase.org/datafiles/` is
+   then read from the disk when the file is there, as `SNPDATA_SALMOBASE` already does for fetch.
+
+   | What the app needs | On NREC today | On salmobase |
+   |---|---|---|
+   | Releases | Fetched by species.sh at a deploy | Read where they are published: `datasets/salmo-snp/releases/` |
+   | Genomes | A copy on the VM | Read where they are (`genomes/`: the manifest's address names the file) |
+   | AQUA-FAANG tracks of the Locus browser | Read from salmobase.org, about 600 small requests a view | Read from the disk |
+   | Public pools | The published one; built on GitHub's runner and sent when the weights change | The published one; built again on Orion and published again when the weights change (the server builds none) |
+   | ChromBPNet model files | Fetched once from salmobase.org | Read where they are |
+   | Results, the secret key | /srv/snpportal | The app's own data folder |
+
+   No species.sh, no pool job in a deploy workflow, no genome copy, and no request from the server to its own
+   public name. Still to find out on the server: Docker or Python, memory, who edits Apache (SALMOBASE.md's survey).
+2. **One scripted test**: built. `tools/smoke.sh <address>` asks a running portal's health page and scores every
+   example of each species through the job queue; `prep/release_test.sh` (step 3 above) runs it on freshly built
+   releases before they are published, and the NREC deploy workflow ends with it. It replaces the checks made by
+   hand in the Orion chat and again in the cloud session (most of an hour on 2026-11-25). Tried on releases
+   2026-11-25 and trout-2026-11-25: eight examples scored in two and a half minutes.
+
+**Proposed, not built** (DECISIONS #67, #68):
+
+3. **The publisher says which release is current.** Today the code names it (serve.py `RELEASE`, `RELEASES`), so
+   every release needs a pull request, the tests and a deploy before the live app shows it. Instead the live app
+   would take what `releases/latest.json` names (one version per species, written by the publish script once the
+   server's copy is checked) and refuse a release in a format newer than it reads: a release is then live when it
+   is published. An install keeps the release its version names, so the same version gives the same data, and
+   `salmo-snp download latest` fetches the newest.
+4. **The build chat's hand-back.** With 3 nothing in the code has to follow a build. Until then it is the five
+   lines of step 5 at the top of this file; or the build chat changes serve.py and this file's record and opens the
+   pull request itself, which needs a GitHub token for this repository on Orion (port 22 is blocked there; HTTPS
+   works).
+5. Smaller: the deploy workflow runs the tests a second time on a commit that main's own run has already tested
+   (4.5 minutes a deploy; skipping them needs a wait for that run when the deploy follows a merge at once, so it
+   gains little); `raw/` per species before `publish --raw` is used for both.
+
 ## Text to start the chat on Orion
 
 ```
 We are on Orion over SSH. Clone https://github.com/garethgillard/salmo-snp.git into ~/git/ if it is not there (else
-pull main), and read AGENTS.md, then docs/ORION.md: it says what the next Atlantic salmon and rainbow trout data
-releases contain ("The latest build" and, in it, "Left for the next build"), and how the builds before were run here
-("On Orion").
-Tell me before any job is submitted and before anything is published; never set a SLURM time limit.
+pull main), and read AGENTS.md, then docs/ORION.md: its first section, "The next build: the plan and the steps",
+says what the next Atlantic salmon and rainbow trout data releases contain and the steps of a build; the rest is
+the record of the builds before. docs/SALMOBASE.md is the brief for installing and updating the portal on the
+salmobase server, which this chat does too.
+Tell me before any job is submitted, before anything is published and before anything is installed or changed on a
+server; never set a SLURM time limit.
 ```

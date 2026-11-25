@@ -19,7 +19,16 @@ python -m pytest -q                              # tests run on the small region
 ```
 
 `bash prep/build_release.sh salmon <date>` (or `trout trout-<date>`) runs a whole release in one go: fetch,
-make_demo.sh, build, the public pool, `snpscore verify`, and a summary to check; it publishes nothing.
+make_demo.sh, build, the public pool, `snpscore verify`, `snpscore diff` against the release before, and a summary
+to check; it publishes nothing. It saves what it can between releases (G, 2026-11-25): a layer whose settings and
+inputs did not change is copied from the release before (the newest of the species in `release/`, or `PREVIOUS=`),
+byte for byte, and only when that release was built by the same code (the manifest's `code`); `FRESH=1` computes
+everything. `bash prep/release_test.sh <version> [version ...]` then tries built releases as a user would, before
+they are published: the portal started on them, and every example of each species scored (`../tools/smoke.sh`).
+
+`snpdata fetch` keeps a file that is there, with one exception: salmobase's files change under the same address (the
+unified peaks: v3, v5, v6), so fetch asks the server for each one's size and date and downloads the file again when
+they differ from what it noted at the last download (`.fetched.json` in the data folder), saying so.
 
 On a shared machine (NMBU's Orion, a SLURM job; [../docs/ORION.md](../docs/ORION.md) is the brief for building
 there): `SNPDATA_SALMOBASE=<folder>` makes fetch read every salmobase input from a copy of salmobase's datafiles
@@ -62,8 +71,8 @@ v6; 17 up to trout-2026-11-24), blacklist, LORe, Ss4R (`species: Omyk` rows of t
 salmon-trout table) and synteny; Ensembl 116 genes, regulatory build and GERP; NCBI models; orthologs; JASPAR motifs;
 EVA rs IDs, and a known-loci catalogue (`rainbow_trout/catalog/known_loci.tsv`: gene regions and published QTL
 windows, the latter as `type` qtl_interval with `start` and `end`). No molQTL, expression, Bgee, genetic map or
-liftover. `snpdata build --reuse <release>` copies the layers whose settings and inputs are unchanged, so a rebuild
-for the catalogue takes minutes, not the motif layer's hour and a half.
+liftover. `snpdata build --reuse <release>` copies the layers whose settings and inputs are unchanged from a release
+built by the same code, so a rebuild for the catalogue takes minutes, not the motif layer's hour and a half.
 
 `public_af` and `flank_variants` come from the one public genome-wide variant set on this assembly, ENA PRJEB109732
 (University of Maryland): 462 farmed fish in three cohorts (35, 92 and 335 fish; 7, 16 and 55 GB), sequenced at about
@@ -171,6 +180,8 @@ release/2026-11-03/
 
 `manifest.json`:
 - `version`, `assembly`, `chromosomes`, `created`, `snpscore_version`, `duckdb_version`
+- `code`: sha256 of the source the layers were computed with ({`build`: snpdata's build module, `motif`: snpscore's
+  motif scoring and genome reader}); `build --reuse` copies a layer only from a release with the same
 - `chrom_sizes`: {chrom: length} of the numbered chromosomes, from the genome `.fai` (or the layers' largest end where
   that is larger, or the `.fai` lacks the chromosome, as in the test fixture). annotate's known chromosomes.
 - `provisional`: the rules G still has to confirm (layers.yaml keys, e.g. `catalog.window`; snpscore's weights.yaml lists its own)
@@ -187,7 +198,8 @@ release/2026-11-03/
 
 Every positional `<layer>.parquet` has `chrom`, `start`, `end` in BED coordinates (0-based start, end exclusive), sorted
 by chrom and start, followed by the layer's value columns. `gene` layers are keyed by `gene_id` instead. Layer
-parquets are zstd-compressed.
+parquets are zstd-compressed, and their rows are in a full order (every column, left to right), so a layer built
+again from the same input has the same bytes and sha256.
 
 | Layer type | In the parquet | Columns annotate adds |
 | --- | --- | --- |

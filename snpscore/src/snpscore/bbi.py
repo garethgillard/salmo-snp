@@ -4,7 +4,9 @@ chromosome tree in one request, and a shared byte-bounded cache, so opening a fi
 small reads. Format: https://genome.ucsc.edu/goldenPath/help/bigWig.html (header, chromosome B+ tree, R-tree, zlib blocks).
 
 Settings: SNPSCORE_CA_FILE (else SSL_CERT_FILE) is the CA bundle; SNPSCORE_RANGE_CACHE_MB (64) sizes the cache;
-SNPSCORE_ALLOWED_HOSTS (comma-separated) replaces the host allowlist. Tests also set ALLOWED_SCHEMES."""
+SNPSCORE_ALLOWED_HOSTS (comma-separated) replaces the host allowlist. Tests also set ALLOWED_SCHEMES.
+SNPSCORE_SALMOBASE names salmobase's datafiles folder where this runs on its server: an address under SALMOBASE is
+then read from that folder when the file is there (local())."""
 from __future__ import annotations
 
 import collections
@@ -33,6 +35,7 @@ CHROM_TREE_MAX = 256 * 1024  # read the whole chromosome tree at once when it is
 RTREE_GUESS = 256  # R-tree block size assumed when reading an index header and its root node together
 WHOLE_FILE_MAX = 64 << 20  # read_all() limit for remote files (.fai, .gzi, trackDb.txt)
 STATS = {"requests": 0, "bytes": 0}  # HTTP requests made by this process, for tests and timings
+SALMOBASE = "https://salmobase.org/datafiles/"  # what salmobase's datafiles folder is served as
 
 log = logging.getLogger(__name__)
 
@@ -190,9 +193,23 @@ def _body(url, resp, offset, size):
     return data, total
 
 
+def local(location):
+    """`location`, or the path of the same file in the server's own datafiles folder when `location` is an address
+    under SALMOBASE, $SNPSCORE_SALMOBASE names that folder and the file is there. Where the portal runs on the
+    salmobase server (G, 2026-11-25) the tracks, the genomes and the models' files are read from the disk this way,
+    with no request; anything that is not there is still read from its address."""
+    location, root = str(location), os.environ.get("SNPSCORE_SALMOBASE")
+    if root and location.startswith(SALMOBASE):
+        root = os.path.realpath(root)
+        path = os.path.realpath(os.path.join(root, location[len(SALMOBASE):]))
+        if path.startswith(root + os.sep) and os.path.isfile(path):  # inside the folder, whatever the address says
+            return path
+    return location
+
+
 def read_all(location):
     """Whole file (local path or allowlisted URL); for small files such as .fai, .gzi and trackDb.txt."""
-    location = str(location)
+    location = local(location)
     if "://" in location:
         return _get(location)[0]
     with open(location, "rb") as f:
@@ -215,7 +232,7 @@ def cached(cls, location, limit=32):
     push out the genome. A local file is reopened when it changes. An opened salmobase bigWig holds about 0.65 MB
     outside the byte-bounded cache (its 3,200-3,800 sequence names and its first read); reopening one whose first
     read is still in that cache costs about 2 ms and no request."""
-    location = str(location)
+    location = local(location)
     key = (location, None if "://" in location else os.stat(location).st_mtime_ns)
     with _lock:
         opened = _OPEN[cls]
@@ -235,7 +252,7 @@ class Source:
     The first read at offset 0 is kept as `head`; reads inside it cost nothing."""
 
     def __init__(self, location):
-        self.location = str(location)
+        self.location = local(location)
         self.remote = "://" in self.location
         if self.remote:
             check_url(self.location)

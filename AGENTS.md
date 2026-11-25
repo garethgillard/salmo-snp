@@ -19,9 +19,12 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
   ROADMAP (the spec of every roadmap item), LICENSING (the licences, the CLA, commercial permission, third-party
   data and software), SCORING (how other projects score variants, and the options for our starting point), CHROMBPNET
   (the brief of the ChromBPNet repository), MISSENSE (the plan of the missense effect score), ORION (building the
-  releases on Orion and hosting them on salmobase: the brief for the chat there); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY
-  (the simplification plan of 2026-10-07, built).
+  releases on Orion and hosting them on salmobase: the brief for the chat there, starting with the next build's plan
+  and the steps of a build), SALMOBASE (installing and updating the portal on the salmobase server: the same chat's
+  brief); for reference: RESEARCH (the source research of 2026-10-06) and SIMPLIFY (the simplification plan of
+  2026-10-07, built).
 - `tools/`: check.sh (what CI runs), user_install_test.sh (a new user's install), get_data.sh (the data for real use),
+  smoke.sh (one test of a running portal: its health page, and every example scored through the job queue),
   cloud_setup.sh (cloud sessions).
 
 ## Plan (G, 2026-10-28)
@@ -40,8 +43,10 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
    - development: clone, `conda env create -f environment.yml` (conda-forge only), editable installs;
    - NREC (demo and staging until salmobase): git checkout, updated only when G says so (the manual `deploy`
      workflow, a batch of tested changes at a time; G, 2026-11-06), never by a merge;
-   - salmobase (the live installation, later): a container installing a tagged version behind salmobase's Apache at
-     /snp/, linked from salmobase with a button (not merged into its Django), the release folder mounted;
+   - salmobase (the live installation, being prepared: G, 2026-11-25): the portal behind salmobase's Apache at
+     /snp/, linked from salmobase with a button (not merged into its Django), as a container or from a virtual
+     environment, reading the published data where it is on the server (`SNPSCORE_SALMOBASE`: its datafiles
+     folder); installed and updated by the chat on Orion (docs/SALMOBASE.md);
    - breeding companies and everyone else: the local install.
    Docker and bioconda only wrap the package. Nothing depends on Docker-only features.
 5. The data is hosted online (salmobase or any static web server) as one folder: releases/<version>/ (the snapshot
@@ -242,6 +247,32 @@ Decided:
   releases, so it works with any salmon release. How: snpportal/README.md "Predictions on demand". Also that day: a
   release builds without a score file that is not published yet ("It might not include chrombpnet scores").
 
+- Faster and simpler builds, tests and deploys (G, 2026-11-25: "Yes if it's changed you can fetch again. Yes reuse
+  where you can to save time between releases"; then "Look for ways for in the next releases to speed up and simply
+  the building, testing and deploying. From now, the builds will run on orion in a separate orion ssh chat, using a
+  build plan it pulls from the repo and serve the data by syncing it to salmobase. For now we deploy to NREC, but
+  soon we'll move the app to the salmobase server. There we can use the same data that's deployed on salmobase").
+  Built: `snpdata fetch` downloads a salmobase file again when the server's copy has changed; a build copies the
+  layers that did not change from the release before, only from one built by the same code, and writes layers in a
+  full row order, so the same input gives the same bytes; the plan and the steps of a build are the first section
+  of docs/ORION.md, which the Orion chat pulls; `tools/check.sh` runs the suites side by side; `salmo-snp
+  download` and the demo's species.sh fetch only the files that changed; the demo's update.sh runs the new commit's
+  own steps. Proposed and not built, for G to choose (DECISIONS #67, #68; docs/ORION.md "Faster and simpler builds,
+  tests and deploys"): who says which release is current, and how the build chat hands back.
+- Who does what, and the salmobase server (G, 2026-11-25: "we should prepare to setup the deployment option to
+  salmobase server. Then we can work on feature development in this chat, and then hand off building and deploying
+  releases to salmobase in the orion ssh chat"). Feature development is the cloud chat's, by pull request; the chat
+  on Orion builds the data releases, publishes them, and installs and updates the portal on the salmobase server,
+  each when G says. Its briefs are docs/ORION.md and docs/SALMOBASE.md: keep them complete, as that chat has
+  nothing else. Prepared, and tried on a mock of the server's folders (nothing has run on the server yet): with
+  `SNPSCORE_SALMOBASE` naming the server's datafiles folder the portal reads the releases, the genomes, the
+  AQUA-FAANG tracks and the models' files where they are published and writes nothing there; `deploy/server.sh`
+  starts it in a container or from a virtual environment; `deploy/survey.sh` reads what the server offers;
+  `tools/smoke.sh` tests a running portal, `prep/release_test.sh` built releases before they are published.
+  Claude's choices, PROVISIONAL (DECISIONS #65): the portal shows the releases its version names, not a newer one
+  in the folder; the server builds no pool (they come from Orion with the release). The NREC demo stays until G
+  says otherwise.
+
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
   the ImmunoMap's bivalent or mixed active/polycomb (G, 2026-11-20) and the trout ImmunoMap's weak accessible
@@ -352,10 +383,10 @@ Tests use the small fixture in `snpdata/tests/fixture`, so they need no download
 
 ```bash
 conda env create -f environment.yml && conda activate salmo-snp   # conda-forge only; installs the three folders editable
-bash tools/check.sh                                    # what CI runs: pyflakes, then the four suites (~4 min)
+bash tools/check.sh                                    # what CI runs: pyflakes, then the four suites side by side (~2 min)
 (cd snpscore && python -m pytest -q)                   # or one suite at a time
 (cd snpdata && python -m pytest -q)
-(cd snpportal && python -m pytest -q tests && SNPPORTAL_WORKERS=0 python manage.py test snpportal)
+(cd snpportal && python -m pytest -q tests && SNPPORTAL_WORKERS=0 python manage.py test snpportal --parallel)
 salmo-snp serve                                        # the portal on http://127.0.0.1:8000/snp/, with the data below
 salmo-snp serve --release snpdata/release/dev          # or a release you built
 ```
@@ -438,9 +469,10 @@ info` says where); then `salmo-snp serve`. A new release is built and published 
   (serve.py DATA_URL: the files of its SHA256SUMS, the genome from the manifest's address, the pool from
   releases/<version>/pool/), checks it and puts it in place: a salmon release becomes /srv/snpportal/release (the one
   it replaces moving to releases/<version> for the results made with it), another species' goes in
-  /srv/snpportal/releases/, which settings.py finds beside the default release. A deploy runs the update.sh already
-  on the VM, so a change to update.sh takes effect on the deploy after the one that installs it; species.sh is the
-  new one at once (update.sh runs it after the checkout). A stale pool of any species is the deploy workflow's
+  /srv/snpportal/releases/, which settings.py finds beside the default release. Only what changed is fetched: a
+  file a release on the VM already holds with the same sha256 is copied from it, and a genome with the manifest's
+  sha256 is kept. update.sh runs the steps of the commit it has just checked out (since 2026-11-25: a change to them
+  takes effect in the deploy that brings it, not one deploy later). A stale pool of any species is the deploy workflow's
   (update.sh names each stale release; the job builds its pool from the release on salmobase and sends it,
   `update.sh pool <version>`). A new release, in short: build and publish it on Orion, name it in serve.py RELEASE or
   RELEASES, merge, deploy. Until 2026-11-24 the releases were GitHub data releases (data-<version>:
@@ -451,7 +483,8 @@ info` says where); then `salmo-snp serve`. A new release is built and published 
   merged pull requests; never on your own initiative, and never a branch. Run the `deploy` workflow on main:
   `gh workflow run deploy.yml --ref main` (cloud sessions, REST only: `gh api -X POST
   repos/garethgillard/salmo-snp/actions/workflows/deploy.yml/dispatches -f ref=main`), or G uses Actions > deploy >
-  Run workflow. It runs the tests, then `deploy/update.sh` on the VM (~20 s). Then check
-  https://158-39-75-9.sslip.io/snp/health/ and tell G what went live (the merges since the last deploy run). A new
+  Run workflow. It runs the tests, then `deploy/update.sh` on the VM (~20 s), then `tools/smoke.sh` against the live
+  demo (its health page, and the known-loci example scored for each species): a red last step means the demo needs
+  a look. Then tell G what went live (the merges since the last deploy run), with the smoke test's lines. A new
   data release is built and published on Orion (docs/ORION.md) and the deploy installs it; a stale public pool (after a weights.yaml or snpscore
   change) is built on GitHub's runner and sent by the same workflow run (snpportal/README.md "Deploying the demo").

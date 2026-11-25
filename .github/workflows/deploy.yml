@@ -5,7 +5,8 @@ name: deploy
 # of any species, is built here from the release on salmobase and sent (the VM's 2 GB RAM can't build it): only for the
 # releases this code names (serve.py RELEASE, RELEASES). An older release kept on the VM for the results made with it
 # keeps its pool, which fits those results' rules. A new data release is built on Orion and published on salmobase
-# (docs/ORION.md); the deploy's species.sh installs it.
+# (docs/ORION.md); the deploy's species.sh installs it. The run ends with tools/smoke.sh against the live demo: its
+# health page, and the known-loci example scored for each species.
 on:
   workflow_dispatch:
 
@@ -41,7 +42,6 @@ jobs:
           echo "stale=$stale" >> "$GITHUB_OUTPUT"
       # The public pools for the code just deployed: salmo-snp download builds one as in every local install (I3)
       - uses: actions/checkout@v7
-        if: steps.update.outputs.stale != ''
       - uses: actions/setup-python@v7
         if: steps.update.outputs.stale != ''
         with:
@@ -73,3 +73,11 @@ jobs:
             rm -rf "$release"
           done
           exit $failed
+      - name: Check the live demo
+        # tools/smoke.sh: the health page, then the known-loci example scored for each species through the job queue
+        if: always() && steps.update.outcome == 'success'
+        shell: bash
+        run: |
+          site=$HOST
+          if [[ $site =~ ^[0-9.]+$ ]]; then site=${site//./-}.sslip.io; fi  # the name the demo's certificate is for
+          EXAMPLES=known_loci bash tools/smoke.sh "https://$site"

@@ -75,6 +75,36 @@ def test_read_back(folder, remote):
                 f.bins("25", start, end, n)
 
 
+def test_salmobase_files_from_its_own_disk(folder, tmp_path, monkeypatch):
+    """Where the portal runs on the salmobase server (SNPSCORE_SALMOBASE names its datafiles folder), an address under
+    salmobase's datafiles is the file in that folder: tracks and the genome are read from the disk, with no request.
+    A file that is not there, and an address that would leave the folder, are read from their address as before."""
+    from snpscore.annotate import genome_location
+    served = tmp_path / "datafiles"
+    (served / "datasets" / "x").mkdir(parents=True)
+    (served / "genomes").mkdir()
+    shutil.copy(folder[0] / NAME, served / "datasets" / "x" / NAME)
+    for ext in ("", ".fai", ".gzi"):
+        shutil.copy(folder[0] / (GENOME + ext), served / "genomes")
+    (tmp_path / "outside.bw").write_bytes(b"not served")
+    track, genome = bbi.SALMOBASE + "datasets/x/" + NAME, bbi.SALMOBASE + "genomes/" + GENOME
+    assert bbi.local(track) == track  # not on the server: nothing changes
+    monkeypatch.setenv("SNPSCORE_SALMOBASE", str(served))
+    assert bbi.local(track) == os.path.realpath(served / "datasets" / "x" / NAME)
+    for elsewhere in (bbi.SALMOBASE + "datasets/x/missing.bw", bbi.SALMOBASE + "datasets/../../outside.bw",
+                      "https://ftp.ensembl.org/datasets/x/" + NAME, str(folder[0] / NAME)):
+        assert bbi.local(elsewhere) == elsewhere
+    bbi.clear_caches()
+    items = folder[1]["Brain_Immature_Female"]
+    assert bbi.open_bbi(track).values("25", 0, 10 ** 9) == [(s, e, v) for _, s, e, v in items]
+    there = genome_location({"genome": {"url": genome, "file": GENOME}})
+    assert there == os.path.realpath(served / "genomes" / GENOME)
+    assert Fasta(genome).fetch("25", 28_960_000, 28_960_010) == Fasta(folder[0] / GENOME).fetch("25", 28_960_000, 28_960_010)
+    assert bbi.STATS["requests"] == 0  # the track, the genome and its two indexes: all from the disk
+    (served / "genomes" / (GENOME + ".gzi")).unlink()  # without an index the genome is read from its address
+    assert genome_location({"genome": {"url": genome, "file": GENOME}}) == genome
+
+
 def test_request_counts(folder, remote):
     local = bbi.BBIFile(folder[0] / NAME)
     f = bbi.open_bbi(remote.url + NAME)

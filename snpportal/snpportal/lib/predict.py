@@ -24,6 +24,8 @@ from urllib.parse import urlsplit
 
 import yaml
 
+from snpscore import bbi
+
 MODELS = Path(__file__).with_name("models.yaml")
 PACKAGES = ("numpy", "onnxruntime")
 INSTALL = "pip install numpy onnxruntime"  # or the extra: pip install "salmo-snp[chrombpnet]"
@@ -68,7 +70,11 @@ def download(url, target):
 
 def fetch(model, folder, name):
     """The model's file `name` (as in its release: scorer/fold_2.onnx) under `folder`, fetched on first use from the
-    model's `url` and checked against the release's SHA256SUMS."""
+    model's `url` and checked against the release's SHA256SUMS. On the server that publishes the model
+    (SNPSCORE_SALMOBASE: snpscore.bbi.local) it is the published file itself, where it is."""
+    served = bbi.local(model["url"].rstrip("/") + "/" + name)
+    if "://" not in served:
+        return Path(served)
     folder = Path(folder)
     target = folder / name
     if target.exists():

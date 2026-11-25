@@ -4,6 +4,7 @@ monitoring (the salmobase container's HEALTHCHECK): release, results folder, job
 track hosts only with ?tracks=1, as that asks them over the network."""
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 import time
@@ -57,6 +58,7 @@ def _reachable(url):
 def health(request):
     """/snp/health/: JSON, 200 when the portal can score, else 503. Counts and states only: never a SNP or a file name."""
     from snpscore.annotate import genome_location
+    from snpscore.pool import stale
     from snpscore.release import check
     release = jobs.release()
     m = jobs.manifest()
@@ -74,13 +76,21 @@ def health(request):
            "results": {"writable": writable, "free_gb": round(free / 1e9, 1), "local": jobs.local()},
            "queue": {"queued": len(jobs._queued), "running": len(jobs._running), "max_queued": jobs.MAX_QUEUED},
            "pool": (release / "pool" / "pool.parquet").exists(),
+           "pool_fits": not stale(release),  # false: built for other weights or another snpscore (or missing)
+           "species": {k: jobs.manifest(f).get("version") for k, f in jobs.species_releases().items()},
            "genome": "none" if not where else "remote" if where.startswith("http") else "local",
            # the card's Predict button: the models of this assembly, and whether their packages are installed here
            "predict": {"models": [x["name"] for x in predict.models(m.get("assembly", ""))], "packages": not predict.missing_packages()}}
     if request.GET.get("tracks") == "1" and (release / "tracks.yaml").exists():
         import yaml
-        hosts = (yaml.safe_load((release / "tracks.yaml").read_text()) or {}).get("hosts") or []
-        out["tracks"] = dict(_reachable(str(x)) for x in hosts[:5])
+        registry = yaml.safe_load((release / "tracks.yaml").read_text()) or {}
+        out["tracks"] = dict(_reachable(str(x)) for x in (registry.get("hosts") or [])[:5])
+        if os.environ.get("SNPSCORE_SALMOBASE"):  # on the salmobase server: the track files it reads from its own disk
+            from snpscore import bbi
+
+            from .lib import tracks
+            urls = [t["url"] for k in tracks.KEYS for t in tracks.load_tracks(release).get(k, [])]
+            out["tracks"]["read from the disk"] = f"{sum(bbi.local(u) != u for u in urls)} of {len(urls)}"
     response = JsonResponse(out, status=200 if out["status"] == "ok" else 503)
     response["Cache-Control"] = "no-store"
     return response

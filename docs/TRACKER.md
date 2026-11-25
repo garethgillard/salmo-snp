@@ -12,8 +12,21 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
   model's score of 216,586 SNPs in its peaks, shown with the direction of the effect and not counted; trout has
   the ImmunoMap's head kidney, PBS and Vibrio (19 conditions, 205,722 peaks). The code names both (serve.py), every
   file checked from a cloud session. The SNP card can also run the gill model for one SNP (Predictions on demand).
-  **The NREC demo still runs 2026-11-24**: it takes the new releases and the new pages at its next deploy, when G
-  says (twice, so that the Predict button's packages are installed).
+  **The NREC demo runs them since 2026-11-25** (G: "Ok to merge and deploy"; main at bec1664, two deploys, the
+  second for the Predict button's packages). Checked on the live site: the health page (release 2026-11-25, the
+  model's packages installed), a Known loci run, a scored SNP's page (25:34535148 C>T: ChromBPNet Gill, less
+  accessible, 0.65, top 1%) and its prediction made on the server (log2 fold change -0.65, as the release's score),
+  the Locus browser's Predicted allele effects row, and for trout the release trout-2026-11-25 with the 'HK PBS'
+  and 'HK Vibrio' rows and the new state in the legend. The deploy removed releases 2026-11-05, 2026-11-20 and
+  trout-2026-11-13 from the VM; 2026-11-24 and trout-2026-11-24 go when the results made with them have expired.
+- **Faster and simpler builds, tests and deploys** (G, 2026-11-25; [ORION.md](ORION.md) has the measurements):
+  the build fetches a changed input again, copies unchanged layers and gives the same bytes for the same input;
+  the tests take 2 minutes instead of 8; an install's update and the demo's deploy fetch only the files that
+  changed; one deploy is enough.
+- **The portal is ready to be installed on the salmobase server** (G, 2026-11-25: feature development in the cloud
+  chat, building and deploying releases to salmobase in the Orion chat): it reads the published data where it is,
+  and [SALMOBASE.md](SALMOBASE.md) is the Orion chat's brief. Nothing has been run on the server yet: the first
+  step there is a read-only survey. Two questions wait for G (DECISIONS #67, #68).
 - **The demo since 2026-11-25** (G: "make a working deployment to NREC"): main at 2e61590 (PRs #31 to #36) with
   releases 2026-11-24 and trout-2026-11-24, built on Orion and fetched from salmobase by the deploy itself
   (https://salmobase.org/datafiles/datasets/salmo-snp; every file checked on the VM, each release with its pool).
@@ -148,7 +161,8 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
         ORION.md's tables from the published files (every row count as planned; `motif` for trout exactly the
         1,083,423 predicted; the salmon pool's tiers unchanged to the SNP); the installer's download with every
         checksum; serve.py names the two releases
-  - [ ] The NREC demo: deploy when G says (twice: the second installs numpy and onnxruntime for the Predict button)
+  - [x] The NREC demo deployed (2026-11-25, G: "Ok to merge and deploy"; twice, the second for numpy and
+        onnxruntime) and checked live: Where things stand
   - [ ] Later (G, 2026-11-25): the gill score of every public and Synchrosmolt site (9,288,186; about 35
         GPU-hours); other tissues' models as they are released
 - [ ] S3e Still to ask or get: allelic imbalance in the 12 fish from the Orion repository (the truth set the summit
@@ -171,6 +185,27 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
 Queued behind it, to run only when G says (cut off twice by the usage limit): a survey of other work (stale texts and
 the guided tour, the live demo for both species, speed with the larger pool, handover, unused public data, bugs in
 the week's changes).
+
+Builds, tests and deploys (G, 2026-11-25: faster and simpler for the next releases; builds in the Orion chat from the
+plan in [ORION.md](ORION.md), the data synced to salmobase, the app to move there from NREC):
+- [x] `snpdata fetch` downloads a salmobase input again when it has changed; a build copies unchanged layers from the
+      release before (one built by the same code) and writes layers in a full row order; each step's seconds in the
+      log; the plan and the five steps of a build at the top of ORION.md
+- [x] `tools/check.sh`: the four suites side by side, the page tests on every core: 2 minutes instead of 8
+- [x] `salmo-snp download` and the demo's species.sh fetch only the files that changed (from 2026-11-24 to
+      2026-11-25: 5 of 37)
+- [x] The demo's update.sh runs the new commit's own steps: one deploy is enough
+- [x] The deployment option to the salmobase server, prepared (G, 2026-11-25; DECISIONS #65): the portal reads the
+      published data in place from one setting (releases, genomes, tracks, model files), one start script for a
+      container or a virtual environment (`deploy/server.sh`), a read-only survey of the server, and the brief
+      [SALMOBASE.md](SALMOBASE.md). Tried on a mock of the server's folders made from the published releases, as a
+      plain process and as the container with the data mounted read only
+- [x] One scripted test (#66): `tools/smoke.sh` for a running portal, `prep/release_test.sh` for built releases
+      before they are published, and at the end of the NREC deploy workflow
+- [ ] On the salmobase server, by the Orion chat when G says: the survey, the install on the test server, Apache's
+      lines, the smoke test, then the live server (SALMOBASE.md)
+- [ ] Which release is current said by the publisher (`latest.json`, one version per species) for the live app (#67)
+- [ ] The build chat's hand-back (#68)
 
 Structural variants (G, 2026-11-24): users score SVs (any regions: an SV VCF, BED, a table or pasted chrom:start-end
 lines) on the Score page's Structural variants tab, each scored by what it overlaps with the SNPs' rules (`snpscore
