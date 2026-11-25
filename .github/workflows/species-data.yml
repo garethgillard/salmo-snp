@@ -1,6 +1,7 @@
 name: species-data
 # A species' data release without G's Mac: built here from the public sources, published as this repository's GitHub
-# data release data-<version> (snpdata/prep/github_release.sh: what tools/get_data.sh and local installs download) and
+# data release data-<version> (snpdata/prep/github_release.sh; since 2026-11-25 installs read salmobase instead, where
+# the releases built on Orion are published: docs/ORION.md) and
 # sent to the NREC demo through the deploy key (snpportal/deploy/update.sh `release <version>`, which checks every file
 # before it puts the release in place; the default species' replaces /srv/snpportal/release). Run it on main when G
 # asks (Actions > species-data > Run workflow, choosing the species), after a deploy has installed the code that names

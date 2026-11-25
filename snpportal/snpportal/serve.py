@@ -20,9 +20,11 @@ import sys
 import urllib.request
 from pathlib import Path
 
-RELEASE = "2026-11-20"  # the data release this version of the code expects (Atlantic salmon, the default species)
+RELEASE = "2026-11-24"  # the data release this version of the code expects (Atlantic salmon, the default species)
 RELEASES = {"atlantic_salmon": RELEASE, "rainbow_trout": "trout-2026-11-24"}  # ... and per species: the species bar's
-DATA_URL = os.environ.get("SALMO_SNP_DATA_URL")  # where the data is published (set once it is hosted, e.g. on salmobase)
+# where the data is published (salmobase, G 2026-11-24: releases/<version>/ and releases/latest.json); a copy elsewhere
+# (a mirror, a share) with SALMO_SNP_DATA_URL or `salmo-snp download --from`
+DATA_URL = os.environ.get("SALMO_SNP_DATA_URL") or "https://salmobase.org/datafiles/datasets/salmo-snp"
 
 
 def data_home():
@@ -82,8 +84,6 @@ def download(version=None, source=None, genome=True):
     URL or path; default DATA_URL) into HOME/releases/<version>, and the genome into HOME/genome. Files already there
     with the right sha256 are kept. Returns the release folder."""
     source = source or DATA_URL
-    if not source:
-        sys.exit("salmo-snp: the data isn't published at a default address yet: give --from <URL or folder>")
     if version == "latest":
         version = json.loads(read(source, "releases/latest.json"))["version"]
     version = version or RELEASE
@@ -239,7 +239,7 @@ def main(argv=None):
     sub = p.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("download", help="fetch a release and the genome, every file checked against its sha256")
     d.add_argument("version", nargs="?", help=f"release version (default {RELEASE}, this code's; 'latest' for the newest)")
-    d.add_argument("--from", dest="source", help="the published data: a URL or a folder (default: SALMO_SNP_DATA_URL)")
+    d.add_argument("--from", dest="source", help=f"the published data: a URL or a folder (default: {DATA_URL})")
     d.add_argument("--species", choices=[*RELEASES, "all"], help="this version's release of a species (default: "
                    "atlantic_salmon), or of every species; the portal's species bar switches between those downloaded")
     d.add_argument("--no-genome", action="store_true", help="skip the genome (~1 GB); sequence checks then read it remotely")

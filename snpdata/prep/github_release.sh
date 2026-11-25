@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Temporary data hosting until salmobase: the published data folder (snpdata publish) as two files on a GitHub Release
-# of this repository, so anyone can install locally (README "Run it on your own computer").
+# of this repository, so anyone can install locally (README "Run it on your own computer"). No longer the way since
+# 2026-11-25: releases are published on salmobase (prep/orion_publish.sh), where installs and the demo read them.
 #   bash prep/github_release.sh release/2026-11-03        (run in snpdata/, after the build; needs gh)
 #   bash prep/github_release.sh release/trout-2026-11-13  (another species: its genome comes from the manifest's path)
 # salmo-snp-data-<version>.tar     site/releases/<version>/ (with SHA256SUMS) and site/releases/latest.json

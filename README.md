@@ -30,22 +30,16 @@ You need:
    Once versions are tagged, install one by its tag (add `@v0.1.0` after `salmo-snp` in both lines) and, to get
    exactly the versions it was checked with, its `constraints.txt` from the GitHub Release: `pip install -c
    constraints.txt ...`. `salmo-snp info` and every exported file name the versions in use.
-2. Get the data, once: the release and the genome, every file checked against its sha256. Until the data is hosted on
-   salmobase it is a GitHub Release of this repository, named after the release this version of salmo-snp expects
-   (`salmo-snp info` names it):
+2. Get the data, once: the release this version of salmo-snp expects (`salmo-snp info` names it) and its genome, from
+   salmobase (https://salmobase.org/datafiles/datasets/salmo-snp), every file checked against its sha256:
    ```bash
-   curl -LO https://github.com/garethgillard/salmo-snp/releases/download/data-2026-11-20/salmo-snp-data-2026-11-20.tar       # ~300 MB
-   curl -LO https://github.com/garethgillard/salmo-snp/releases/download/data-2026-11-20/salmo-snp-genome-Ssal_v3.1.tar      # ~800 MB
-   tar -xf salmo-snp-data-2026-11-20.tar && tar -xf salmo-snp-genome-Ssal_v3.1.tar
-   salmo-snp download --from site      # checks every file, copies it into the data folder and scores the public
-                                       # sites for comparison (a minute or two); then delete site/
+   salmo-snp download      # about 1.3 GB: checks every file, copies it into the data folder and scores the public
+                           # sites for comparison (a minute or two)
    ```
-   In a clone of the repository, `bash tools/get_data.sh` does the same. Once the data is hosted online,
-   `salmo-snp download` alone will do (or `--from <address>`; a copy of the published folder on a disk or a share
-   works too, for computers without internet).
-   **Rainbow trout** (USDA_OmykA_1.1) is a second release, `trout-2026-11-13`: once it is published, fetch it the
-   same way (its two files, then `salmo-snp download trout-2026-11-13 --from site`, or `salmo-snp download --species
-   rainbow_trout` when the data is hosted). With both installed, the species bar at the top right of every page
+   In a clone of the repository, `bash tools/get_data.sh` does the same. `--from <folder>` reads a copy of the
+   published folder on a disk or a share instead, for computers without internet.
+   **Rainbow trout** (USDA_OmykA_1.1) is a second release, `trout-2026-11-24`: `salmo-snp download --species
+   rainbow_trout` (or `--species all` for both). With both installed, the species bar at the top right of every page
    picks the species new lists are scored against; results keep the species they were scored for.
 3. Start it, and open http://127.0.0.1:8000/snp/ (only this computer can reach it; Ctrl-C stops it):
    ```bash

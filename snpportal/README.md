@@ -14,9 +14,9 @@ upload, jobs, display and export, with its plain-Python parts in `snpportal/lib/
 ## Run locally
 
 As users run it (the root README's guide; `snpportal/serve.py`): `pip install` snpscore and this folder (the
-`salmo-snp` package), `salmo-snp download --from <data>` (the release and genome, checked against SHA256SUMS and the
-manifest, into the platform data folder) and `salmo-snp serve` (http://127.0.0.1:8000/snp/, this computer only). serve
-sets `SNPPORTAL_LOCAL`: results are never expired (`jobs.keep_seconds()` is None, cleanup deletes nothing) and the
+`salmo-snp` package), `salmo-snp download` (the release and genome from salmobase, serve.py `DATA_URL`, or a copy
+with `--from <folder>`, checked against SHA256SUMS and the manifest, into the platform data folder) and `salmo-snp
+serve` (http://127.0.0.1:8000/snp/, this computer only). serve sets `SNPPORTAL_LOCAL`: results are never expired (`jobs.keep_seconds()` is None, cleanup deletes nothing) and the
 Score, Help, Design panel and Run locally pages say the results stay on this computer. `salmo-snp serve --release
 <folder>` uses a release built with snpdata. For development with the published data, `bash ../tools/get_data.sh`
 and `salmo-snp serve` are enough; to build the release yourself (it needs ~1.5 GB of public inputs):
@@ -85,13 +85,13 @@ files and restarts the portal; if the portal doesn't answer within 40 s it goes 
 job fails (Actions tab), as it does after 15 minutes. The key GitHub uses can run nothing else on the VM (a forced
 command in `authorized_keys`). One-time setup, after `nrec.sh`: `bash deploy/github_deploy.sh nrec 158.39.75.9` (makes
 that key, stores it as the repository secret `NREC_DEPLOY_KEY` with the host key, and sets the variable `NREC_HOST`;
-rerun it to replace the key). Releases are not in git: a new release goes up with the `species-data` workflow (any species, Atlantic salmon included since 2026-11-20: built on GitHub's runner, published as the GitHub data release and installed by `deploy/species.sh`; a salmon release becomes /srv/snpportal/release) or with `nrec.sh`. The public pool
+rerun it to replace the key). Releases are not in git: they are built on Orion and published on salmobase (docs/ORION.md), and after a deploy `deploy/species.sh` installs a release that serve.py names and the VM lacks from there, with the pool published beside it (a salmon release becomes /srv/snpportal/release). The `species-data` workflow (a build on GitHub's runner, sent to the VM) and `nrec.sh` still work. The public pool
 after a change to weights.yaml or snpscore is the workflow's: the VM (2 GB RAM) can't build it (it swapped for 17
 minutes until the SSH session dropped, 2026-11-06), so update.sh says it is stale, and the job then builds it on
-GitHub's runner (the data release through `tools/get_data.sh --no-genome`, whose `salmo-snp download` builds it, about
-3 minutes) and sends it with the same key (`update.sh pool [version]`, a .tar.gz on stdin), which installs it only if
-it fits the deployed release, weights and snpscore. This covers every species' release on the VM: update.sh names
-each release whose pool is stale, and the job builds each from its GitHub data release (data-<version>).
+GitHub's runner (the release from salmobase through `tools/get_data.sh --no-genome`, whose `salmo-snp download` builds
+it, about 3 minutes) and sends it with the same key (`update.sh pool [version]`, a .tar.gz on stdin), which installs it
+only if it fits the deployed release, weights and snpscore. This covers every species' release on the VM: update.sh
+names each release whose pool is stale, and the job builds each from its release on salmobase.
 
 ## salmobase container
 

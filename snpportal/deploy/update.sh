@@ -2,8 +2,8 @@
 # Update the NREC demo to a commit of origin/main. GitHub Actions' deploy workflow (run when G asks) runs it over SSH
 # after the tests pass (the deploy key's authorized_keys line forces this script, so that key can do nothing else);
 # nrec.sh runs it too.
-# After installing, deploy/species.sh fetches the releases of the other species this code names (rainbow trout) that
-# the VM doesn't hold yet, from the GitHub data release: the portal's species bar then offers them.
+# After installing, deploy/species.sh fetches the releases this code names (serve.py RELEASE, and RELEASES: rainbow
+# trout) that the VM doesn't hold yet, from salmobase (serve.py DATA_URL): the portal's species bar then offers them.
 # `release <version>` takes such a release as a tar on stdin instead (the species-data workflow builds and sends it).
 # The commit comes in SSH_ORIGINAL_COMMAND (or $1); anything that is not a commit on origin/main means origin/main.
 # If the portal doesn't answer after the restart, it goes back to the previous commit and fails.
@@ -80,7 +80,7 @@ install() {  # check out $1, install its packages, say if the pool is stale, col
   /srv/snpportal/venv/bin/pip install -q --upgrade --upgrade-strategy eager gunicorn -e snpscore -e snpportal || return 1
   # The public pool is never built here: the VM's 2 GB RAM can't, and trying swapped for 17 min until the SSH session
   # dropped (2026-11-06). The deploy workflow builds it and sends it (`pool` above) when this line says so.
-  bash snpportal/deploy/species.sh || true  # the other species' releases, fetched once from the GitHub data release
+  bash snpportal/deploy/species.sh || true  # the releases this code names, fetched once from salmobase
   for r in "$release" /srv/snpportal/releases/*; do  # every species' pool: the workflow reads these lines
     [ -f "$r/manifest.json" ] || continue
     if stale "$r"; then echo "the public pool is stale: $(version "$r") (new weights.yaml or snpscore)" >&2; fi
