@@ -211,6 +211,27 @@ def test_parse_trackdb():
     assert (extra["since"], extra["hosts"]) == ("2026-10-08", ["salmobase.org"])
 
 
+def test_trout_hub(monkeypatch):
+    """The trout hub's registry: its files start with RainbowTrout (from 2026-11-20 the state file list was read as
+    salmon's and stopped the command), and its ImmunoMap folder (2026-11-25) has in vitro tracks too."""
+    base = "https://salmobase.org/datafiles/datasets/Aqua-Faang/"
+    bigwig = "track a\ntype bigWig\nbigDataUrl ATAC/bigWig/RainbowTrout_ATAC_{}_R1.mLb.clN.bigWig\n"
+    files = {"chromatin_states/chromhmm_trout_files.txt": "chromatin_states/RainbowTrout/BodyMap/RainbowTrout_Brain_Immature_Female.bb\n"
+                                                           "chromatin_states/RainbowTrout/ImmunoMap/RainbowTrout_HeadKidney_invivo_pbs.bb\n",
+             "robust_ATAC_peaks/trout_files.txt": "robust_ATAC_peaks/annotated_peaks/RainbowTrout/ImmunoMap/RainbowTrout_ATAC_HeadKidney_invivo_pbs.bb\n",
+             "trackhub/RainbowTrout/BodyMap/trackDb.txt": bigwig.format("Brain_Immature_Female"),
+             "trackhub/RainbowTrout/DevMap/trackDb.txt": bigwig.format("LateBlastulation"),
+             "trackhub/RainbowTrout/ImmunoMap/trackDb.txt": bigwig.format("HeadKidney_invivo_pbs") + "\n" + bigwig.format("HeadKidney_invitro_vibrio")}
+    monkeypatch.setattr(trackhub.bbi, "read_all", lambda url: files[url.removeprefix(base)].encode())
+    cfg = trackhub.from_trackhub(base + "trackhub/RainbowTrout/")
+    assert [t["id"] for t in cfg["chromhmm"] + cfg["peaks"]] == [
+        "ChromHMM_Brain_Immature_Female", "ChromHMM_HeadKidney_invivo_pbs", "Peaks_HeadKidney_invivo_pbs"]
+    assert [(t["source"], t["condition"], t["chromatin_condition"]) for t in cfg["tracks"]] == [
+        ("BodyMap", "Brain_Immature_Female", "chromatin_Brain_Immature_Female"), ("DevMap", "LateBlastulation", None),
+        ("ImmunoMap", "HeadKidney_invivo_pbs", "chromatin_HeadKidney_invivo_pbs"), ("ImmunoMap", "HeadKidney_invitro_vibrio", None)]
+    assert cfg["defaults"]["presets"]["all"][0] == "Brain_Immature_Female" and cfg["hosts"] == ["salmobase.org"]
+
+
 def test_ncbi_transcripts(release):
     """RefSeq models on chromosomes 1-29 (accessions renamed through the alias table), exon and CDS parts only."""
     con = duckdb.connect()
