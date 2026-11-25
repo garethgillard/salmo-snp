@@ -510,7 +510,8 @@ def state_palette(request):
     response = redirect(back)
     name = request.GET.get("name")
     if name in palette.STATE_PALETTES:
-        response.set_cookie(palette.COOKIE, name, max_age=365 * 86400, samesite="Lax", httponly=True, secure=request.is_secure())
+        response.set_cookie(palette.COOKIE, name, max_age=365 * 86400, samesite="Lax", httponly=True, secure=request.is_secure(),
+                            path=jobs.cookie_path())
     return response
 
 
@@ -520,7 +521,7 @@ def choose_species(request):
     key = request.POST.get("species") if request.method == "POST" else None
     response = redirect(reverse("snpportal:upload"))
     if key in jobs.species_releases():
-        response.set_cookie(jobs.SPECIES_COOKIE, key, max_age=365 * 86400, samesite="Lax", httponly=True)
+        response.set_cookie(jobs.SPECIES_COOKIE, key, max_age=365 * 86400, samesite="Lax", httponly=True, path=jobs.cookie_path())
     return response
 
 

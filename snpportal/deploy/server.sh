@@ -18,6 +18,7 @@ DATA=${SNPPORTAL_DATA:-/data}
 export SNPPORTAL_RESULTS_DIR="${SNPPORTAL_RESULTS_DIR:-$DATA/results}"
 export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-snpsite.settings}" DJANGO_DEBUG="${DJANGO_DEBUG:-0}"
 export DJANGO_STATIC_URL="${DJANGO_STATIC_URL:-/snp/static/}" SNPPORTAL_SERVE_STATIC="${SNPPORTAL_SERVE_STATIC:-1}"
+export SNPPORTAL_COOKIE_PATH="${SNPPORTAL_COOKIE_PATH:-/snp/}"  # beside another site: its pages never get our cookies
 mkdir -p "$SNPPORTAL_RESULTS_DIR"
 chmod 700 "$SNPPORTAL_RESULTS_DIR"
 cd "$DATA"  # not a checkout of the repository: its snpportal/ folder would hide the installed package from python -m

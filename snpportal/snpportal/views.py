@@ -60,7 +60,8 @@ class PrivateReports(SafeExceptionReporterFilter):
 
 
 def private(view):
-    """no-store caching, same-origin referrers and content-free error reports for a view that shows a user's SNPs."""
+    """no-store caching, same-origin referrers, no indexing and content-free error reports for a view that shows a
+    user's SNPs."""
     @wraps(view)
     def wrapped(request, *args, **kwargs):
         request.exception_reporter_filter = PrivateReports()
@@ -72,6 +73,7 @@ def private(view):
             raise RuntimeError(f"{type(e).__name__} in a portal query (message withheld)").with_traceback(e.__traceback__) from None
         response["Cache-Control"] = "no-store, private"
         response["Referrer-Policy"] = "same-origin"
+        response["X-Robots-Tag"] = "noindex"  # a result's address is a secret; if one leaks, no search engine lists it
         return response
     return wrapped
 
@@ -305,7 +307,7 @@ def results(request, key):
         {"label": "Delete", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",
          "confirm": "Delete these results now? This can't be undone."})
     response = render(request, "snpportal/results.html", context)
-    response.set_cookie(CURRENT, str(key), max_age=24 * 3600, httponly=True, samesite="Lax")
+    response.set_cookie(CURRENT, str(key), max_age=24 * 3600, httponly=True, samesite="Lax", path=jobs.cookie_path())
     keep_mine(response, [str(key)] + [k for k in _mine_keys(request) if k != str(key)])  # the Score page lists it
     return response
 
@@ -376,7 +378,7 @@ def _mine_keys(request):
 
 def keep_mine(response, keys):
     response.set_cookie(MINE, ",".join(keys[:MAX_MINE]), max_age=int(jobs.keep_seconds() or jobs.FOREVER),
-                        httponly=True, samesite="Lax")
+                        httponly=True, samesite="Lax", path=jobs.cookie_path())
     return response
 
 

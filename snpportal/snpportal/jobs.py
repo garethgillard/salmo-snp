@@ -71,6 +71,12 @@ def setting(name, default):
     return getattr(settings, name, default)
 
 
+def cookie_path():
+    """The path the portal's cookies are sent to: '/', or '/snp/' on a server that shares its host with another site
+    (SNPPORTAL_COOKIE_PATH; deploy/server.sh sets it), so that salmobase's own pages never receive them."""
+    return setting("SNPPORTAL_COOKIE_PATH", "/")
+
+
 _current = contextvars.ContextVar("snpportal_release", default=None)  # I17: the release of this request or job
 
 

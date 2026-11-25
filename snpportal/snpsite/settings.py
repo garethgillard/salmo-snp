@@ -12,9 +12,19 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
 CSRF_TRUSTED_ORIGINS = [f"https://{h}" for h in ALLOWED_HOSTS if h != "*"]
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")  # behind Caddy on the demo server
+# Beside another site on the same host (salmobase's own Django, with the portal at /snp/): the portal's form token has
+# a name of its own, so neither site reads or replaces the other's, and with SNPPORTAL_COOKIE_PATH=/snp/ (set by
+# deploy/server.sh) its cookies are sent to its own pages only. Its pages may be framed by its own pages alone (the
+# Table's drawer frames the Locus browser), and browsers are told not to guess content types.
+CSRF_COOKIE_NAME = "snpportal_csrftoken"
+SNPPORTAL_COOKIE_PATH = os.environ.get("SNPPORTAL_COOKIE_PATH", "/")
+CSRF_COOKIE_PATH = SNPPORTAL_COOKIE_PATH
+X_FRAME_OPTIONS = "SAMEORIGIN"
+SECURE_CONTENT_TYPE_NOSNIFF = True
 STATIC_ROOT = os.environ.get("DJANGO_STATIC_ROOT")  # collectstatic's target; Caddy serves it when DEBUG is off
 INSTALLED_APPS = ["django.contrib.staticfiles", "snpportal"]
-MIDDLEWARE = ["django.middleware.common.CommonMiddleware", "django.middleware.csrf.CsrfViewMiddleware",
+MIDDLEWARE = ["django.middleware.security.SecurityMiddleware", "django.middleware.common.CommonMiddleware",
+              "django.middleware.csrf.CsrfViewMiddleware", "django.middleware.clickjacking.XFrameOptionsMiddleware",
               "snpportal.palette.middleware",  # a viewer's chromatin colours (the locus browser's toggle)
               "snpportal.jobs.middleware"]  # the release each request reads (several releases installed, I17)
 ROOT_URLCONF = "snpsite.urls"

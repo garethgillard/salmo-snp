@@ -71,7 +71,7 @@ def _new():
 def _cookie(response, d):
     keep = jobs.keep_seconds()
     left = jobs.FOREVER if keep is None else max(0, int(keep - _age(d)))
-    response.set_cookie(COOKIE, d.name[len("panel-"):], max_age=left, httponly=True, samesite="Lax")
+    response.set_cookie(COOKIE, d.name[len("panel-"):], max_age=left, httponly=True, samesite="Lax", path=jobs.cookie_path())
     return response
 
 
@@ -431,7 +431,7 @@ def _change(request):
         return back
     if request.POST.get("clear"):
         shutil.rmtree(d, ignore_errors=True)
-        back.delete_cookie(COOKIE)
+        back.delete_cookie(COOKIE, path=jobs.cookie_path())
         return back
     if request.POST.get("remove"):
         s = jobs.read_json(d / "panel.json")

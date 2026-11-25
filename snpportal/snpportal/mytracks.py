@@ -96,7 +96,8 @@ def keep(response, ids):
     """Remember this browser's tracks (a server only: a local install lists its folder)."""
     if not jobs.local():
         response.set_signed_cookie(COOKIE, ",".join(ids[:MAX_TRACKS]), salt=COOKIE,
-                                   max_age=int(jobs.keep_seconds() or jobs.FOREVER), httponly=True, samesite="Lax")
+                                   max_age=int(jobs.keep_seconds() or jobs.FOREVER), httponly=True, samesite="Lax",
+                                   path=jobs.cookie_path())
     return response
 
 
