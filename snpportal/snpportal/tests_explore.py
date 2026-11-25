@@ -264,7 +264,9 @@ class ExploreTest(SimpleTestCase):
         self.assertIn("Not yet validated against known causal variants (n = 6)", edited)
         self.assertTrue(tsv.startswith("# ") and "\nfeature\tpositives" in tsv)
         self.assertContains(local, "--trait all")  # snpscore names single tissues only
-        self.assertContains(local, "salmo-snp download --from site")  # no DATA_URL yet: the GitHub Release steps
+        self.assertContains(local, "<pre class=\"sp-mono mb-0\">salmo-snp download</pre>")  # from DATA_URL (salmobase)
+        self.assertContains(local, "https://salmobase.org/datafiles/datasets/salmo-snp")
+        self.assertNotContains(local, "releases/download/data-")  # no GitHub Release steps any more
         lines = sorted(f"{x['name']} {x.get('sha256')}\n" for x in jobs.release_info()["layers"])  # a self-built release:
         self.assertContains(local, hashlib.sha256("".join(lines).encode()).hexdigest())  # checked by its layers,
         self.assertNotContains(local, jobs.release_info()["sha256"])  # not by its manifest (build date, genome path)

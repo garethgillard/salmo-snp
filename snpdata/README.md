@@ -117,7 +117,9 @@ A published version never changes: build a new version folder instead. `publish`
 manifest. Before publishing, the licence of each layer must allow redistribution (layers.yaml `licence`; for the nf-RASQUAL
 and 504-fish layers the authors agreed, G 2026-11-10): `--raw` redistributes the inputs as
 well as the derived tables. Each salmo-snp version names the release it expects (`snpportal/snpportal/serve.py`
-`RELEASE`), and `DATA_URL` there gets the site's address once it is hosted.
+`RELEASE`), and `DATA_URL` there is the site's address: salmobase, https://salmobase.org/datafiles/datasets/salmo-snp,
+since 2026-11-25. Releases built on Orion go there with `prep/orion_publish.sh`, which links them into salmobase's
+share on Orion instead of copying them, then uploads the share's folder (docs/ORION.md).
 
 ## Release format (the contract with snpscore and the portal)
 

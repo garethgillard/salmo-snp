@@ -491,7 +491,7 @@ def run_locally(request):
                          "sorted(x['name'] + ' ' + str(x.get('sha256')) + chr(10) for x in m['layers'])).encode()).hexdigest())\""),
         "command": f"snpscore annotate my_snps.vcf.gz --release {folder} --trait all -o my_snps.tsv",
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(),
-        "data_url": serve.DATA_URL})  # unset while the data is a GitHub Release (temporary hosting)
+        "data_url": serve.DATA_URL})
 
 
 def state_palette(request):

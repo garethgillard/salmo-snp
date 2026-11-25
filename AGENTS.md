@@ -44,12 +44,13 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
      /snp/, linked from salmobase with a button (not merged into its Django), the release folder mounted;
    - breeding companies and everyone else: the local install.
    Docker and bioconda only wrap the package. Nothing depends on Docker-only features.
-5. The data is hosted online (salmobase or any static web server) as one folder made by `snpdata publish --raw`:
-   releases/<version>/ (the snapshot `salmo-snp download` fetches, with SHA256SUMS), releases/latest.json, and raw/
-   (the input files, genome included, that `snpdata fetch --mirror` rebuilds from). Releases are versioned apart from
-   the code; each salmo-snp version names the one it expects (serve.py RELEASE), and serve.py DATA_URL gets the
-   folder's address once it is hosted. A copy of the folder on a disk works the same (`--from <folder>`), for
-   computers without internet. Fetching public data at given locations (AQUA-FAANG signal for a viewed region) is
+5. The data is hosted online (salmobase or any static web server) as one folder: releases/<version>/ (the snapshot
+   `salmo-snp download` fetches, with SHA256SUMS), releases/latest.json, and with `snpdata publish --raw` raw/ (the
+   input files, genome included, that `snpdata fetch --mirror` rebuilds from). Since 2026-11-25 it is
+   https://salmobase.org/datafiles/datasets/salmo-snp (serve.py DATA_URL; docs/ORION.md "Hosting on salmobase").
+   Releases are versioned apart from the code; each salmo-snp version names the one it expects (serve.py RELEASE). A
+   copy of the folder on a disk works the same (`--from <folder>`), for computers without internet. Fetching public
+   data at given locations (AQUA-FAANG signal for a viewed region) is
    fine; users' SNPs and results are never sent or stored online. Never edit a release by hand: rebuild it
    (snpscore.release.check refuses damaged ones).
 6. GitHub: branches and pull requests; tests on every pull request and push to main; G reviews biology files
@@ -197,8 +198,10 @@ Decided:
 - Builds on Orion, releases on salmobase (G, 2026-11-24): releases are built on Orion from now on ("faster as we can
   run slurm jobs, have access to salmobase data there"), the built snapshots are uploaded to salmobase's data files,
   and the live app and installs retrieve them from there; the work continues in a chat on Orion over SSH. The brief,
-  with what the next build contains and what has to be found out there: docs/ORION.md. Until its pull request
-  changes serve.py DATA_URL and the deploy scripts, the GitHub data releases stay what installs and the demo read.
+  with what the next build contains and what has to be found out there: docs/ORION.md. Publishing (G, 2026-11-25:
+  "We need only to make links and then rsync to salmobase server. Do a test and then if it passes upload the data"):
+  `snpdata/prep/orion_publish.sh`; releases 2026-11-24 and trout-2026-11-24 are there since 2026-11-25, and serve.py
+  DATA_URL, tools/get_data.sh and the demo's species.sh read them from there.
   The same day G set the build's contents (docs/ORION.md has the list): the ChromBPNet scores wait for a later
   build; the AQUA-FAANG citation becomes the published paper; a snapshot holds "only data used in the portal or
   package tool" (no benchmark files); no pool with coding consequences, no fSalSal1 tables and no missense score
@@ -322,16 +325,16 @@ prep/make_fixture_trout.py` in snpdata/ re-cuts it):
 ```bash
 cd snpdata && snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw   # ~80 GB streamed, 2 GB kept
 snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out release/trout-2026-11-13   # ~1.5 h (motifs)
-bash tools/get_data.sh trout-2026-11-13   # or, for the build above: salmo-snp download trout-2026-11-13 --from <published folder>
+bash tools/get_data.sh trout-2026-11-24   # the published release (salmobase); a build: salmo-snp serve --release
 ```
 Without conda: a Python 3.12 venv and `pip install -e "snpscore[test]" -e snpdata -e snpportal`, as CI. `bash tools/user_install_test.sh [python]` checks a new user's install (wheels, the
 newest dependencies allowed, publish -> download -> annotate -> serve); run it after changing packaging,
 dependencies or serve.py.
 
-The data for real use (not needed for the tests): `bash tools/get_data.sh`, the GitHub data release named after
-serve.py RELEASE (temporary hosting until salmobase), checked and copied into the salmo-snp data folder (`salmo-snp
-info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `snpdata build`, then
-`bash prep/github_release.sh <release>`.
+The data for real use (not needed for the tests): `bash tools/get_data.sh` (`salmo-snp download`: the release
+serve.py RELEASE names and its genome, from salmobase), checked and copied into the salmo-snp data folder (`salmo-snp
+info` says where); then `salmo-snp serve`. A new release is built and published on Orion (docs/ORION.md:
+`prep/orion_build.sbatch`, then `prep/orion_publish.sh`).
 
 ## Cloud sessions (Claude Code on the web)
 - Setup: `.claude/settings.json` runs `tools/cloud_setup.sh` at session start (only when CLAUDE_CODE_REMOTE=true): it
@@ -340,10 +343,11 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   no network and no data. A new user's install on other Pythons: `bash tools/user_install_test.sh python3.13` (uv
   fetches others: `uv python install 3.11`, then `$(uv python find 3.11)`). Local auto-memory doesn't reach the cloud: these
   AGENTS.md files are the memory, so record decisions and how-tos here.
-- The container is reclaimed when the session ends: push before stopping. `tools/get_data.sh` (about 20 s) puts the
-  release and the genome in ~/.local/share/salmo-snp; rerun it in each new session that needs them.
-- Network: the default (Trusted) allows GitHub, its release downloads and PyPI, so the tests and
-  `tools/get_data.sh` work. The locus browser's AQUA-FAANG tracks and the genome URL need `salmobase.org`; rebuilding
+- The container is reclaimed when the session ends: push before stopping. `tools/get_data.sh` (a minute or two)
+  puts the release and the genome in ~/.local/share/salmo-snp, from salmobase; rerun it in each new session that
+  needs them.
+- Network: the default (Trusted) allows GitHub and PyPI, so the tests work. `tools/get_data.sh` (the data), the
+  locus browser's AQUA-FAANG tracks and the genome URL need `salmobase.org`; rebuilding
   the data (`snpdata fetch`) needs salmobase.org, ftp.ensembl.org, jun2026.archive.ensembl.org, ftp.ebi.ac.uk,
   ftp.sra.ebi.ac.uk, ftp.ncbi.nlm.nih.gov, jaspar.elixir.no, www.bgee.org and www.biorxiv.org: in the environment's
   settings (the cloud environment menu in the session's title bar, then Edit), Network access, add them under Allowed
@@ -379,33 +383,27 @@ info` says where); then `salmo-snp serve`. A new release goes up from G's Mac: `
   once CI is green; the merge deploys nothing. Before merging, say whether the PR touches the CODEOWNERS
   files (the biology) and wait for G's OK. main's protection asks for a PR and the `tests` check, not approvals (the
   PRs are under G's account, and GitHub doesn't let an author approve). After a merge, the branch restarts from main
-  for the next PR. `deploy/nrec.sh` and new data releases need G's Mac (SSH key, data/raw).
-- Other species on the NREC demo (2026-11-13): `deploy/update.sh` ends with `deploy/species.sh`, which fetches a
-  release named in serve.py RELEASES that the VM lacks from the GitHub data release data-<version> (the release, its
-  genome and, built with `POOL=1 bash prep/github_release.sh`, its pool), checks it and puts it in
-  /srv/snpportal/releases/; settings.py finds that folder beside the default release. A deploy runs the update.sh
-  already on the VM, so a change to these scripts takes effect on the deploy after the one that installs it. Cloud
-  sessions may not create GitHub Releases (the API refuses): G creates data-<version>, or runs the script on a Mac.
-  Without either, the `species-data` workflow (run on main when G asks) builds the trout release from the public
-  sources on GitHub's runners (hours: three cohort jobs, then the build) and sends it with its pool to the VM
-  (`update.sh` `release <version>` -> `species.sh stdin`, checked before it is put in place). A stale pool of any
-  species is the deploy workflow's (update.sh names each stale release; the job builds its pool from the GitHub data
-  release data-<version> and sends it, `update.sh pool <version>`): so trout's needs data-trout-<date> published.
-  A release that exists only on the VM (built by that workflow) goes on GitHub from G's Mac with
-  `bash snpdata/prep/release_from_demo.sh [version] [ssh host]` (copies it, its pool and genome from the VM, then
-  `GENOME=<its genome> POOL=1 bash prep/github_release.sh`); done for trout-2026-11-13 on 2026-11-14.
-  A new trout release, in short: bump serve.py RELEASES, merge, deploy, run `species-data` on main.
-  Since 2026-11-20 the `species-data` workflow takes a species (rainbow_trout or atlantic_salmon): it builds the
-  release serve.py names (RELEASE for salmon) on GitHub's runner, publishes it as the GitHub data release
-  data-<version> itself (prep/github_release.sh with the workflow's token, POOL=1) and sends it to the VM; a salmon
-  release becomes /srv/snpportal/release there (deploy/species.sh), the one it replaces moving to
-  releases/<version> for the results made with it. A new salmon release, in short: bump serve.py RELEASE, merge,
-  deploy, run `species-data` (atlantic_salmon) on main; no Mac needed (deploy/nrec.sh still works).
+  for the next PR. `deploy/nrec.sh` needs G's Mac (SSH key); new data releases are built and published on Orion
+  (docs/ORION.md).
+- The releases on the NREC demo (from salmobase since 2026-11-25): `deploy/update.sh` ends with `deploy/species.sh`,
+  which fetches a release named in serve.py RELEASE or RELEASES that the VM lacks from where the data is published
+  (serve.py DATA_URL: the files of its SHA256SUMS, the genome from the manifest's address, the pool from
+  releases/<version>/pool/), checks it and puts it in place: a salmon release becomes /srv/snpportal/release (the one
+  it replaces moving to releases/<version> for the results made with it), another species' goes in
+  /srv/snpportal/releases/, which settings.py finds beside the default release. A deploy runs the update.sh already
+  on the VM, so a change to update.sh takes effect on the deploy after the one that installs it; species.sh is the
+  new one at once (update.sh runs it after the checkout). A stale pool of any species is the deploy workflow's
+  (update.sh names each stale release; the job builds its pool from the release on salmobase and sends it,
+  `update.sh pool <version>`). A new release, in short: build and publish it on Orion, name it in serve.py RELEASE or
+  RELEASES, merge, deploy. Until 2026-11-24 the releases were GitHub data releases (data-<version>:
+  `prep/github_release.sh`, `prep/release_from_demo.sh`); the `species-data` workflow still builds a release on
+  GitHub's runner and sends it to the VM (`update.sh` `release <version>` -> `species.sh stdin`), but salmon can't
+  build there (its Synchrosmolt input is not online).
 - Deploying the NREC demo (G, 2026-11-06): only when G asks in the chat ("deploy to NREC"), usually after several
   merged pull requests; never on your own initiative, and never a branch. Run the `deploy` workflow on main:
   `gh workflow run deploy.yml --ref main` (cloud sessions, REST only: `gh api -X POST
   repos/garethgillard/salmo-snp/actions/workflows/deploy.yml/dispatches -f ref=main`), or G uses Actions > deploy >
   Run workflow. It runs the tests, then `deploy/update.sh` on the VM (~20 s). Then check
   https://158-39-75-9.sslip.io/snp/health/ and tell G what went live (the merges since the last deploy run). A new
-  data release goes up with the `species-data` workflow (above) or `deploy/nrec.sh` from G's Mac; a stale public pool (after a weights.yaml or snpscore
+  data release is built and published on Orion (docs/ORION.md) and the deploy installs it; a stale public pool (after a weights.yaml or snpscore
   change) is built on GitHub's runner and sent by the same workflow run (snpportal/README.md "Deploying the demo").

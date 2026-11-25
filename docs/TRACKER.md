@@ -81,13 +81,19 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
       gaps did), and `summit`, the nearest ATAC summit inside a robust peak with its distance, signal and rank (no
       gain at eQTL leads over the peak itself). Both are terms with weight 0: in the Table, the card and (pike) the
       Locus browser, never counted, until G sets them (DECISIONS #54, #58). They reach the data with the next release
-- [ ] S3c The next release of both species, built on Orion and published to salmobase (G, 2026-11-24: builds run
+- [x] S3c The next release of both species, built on Orion and published to salmobase (G, 2026-11-24: builds run
       there from now on; the brief, with the build's contents and checks: [ORION.md](ORION.md)). It brings the two
       layers, the Synchrosmolt whole-genome set, the known SVs and their examples, and for salmon the unified peaks
       v5: salmobase replaced the gill and head kidney states on 2026-11-23 (retrained models, the same 328,894
       peaks), so the demo scores with v3 states while its browser tracks already show v5. And the three examples
       release 2026-11-20 lost (public 50k, chip and GWAS: its build never ran prep/make_demo.sh, so the demo has
-      offered only Known loci since). It can also take the ChromBPNet scores if it waits for them
+      offered only Known loci since). It can also take the ChromBPNet scores if it waits for them.
+      Built on Orion on 2026-11-25: `2026-11-24` (18 minutes) and `trout-2026-11-24` (15 minutes), every check
+      passed (ORION.md "On Orion": what was fixed, and the two results explained). Published the same day on
+      salmobase, https://salmobase.org/datafiles/datasets/salmo-snp (links in salmobase's share on Orion, then
+      rsync: `prep/orion_publish.sh`), tested before and after; serve.py `DATA_URL` defaults to it, so installs,
+      `tools/get_data.sh` and the demo's species.sh fetch from there (ORION.md "Hosting on salmobase"). The NREC demo
+      gets the two releases at its next deploy, when G says
 - [ ] S3d A missense effect score, on Orion: the plan is [MISSENSE.md](MISSENSE.md) (a protein language model on one
       GPU, SIFT 4G as the cross-check; 80,820 public missense SNPs; checked against rarity in the 504 fish);
       G's choices: DECISIONS #59
@@ -148,7 +154,8 @@ conversion code (I19, PR #7, 2026-11-06; its data is postponed, G 2026-11-06: se
    sites file fetch makes (frequencies only) and give the source a `url`, and drop that source's `sites_only` and
    `count_gt`: counting genotypes in a file that has none writes every frequency as NULL without an error.
    **Since later that day the builds go to Orion (G, 2026-11-24; [ORION.md](ORION.md) is the brief): the steps
-   below still say what a build needs, wherever it runs.**
+   below still say what a build needs, wherever it runs. Since 2026-11-25 the releases are published on salmobase,
+   not as GitHub data releases (S3c).**
    **Handover for the next releases (SV session, 2026-11-24). G builds the next salmon and trout releases locally
    on his Mac (G, 2026-11-24):**
    - What main already has (PRs #30-#32): SV scoring, live on the demo since the deploy of 257cdf3; the 6 salmon and

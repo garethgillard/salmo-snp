@@ -4,8 +4,9 @@
 # (results made with it keep it); the others in releases/<version>. Two ways in, both checked the same
 # way (every file against SHA256SUMS, the genome against the manifest) before anything is put in place:
 #   species.sh                   update.sh runs this after a deploy: a release that is not in
-#                                /srv/snpportal/releases/<version>/ yet is fetched from this repository's GitHub data
-#                                release data-<version> (prep/github_release.sh with POOL=1), if it is published.
+#                                /srv/snpportal/releases/<version>/ yet is fetched from where the data is published
+#                                (DATA_URL, salmobase: releases/<version>/, every file of its SHA256SUMS, and the pool
+#                                beside it in releases/<version>/pool/), its genome from the manifest's address.
 #   species.sh stdin <version>   update.sh's `release <version>`: the same folders as a tar on stdin (site/releases/
 #                                <version>/, site/raw/ with the genome, pool/), sent by the species-data workflow,
 #                                which builds the release from the public sources on GitHub's runner. Replaces the
@@ -14,7 +15,7 @@
 # can't be fetched is reported and the portal keeps the species it has.
 set -uo pipefail
 ROOT=/srv/snpportal
-REPO=garethgillard/salmo-snp
+DATA_URL=${SALMO_SNP_DATA_URL:-https://salmobase.org/datafiles/datasets/salmo-snp}  # as serve.py DATA_URL
 SERVE=$ROOT/salmo-snp/snpportal/snpportal/serve.py
 
 default_version() { sed -n 's/^RELEASE = "\([^"]*\)".*/\1/p' "$SERVE"; }
@@ -87,14 +88,22 @@ for v in $(named); do
   T=$(mktemp -d "$ROOT/.fetch-XXXXXX")
   (
     set -e
-    names=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/tags/data-$v" |
-            python3 -c "import json, sys; print(*[a['name'] for a in json.load(sys.stdin)['assets']])")
-    for n in $names; do
-      curl -fsSL --retry 3 -o "$T/$n" "https://github.com/$REPO/releases/download/data-$v/$n"
-      tar -xf "$T/$n" -C "$T" && rm "$T/$n"
+    base=$DATA_URL/releases/$v site=$T/site/releases/$v
+    mkdir -p "$site" "$T/site/raw" "$T/pool"
+    curl -fsSL --retry 3 -o "$site/SHA256SUMS" "$base/SHA256SUMS"
+    while read -r _ name; do  # install_site checks each file against these sums
+      case $name in /*|*..*) echo "release $v: unexpected file name in SHA256SUMS: $name" >&2; exit 1 ;; esac
+      mkdir -p "$(dirname "$site/$name")"
+      curl -fsSL --retry 3 -o "$site/$name" "$base/$name"
+    done < "$site/SHA256SUMS"
+    read -r url file < <("$ROOT/venv/bin/python" -c 'import json, sys; g = json.load(open(sys.argv[1]))["genome"]
+print(g["url"], g["file"])' "$site/manifest.json")
+    for ext in "" .fai .gzi; do curl -fsSL --retry 3 -o "$T/site/raw/$file$ext" "$url$ext"; done
+    for f in pool.parquet background.json; do  # without a published pool the VM says it is stale: deploy.yml builds it
+      curl -fsSL --retry 3 -o "$T/pool/$f" "$base/pool/$f" || { rm -rf "$T/pool"; break; }
     done
     install_site "$T" "$v"
-  ) && echo "release $v fetched" || echo "release $v could not be fetched (is data-$v published?)" >&2
+  ) && echo "release $v fetched" || echo "release $v could not be fetched from $DATA_URL (is it published?)" >&2
   rm -rf "$T"
 done
 exit 0

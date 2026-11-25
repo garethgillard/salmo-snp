@@ -11,8 +11,9 @@
 #   SNPDATA_SALMOBASE=<dir>  a copy of salmobase's datafiles folder: fetch reads salmobase's files from it
 #   PREVIOUS=<release>       an earlier release folder: `snpscore diff` lists what changed since
 #   SKIP_FETCH=1             use the inputs as they are (no network)
-#   DATA=<dir> OUT=<dir>     the inputs and where releases go (defaults: data/raw or data/rainbow_trout/raw, release).
-#                            With another DATA the salmon examples (prep/make_demo.sh) are left as they are.
+#   RAW=<dir> OUT=<dir>      the inputs and where releases go (defaults: data/raw or data/rainbow_trout/raw, release).
+#                            With another RAW the salmon examples (prep/make_demo.sh) are left as they are. (Not
+#                            DATA: Orion exports DATA=/data/$USER at every login.)
 set -euo pipefail
 species=${1:?salmon or trout}
 version=${2:?the release name: <date> for salmon, trout-<date> for rainbow trout}
@@ -25,7 +26,7 @@ case "$species:$version" in
   salmon:[0-9]*|trout:trout-[0-9]*) ;;
   *) echo "a salmon release is named <date>, a rainbow trout one trout-<date>" >&2; exit 1 ;;
 esac
-data=${DATA:-$default}
+data=${RAW:-$default}
 out=${OUT:-release}/$version
 [ ! -e "$out" ] || { echo "$out exists: a release never changes, so choose another name (or remove a failed build)" >&2; exit 1; }
 threads=${THREADS:-$(python -c 'import os; print(len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count())')}
