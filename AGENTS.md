@@ -282,8 +282,8 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   overlapping blocks dropped (DECISIONS #37; the alignment postponed, G 2026-11-06: no fSalSal1
   tables in a release until I20).
 - The gill ChromBPNet scores' first set (2026-11-25, DECISIONS #60): until every site is scored, the public and
-  Synchrosmolt SNPs inside the model's own training peaks (216,592 SNPs in the gill MACS2 peaks; under an hour on a
-  GPU), where its predictions mean the most. The layer's percentile is the scorer's, among 100,000 random public
+  Synchrosmolt SNPs inside the model's own training peaks (216,592 SNPs in the gill MACS2 peaks; 216,586 scored in
+  release 2026-11-25, on CPU in about an hour), where its predictions mean the most. The layer's percentile is the scorer's, among 100,000 random public
   SNPs, so 'top 1%' reads the same whichever set is scored.
 - The pike and summit layers (2026-11-24, DECISIONS #54, #58; docs/SCORING.md section 6 has the tests):
   - `pike`: the bases with alignment depth to northern pike in AQUA-FAANG's salmon-trout-pike alignment, alignment

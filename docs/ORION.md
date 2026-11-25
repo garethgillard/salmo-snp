@@ -40,20 +40,31 @@ and trout-2026-11-24.
 
 **The result**, checked from a cloud session on the published files (2026-11-25):
 
-- **Salmon `2026-11-25`**: `chrombpnet_gill` has 216,586 SNPs with score, percentile and effect (105,604 predicted
-  more accessible, 110,981 less), built from the file the ChromBPNet work published at 13:01 GMT (the manifest's
-  source checksum is the published one, 88007cf6...); 176,598 of them are public sites. Every other layer has the
-  rows of 2026-11-24, and the pool's 3,436,671 sites are in the same tiers to the SNP (13,048, 211,572, 291,705,
-  2,920,346).
-- **Trout `trout-2026-11-25`**: `chromatin` 205,722 peaks in 19 conditions; `summit` 1,383,135 from 18 peak files
-  (PBS's among them, Vibrio's not); `motif` 1,083,423, the number predicted; tracks.yaml with 733 signal tracks and
-  19 state and 19 peak tracks; the new wording and samples. The pool's 3,372,181 sites: tiers 0.28%, 4.98%, 5.05%
-  and 89.69% (9,592, 167,768, 170,441, 3,024,380; before: 9,368, 166,066, 164,629, 3,032,118).
-- **The installer**: `salmo-snp download` fetched the salmon release from the address with every file matching its
-  checksum, and `snpscore verify` passed. The portal on it: the Table's Scores column, the Locus browser's effects
-  row and the card's Predict button (none of the 40 known-loci SNPs lies in a gill peak, so each shows 'not scored'
-  and the button is how to see its prediction). For trout the manifest, the pool and tracks.yaml were read from the
-  address.
+- **Salmon `2026-11-25`** (built from main d48f4a6 in 7 minutes): `chrombpnet_gill` has 216,586 SNPs with score,
+  percentile and effect (105,604 predicted more accessible, 110,981 less), built from the score file published at
+  13:01 GMT (the manifest's source checksum is the published one, 88007cf6...). The set was the 216,592 single-base
+  SNPs of release 2026-11-24 inside the model's 212,433 training peaks: 176,604 public sites and 39,988 only in the
+  Synchrosmolt set. Six are not scored, on chromosome 15 at positions 318 to 531: within 1,057 bp of the
+  chromosome's end, where the model's window does not fit. `chromatin` is v6, its states in all 27 conditions equal
+  to 2026-11-24's row by row, with `summary` filled. Every other layer has the rows of 2026-11-24 (`transcripts`
+  and `transcripts_ncbi` in another order), and the pool's 3,436,671 sites are in the same tiers to the SNP
+  (13,048, 211,572, 291,705, 2,920,346).
+- **Trout `trout-2026-11-25`** (11 minutes): `chromatin` 205,722 peaks in 19 conditions; `summit` 1,383,135 from 18
+  peak files (PBS's among them; Vibrio's summits were skipped, #64); `motif` 1,083,423, the number predicted;
+  tracks.yaml with 733 signal tracks and 19 state and 19 peak tracks; the new wording and samples. The pool's
+  3,372,181 sites: tiers 0.28%, 4.98%, 5.05% and 89.69% (9,592, 167,768, 170,441, 3,024,380; before: 9,368,
+  166,066, 164,629, 3,032,118). `snpscore diff` lists `chromatin`, `summit` and `motif`, and the two transcript
+  layers for their row order.
+- **The installer**, on Orion and again from a cloud session: `salmo-snp download` fetched both releases from the
+  address with every file matching its checksum, and `snpscore verify` passed on both. The portal on them: for
+  salmon the Table's Scores column, the Locus browser's effects row and the card's Predict button (none of the 40
+  known-loci SNPs lies in a gill peak, so each shows 'not scored' and the button is how to see its prediction); for
+  trout the 19 conditions with the 'HK PBS' and 'HK Vibrio' rows and the new state in the legend.
+- **Who made the scores**: the build chat on Orion itself, with the model release's own scorer on CPU (onnxruntime,
+  in salmo-chrombpnet's scorer environment): 48 SLURM tasks of 4 CPUs, about an hour; the scorer's self-test
+  passed. One fold model takes about 4.6 GB at batch 32, and 8 GB was not enough: 16 GB for a 4-CPU task, 32 GB for
+  the self-test. The scripts and the full per-SNP tables (JSD and the scorer's other scores) are in
+  `/mnt/project/ELIXIR/salmo-snp/chrombpnet_gill/`.
 - Worth knowing about the scores: SNPs in gill peaks do not rank high by |log2 fold change| alone. Their median
   percentile among the 100,000 random SNPs is 0.44, and 0.7% are in the top 1%. The score is a relative change, and
   the scorer's active-allele quantile, which says whether the place is accessible at all, is not in the layer.
@@ -96,8 +107,9 @@ and trout-2026-11-24.
 
 ### What it needed
 
-1. **The gill scores, from the ChromBPNet work** (its own repository and chat on Orion): published in time, at
-   13:01 GMT on 2026-11-25, with 216,586 of the 216,592 SNPs asked for. A build does not wait for
+1. **The gill scores**: asked of the ChromBPNet work (its own repository and chat on Orion), and made in the end
+   by the build chat with the model release's scorer (above). Published in time, at 13:01 GMT on 2026-11-25, with
+   216,586 of the 216,592 SNPs asked for. A build does not wait for
    them (G, 2026-11-25: the release "might not include chrombpnet scores"): while the file is not at the address
    layers.yaml names, `snpdata fetch` says so and goes on, and `snpdata build` leaves the layer out; the build after
    the file is published takes it. The portal can predict one SNP at a time without the file (the card's button:
@@ -121,6 +133,9 @@ and trout-2026-11-24.
       (variants.Gill.bed) are welcome beside it.
    Later, not now (G, 2026-11-25): every public and Synchrosmolt site, 9,288,186 SNPs, about 35 GPU-hours.
    ```
+
+   (The public sites among them are 176,604: the 176,608 counted four public records with longer alleles, from
+   before the single-base rule.)
 
    The scorer was tried in a cloud session (4 cores, no GPU): its scores of 44 of the model's test SNPs equal the
    published ones to 0.00001, and it takes 0.3 to 0.5 s a SNP there. The fixture's 697 scores were made that way
@@ -161,6 +176,11 @@ MODE=dry bash prep/orion_publish.sh <date> trout-<date>      # only after the ch
 
 On Orion these run as SLURM jobs (`prep/orion_build.sbatch`, "On Orion" below); elsewhere `snpdata publish
 release/<version> --to <a folder>` lays out the same folder by copying.
+
+Two things to do by hand, both met on 2026-11-25. `snpdata fetch` downloads only the files that are missing, so an
+input that changed under the same address (the unified peaks, v5 to v6) is not fetched again: move the old file
+aside before the build. And `orion_publish.sh` writes the first version it is given into `latest.json`: give the
+salmon release first.
 
 It runs, and stops at the first that fails: `snpdata fetch` (a file already there is kept), for salmon
 `prep/make_demo.sh` (the three example inputs: the step release 2026-11-20 missed), `snpdata build` with DuckDB's
@@ -274,7 +294,12 @@ matched its checksum.
    next deploy: species.sh now removes a release the code no longer names once nothing kept on the server was made
    with it (G, 2026-11-25), before it fetches, so the room counts (4.9 GB were free, under the 5 GB a fetch asks for).
 2. So that `snpscore diff` lists only real changes: write positional layers in a full order (every column after
-   `chrom, start`), which gives the same bytes on any number of threads.
+   `chrom, start`), which gives the same bytes on any number of threads. Two questions for G from the builds of
+   2026-11-25, neither changed yet:
+   - Should `fetch` download a file again when salmobase's copy has changed (its size or Last-Modified)? Today a
+     changed input is used only if the old file is moved aside. Recommended: yes, for salmobase's files, saying so.
+   - Should `build_release.sh` pass `--reuse <the release before>`? Every layer is computed again today; with it an
+     unchanged layer is copied byte for byte, and the diff lists only real changes. Recommended: yes.
 3. Before anyone uses `salmo-snp download latest` or `snpdata publish --raw` for both species: the first two
    faults below.
 
