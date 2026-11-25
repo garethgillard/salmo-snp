@@ -272,6 +272,13 @@ Decided:
   Claude's choices, PROVISIONAL (DECISIONS #65): the portal shows the releases its version names, not a newer one
   in the folder; the server builds no pool (they come from Orion with the release). The NREC demo stays until G
   says otherwise.
+  What the live site shows from outside (2026-11-25; docs/SALMOBASE.md has it): Apache 2.4 on Debian in front,
+  salmobase's own Django behind it, `/snp/` free on salmobase.org and test.salmobase.org. So the portal is a second
+  application on one host name: its cookies have names of their own and the path `/snp/` on a server, and it was
+  tried behind Apache beside a stand-in for salmobase's site. Neither salmobase's source nor the server could be
+  read from a cloud session: what is still unknown is a table in docs/SALMOBASE.md, filled in by the survey.
+  Navigation between salmobase's pages and the portal is left for later (G, 2026-11-25: "Don't worry about
+  navigation to and from salmobase for now"): the portal is an address.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,

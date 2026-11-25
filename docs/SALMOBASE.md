@@ -1,8 +1,9 @@
 # The portal on the salmobase server: brief (2026-11-25)
 
 This brief is for the chat that deploys the portal on the salmobase server: the chat on Orion over SSH, which also
-builds and publishes the data releases ([ORION.md](ORION.md)). Nothing here has been run on the server yet. Every
-command was tried in a cloud session on a mock of the server's folders made from the published releases. Read
+builds and publishes the data releases ([ORION.md](ORION.md)). Nothing here has been run on the server yet. It was
+tried in a cloud session on a mock of the server: its datafiles folder made from the published releases, mounted
+read only, and Apache in front of a stand-in for salmobase's own site with the portal beside it. Read
 [../AGENTS.md](../AGENTS.md) first: its rules apply here too. Keep this file up to date as the work goes on.
 
 ## Who does what (G, 2026-11-25)
@@ -49,6 +50,52 @@ says (AGENTS.md "Deploying the NREC demo").
   100 MB of memory at rest and 1.3 GB at the most while the examples were scored (a job may take 2 GB:
   `SNPPORTAL_DUCKDB_MEMORY`); two threads a job, one job at a time; it answers five seconds after it starts.
 
+## What is known about the server
+
+Seen from outside on 2026-11-25, with ordinary requests to the public site, and from the publishing work:
+
+- **Apache 2.4.68 on Debian** is in front, on salmobase.org and on test.salmobase.org. It answers `/datafiles/` (a
+  listing of the folder) and `/static/` itself.
+- **salmobase's own pages come from a Django application behind it**, which answers as Django's own server
+  (`WSGIServer/0.2 CPython/3.12.16`): the home page, `/jbrowse/`, `/robots.txt`. So Apache already proxies, and a
+  Python 3.12 runs wherever that application does (on the server itself or in a container).
+- **`/snp/` is free**: both hosts answer 404 there, from salmobase's application.
+- salmobase's pages set no cookie on the pages looked at (home, the BLAST form); its admin pages would, under
+  Django's usual names. They load Bootstrap 5.1.3, a cookie-consent script and Google's tag manager from other
+  sites. Its robots.txt disallows `/admin/` only.
+- From Orion, `ssh salmobase` is the live server (web-05.orion.nmbu.no) and `ssh test.salmobase` the test server;
+  the user's `datafiles/` there is the served folder, with the releases in `datasets/salmo-snp/releases/`.
+
+Not known, and not visible from outside: how that Django application is started and by whom, whether the server has
+Docker, how much memory it has, where Apache's virtual host file is and who may edit it. The survey below answers
+the first three; the table at the end collects all of it.
+
+## Beside salmobase's own site
+
+The portal is a second application on the same host name. What keeps the two apart, each point tried behind Apache
+with a stand-in for salmobase's application (a Django site with a form of its own):
+
+- **Addresses**: everything of the portal is under `/snp/`: its pages, its forms and its static files
+  (`/snp/static/`). It answers nothing else, and salmobase's `/static/` and `/datafiles/` are not touched.
+- **Cookies**: the portal's have names of their own (`snpportal_csrftoken`, `snpportal_*`, `snp_species`) and the
+  path `/snp/` (`SNPPORTAL_COOKIE_PATH`, which server.sh sets), so salmobase's pages never receive them, and the
+  portal neither reads nor replaces Django's usual `csrftoken` of salmobase's forms. Tried with one browser on both
+  sites: each site's form was accepted with the other's cookies present, and the stand-in received only its own.
+- **Headers**: its pages may be framed by its own pages only, browsers are told not to guess content types, and a
+  result's page is never stored by caches or listed by search engines.
+- **No request to other sites**: Bootstrap and htmx come with the package. salmobase's cookie-consent script and
+  tag manager are not on the portal's pages.
+- **Its own process**: a port on 127.0.0.1, its own Python environment or container, its own data folder. It shares
+  no database, no code and no session with salmobase's application. While it is stopped or being updated the site
+  answers as before, and `/snp/` answers 503 from Apache.
+- **What it may use**: one list is scored at a time (others wait, at most ten), with two threads and 2 GB at the
+  most; an upload is at most 300 MB and is deleted once scored; results go after 24 hours. To be sure that it
+  cannot starve the site, give it a ceiling: `--memory 4g --cpus 2` for the container, `MemoryMax=4G` and
+  `CPUQuota=200%` in the service file (both are in the commands below).
+
+Navigation between salmobase's pages and the portal (a menu entry there, a way back here) is left for later (G,
+2026-11-25): until then the portal is an address, `https://salmobase.org/snp/`.
+
 ## Step 0: look at the server
 
 `snpportal/deploy/survey.sh` only reads; it creates, changes and starts nothing. From the clone on Orion:
@@ -82,7 +129,7 @@ cd ~/salmo-snp/code && git fetch -q origin main && git checkout -q --detach <com
 docker build -f snpportal/deploy/Dockerfile -t salmo-snp:<commit> .
 mkdir -p ~/salmo-snp/data && sudo chown 1000 ~/salmo-snp/data                # the container's user; once
 docker rm -f salmo-snp 2> /dev/null
-docker run -d --name salmo-snp --restart unless-stopped -p 127.0.0.1:8090:8000 \
+docker run -d --name salmo-snp --restart unless-stopped -p 127.0.0.1:8090:8000 --memory 4g --cpus 2 \
   -v <the datafiles folder>:/datafiles:ro -v ~/salmo-snp/data:/data \
   -e DJANGO_ALLOWED_HOSTS=salmobase.org salmo-snp:<commit>
 docker logs salmo-snp 2>&1 | head
@@ -116,6 +163,8 @@ Environment=SNPPORTAL_BIND=127.0.0.1:8090
 Environment=DJANGO_ALLOWED_HOSTS=salmobase.org
 ExecStart=/bin/sh %h/salmo-snp/code/snpportal/deploy/server.sh
 Restart=on-failure
+MemoryMax=4G
+CPUQuota=200%
 
 [Install]
 WantedBy=default.target
@@ -127,7 +176,9 @@ journalctl --user -u salmo-snp -n 20 --no-pager
 ```
 
 The same script was tried this way in a cloud session on the mock (started by hand, as there is no systemd there).
-The unit file itself has not been tried.
+The unit file itself has not been tried. A user service applies `MemoryMax` and `CPUQuota` only where the system
+lets users set them; where it does not, they are ignored without an error, and the portal's own limits still hold
+(`systemctl --user show salmo-snp -p MemoryMax -p CPUQuotaPerSecUSec` says what is in force).
 
 ## What the service says when it starts
 
@@ -142,21 +193,36 @@ table above says. The portal still works, reading those from `https://salmobase.
 reaches its own public name. `no release at ...`: the version names a release that is not in the releases folder
 (not published, or the folder is not the one set). `PUBLIC POOL MISSING OR BUILT FOR OTHER WEIGHTS`: see below.
 
-## Apache, once (whoever administers the server)
+## Apache, once (whoever may edit its configuration)
 
-In salmobase's virtual host:
+In the virtual host of salmobase.org (on Debian a file in `/etc/apache2/sites-available/`; the survey lists the
+enabled ones and their proxy lines):
 
 ```apache
-ProxyPass        /snp/ http://127.0.0.1:8090/snp/
-ProxyPassReverse /snp/ http://127.0.0.1:8090/snp/
-ProxyPreserveHost On
-RequestHeader set X-Forwarded-Proto "https"
-ProxyTimeout 300
-LimitRequestBody 314572800
+<Location /snp/>
+    ProxyPass        http://127.0.0.1:8090/snp/ timeout=300
+    ProxyPassReverse http://127.0.0.1:8090/snp/
+    ProxyPreserveHost On
+    RequestHeader set X-Forwarded-Proto "https"
+    LimitRequestBody 314572800
+</Location>
 ```
 
-The last two are for uploads: lists of up to 300 MB, scored for up to five minutes before the page answers. Then
-the button on salmobase that links to `/snp/`.
+```bash
+sudo a2enmod proxy proxy_http headers      # the first two are on already, as Apache proxies salmobase's own pages
+sudo apache2ctl configtest && sudo systemctl reload apache2
+curl -s https://test.salmobase.org/snp/health/
+```
+
+- Everything in the block applies to `/snp/` alone, so salmobase's own proxy rule is not changed.
+- Tried on Apache 2.4.71 in front of a stand-in for salmobase's application that took every other address: the
+  block wins wherever it stands in the file. Written as plain `ProxyPass /snp/ ...` lines instead, it must stand
+  above the rule that sends everything else to salmobase's application, or that application answers `/snp/` (404).
+- `timeout=300` and `LimitRequestBody` are for uploads: lists of up to 300 MB, scored for up to five minutes before
+  the page answers. `X-Forwarded-Proto` tells the portal that the visitor came by https, so that it marks its
+  cookies for https only (its forms were accepted without the line too, in the trial).
+- Through that Apache the smoke test passed for both species, a file was uploaded and scored, and the stand-in's
+  own form kept working. With the portal not running, `/snp/` answered 503 and the stand-in's pages 200.
 
 ## Check a deploy
 
@@ -177,6 +243,32 @@ smoke: ok
 
 It ends with `smoke: ok` or says which example failed, and exits accordingly. `EXAMPLES=known_loci` scores only
 that one. The health page alone: `/snp/health/?tracks=1`.
+
+## Working from Orion
+
+- Every command on the server is `ssh salmobase '<command>'` (or `ssh test.salmobase`) from a login node. A login
+  node cuts a long connection (an rsync after about ten minutes), so start anything long detached and read its log:
+  `ssh salmobase 'cd ~/salmo-snp/code && nohup docker build -f snpportal/deploy/Dockerfile -t salmo-snp:<commit> . > ~/salmo-snp/build.log 2>&1 &'`,
+  then `ssh salmobase 'tail -3 ~/salmo-snp/build.log'`.
+- **If the server does not reach GitHub or PyPI** (the survey's last lines): send Orion's clone instead of cloning
+  there, `rsync -a --delete --exclude .git ~/git/salmo-snp/ salmobase:salmo-snp/code/` (the copy is then at the
+  commit Orion's clone is at, and the `git` lines above are skipped; `--delete` here touches that copy of the code
+  alone), and for way B build the packages on Orion with the Python version the server has and send them:
+
+  ```bash
+  pip wheel -w ~/salmo-snp-wheels ./snpscore "./snpportal[chrombpnet]" gunicorn
+  rsync -a ~/salmo-snp-wheels/ salmobase:salmo-snp/wheels/
+  ssh salmobase '~/salmo-snp/venv/bin/pip install --no-index --find-links ~/salmo-snp/wheels --upgrade snpscore "salmo-snp[chrombpnet]" gunicorn'
+  ```
+
+  Not tried. For way A the image can be built where Docker is and sent with `docker save | ssh salmobase docker load`.
+- **If the server has no Python 3.11 or newer and no Docker**: `uv` installs one without administrator rights
+  (`curl -LsSf https://astral.sh/uv/install.sh | sh`, then `uv python install 3.12` and `uv venv --python 3.12
+  ~/salmo-snp/venv`), if the server reaches GitHub. Not tried there. If the survey shows Orion's project storage
+  mounted on the server, tell G before using an environment from it: the server would then depend on that mount.
+- **Logs**: `docker logs salmo-snp` or `journalctl --user -u salmo-snp`. They hold event names, a job's reference,
+  counts and timings, never a SNP or a file name. Nothing else needs looking after: results delete themselves, and
+  `free_gb` on the health page is the room left in the data folder.
 
 ## Update to a new version
 
@@ -211,16 +303,19 @@ Fill this in from the survey, and tell G what it means for the way to install.
 
 | | test.salmobase | salmobase |
 |---|---|---|
-| Operating system, cores, memory | | |
-| The datafiles folder's path | | |
-| The user the portal runs as | | |
-| Docker or Podman | | |
-| Python 3.11 or newer | | |
-| A service this user may keep running | | |
-| Who edits Apache | | |
+| Operating system (Debian, by Apache's answer), cores, memory | | |
+| The datafiles folder's path, and whether both servers serve the same one | | |
+| The user the portal runs as, and the room in its home | | |
+| Docker or Podman, usable by that user | | |
+| Python 3.11 or newer outside salmobase's own environment | | |
+| A service this user may keep running (`Linger`) | | |
+| How salmobase's own application is started (it must not be disturbed) | | |
+| Apache's virtual host file, and who may edit it | | |
 | The port (8090 unless taken) | | |
 | Reaches GitHub, PyPI, Docker Hub | | |
 
-Open, for G (DECISIONS #66 to #68): whether the portal should take the newest published release by itself instead
-of the one its version names; a tagged version for each deploy instead of a commit of main; when the NREC demo is
-switched off.
+For G: who edits Apache's configuration on the two servers (the one step that needs an administrator); whether the
+portal should carry salmobase's cookie-consent and tag-manager scripts (it carries none); the menu entry on
+salmobase and the way back, later; and DECISIONS #67 and #68 (whether the portal should take the newest published
+release by itself, and how the build chat hands back). Also open: a tagged version for each deploy instead of a
+commit of main, and when the NREC demo is switched off.

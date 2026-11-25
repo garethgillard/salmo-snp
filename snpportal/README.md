@@ -118,6 +118,10 @@ installing and updating it there, with the commands; in short:
   `SNPSCORE_GENOME_DIR` name a release folder and the genomes, as on the NREC demo.
 - `SNPPORTAL_DATA` (`/data` in the container) holds results, the secret key and, outside a container, the static
   files. Nothing else is written.
+- Beside salmobase's own Django on the same host name: the portal's cookies have names of their own
+  (`snpportal_csrftoken`, not Django's usual `csrftoken`) and, with `SNPPORTAL_COOKIE_PATH=/snp/` (server.sh sets
+  it), are sent to its own pages only; its pages may be framed by its own pages alone (the Table's drawer frames the
+  Locus browser), and a result's page says `noindex`.
 - The public pool is read from the release's `pool/`. A release folder the portal may write to gets its pool built
   at the start; a published folder is read only, and its pools are built on Orion and published with the release.
 - `deploy/survey.sh` reads what a server offers (it changes nothing); `../tools/smoke.sh <address>` tests a running
@@ -125,7 +129,9 @@ installing and updating it there, with the commands; in short:
 
 Tried in a cloud session on 2026-11-25 against a mock of the server's folders made from releases 2026-11-25 and
 trout-2026-11-25 (the datafiles folder read only): as a plain process and as the container, the smoke test passed,
-a prediction ran from the model files in place, and nothing in the datafiles folder changed.
+a prediction ran from the model files in place, and nothing in the datafiles folder changed. And behind Apache
+2.4, beside a stand-in for salmobase's own Django that took every other address: the smoke test and an upload
+passed through the proxy, and each site's forms worked with the other's cookies in the same browser.
 
 ## How it works
 

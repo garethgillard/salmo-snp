@@ -11,6 +11,10 @@ id; hostname -f 2>/dev/null || hostname; uname -srm
 
 say "cores, memory, disk"
 nproc; try free -g; try df -h "$HOME" /data /srv /var
+ls -ld "$HOME" 2>&1
+for d in /mnt/project/ELIXIR /net/fs-2/scale/OrionStore/Projects/ELIXIR; do  # Orion's project storage, if it is mounted here too
+  [ -d "$d" ] && echo "Orion's storage is here: $d ($(ls "$d" 2> /dev/null | head -5 | tr '\n' ' '))"
+done
 
 say "the datafiles folder (what https://salmobase.org/datafiles/ serves)"
 for d in "$HOME/datafiles" /data/datafiles /srv/datafiles; do
@@ -33,9 +37,14 @@ try crontab -l
 
 say "the web server and what runs salmobase"
 ps -eo user:12,pid,args --no-headers 2> /dev/null | grep -E 'httpd|apache2|nginx|caddy|gunicorn|uwsgi|daphne|manage\.py|node |java ' | grep -v grep | cut -c1-160 | head -25
-for f in /etc/httpd/conf.d /etc/httpd/conf /etc/apache2/sites-enabled /etc/nginx/conf.d /etc/nginx/sites-enabled; do
-  [ -d "$f" ] && echo "$f: $(ls "$f" 2>&1 | tr '\n' ' ')" && grep -rhE '^\s*(ProxyPass|proxy_pass|ServerName|server_name|Alias|DocumentRoot)\b' "$f" 2> /dev/null | sort -u | head -30
+for pid in $(pgrep -f 'manage\.py' 2> /dev/null | head -3); do  # where salmobase's own application runs from, if this user may see it
+  echo "pid $pid runs in $(readlink "/proc/$pid/cwd" 2>&1)"
 done
+for f in /etc/httpd/conf.d /etc/httpd/conf /etc/apache2/sites-enabled /etc/nginx/conf.d /etc/nginx/sites-enabled; do
+  [ -d "$f" ] && echo "$f: $(ls "$f" 2>&1 | tr '\n' ' ')" && grep -rhE '^\s*(<VirtualHost|<Location|ProxyPass|ProxyPreserveHost|RequestHeader|proxy_pass|ServerName|ServerAlias|server_name|Alias|DocumentRoot|LimitRequestBody|ProxyTimeout|Header)\b' "$f" 2> /dev/null | head -40
+done
+[ -d /etc/apache2/mods-enabled ] && echo "Apache modules on: $(ls /etc/apache2/mods-enabled | grep -E '^(proxy|proxy_http|headers|ssl|rewrite)\.load' | tr '\n' ' ')"
+command -v docker > /dev/null && { docker compose ls 2>&1 | head -8; }
 
 say "ports in use"
 (ss -ltn 2> /dev/null || netstat -ltn 2> /dev/null) | head -30

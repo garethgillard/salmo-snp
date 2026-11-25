@@ -202,8 +202,12 @@ plan in [ORION.md](ORION.md), the data synced to salmobase, the app to move ther
       plain process and as the container with the data mounted read only
 - [x] One scripted test (#66): `tools/smoke.sh` for a running portal, `prep/release_test.sh` for built releases
       before they are published, and at the end of the NREC deploy workflow
+- [x] The portal beside salmobase's own site on one host name (2026-11-25): what the live site shows from outside
+      (Apache on Debian in front of salmobase's Django; `/snp/` free), its own cookie names and path, frame and
+      no-index headers, and a trial behind Apache with a stand-in for salmobase's site (SALMOBASE.md)
 - [ ] On the salmobase server, by the Orion chat when G says: the survey, the install on the test server, Apache's
-      lines, the smoke test, then the live server (SALMOBASE.md)
+      lines (someone who may edit its configuration), the smoke test, then the live server (SALMOBASE.md)
+- [ ] Later (G, 2026-11-25): navigation between salmobase's pages and the portal
 - [ ] Which release is current said by the publisher (`latest.json`, one version per species) for the live app (#67)
 - [ ] The build chat's hand-back (#68)
 
