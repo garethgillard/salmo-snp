@@ -189,10 +189,26 @@ inside its `<VirtualHost>`, after the `<Location /docs>` block and before `Proxy
   container of the portal is found at once. The three `Header` lines keep salmobase's JBrowse headers off the
   portal's answers.
 - Two ways to put it in place, both only when G says, as both act on salmobase's own container:
-  - **For good**: a merge request to salmobase's repository with the block, then, with the merge pulled into
-    `src/salmobase` on the server, salmobase's `app` image built again and its container replaced, the way its
-    maintainers do it (in salmobase's compose folder: `docker compose build app && docker compose up -d app`). The
-    whole site is away for the seconds that takes.
+  - **For good**: a merge request to salmobase's repository, which G accepts (G, 2026-11-25: "I have access to
+    the repo and can accept the pull"). The change is ready as a file, `snpportal/deploy/salmobase-snp.patch` (the
+    block with a comment; it applies to salmobase's `master` and `dev`). From a clone of salmobase with the right to
+    push, the last command opens the merge request by itself:
+
+    ```bash
+    git fetch origin && git checkout -b snp-portal origin/master
+    git apply <the salmo-snp clone>/snpportal/deploy/salmobase-snp.patch
+    git commit -am "feat: send /snp to the functional SNP portal's container"
+    git push -u origin snp-portal -o merge_request.create -o merge_request.target=master \
+      -o merge_request.title="Send /snp to the functional SNP portal's container"
+    ```
+
+    What to say in it: the portal (https://github.com/garethgillard/salmo-snp) runs as a container of its own that
+    joins this project's network as `snp`, from a compose file in its own repository, so `docker-compose.yml` here
+    does not change; everything of it is under `/snp/` and no other address changes; where no such container runs
+    (the devcontainer) Apache starts as before and `/snp` answers an error; its cookies do not meet this site's.
+    Then, with the merge pulled into `src/salmobase` on the server, salmobase's `app` image is built again and its
+    container replaced, the way its maintainers do it (in salmobase's compose folder: `docker compose build app &&
+    docker compose up -d app`). The whole site is away for the seconds that takes.
   - **To try it on the test server first, without building anything**: put the edited file into the running
     container and let Apache read it again, which interrupts nothing. It lasts until that container is replaced.
 
@@ -339,8 +355,9 @@ Fill this in from the survey, and tell G what it means.
 | The port on 127.0.0.1 for the checks (8090 unless taken) | | |
 | Reaches GitHub, PyPI, Docker Hub | | |
 
-For G: who merges the block into salmobase's repository and replaces its `app` container (the one step that acts
-on salmobase itself); whether the portal should carry salmobase's cookie-consent and tag-manager scripts (it
+For G: the merge request with the block is G's to accept (above); who then replaces salmobase's `app` container on
+the two servers, and which of salmobase's branches each server runs (`master` or `dev`: the merge request goes to
+that one); whether the portal should carry salmobase's cookie-consent and tag-manager scripts (it
 carries none); the menu entry on salmobase and the way back, later; and DECISIONS #67 and #68 (whether the portal
 should take the newest published release by itself, and how the build chat hands back). Also open: a tagged version
 for each deploy instead of a commit of main, and when the NREC demo is switched off.

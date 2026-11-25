@@ -1,0 +1,31 @@
+The one change in salmobase's own repository (https://gitlab.com/elixir-nmbu/salmobase) for the functional SNP portal:
+a block in its Apache file that sends /snp to the portal's container. docs/SALMOBASE.md says how it becomes a merge
+request there. Made against salmobase's master at 9b1f40e (2026-10-28); it applies to its dev branch as well.
+In a clone of salmobase:  git apply <this file>
+
+diff --git a/server_config/apache2/salmobase.conf b/server_config/apache2/salmobase.conf
+index ea4066e..c4d58d7 100644
+--- a/server_config/apache2/salmobase.conf
++++ b/server_config/apache2/salmobase.conf
+@@ -30,6 +30,21 @@ ServerName ${SERVER_NAME}
+     	ProxyPassReverse http://docs:80/
+ 	</Location>
+ 
++	# The functional SNP portal (https://github.com/garethgillard/salmo-snp): a container of its own, on this
++	# network under the name `snp`. Its pages, forms and static files are all under /snp/. disablereuse: the name is
++	# looked up for each request, so a new container of the portal is found without a restart here. The portal's
++	# answers do not carry the JBrowse CORS headers set above. While no such container runs, /snp answers an error
++	# and nothing else changes.
++	<Location /snp>
++		ProxyPass http://snp:8000/snp timeout=300 disablereuse=On
++		ProxyPassReverse http://snp:8000/snp
++		RequestHeader set X-Forwarded-Proto "https"
++		LimitRequestBody 314572800
++		Header onsuccess unset Access-Control-Allow-Origin
++		Header onsuccess unset Access-Control-Allow-Headers
++		Header onsuccess unset Access-Control-Expose-Headers
++	</Location>
++
+ 	ProxyPass /datafiles !
+ 	ProxyPass /static !
+ 	ProxyPass / http://127.0.0.1:8000/

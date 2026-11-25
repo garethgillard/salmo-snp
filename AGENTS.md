@@ -277,7 +277,9 @@ Decided:
   container, its configuration copied into the image, `/docs` sent to the docs container by name, and `/snp` free.
   So the portal is a container of its own in a compose project of its own (`deploy/compose.salmobase.yml`) on
   salmobase's network, named `snp`, and one block in salmobase's Apache file sends `/snp` to it: the one change in
-  salmobase's repository. Being a second Django on one host name, its cookies have names of their own and the path
+  salmobase's repository, kept here as `deploy/salmobase-snp.patch` for a merge request there, which G accepts (G,
+  2026-11-25: "I have access to the repo and can accept the pull"; a cloud session has no GitLab login, so the
+  branch is pushed from a clone that has: G's, or Orion's). Being a second Django on one host name, its cookies have names of their own and the path
   `/snp/`. Tried with salmobase's real Apache file and a stand-in for its Django. The server itself cannot be
   reached from a cloud session: what is still unknown is a table in docs/SALMOBASE.md, filled in by the survey.
   Navigation between salmobase's pages and the portal is left for later (G, 2026-11-25: "Don't worry about

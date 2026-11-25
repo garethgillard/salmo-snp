@@ -109,7 +109,8 @@ commands; in short:
 - salmobase runs as a Docker Compose project with Apache inside its `app` container (its repository:
   https://gitlab.com/elixir-nmbu/salmobase). The portal is a container of its own in a compose project of its own
   (`deploy/compose.salmobase.yml`) on salmobase's network, named `snp`; one block in salmobase's Apache file sends
-  `/snp` to it, as that file already sends `/docs` to salmobase's docs container.
+  `/snp` to it, as that file already sends `/docs` to salmobase's docs container (`deploy/salmobase-snp.patch` is
+  that change, for a merge request to salmobase's repository).
 - `deploy/server.sh` starts it (in the image of `deploy/Dockerfile`, or from a virtual environment on a server
   without Docker): the secret key, a look at each species' release (`manage.py snpportal_prepare`), Django's checks,
   an hourly cleanup, gunicorn. gunicorn serves everything under `/snp/`, static files included

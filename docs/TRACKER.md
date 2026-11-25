@@ -209,9 +209,11 @@ plan in [ORION.md](ORION.md), the data synced to salmobase, the app to move ther
       Apache inside its `app` container, so the portal is a container of its own on salmobase's network
       (`deploy/compose.salmobase.yml`) and one block in salmobase's Apache file sends `/snp` to it; tried with
       salmobase's real Apache file
+- [ ] The merge request to salmobase's repository with the block for `/snp` (`deploy/salmobase-snp.patch`; pushed
+      from a clone with a GitLab login, accepted by G)
 - [ ] On the salmobase server, by the Orion chat when G says: the survey, the portal's container on the test
-      server, the block in salmobase's Apache file (a merge request to salmobase's repository, and its `app`
-      container replaced), the smoke test, then the live server (SALMOBASE.md)
+      server, salmobase's `app` container replaced once the merge request is in, the smoke test, then the live
+      server (SALMOBASE.md)
 - [ ] Later (G, 2026-11-25): navigation between salmobase's pages and the portal
 - [ ] Which release is current said by the publisher (`latest.json`, one version per species) for the live app (#67)
 - [ ] The build chat's hand-back (#68)
