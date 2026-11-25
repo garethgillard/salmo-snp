@@ -100,39 +100,32 @@ for the card's Predict button) took two deploys that day. species.sh fetches onl
 release on the VM holds with the same sha256 is copied from it (most layers, from one release to the next), and a
 genome file with the manifest's sha256 is kept.
 
-## salmobase container
+## On the salmobase server
 
-The live installation (later) is a container of a tagged version behind salmobase's Apache at `/snp/`, linked from
-salmobase with a button, not merged into its Django (`deploy/Dockerfile`, `deploy/container.sh`). gunicorn serves
-everything under `/snp/`, static files included (`DJANGO_STATIC_URL=/snp/static/`, `SNPPORTAL_SERVE_STATIC=1`), so
-Apache needs one proxy rule; results are kept 24 h (`SNPPORTAL_KEEP_HOURS`), as on the demo.
+The live installation (being prepared: G, 2026-11-25) runs behind salmobase's Apache at `/snp/`, linked from
+salmobase with a button, not merged into its Django. [../docs/SALMOBASE.md](../docs/SALMOBASE.md) is the brief for
+installing and updating it there, with the commands; in short:
 
-```bash
-git checkout v0.1.0 && docker build -f snpportal/deploy/Dockerfile -t salmo-snp:v0.1.0 .
-docker run -d --name salmo-snp --restart unless-stopped -p 127.0.0.1:8090:8000 \
-  -v /srv/salmo-snp/release:/release -v /srv/salmo-snp/genome:/genome:ro -v /srv/salmo-snp/data:/data \
-  -e DJANGO_ALLOWED_HOSTS=salmobase.org salmo-snp:v0.1.0
-```
+- `deploy/server.sh` starts it, in the container (`deploy/Dockerfile`) or from a virtual environment: the secret
+  key, a look at each species' release (`manage.py snpportal_prepare`), Django's checks, an hourly cleanup, gunicorn.
+  gunicorn serves everything under `/snp/`, static files included (`DJANGO_STATIC_URL=/snp/static/`,
+  `SNPPORTAL_SERVE_STATIC=1`), so Apache needs one proxy rule; results are kept 24 h (`SNPPORTAL_KEEP_HOURS`).
+- `SNPSCORE_SALMOBASE` names the server's datafiles folder (what `https://salmobase.org/datafiles/` serves), mounted
+  read only. The portal then reads where they are published: the releases (`datasets/salmo-snp/releases/`; the
+  default is the release this version names, and each species' named one for new work), the genomes, the
+  AQUA-FAANG tracks and the models' files (`snpscore.bbi.local` maps an address under salmobase's datafiles to the
+  file). A file that is not there is read from its address. Without the setting, `SNPSCORE_RELEASE` and
+  `SNPSCORE_GENOME_DIR` name a release folder and the genomes, as on the NREC demo.
+- `SNPPORTAL_DATA` (`/data` in the container) holds results, the secret key and, outside a container, the static
+  files. Nothing else is written.
+- The public pool is read from the release's `pool/`. A release folder the portal may write to gets its pool built
+  at the start; a published folder is read only, and its pools are built on Orion and published with the release.
+- `deploy/survey.sh` reads what a server offers (it changes nothing); `../tools/smoke.sh <address>` tests a running
+  portal: its health page, and every example of each species scored through the job queue.
 
-- `/release`: a release folder (`salmo-snp download --from <site>` on the host, or the published snapshot). Writable,
-  so the container builds the public pool into `pool/` when it is missing or stale; read-only works without it.
-- `/genome`: the release's genome (`*.fa.gz`, `.fai`, `.gzi`) for the sequence checks; without it they read salmobase.
-- `/data`: results and the secret key (made at the first start unless `DJANGO_SECRET_KEY` is set). The container runs
-  as uid 1000: that user must own the host folders it writes.
-- Docker's health check asks `/snp/health/` (P8.4); a damaged release stops the start (`manage.py check`).
-
-Apache (salmobase's virtual host):
-
-```apache
-ProxyPass        /snp/ http://127.0.0.1:8090/snp/
-ProxyPassReverse /snp/ http://127.0.0.1:8090/snp/
-ProxyPreserveHost On
-RequestHeader set X-Forwarded-Proto "https"
-LimitRequestBody 314572800
-```
-
-Built and run in a cloud session on 2026-11-05 against release 2026-11-03: pages, `/snp/static/`, the health check
-and a scoring job worked behind a Host of salmobase.org.
+Tried in a cloud session on 2026-11-25 against a mock of the server's folders made from releases 2026-11-25 and
+trout-2026-11-25 (the datafiles folder read only): as a plain process and as the container, the smoke test passed,
+a prediction ran from the model files in place, and nothing in the datafiles folder changed.
 
 ## How it works
 

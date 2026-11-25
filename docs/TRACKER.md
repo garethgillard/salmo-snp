@@ -22,8 +22,11 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 - **Faster and simpler builds, tests and deploys** (G, 2026-11-25; [ORION.md](ORION.md) has the measurements):
   the build fetches a changed input again, copies unchanged layers and gives the same bytes for the same input;
   the tests take 2 minutes instead of 8; an install's update and the demo's deploy fetch only the files that
-  changed; one deploy is enough. Four proposals wait for G (DECISIONS #65-#68), the first being the app on
-  salmobase reading the published data in place.
+  changed; one deploy is enough.
+- **The portal is ready to be installed on the salmobase server** (G, 2026-11-25: feature development in the cloud
+  chat, building and deploying releases to salmobase in the Orion chat): it reads the published data where it is,
+  and [SALMOBASE.md](SALMOBASE.md) is the Orion chat's brief. Nothing has been run on the server yet: the first
+  step there is a read-only survey. Two questions wait for G (DECISIONS #67, #68).
 - **The demo since 2026-11-25** (G: "make a working deployment to NREC"): main at 2e61590 (PRs #31 to #36) with
   releases 2026-11-24 and trout-2026-11-24, built on Orion and fetched from salmobase by the deploy itself
   (https://salmobase.org/datafiles/datasets/salmo-snp; every file checked on the VM, each release with its pool).
@@ -192,9 +195,15 @@ plan in [ORION.md](ORION.md), the data synced to salmobase, the app to move ther
 - [x] `salmo-snp download` and the demo's species.sh fetch only the files that changed (from 2026-11-24 to
       2026-11-25: 5 of 37)
 - [x] The demo's update.sh runs the new commit's own steps: one deploy is enough
-- [ ] The app on salmobase reading the published data in place: releases, genomes, tracks and model files from the
-      server's datafiles folder, pools in its own folder (DECISIONS #65)
-- [ ] One scripted test of a release, run by the build job before publishing (#66)
+- [x] The deployment option to the salmobase server, prepared (G, 2026-11-25; DECISIONS #65): the portal reads the
+      published data in place from one setting (releases, genomes, tracks, model files), one start script for a
+      container or a virtual environment (`deploy/server.sh`), a read-only survey of the server, and the brief
+      [SALMOBASE.md](SALMOBASE.md). Tried on a mock of the server's folders made from the published releases, as a
+      plain process and as the container with the data mounted read only
+- [x] One scripted test (#66): `tools/smoke.sh` for a running portal, `prep/release_test.sh` for built releases
+      before they are published, and at the end of the NREC deploy workflow
+- [ ] On the salmobase server, by the Orion chat when G says: the survey, the install on the test server, Apache's
+      lines, the smoke test, then the live server (SALMOBASE.md)
 - [ ] Which release is current said by the publisher (`latest.json`, one version per species) for the live app (#67)
 - [ ] The build chat's hand-back (#68)
 

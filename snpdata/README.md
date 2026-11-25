@@ -23,7 +23,8 @@ make_demo.sh, build, the public pool, `snpscore verify`, `snpscore diff` against
 to check; it publishes nothing. It saves what it can between releases (G, 2026-11-25): a layer whose settings and
 inputs did not change is copied from the release before (the newest of the species in `release/`, or `PREVIOUS=`),
 byte for byte, and only when that release was built by the same code (the manifest's `code`); `FRESH=1` computes
-everything.
+everything. `bash prep/release_test.sh <version> [version ...]` then tries built releases as a user would, before
+they are published: the portal started on them, and every example of each species scored (`../tools/smoke.sh`).
 
 `snpdata fetch` keeps a file that is there, with one exception: salmobase's files change under the same address (the
 unified peaks: v3, v5, v6), so fetch asks the server for each one's size and date and downloads the file again when

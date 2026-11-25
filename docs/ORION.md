@@ -27,13 +27,18 @@ next build".
    Each fetches what is missing or has changed on salmobase, copies the unchanged layers from the release before,
    builds the rest and the pool, and checks every file ("How a build runs").
 3. Read the end of each log (`/mnt/project/ELIXIR/salmo-snp/logs/`): `changes since` must list the layers the plan
-   names and no other, and the summary's rows must be the plan's. Anything else is a finding: stop and tell G.
+   names and no other, and the summary's rows must be the plan's. Then test the two releases together:
+   `sbatch --job-name=test-<date> prep/orion_test.sbatch <date> trout-<date>` starts the portal on them as a user
+   runs it and scores every example of both species through the job queue (`prep/release_test.sh`; two to three
+   minutes); its log must end with `release test: ok`. Anything else is a finding: stop and tell G.
 4. `MODE=dry bash prep/orion_publish.sh <date> trout-<date>` on a login node, and with G's go-ahead `MODE=run`
    ("Hosting on salmobase").
 5. Hand back to the chat that works on the code: the two versions, the `changes since` and summary lines of both
-   logs, and anything that was not as planned. That chat names the releases in serve.py, and the demo takes them at
-   its next deploy, when G says.
-
+   logs, and anything that was not as planned. That chat names the releases in serve.py (a pull request, which G
+   merges).
+6. When G says, the portal is updated to the version that names them: on the salmobase server by this chat
+   ([SALMOBASE.md](SALMOBASE.md), which is the brief for installing and updating the portal there), and on the NREC
+   demo, while it lasts, by GitHub's `deploy` workflow.
 
 ## Decided (G, 2026-11-24)
 
@@ -447,7 +452,7 @@ server. There we can use the same data that's deployed on salmobase."
   arguments ("How a build runs"). The whole script was run twice on the test data: the second build copied all 21
   layers and `snpscore diff` reported no change.
 - The tests: `tools/check.sh` runs the four suites side by side and the page tests on every core: 2 minutes 15 in
-  a cloud session instead of 8. For that the motif layer scores a single batch of SNPs in its own process (as a
+  a cloud session instead of 8, and 1 minute 46 on GitHub's runner instead of about 4. For that the motif layer scores a single batch of SNPs in its own process (as a
   test's small release has), and the page tests' worker processes are spawned, not forked.
 - An update downloads only what changed: `salmo-snp download` copies a file that another installed release holds
   with the same sha256 instead of fetching it. From 2026-11-24 to 2026-11-25: 5 files fetched and 32 copied, 49
@@ -457,32 +462,34 @@ server. There we can use the same data that's deployed on salmobase."
   keeps a genome that has the manifest's checksum. Tried on a mock of the VM that held 2026-11-24: 8 requests to
   salmobase (the checksums, 5 changed files, the pool) instead of 43, and no genome.
 
-**Proposed, not built** (DECISIONS #65 to #68; in the order recommended):
+**Then** (G, 2026-11-25: "we should prepare to setup the deployment option to salmobase server. Then we can work on
+feature development in this chat, and then hand off building and deploying releases to salmobase in the orion ssh
+chat"), in the same pull request:
 
-1. **The app on salmobase reads the published data in place.** One read-only mount of the server's datafiles folder
-   and one setting naming it; an address under `https://salmobase.org/datafiles/` is then read from the disk when
-   the file is there, as `SNPDATA_SALMOBASE` already does for fetch.
+1. **The app on salmobase reads the published data in place**: built, and tried on a mock of the server's folders;
+   [SALMOBASE.md](SALMOBASE.md) is the brief for installing it there. One read-only mount of the server's datafiles
+   folder and one setting naming it (`SNPSCORE_SALMOBASE`); an address under `https://salmobase.org/datafiles/` is
+   then read from the disk when the file is there, as `SNPDATA_SALMOBASE` already does for fetch.
 
    | What the app needs | On NREC today | On salmobase |
    |---|---|---|
    | Releases | Fetched by species.sh at a deploy | Read where they are published: `datasets/salmo-snp/releases/` |
    | Genomes | A copy on the VM | Read where they are (`genomes/`: the manifest's address names the file) |
    | AQUA-FAANG tracks of the Locus browser | Read from salmobase.org, about 600 small requests a view | Read from the disk |
-   | Public pools | The published one; built on GitHub's runner and sent when the weights change | The published one while it fits the weights, else built by the app into its own folder |
+   | Public pools | The published one; built on GitHub's runner and sent when the weights change | The published one; built again on Orion and published again when the weights change (the server builds none) |
    | ChromBPNet model files | Fetched once from salmobase.org | Read where they are |
-   | Results, saved projects, the secret key | /srv/snpportal | The app's own data folder |
+   | Results, the secret key | /srv/snpportal | The app's own data folder |
 
-   In the code: the mapping in snpscore's reader of remote files (tracks, genome and models follow); the default
-   release found by its name in the releases folder; a pool folder outside the release, which is read-only there
-   (`<release>/pool` is named in 17 places); the container's mounts. No species.sh, no pool job in the deploy
-   workflow, no genome copy. To know first: whether the server runs Docker (or Podman), how much memory it has (a
-   pool takes about 4 GB for a minute), and who adds the two Apache lines (snpportal/README.md "salmobase
-   container").
-2. **One scripted test of a release**, run by the build job before anything is published: install it from the
-   folder as a user would, start the portal on both species, score every example of the release through the job
-   queue, ask the health page, and fail on the first error. It is `tools/user_install_test.sh` with a real release
-   in place of the test data. It replaces the checks made by hand in the Orion chat and again in the cloud session
-   (most of an hour on 2026-11-25).
+   No species.sh, no pool job in a deploy workflow, no genome copy, and no request from the server to its own
+   public name. Still to find out on the server: Docker or Python, memory, who edits Apache (SALMOBASE.md's survey).
+2. **One scripted test**: built. `tools/smoke.sh <address>` asks a running portal's health page and scores every
+   example of each species through the job queue; `prep/release_test.sh` (step 3 above) runs it on freshly built
+   releases before they are published, and the NREC deploy workflow ends with it. It replaces the checks made by
+   hand in the Orion chat and again in the cloud session (most of an hour on 2026-11-25). Tried on releases
+   2026-11-25 and trout-2026-11-25: eight examples scored in two and a half minutes.
+
+**Proposed, not built** (DECISIONS #67, #68):
+
 3. **The publisher says which release is current.** Today the code names it (serve.py `RELEASE`, `RELEASES`), so
    every release needs a pull request, the tests and a deploy before the live app shows it. Instead the live app
    would take what `releases/latest.json` names (one version per species, written by the publish script once the
@@ -503,6 +510,8 @@ server. There we can use the same data that's deployed on salmobase."
 We are on Orion over SSH. Clone https://github.com/garethgillard/salmo-snp.git into ~/git/ if it is not there (else
 pull main), and read AGENTS.md, then docs/ORION.md: its first section, "The next build: the plan and the steps",
 says what the next Atlantic salmon and rainbow trout data releases contain and the steps of a build; the rest is
-the record of the builds before.
-Tell me before any job is submitted and before anything is published; never set a SLURM time limit.
+the record of the builds before. docs/SALMOBASE.md is the brief for installing and updating the portal on the
+salmobase server, which this chat does too.
+Tell me before any job is submitted, before anything is published and before anything is installed or changed on a
+server; never set a SLURM time limit.
 ```
