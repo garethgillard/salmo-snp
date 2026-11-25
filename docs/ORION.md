@@ -183,9 +183,9 @@ things stand"). The installer was also run from a cloud session against the addr
 matched its checksum.
 
 **Next**
-1. Remove the older releases from `/srv/snpportal/releases/` on the VM (2026-11-05, trout-2026-11-13, and
-   2026-11-20 a day after the deploy): 4.9 GB are free, and species.sh refuses to fetch a release under 5 GB. By
-   hand over SSH, or as a rule in species.sh if G wants one (which releases may go, and when, is G's to say).
+1. The older releases on the VM (2026-11-05, trout-2026-11-13, and 2026-11-20 a day after the deploy) go at the
+   next deploy: species.sh now removes a release the code no longer names once nothing kept on the server was made
+   with it (G, 2026-11-25), before it fetches, so the room counts (4.9 GB were free, under the 5 GB a fetch asks for).
 2. So that `snpscore diff` lists only real changes: write positional layers in a full order (every column after
    `chrom, start`), which gives the same bytes on any number of threads.
 3. Before anyone uses `salmo-snp download latest` or `snpdata publish --raw` for both species: the first two

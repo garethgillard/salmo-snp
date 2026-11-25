@@ -11,10 +11,15 @@
 #                                <version>/, site/raw/ with the genome, pool/), sent by the species-data workflow,
 #                                which builds the release from the public sources on GitHub's runner. Replaces the
 #                                release if the VM has it.
+#   species.sh cleanup          only the cleanup below.
 # The pool comes with the release, as the VM's 2 GB RAM can't build it. Nothing here stops a deploy: a release that
 # can't be fetched is reported and the portal keeps the species it has.
+# Cleanup (G, 2026-11-25), before and after fetching: a release in /srv/snpportal/releases/ that this code no longer
+# names is removed once no job, Design panel or saved project kept on the server was made with it (results expire, so
+# usually a day after it was replaced). The default release's folder and the genomes are never touched, and a
+# release stays whenever the look could not be completed.
 set -uo pipefail
-ROOT=/srv/snpportal
+ROOT=${SNPPORTAL_ROOT:-/srv/snpportal}  # another root only in the test (snpportal/tests/test_deploy.py)
 DATA_URL=${SALMO_SNP_DATA_URL:-https://salmobase.org/datafiles/datasets/salmo-snp}  # as serve.py DATA_URL
 SERVE=$ROOT/salmo-snp/snpportal/snpportal/serve.py
 
@@ -70,6 +75,46 @@ named() {  # the versions serve.py names: RELEASE (the default species'), then t
   sed -n 's/^RELEASES = {\(.*\)}.*/\1/p' "$SERVE" | grep -o ': "[^"]*"' | tr -d ':" '
 }
 
+unused() {  # succeeds only when it could look everywhere and nothing kept on the server was made with release $1
+  local results projects
+  results=$(sed -n 's/^SNPPORTAL_RESULTS_DIR=//p' "$ROOT/env" 2>/dev/null | tail -1)
+  results=${results:-$ROOT/results}
+  projects=$(sed -n 's/^SNPPORTAL_PROJECTS_DIR=//p' "$ROOT/env" 2>/dev/null | tail -1)
+  projects=${projects:-$(dirname "$results")/projects}
+  "$ROOT/venv/bin/python" - "$1" "$results" "$projects" <<'PY'
+import json, sys
+from pathlib import Path
+version = sys.argv[1]
+for folder in map(Path, sys.argv[2:]):  # jobs and Design panels (job.json, panel.json), saved project versions (meta.json)
+    for name in ("job.json", "panel.json", "meta.json"):
+        for path in (folder.rglob(name) if folder.is_dir() else ()):
+            if json.loads(path.read_text()).get("release") == version:  # a file that can't be read stops the look
+                sys.exit(3)
+PY
+}
+
+cleanup() {
+  local keep dir v
+  [ -n "$(default_version)" ] || return 0  # the names could not be read: remove nothing
+  keep=" $(named | tr '\n' ' ')"
+  for dir in "$ROOT"/releases/*/; do
+    [ -f "$dir/manifest.json" ] || continue
+    v=$(basename "$dir")
+    case "$keep" in *" $v "*) continue ;; esac
+    [ "$(version_of "$dir")" = "$v" ] || continue  # only a folder that is the release its name says
+    if unused "$v"; then
+      rm -rf "$ROOT/releases/$v" && echo "release $v removed: this code no longer names it, and nothing kept here was made with it"
+    else
+      echo "release $v kept: results made with it are still here (or the look failed)"
+    fi
+  done
+}
+
+if [ "${1:-}" = cleanup ]; then
+  cleanup
+  exit 0
+fi
+
 if [ "${1:-}" = stdin ]; then
   v=${2:-}
   grep -qxF "$v" <<< "$(named)" || { echo "release '$v' is not one this code names (serve.py RELEASE, RELEASES)" >&2; exit 1; }
@@ -81,6 +126,7 @@ if [ "${1:-}" = stdin ]; then
   exit 0
 fi
 
+cleanup  # first, so that the room it makes counts for the releases fetched next
 for v in $(named); do
   { [ -f "$ROOT/releases/$v/manifest.json" ] || [ "$(version_of "$ROOT/release")" = "$v" ]; } && continue
   free=$(df -Pk "$ROOT" | awk 'NR == 2 { print $4 }')
@@ -106,4 +152,5 @@ print(g["url"], g["file"])' "$site/manifest.json")
   ) && echo "release $v fetched" || echo "release $v could not be fetched from $DATA_URL (is it published?)" >&2
   rm -rf "$T"
 done
+cleanup  # and the release just replaced, when nothing was made with it
 exit 0
