@@ -93,9 +93,12 @@ it, about 3 minutes) and sends it with the same key (`update.sh pool [version]`,
 only if it fits the deployed release, weights and snpscore. This covers every species' release on the VM: update.sh
 names each release whose pool is stale, and the job builds each from its release on salmobase.
 
-A change to what update.sh installs arrives one deploy late, because a deploy runs the update.sh that is already on
-the VM. So after the `chrombpnet` extra of 2026-11-25 (numpy and onnxruntime, for the card's Predict button), deploy
-twice, and see `predict.packages` in `/snp/health/` turn true.
+update.sh runs the steps of the commit it has just checked out (packages, releases, static files, restart), so a
+change to them takes effect in the deploy that brings it (tests/test_deploy.py). Until 2026-11-25 a deploy ran the
+update.sh already on the VM and such a change arrived one deploy late: the `chrombpnet` extra (numpy and onnxruntime,
+for the card's Predict button) took two deploys that day. species.sh fetches only what changed: a file that a
+release on the VM holds with the same sha256 is copied from it (most layers, from one release to the next), and a
+genome file with the manifest's sha256 is kept.
 
 ## salmobase container
 

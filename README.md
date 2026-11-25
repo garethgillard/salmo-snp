@@ -38,7 +38,8 @@ You need:
                            # sites for comparison (a minute or two)
    ```
    In a clone of the repository, `bash tools/get_data.sh` does the same. `--from <folder>` reads a copy of the
-   published folder on a disk or a share instead, for computers without internet.
+   published folder on a disk or a share instead, for computers without internet. A later release downloads faster:
+   the files that did not change since a release you have (most of them) are copied from it, and checked the same.
    **Rainbow trout** (USDA_OmykA_1.1) is a second release, `trout-2026-11-25`: `salmo-snp download --species
    rainbow_trout` (or `--species all` for both). With both installed, the species bar at the top right of every page
    picks the species new lists are scored against; results keep the species they were scored for.

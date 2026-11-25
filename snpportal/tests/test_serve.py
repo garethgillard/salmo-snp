@@ -50,6 +50,26 @@ def test_download(site, url, where, tmp_path, monkeypatch):
     assert serve.local_genome(got) == tmp_path / "genome" / "Salmo_salar.Ssal_v3.1.dna_sm.toplevel.fa.gz"
 
 
+def test_an_update_fetches_only_what_changed(site, tmp_path, monkeypatch, capsys):
+    """Most layers are the same file in the next release, byte for byte: download copies those from the release
+    installed here and fetches the rest. A file here that no longer has its checksum is fetched like a new one."""
+    import shutil
+
+    from snpdata.build import write_sums
+    monkeypatch.setattr(serve, "HOME", tmp_path / "home")
+    first = serve.download("2026-01-01", site, genome=False)
+    new = shutil.copytree(site / "releases" / "2026-01-01", tmp_path / "site" / "releases" / "2026-01-02")
+    (new / "manifest.json").write_text((new / "manifest.json").read_text().replace('"version": "2026-01-01"', '"version": "2026-01-02"'))
+    write_sums(new)
+    (first / "gerp.parquet").write_bytes(b"damaged since it was installed")
+    fetched, copy = [], serve.copy
+    monkeypatch.setattr(serve, "copy", lambda source, name, target: (fetched.append((str(source), name)), copy(source, name, target))[1])
+    capsys.readouterr()
+    got = serve.download("2026-01-02", tmp_path / "site", genome=False)
+    assert sorted(name for source, name in fetched if source.startswith(str(tmp_path / "site"))) == ["gerp.parquet", "manifest.json"]
+    assert not check(got) and "files are unchanged since a release installed here" in capsys.readouterr().out
+
+
 def test_damaged_files_are_refused(site, tmp_path, monkeypatch):
     monkeypatch.setattr(serve, "HOME", tmp_path)
     folder = serve.download("2026-01-01", site, genome=False)

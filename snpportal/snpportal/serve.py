@@ -68,10 +68,25 @@ def copy(source, name, target):
     tmp.replace(target)
 
 
-def get(source, name, target, digest):
-    """Fetch one file unless `target` already has `digest`; refuse it when it doesn't match."""
+def held(but):
+    """{sha256: file} of what the other installed releases hold, by their SHA256SUMS: most layers do not change from
+    one release to the next, and such a file is copied from the release that has it instead of downloaded."""
+    out = {}
+    for sums in sorted((HOME / "releases").glob("*/SHA256SUMS")):
+        if sums.parent != but:
+            for digest, name in (line.split(None, 1) for line in sums.read_text().splitlines() if line.strip()):
+                out[digest] = sums.parent / name.strip().lstrip("*")
+    return out
+
+
+def get(source, name, target, digest, same=None):
+    """Fetch one file unless `target` already has `digest`; refuse it when it doesn't match. `same`: a file here that
+    should have that digest (held): copied if it does, which the caller is told (True)."""
     if target.exists() and (digest is None or sha256(target) == digest):
         return
+    if same and same.is_file() and sha256(same) == digest:
+        copy(same.parent, same.name, target)
+        return True
     print(f"  {name}", flush=True)
     copy(source, name, target)
     if digest and sha256(target) != digest:
@@ -82,7 +97,8 @@ def get(source, name, target, digest):
 def download(version=None, source=None, genome=True):
     """Release `version` (default: RELEASE; 'latest' reads releases/latest.json) from `source` (a published data folder:
     URL or path; default DATA_URL) into HOME/releases/<version>, and the genome into HOME/genome. Files already there
-    with the right sha256 are kept. Returns the release folder."""
+    with the right sha256 are kept, and a file another installed release holds with that sha256 is copied from it
+    (an update fetches only what changed). Returns the release folder."""
     source = source or DATA_URL
     if version == "latest":
         version = json.loads(read(source, "releases/latest.json"))["version"]
@@ -94,12 +110,15 @@ def download(version=None, source=None, genome=True):
         sys.exit(f"salmo-snp: no release {version} at {source} (looked for releases/{version}/SHA256SUMS)")
     folder = HOME / "releases" / version
     print(f"release {version} -> {folder}", flush=True)
+    here, copied = held(folder), 0
     for digest, name in (line.split(None, 1) for line in sums.splitlines() if line.strip()):
         name = name.strip().lstrip("*")
         target = (folder / name).resolve()
         if folder.resolve() not in target.parents:
             sys.exit(f"salmo-snp: unexpected file name in SHA256SUMS: {name}")
-        get(base, name, target, digest)
+        copied += bool(get(base, name, target, digest, here.get(digest)))
+    if copied:
+        print(f"  {copied} files are unchanged since a release installed here: copied from it, not downloaded")
     (folder / "SHA256SUMS").write_text(sums)  # kept: `snpscore verify` and the portal's system check re-hash against it
     from snpscore.release import check
     problems = check(folder)
