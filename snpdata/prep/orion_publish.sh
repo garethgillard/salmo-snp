@@ -7,8 +7,9 @@
 # can't build one); installs build their own. Never --delete: the server has files the share lacks.
 # Run in snpdata/ on a LOGIN node (compute nodes can't reach the server), as a background task: the login node cuts a
 # long rsync after about 10 minutes, and a second run goes on from where it stopped.
-#   MODE=dry bash prep/orion_publish.sh 2026-11-24 trout-2026-11-24    # the default: check, link, show what would go
-#   MODE=run bash prep/orion_publish.sh 2026-11-24 trout-2026-11-24    # send it (with G's go-ahead)
+#   MODE=dry bash prep/orion_publish.sh 2026-11-25 trout-2026-11-25    # the default: check, link, show what would go
+#   MODE=run bash prep/orion_publish.sh 2026-11-25 trout-2026-11-25    # send it (with G's go-ahead)
+# The first version given is the one latest.json names: give the salmon release first.
 set -euo pipefail
 mode=${MODE:-dry} host=${HOST:-salmobase}
 share=${SHARE:-/mnt/project/ELIXIR/salmobase/datafiles}/datasets/salmo-snp

@@ -111,7 +111,8 @@ layers:
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/robust_ATAC_peaks/unified_annotated_peaks/RainbowTrout_unified_peaks.bed
     id: true
     # The unified peaks v6 (2026-11-25; VERSION.md beside the file) added the ImmunoMap's head kidney, PBS and Vibrio:
-    # 205,722 peaks in 19 conditions (releases up to trout-2026-11-24: 194,002 in 17). Poly I:C has no states.
+    # 205,722 peaks in 19 conditions, from release trout-2026-11-25 (up to trout-2026-11-24: 194,002 in 17). Poly I:C
+    # has no states.
     description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 19 conditions (brain, liver and muscle by maturity and sex, head kidney after PBS and after Vibrio (the ImmunoMap), and five embryo stages; empty = no peak there)
     citation: AQUA-FAANG consortium, rainbow trout unified ATAC peaks and ChromHMM states (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Developmental contexts of gene-regulatory evolution following whole genome duplication in salmonids. Nat Ecol Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6
 

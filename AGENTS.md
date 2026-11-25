@@ -212,9 +212,10 @@ Decided:
   not online. G's rule for all Orion work (2026-11-20): never set a SLURM time limit.
 
 - The build after those (G, 2026-11-25): "plan the next build using the new gill salmo-chrombpnet model available,
-  and the new trout immunomap data on salmobase". Planned, not built: docs/ORION.md "The next build". G's answers
-  the same day (DECISIONS #60-#64: "go with your recommendations for all five, except the full 9+ million public
-  snps. We'll do it, but just not at this point"):
+  and the new trout immunomap data on salmobase". Built on Orion and published the same day as releases 2026-11-25
+  and trout-2026-11-25, which serve.py names (docs/ORION.md "The latest build" has the plan, the checks and the
+  result). G's answers that day (DECISIONS #60-#64: "go with your recommendations for all five, except the full 9+
+  million public snps. We'll do it, but just not at this point"):
   - Salmon gains the layer `chrombpnet_gill`, the gill ChromBPNet model's score per SNP (the absolute log2 fold
     change of predicted accessibility, each SNP by the fold that held its chromosome out), shown and not counted.
     Every public and Synchrosmolt site (9,288,186) is to be scored later, not now. Which smaller set comes first
@@ -281,8 +282,8 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   overlapping blocks dropped (DECISIONS #37; the alignment postponed, G 2026-11-06: no fSalSal1
   tables in a release until I20).
 - The gill ChromBPNet scores' first set (2026-11-25, DECISIONS #60): until every site is scored, the public and
-  Synchrosmolt SNPs inside the model's own training peaks (216,592 SNPs in the gill MACS2 peaks; under an hour on a
-  GPU), where its predictions mean the most. The layer's percentile is the scorer's, among 100,000 random public
+  Synchrosmolt SNPs inside the model's own training peaks (216,592 SNPs in the gill MACS2 peaks; 216,586 scored in
+  release 2026-11-25, on CPU in about an hour), where its predictions mean the most. The layer's percentile is the scorer's, among 100,000 random public
   SNPs, so 'top 1%' reads the same whichever set is scored.
 - The pike and summit layers (2026-11-24, DECISIONS #54, #58; docs/SCORING.md section 6 has the tests):
   - `pike`: the bases with alignment depth to northern pike in AQUA-FAANG's salmon-trout-pike alignment, alignment
@@ -363,7 +364,7 @@ prep/make_fixture_trout.py` in snpdata/ re-cuts it):
 ```bash
 cd snpdata && snpdata fetch --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw   # ~80 GB streamed, 2 GB kept
 snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw --out release/trout-2026-11-13   # ~1.5 h (motifs)
-bash tools/get_data.sh trout-2026-11-24   # the published release (salmobase); a build: salmo-snp serve --release
+bash tools/get_data.sh trout-2026-11-25   # the published release (salmobase); a build: salmo-snp serve --release
 ```
 Without conda: a Python 3.12 venv and `pip install -e "snpscore[test]" -e snpdata -e snpportal`, as CI. `bash tools/user_install_test.sh [python]` checks a new user's install (wheels, the
 newest dependencies allowed, publish -> download -> annotate -> serve); run it after changing packaging,

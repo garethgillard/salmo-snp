@@ -6,12 +6,14 @@ Specs: [ROADMAP.md](ROADMAP.md). Questions only G can answer: [DECISIONS.md](DEC
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
 ## Where things stand (2026-11-25)
-- **The next build is planned and prepared, not started** (G, 2026-11-25: "plan the next build using the new gill
-  salmo-chrombpnet model available, and the new trout immunomap data on salmobase"): [ORION.md](ORION.md) "The next
-  build" (Next, S3f). Salmon gains the gill ChromBPNet model's score of the SNPs in its peaks, shown with the
-  direction of the effect and not counted; trout gains the ImmunoMap's head kidney, PBS and Vibrio (19 conditions,
-  205,722 peaks). G answered DECISIONS #60 to #64 the same day and the repository is ready; the salmon build waits
-  for one file, the scores, from the ChromBPNet work on Orion.
+- **Releases 2026-11-25 and trout-2026-11-25 are on salmobase** (G, 2026-11-25: "plan the next build using the new
+  gill salmo-chrombpnet model available, and the new trout immunomap data on salmobase"; planned, built on Orion and
+  published the same day: [ORION.md](ORION.md) "The latest build"; Next, S3f). Salmon has the gill ChromBPNet
+  model's score of 216,586 SNPs in its peaks, shown with the direction of the effect and not counted; trout has
+  the ImmunoMap's head kidney, PBS and Vibrio (19 conditions, 205,722 peaks). The code names both (serve.py), every
+  file checked from a cloud session. The SNP card can also run the gill model for one SNP (Predictions on demand).
+  **The NREC demo still runs 2026-11-24**: it takes the new releases and the new pages at its next deploy, when G
+  says (twice, so that the Predict button's packages are installed).
 - **The demo since 2026-11-25** (G: "make a working deployment to NREC"): main at 2e61590 (PRs #31 to #36) with
   releases 2026-11-24 and trout-2026-11-24, built on Orion and fetched from salmobase by the deploy itself
   (https://salmobase.org/datafiles/datasets/salmo-snp; every file checked on the VM, each release with its pool).
@@ -140,9 +142,15 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
         SNPs. On the demo after two deploys: the first brings the new update.sh, the second the packages
   - [x] A release builds without the score file when it is not published yet (fetch says so, build leaves the
         layer out): G, 2026-11-25, the build "might not include chrombpnet scores"
-  - [ ] The score file, from the ChromBPNet work on Orion (the request is in ORION.md): the release built after it
-        is published has the layer
-  - [ ] The builds on Orion, the checks of ORION.md's tables, publishing, then serve.py names the releases
+  - [x] The score file, from the ChromBPNet work on Orion: published on 2026-11-25 at 13:01 GMT, 216,586 SNPs
+        with score, effect and percentile
+  - [x] The builds on Orion, published as 2026-11-25 and trout-2026-11-25 (2026-11-25, 13:11 GMT); the checks of
+        ORION.md's tables from the published files (every row count as planned; `motif` for trout exactly the
+        1,083,423 predicted; the salmon pool's tiers unchanged to the SNP); the installer's download with every
+        checksum; serve.py names the two releases
+  - [ ] The NREC demo: deploy when G says (twice: the second installs numpy and onnxruntime for the Predict button)
+  - [ ] Later (G, 2026-11-25): the gill score of every public and Synchrosmolt site (9,288,186; about 35
+        GPU-hours); other tissues' models as they are released
 - [ ] S3e Still to ask or get: allelic imbalance in the 12 fish from the Orion repository (the truth set the summit
       rule and the ChromBPNet scores need); the large gill eQTL set, if its authors share it
 - [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52, #54, #58), then weights.yaml and
