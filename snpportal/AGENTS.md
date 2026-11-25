@@ -20,6 +20,9 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   "salmobase container" (Apache proxies /snp/ to it; it serves its own static files under /snp/static/). In a cloud
   session `dockerd &` starts Docker; build with `--secret id=ca,src=/root/.ccr/ca-bundle.crt` and the proxy as build
   args (HTTPS_PROXY), so pip trusts the session's proxy.
+- Old releases on the demo (G, 2026-11-25): at each deploy `deploy/species.sh` removes from /srv/snpportal/releases/
+  a release the code no longer names, once no job, Design panel or saved project kept there was made with it; it
+  never touches the default release or the genomes, and removes nothing when it could not look (tests/test_deploy.py).
 - Health: `/snp/health/` (JSON, no content) and a Django system check (`manage.py check`: the release re-hashed).
 - Tracks AQUA-FAANG publishes after a release (2026: salmon gill ATAC-seq, the ImmunoMap) go live with a deploy:
   `snpdata tracks --added-since <release>/tracks.yaml` (in ../snpdata) regenerates tracks.yaml and writes
