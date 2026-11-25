@@ -232,6 +232,31 @@ def test_trout_hub(monkeypatch):
     assert cfg["defaults"]["presets"]["all"][0] == "Brain_Immature_Female" and cfg["hosts"] == ["salmobase.org"]
 
 
+def test_score_layer_not_published(release, tmp_path, monkeypatch, capsys):
+    """A model's score file is another project's: where it is not published yet (404), fetch says so and goes on, and
+    build leaves the layer out, as in a release made before the gill ChromBPNet scores existed."""
+    import importlib
+    import urllib.error
+
+    import yaml
+    build_module = importlib.import_module("snpdata.build")
+    layer = {"name": "later", "type": "point", "format": "variant_scores", "file": "later.tsv.gz", "url": "https://example.org/later.tsv.gz"}
+    (tmp_path / "layers.yaml").write_text(yaml.safe_dump({"layers": [layer, {**layer, "name": "other", "format": "bed", "file": "other.bed"}]}))
+
+    def missing(url, target):
+        raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+    monkeypatch.setattr(build_module, "download", missing)
+    with pytest.raises(urllib.error.HTTPError):  # any other input that is missing still stops fetch
+        build_module.fetch(tmp_path / "layers.yaml", tmp_path / "raw")
+    assert "later.tsv.gz is not published (404): build will leave the layer later out" in capsys.readouterr().out
+    assert not list((tmp_path / "raw").iterdir())
+    load = build_module.load_yaml
+    monkeypatch.setattr(build_module, "load_yaml", lambda p: (lambda c: {**c, "layers": c["layers"] + [layer]} if "layers" in c else c)(load(p)))
+    out = build(DATA / "layers.yaml", DATA / "tests" / "fixture", tmp_path / "without", reuse=release)
+    names = [l["name"] for l in json.loads((out / "manifest.json").read_text())["layers"]]
+    assert "later" not in names and "chrombpnet_gill" in names and not (out / "later.parquet").exists()
+
+
 def test_ncbi_transcripts(release):
     """RefSeq models on chromosomes 1-29 (accessions renamed through the alias table), exon and CDS parts only."""
     con = duckdb.connect()
