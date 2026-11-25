@@ -57,7 +57,7 @@ against releases 2026-11-24 and trout-2026-11-24 in a cloud session. The questio
 | `chrombpnet_gill` (new) | A per-variant score layer, which needs no new code (snpdata/README.md "A per-variant score"): the gill model's predicted effect of the alt allele on accessibility, each SNP scored by the fold that held its chromosome out. `build` adds the percentile within the scored set. The portal shows it in the Table's Scores column, on the card and as a Locus browser row; it counts nothing (weights.yaml `variant_scores: {}`, DECISIONS #53). **The score file does not exist yet** (What it needs first, 1) | Rows = the scored set: 9,288,186 with #60's recommendation; `snpscore annotate` gives a public SNP `chrombpnet_gill_score` and `chrombpnet_gill_percentile` |
 | `chromatin` | Input v6. Nothing scored changes: read with the build's reader, it has the 328,894 peaks of release 2026-11-24 and the same state in every one of the 27 conditions. `summary` is filled again (empty since v3; nothing shows it) | 328,894 rows |
 | The public pool | Built again. The tiers stay as they are unless a weight changes (pike is still 0: DECISIONS #54) | 3,436,671 sites; tiers 0.38%, 6.16%, 8.49%, 84.98%, as for 2026-11-24 |
-| Unchanged | Every other layer and table of 2026-11-24: `summit` 2,468,735, `pike` 1,226,940, `synchrosmolt_af` 3,993,949, `motif` 533,163, `public_af` 7,572,808, `molqtl` 2,656, `liftover_icsasg_v2` 735,344 blocks, the catalogue's 46 rows, the six examples | `snpscore diff 2026-11-24 <new>` lists `chrombpnet_gill` and `chromatin` only, once layers are written in a full order (What it needs first, 3) |
+| Unchanged | Every other layer and table of 2026-11-24: `summit` 2,468,735, `pike` 1,226,940, `synchrosmolt_af` 3,993,949, `motif` 533,163, `public_af` 7,572,808, `molqtl` 2,656, `liftover_icsasg_v2` 735,344 blocks, the catalogue's 46 rows, the six examples | `snpscore diff 2026-11-24 <new>`: `chrombpnet_gill` and `chromatin` are new or changed. It compares file checksums, so it also lists the layers whose rows share a start (`transcripts`, `transcripts_ncbi`, as on 2026-11-25): compare those row by row |
 
 ### Rainbow trout, release `trout-<date>` (the one before: trout-2026-11-24)
 
@@ -69,7 +69,7 @@ against releases 2026-11-24 and trout-2026-11-24 in a cloud session. The questio
 | tracks.yaml | Regenerated from the trout trackhub with its ImmunoMap folder: 733 signal tracks (603), 19 state tracks and 19 robust peak tracks (17 each). The 130 new signal tracks are ATAC, H3K27ac, H3K27me3, H3K4me3, input and RNA-seq of head kidney in vivo (PBS, poly I:C, Vibrio) and of leukocytes in vitro | The Locus browser offers 'HK PBS' and 'HK Vibrio' state rows; the Table's Chromatin filter offers head kidney |
 | Wording | 19 conditions; the ImmunoMap's samples in the species block, the Data page and Help | The pages name 19 conditions |
 | The public pool | The same 3,372,181 sites. Tiers change at head kidney peaks: of the 18,801,055 public sites, 350,142 lie in a peak with a head kidney state, 158,124 where head kidney is active, and 7,266 where no other condition is | The tier shares of trout-2026-11-24 were 0.28%, 4.92%, 4.88%, 89.92% |
-| Unchanged | `pike` 1,192,301, `public_af` 18,801,055, `flank_variants` 46,593,552, the gene and regulatory layers, the catalogue's 13 rows, the four examples | `snpscore diff` |
+| Unchanged | `pike` 1,192,301, `public_af` 18,801,055, `flank_variants` 46,593,552, the gene and regulatory layers, the catalogue's 13 rows, the four examples | `snpscore diff`, read as for salmon |
 
 ### What it needs first
 
@@ -83,8 +83,8 @@ against releases 2026-11-24 and trout-2026-11-24 in a cloud session. The questio
 2. **From the AQUA-FAANG files, if Vibrio is to have summits (#64)**: a MACS2 call on the merged reads of Vibrio's
    four fish, beside PBS's in `nfcore/RainbowTrout/ImmunoMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/`.
    Also: VERSION.md cites `chromatin_states/RainbowTrout/ImmunoMap/README.md`, which is not on salmobase (404).
-3. **One pull request in this repository before the build** (a cloud session can make it; the trout fixture is
-   re-cut on Orion, where the inputs are):
+3. **One pull request in this repository before the build** (a cloud session can make it: the two inputs the trout
+   fixture needs new, the v6 peaks and PBS's peak file, are on salmobase):
    - salmon `layers.yaml`: the `chrombpnet_gill` entry, with the score file's address;
    - trout `layers.yaml`: 19 conditions in the descriptions and the samples, PBS's peak file in `summit`;
    - `snpdata tracks --hub <the trout hub>` in `snpdata/rainbow_trout/`, for its tracks.yaml (done with this plan:
@@ -93,8 +93,10 @@ against releases 2026-11-24 and trout-2026-11-24 in a cloud session. The questio
    - the portal: a colour and a short name for `Weak_accessible_chromatin` (salmobase's colour is 196,234,250),
      and the Help and Data pages' ImmunoMap text for trout;
    - weights.yaml, only if G answers #63 or #54;
-   - the trout fixture with v6 and PBS's peaks (`python prep/make_fixture_trout.py`), and tests of the two conditions;
-   - positional layers written in a full order ("Next" below), so that the diff lists only what changed;
+   - the trout fixture with v6 and PBS's peaks (the cuts `prep/make_fixture_trout.py` makes), and tests of the two
+     conditions;
+   - positional layers written in a full order ("Next" below): the builds after this one then give the same bytes
+     for the same rows, and the diff lists only what changed;
    - after publishing: serve.py `RELEASE` and `RELEASES` name the new releases.
 4. **G's answers** to DECISIONS #60 to #64. With the recommendations as they stand, nothing else waits.
 
