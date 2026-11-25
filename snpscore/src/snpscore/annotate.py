@@ -326,9 +326,11 @@ def point_sql(name, cols, parquet, layer):
                 WHEN s.ref = l.alt AND (s.alt IS NULL OR s.alt = l.ref) THEN 'swapped'
                 WHEN {fref} = l.ref AND (s.alt IS NULL OR {falt} = l.alt) THEN 'strand_flip'
                 WHEN {fref} = l.alt AND (s.alt IS NULL OR {falt} = l.ref) THEN 'strand_flip_swapped'"""
-    def swapped(c):  # an ALT allele frequency (af, <population>_af) or count (ac, with an) in the input's alt allele
+    def swapped(c):  # an ALT allele frequency (af, <population>_af) or count (ac, with an) in the input's alt allele;
+        # a score layer's `effect` (signed, of the layer's alt allele) changes sign
         return (f"round(1 - {q(c)}, 6)" if c == "af" or c.endswith("_af") else
-                f"{q('an')} - {q(c)}" if c == "ac" and "an" in cols else None)
+                f"{q('an')} - {q(c)}" if c == "ac" and "an" in cols else
+                f"-{q(c)}" if c == "effect" else None)
     values = "".join(", CASE WHEN m = 'other' THEN NULL"
                      + (f" WHEN m IN ('swapped', 'strand_flip_swapped') THEN {swapped(c)}" if swapped(c) else "")
                      + f" ELSE {q(c)} END AS {q(name + '_' + c)}" for c in cols if c not in ("ref", "alt"))

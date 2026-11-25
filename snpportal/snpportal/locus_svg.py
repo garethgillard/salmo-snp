@@ -37,9 +37,10 @@ EVIDENCE = {  # published-association marker by evidence kind (explore.evidence_
 SIGNAL_UNIT = "RPM"  # nf-core ATAC bigWigs are scaled to 1M mapped reads
 STATE_ORDER = ("Active_TSS", "Flanking_upstream", "Flanking_downstream", "Active_enhancer", "Active_TSS_or_enhancer",
                "Primed_enhancer", "Poised_enhancer_1", "Poised_enhancer_2", "Flanking_TSS_or_poised_enhancer",
-               "Accessible_chromatin", "Bivalent", "Bivalent_or_mixed_active/polycomb", "Repressed_polycomb",
-               "ZNF_genes_and_repeats", "Unknown_1", "Unknown_2")  # strongest first; stacked bottom to top; Quiescent is not
-# drawn. The three '_or_' labels are the ImmunoMap's 6-state model (salmobase 2026); Unknown_2 is the gill model's.
+               "Accessible_chromatin", "Weak_accessible_chromatin", "Bivalent", "Bivalent_or_mixed_active/polycomb",
+               "Repressed_polycomb", "ZNF_genes_and_repeats", "Unknown_1", "Unknown_2")  # strongest first; stacked bottom
+# to top; Quiescent is not drawn. The three '_or_' labels are the salmon ImmunoMap's 6-state model (salmobase 2026),
+# Weak_accessible_chromatin the trout ImmunoMap's; Unknown_2 is the gill model's.
 
 
 def _colour(name):

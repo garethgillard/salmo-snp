@@ -2077,6 +2077,11 @@ G sets it). The fixture gets a SYNTHETIC score file.
 
 **Acceptance.** The synthetic layer reaches every place above; tiers are unchanged at weight 0.
 
+Since 2026-11-25 a score file may carry two more columns: `effect`, the signed effect of the alt allele (shown as an
+arrow, and in the Locus browser as a tick up in red or down in blue), and `percentile` in the model's own reference
+set (snpdata/README.md "A per-variant score"). The first real layer is `chrombpnet_gill`, the gill ChromBPNet
+model's predictions; the fixture holds 697 of them.
+
 #### I16 DeepFARM and a CADD-like score
 
 phase 3 · G's data · must when ready

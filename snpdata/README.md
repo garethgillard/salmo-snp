@@ -57,7 +57,8 @@ adds for a species other than salmon: `species` (key, name, latin, the chromosom
 browser's `example`, the pages' `wording`, `samples` and `searches`: the manifest carries it and the portal reads it),
 `chromosome_names` (when the chromosomes are not all numbers), `rsid.older` (the older assembly of EVA's second file)
 and `demo_sample` (an example list cut from a built layer). The layers are the salmon ones where the same source
-exists for trout: AQUA-FAANG peaks and states (17 conditions), blacklist, LORe, Ss4R (`species: Omyk` rows of the
+exists for trout: AQUA-FAANG peaks and states (19 conditions with the ImmunoMap's head kidney, from the unified peaks
+v6; 17 up to trout-2026-11-24), blacklist, LORe, Ss4R (`species: Omyk` rows of the
 salmon-trout table) and synteny; Ensembl 116 genes, regulatory build and GERP; NCBI models; orthologs; JASPAR motifs;
 EVA rs IDs, and a known-loci catalogue (`rainbow_trout/catalog/known_loci.tsv`: gene regions and published QTL
 windows, the latter as `type` qtl_interval with `start` and `end`). No molQTL, expression, Bgee, genetic map or
@@ -270,23 +271,37 @@ windows (`type` qtl_interval) also have `start` and `end`.
    value for `GOLDEN` in `../snpscore/tests/test_snpscore.py`; update it on purpose and say why in the commit.
 4. If it should count towards tiers, add a weight in snpscore's `weights.yaml` (G decides it) and a term in `../snpscore/src/snpscore/score.py`.
 
-**A per-variant score** (ROADMAP I15: DeepFARM, a CADD-like score) needs no code: a tab-separated file (gzip optional)
-with the header `chrom pos ref alt score` (pos 1-based, Ssal_v3.1, chromosomes 1-29) and one layers.yaml entry:
+**A per-variant score** (ROADMAP I15: a ChromBPNet model's allele effects, a CADD-like score) needs no code: a
+tab-separated file (gzip optional) with the header `chrom pos ref alt score` (pos 1-based, Ssal_v3.1, chromosomes
+1-29; a higher score means more effect) and one layers.yaml entry:
 
 ```yaml
-  - name: deepfarm
+  - name: chrombpnet_gill
     type: point
     format: variant_scores
-    file: deepfarm_scores.tsv.gz
-    label: DeepFARM                 # how the portal names it
-    description: DeepFARM regulatory-effect score of the alt allele (what the model scored, e.g. public sites in peaks)
+    file: chrombpnet_gill.tsv.gz
+    label: ChromBPNet Gill          # how the portal names it
+    direction: [more accessible, less accessible]   # optional, with an `effect` column: the alt allele above, below zero
+    reference: 100,000 random public SNPs           # optional, with a `percentile` column: what it ranks among
+    description: what the model scored and how to read it
     citation: ...
     licence: ...
 ```
 
-`build` adds `percentile` (the share of the scored set with a lower score). annotate gives `deepfarm` (true when the
-variant was scored), `deepfarm_score` and `deepfarm_percentile`; the portal shows them in the Table's Scores column, the
-card and a locus-browser row, and the benchmark compares the top 10% and 1% with matched controls. It counts in tiers only
-once G sets `variant_scores: {deepfarm: <percentile>}` and a `deepfarm` weight in snpscore's weights.yaml.
+Two more columns are read when the header names them:
+
+- `effect`: the signed effect of the alt allele (ChromBPNet: the log2 fold change of predicted accessibility, alt over
+  ref). annotate turns it to the input's alt allele when the alleles are swapped. The portal shows its direction: an
+  arrow in the Table and on the card, and in the Locus browser a tick up in red or down in blue, as the ChromBPNet
+  scorer's own browser track colours them.
+- `percentile`: the score's rank, 0 to 1, in the model's own reference set, so 'top 1%' reads the same whichever
+  variants were scored. Without the column `build` computes it: the share of the scored set with a lower score.
+
+annotate gives `chrombpnet_gill` (true when the variant was scored), `chrombpnet_gill_score`, `_percentile` and
+`_effect`; the portal shows them in the Table's Scores column, on the card and in the Locus browser's 'Predicted
+allele effects' rows, and the benchmark compares the top 10% and 1% with matched controls. A layer counts in tiers
+only once G sets `variant_scores: {chrombpnet_gill: <percentile>}` and a `chrombpnet_gill` weight in snpscore's
+weights.yaml. The gill ChromBPNet scores are the first such layer (layers.yaml; where the file comes from:
+[docs/ORION.md](../docs/ORION.md)).
 
 Progress and next steps: [docs/TRACKER.md](../docs/TRACKER.md).

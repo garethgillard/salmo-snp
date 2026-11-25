@@ -123,8 +123,9 @@ layers:
     file: AtlanticSalmon_unified_peaks.bed
     # The 21 published conditions plus gill (2026) and the ImmunoMap, scored since G's answer of 2026-11-20
     # (docs/DECISIONS.md #47). The file changes on salmobase (its VERSION.md): release 2026-11-05 was built from v1,
-    # release 2026-11-20 from v3 (2026-11-18, now archive/v3/); v5 (2026-11-23) has the same 328,894 peaks with the
-    # gill and head kidney states of retrained models, so the next release differs in those six conditions' states.
+    # release 2026-11-20 from v3 (2026-11-18, now archive/v3/), release 2026-11-24 from v5 (2026-11-23: the same
+    # 328,894 peaks with the gill and head kidney states of retrained models). v6 (2026-11-25) is v5 with the peak's
+    # summary label and its colour back in columns 7 and 8.
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/robust_ATAC_peaks/unified_annotated_peaks/AtlanticSalmon_unified_peaks.bed
     id: true
     description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 27 conditions (empty = no peak there)
@@ -388,6 +389,28 @@ layers:
       JASPAR 2024 CORE vertebrates, non-redundant (879 motifs); Rauluseviciute I et al. 2024, Nucleic Acids Research
       52:D174, doi:10.1093/nar/gkad1059
     licence: CC BY 4.0 (JASPAR)
+
+  - name: chrombpnet_gill
+    type: point
+    format: variant_scores  # README "A per-variant score". The file comes from the salmo-chrombpnet work (docs/ORION.md)
+    file: chrombpnet_gill.tsv.gz
+    url: https://salmobase.org/datafiles/datasets/chrombpnet/AtlanticSalmon/v1/Gill/scores/chrombpnet_gill.tsv.gz
+    label: ChromBPNet Gill
+    direction: [more accessible, less accessible]  # the alt allele, where `effect` is above and below zero
+    reference: 100,000 random public SNPs          # what `percentile` ranks among
+    description: >-
+      The gill ChromBPNet model's prediction of what the alt allele does to ATAC-seq accessibility in gill: score (the
+      absolute log2 fold change of the predicted counts, alt over ref), effect (the log2 fold change: above zero the
+      alt allele is predicted more accessible) and percentile (the share of 100,000 random public SNPs, scored the
+      same way, with a lower score). Each SNP is scored by the fold model that held its chromosome out of training.
+      Scored so far (G, 2026-11-25: every public site later): the public and Synchrosmolt SNPs inside the model's own
+      training peaks; a SNP outside that set is not scored. A model's prediction, not a measurement
+    citation: >-
+      salmo-chrombpnet Gill v1 (NMBU; salmobase.org datafiles/datasets/chrombpnet); Pampari A et al. ChromBPNet.
+      bioRxiv 2024, doi:10.1101/2024.12.25.630221; AQUA-FAANG gill ATAC-seq: Baudement M-O, Perojil Morata D,
+      Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Developmental contexts of gene-regulatory evolution following
+      whole genome duplication in salmonids. Nat Ecol Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6
+    licence: PolyForm Noncommercial 1.0.0, NMBU (the models and their scores)
 
   - name: molqtl
     type: point

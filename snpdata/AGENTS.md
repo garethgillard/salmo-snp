@@ -12,6 +12,10 @@ and the portal.
 - data/ and release/ are never committed. Never edit files in data/raw by hand.
 - The motif layer uses snpscore's motif scoring, so a release records the snpscore version it was built with.
 - After changing layers, re-cut the test fixture: `bash prep/make_fixture.sh`.
+- A per-variant score layer (README "A per-variant score") is a file from another project and one registry entry.
+  The first is `chrombpnet_gill`, from the salmo-chrombpnet work on Orion (../docs/ORION.md has the request and the
+  address). The fixture's file holds real predictions for its 697 SNPs in the model's peaks, made with the model's
+  own scorer (numpy and onnxruntime in a scratch environment, never in this project's dependencies).
 - One registry per species: `layers.yaml` (Atlantic salmon) and `rainbow_trout/layers.yaml` (USDA_OmykA_1.1; its
   tracks.yaml beside it, its fixture tests/fixture/rainbow_trout from `python prep/make_fixture_trout.py`). A release's
   version says the species (trout-<date>); README "Rainbow trout". build.py has no species in it: what differs is

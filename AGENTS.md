@@ -210,15 +210,29 @@ Decided:
   not online. G's rule for all Orion work (2026-11-20): never set a SLURM time limit.
 
 - The build after those (G, 2026-11-25): "plan the next build using the new gill salmo-chrombpnet model available,
-  and the new trout immunomap data on salmobase". Planned, not built: docs/ORION.md "The next build". Salmon gains
-  the layer `chrombpnet_gill` (the gill model's score per SNP, shown and not counted); trout is built from the
-  unified peaks v6, with the ImmunoMap's head kidney after PBS and Vibrio (19 conditions). G has not answered what
-  Claude recommends there: DECISIONS #60-#64 (which SNPs are scored, users' own SNPs, whether trout head kidney
-  counts in the tiers, the new label Weak_accessible_chromatin, Vibrio's summits).
+  and the new trout immunomap data on salmobase". Planned, not built: docs/ORION.md "The next build". G's answers
+  the same day (DECISIONS #60-#64: "go with your recommendations for all five, except the full 9+ million public
+  snps. We'll do it, but just not at this point"):
+  - Salmon gains the layer `chrombpnet_gill`, the gill ChromBPNet model's score per SNP (the absolute log2 fold
+    change of predicted accessibility, each SNP by the fold that held its chromosome out), shown and not counted.
+    Every public and Synchrosmolt site (9,288,186) is to be scored later, not now. Which smaller set comes first
+    is Claude's choice (Provisional below).
+  - "Can we make sure we have that useful track from chrombpnet to show effects": the Locus browser's score rows
+    show the direction of each effect as the scorer's own browser track does (up and red: the alt allele predicted
+    more accessible; down and blue: less). A score file may carry `effect` (signed) and `percentile` columns for it.
+  - A user's own SNPs outside the scored set show 'not scored' in this build. Scoring them in the install (numpy
+    and onnxruntime) is for later, and still G's call.
+  - Trout head kidney (the ImmunoMap's PBS and Vibrio) counts in the tiers, as salmon's does: the trout release is
+    built from the unified peaks v6 (19 conditions).
+  - `Weak_accessible_chromatin` (the trout PBS model's ATAC-only state with weak emission) is a weak state, as
+    Accessible_chromatin.
+  - Vibrio's summits: from a MACS2 call on its four good fish's merged reads if that is quick to make with the
+    AQUA-FAANG files, else the build goes without them.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
-  and the ImmunoMap's bivalent or mixed active/polycomb (G, 2026-11-20). Not counted: repressed polycomb, quiescent, ZNF
+  the ImmunoMap's bivalent or mixed active/polycomb (G, 2026-11-20) and the trout ImmunoMap's weak accessible
+  chromatin (G, 2026-11-25). Not counted: repressed polycomb, quiescent, ZNF
   genes and repeats, Unknown_1 (the published models') and Unknown_2 (the first gill model's; gone from the unified
   peaks since their v4 of 2026-11-23).
 - Trait presets (condition prefixes): maturation = Brain + Gonad; growth_and_fillet = Muscle + Liver;
@@ -254,6 +268,10 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   IDs with one offset (layers.yaml liftover); fSalSal1 from same-chromosome minimap2 asm5 alignments, mapq >= 5,
   overlapping blocks dropped (DECISIONS #37; the alignment postponed, G 2026-11-06: no fSalSal1
   tables in a release until I20).
+- The gill ChromBPNet scores' first set (2026-11-25, DECISIONS #60): until every site is scored, the public and
+  Synchrosmolt SNPs inside the model's own training peaks (216,592 SNPs in the gill MACS2 peaks; under an hour on a
+  GPU), where its predictions mean the most. The layer's percentile is the scorer's, among 100,000 random public
+  SNPs, so 'top 1%' reads the same whichever set is scored.
 - The pike and summit layers (2026-11-24, DECISIONS #54, #58; docs/SCORING.md section 6 has the tests):
   - `pike`: the bases with alignment depth to northern pike in AQUA-FAANG's salmon-trout-pike alignment, alignment
     gaps of up to 50 bp closed (layers.yaml `max_gap`; chosen from the eQTL test: SNPs in gaps of up to 50 bp are
@@ -266,7 +284,8 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     Weights: pike 0, summit 0. Recommended to G: pike 1; summit 0 until allelic imbalance or ChromBPNet can test it.
 - Rainbow trout release (2026-11-12, DECISIONS #38-#45; the tier rules are salmon's weights.yaml, unchanged):
   - Layers: AQUA-FAANG unified peaks and ChromHMM states (17 conditions: brain, liver, muscle by maturity and sex, five
-    embryo stages; no gonad states), blacklist, LORe regions, Ss4R duplicates (the same salmon-trout table, its Omyk
+    embryo stages; no gonad states; from the release after trout-2026-11-24 also the ImmunoMap's head kidney after
+    PBS and Vibrio, 19 conditions: Decided, 2026-11-25), blacklist, LORe regions, Ss4R duplicates (the same salmon-trout table, its Omyk
     rows) and synteny; Ensembl 116 genes, regulatory build and GERP; NCBI RefSeq models; JASPAR motifs (G's salmon
     rule); EVA release 9 rs IDs (USDA_OmykA_1.1, and Omyk_1.0 as the older assembly). No molQTL, expression, Bgee,
     genetic map or position conversion (EVA has too few rs IDs on Omyk_1.0 for blocks).
@@ -383,6 +402,12 @@ info` says where); then `salmo-snp serve`. A new release is built and published 
      tour_images does).
   4. Push and open (or update) the pull request; CI runs. NREC runs main only, and only what G has had deployed:
      it is public, so branches never go there.
+- A ChromBPNet model's scorer runs in a cloud session (2026-11-25, for the fixture's gill scores): a scratch venv
+  with numpy and onnxruntime (not project dependencies), the model's `scorer/` files and
+  `training_peaks.narrowPeak.gz` from salmobase laid out as in its release, and an uncompressed FASTA of the
+  chromosomes needed, cut from the bgzipped genome (`zcat` and a filter on the record names; the scorer accepts a
+  subset). Run one chromosome per process: 0.3 to 0.5 s a SNP on 4 cores, about 1 GB. Its scores of the model's
+  test SNPs matched the published ones to 0.00001.
 - Checking pages without a browser: fetch them with curl from a `salmo-snp serve` in the background;
   `bash tools/user_install_test.sh` checks the whole user path.
 - Merging (G, 2026-11-04): features collect on the session's branch and its pull request, and go live only when G

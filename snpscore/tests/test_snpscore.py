@@ -462,7 +462,9 @@ def test_read_snps_keeps_input_order(tmp_path):
 #   the 2,519 fixture SNPs), with weight 0, so no tier or score changes (checked by building with and without the
 #   layers). With them, the fixture's unified peaks re-cut from salmobase's v5 (2026-11-23: gill and head kidney states
 #   from retrained models, the same peaks): 26 of its 1,341 peaks change a state, no fixture SNP's tier or score.
-GOLDEN = "e1c4c87aa2a096c4c244c3a0c1ca36c28727b6cd9f61becb28e17c859e6b19e0"
+#   The layer chrombpnet_gill (2026-11-25: the gill ChromBPNet model's real predictions for the fixture's 697 public
+#   and Synchrosmolt SNPs inside its training peaks) adds five columns; no tier or score changes (weight 0).
+GOLDEN = "ad931a9ddf01086c53ec076bcb0f9b09f1ee6cee7f347337708393bd9d810891"
 
 
 def test_long_lists_are_written_in_sorted_parts(release, tmp_path, monkeypatch):
@@ -505,8 +507,8 @@ def test_variant_score_layer(tmp_path, monkeypatch):  # I15: a SYNTHETIC per-var
     import yaml
     sites = fixture_sites(3)  # scores 0.1, 0.5 and 0.9 for the fixture's first three sites; every other SNP is unscored
     scores = tmp_path / "variant_scores_SYNTHETIC.tsv"
-    scores.write_text("chrom\tpos\tref\talt\tscore\n" + "".join(
-        f"{c}\t{p}\t{r}\t{a}\t{s}\n" for (c, p, _, r, a), s in zip(sites, (0.1, 0.5, 0.9))))
+    scores.write_text("chrom\tpos\tref\talt\tscore\teffect\n" + "".join(  # effect: the signed effect of the alt allele
+        f"{c}\t{p}\t{r}\t{a}\t{s}\t{e}\n" for (c, p, _, r, a), s, e in zip(sites, (0.1, 0.5, 0.9), (-0.1, 0.5, -0.9))))
     layer = {"name": "synscore", "type": "point", "format": "variant_scores", "file": str(scores), "label": "Synthetic",
              "description": "SYNTHETIC test scores"}
     b = importlib.import_module("snpdata.build")
@@ -517,6 +519,11 @@ def test_variant_score_layer(tmp_path, monkeypatch):  # I15: a SYNTHETIC per-var
     first, last = rows[sites[0][0], int(sites[0][1])], rows[sites[2][0], int(sites[2][1])]
     assert (first["synscore"], first["synscore_score"], first["synscore_percentile"]) == (True, 0.1, 0.0)
     assert (last["synscore_score"], last["synscore_percentile"]) == (0.9, 1.0)
+    assert (first["synscore_effect"], last["synscore_effect"]) == (-0.1, -0.9)
+    c, p, _, r, a = sites[1]  # the same site with its alleles the other way round: the effect of this alt allele
+    (tmp_path / "swapped.tsv").write_text(f"chrom\tpos\tref\talt\n{c}\t{p}\t{a}\t{r}\n")
+    swapped, = read(annotate(tmp_path / "swapped.tsv", rel, tmp_path / "swapped.parquet"))
+    assert (swapped["synscore_alleles"], swapped["synscore_score"], swapped["synscore_effect"]) == ("swapped", 0.5, -0.5)
     other = next(r for k, r in rows.items() if k not in {(c, int(p)) for c, p, *_ in sites})
     assert other["synscore"] is False and other["synscore_score"] is None  # outside the scored set: not scored, not 0
     weights = load_weights()  # weight 0 / no percentile: shown, never counted; with G's numbers it counts
@@ -528,6 +535,32 @@ def test_variant_score_layer(tmp_path, monkeypatch):  # I15: a SYNTHETIC per-var
     terms = {(c, p): [t["term"] for t in tt] for c, p, tt in con.execute(
         f"SELECT chrom, pos, tier_terms FROM ({scored('a', weights, columns, 'all')})").fetchall()}
     assert "synscore" in terms[sites[2][0], int(sites[2][1])] and "synscore" not in terms[sites[0][0], int(sites[0][1])]
+
+
+def test_weak_accessible_chromatin_is_weak():
+    """The trout ImmunoMap's PBS label (an ATAC-only state with weak emission) is a weak state, one point, as
+    Accessible_chromatin (G, 2026-11-25); Quiescent and no peak count nothing."""
+    weights = load_weights()
+    con = duckdb.connect()
+    con.execute("""CREATE TABLE a AS SELECT * FROM (VALUES (1, 'Weak_accessible_chromatin'), (2, 'Accessible_chromatin'), (3, 'Quiescent'),
+                   (4, NULL)) t(pos, chromatin_HeadKidney_invivo_pbs)""")
+    rows = dict(con.execute(f"SELECT pos, tier_score FROM ({scored('a', weights, ['pos', 'chromatin_HeadKidney_invivo_pbs'], 'all')})").fetchall())
+    assert rows == {1: weights["weights"]["weak"], 2: weights["weights"]["weak"], 3: 0, 4: 0}
+
+
+def test_chrombpnet_gill_layer(release, tmp_path):
+    """The release's own score layer: the gill ChromBPNet model's predictions (real ones in the fixture), with the
+    effect's sign and the scorer's percentile, which ranks among its 100,000 random public SNPs and not in the file."""
+    rows = {(r["chrom"], r["pos"]): r for r in read(annotate(FIXTURE / "snps.vcf", release, tmp_path / "out.parquet"))}
+    top = rows["25", 28608041]  # T>C: the alt allele is predicted less accessible in gill
+    assert (top["chrombpnet_gill"], top["chrombpnet_gill_score"], top["chrombpnet_gill_effect"], top["chrombpnet_gill_percentile"]) == (
+        True, 0.21179, -0.21179, 0.9922)
+    scored = [r for r in rows.values() if r["chrombpnet_gill"]]
+    assert len(scored) == 76 and all(abs(r["chrombpnet_gill_effect"]) == r["chrombpnet_gill_score"] for r in scored)
+    assert not any("chrombpnet" in str(r["tier_terms"]) for r in scored)  # shown, never counted (weights.yaml variant_scores: {})
+    layer = next(x for x in json.loads((release / "manifest.json").read_text())["layers"] if x["name"] == "chrombpnet_gill")
+    assert (layer["rows"], layer["columns"], layer["direction"]) == (697, ["ref", "alt", "score", "percentile", "effect"],
+                                                                     ["more accessible", "less accessible"])
 
 
 def test_genome_location_by_file_name(tmp_path, monkeypatch):  # I17: a data folder may hold the genomes of several releases

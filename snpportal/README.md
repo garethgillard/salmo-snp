@@ -272,7 +272,10 @@ Locus browser groups, top to bottom: Genes and variants (your SNPs, published lo
 (a combined row with a segment per dataset at each site; opened, one row per dataset with height = MAF: the 504-fish
 panel, its 12 AQUA-FAANG fish, the Synchrosmolt parents; colours in `palette.SNP_SETS`), TF motifs (public SNPs in
 robust peaks that change a motif match: ticks, the two largest changes enlarged in wedges below them, and from 150 bp
-every changed motif's logo over the reference sequence; windows go down to 60 bp), Regulatory elements, Chromatin
+every changed motif's logo over the reference sequence; windows go down to 60 bp), Predicted allele effects (in a
+release with score layers, such as the gill ChromBPNet model's: one row per model and a tick per scored SNP, its
+height the score's rank; up and red where the alt allele is predicted more accessible, down and blue where less,
+as the ChromBPNet scorer's own browser track colours them; `palette.EFFECTS`), Regulatory elements, Chromatin
 states, Functional assays and Other annotation. The AQUA-FAANG rows come from the release's tracks.yaml plus
 `snpportal/lib/tracks_added.yaml`: tracks published after the release (salmon gill ATAC-seq of 2026, gill states and
 peaks, the ImmunoMap), added to a registry of the same hub that lacks them (`snpdata tracks --added-since

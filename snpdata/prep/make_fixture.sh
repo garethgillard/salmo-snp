@@ -87,6 +87,12 @@ awk -F'\t' 'NR == 1 || $2 ~ /^(1|9|21|25|26)$/ || $5 ~ /^(1|9|21|25|26)$/' "$RAW
 awk -F'\t' '$1 == "1" || $1 == "9" || $1 == "21" || $1 == "25" || $1 == "26"' "$RAW/alias_filtered.txt" > "$OUT/alias_filtered.txt"
 # The Ssal_v3.1 -> fSalSal1 alignment (prep/align_assemblies.py): its alignments inside the regions, and the names table.
 gzip -dc "$RAW/ssal31_to_fsalsal1.paf.gz" | awk -F'\t' "$HIT hit(\$1, \$3, \$4)" | gzip > "$OUT/ssal31_to_fsalsal1.paf.gz"
+# The gill ChromBPNet scores inside the regions. Until the real file is in data/raw the fixture keeps its own: the
+# model's predictions for the fixture's 697 public and Synchrosmolt SNPs in its training peaks, made with the model's
+# scorer in a cloud session on 2026-11-25 (docs/ORION.md).
+if [ -f "$RAW/chrombpnet_gill.tsv.gz" ]; then
+  gzip -dc "$RAW/chrombpnet_gill.tsv.gz" | awk -F'\t' "$HIT NR == 1 || hit(\$1, \$2 - 1, \$2)" | gzip -9n > "$OUT/chrombpnet_gill.tsv.gz"
+fi
 cp "$RAW/fsalsal1_names.tsv" "$OUT/fsalsal1_names.tsv"
 .venv/bin/python prep/make_fixture_genome.py
 wc -l "$OUT"/*

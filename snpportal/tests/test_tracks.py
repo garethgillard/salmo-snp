@@ -95,7 +95,8 @@ def test_added(tmp_path):
     assert [{t["id"] for t in cfg[k]} for k in tracks.KEYS] == [{t["id"] for t in want[k]} for k in tracks.KEYS]
     trout = yaml.safe_load((DATA / "rainbow_trout" / "tracks.yaml").read_text())
     got = tracks.load_tracks(DATA / "rainbow_trout" / "tracks.yaml")
-    assert len(got["tracks"]) == len(trout["tracks"]) and not any(t["source"] == "ImmunoMap" for t in got["tracks"])
+    assert len(got["tracks"]) == len(trout["tracks"]) and not any("AtlanticSalmon" in t["url"] for t in got["tracks"])
+    assert sum(t["source"] == "ImmunoMap" for t in got["tracks"]) == 130  # its own ImmunoMap tracks, in its registry since 2026-11-25
 
 
 def test_registry_policy(tmp_path, remote):
