@@ -1,8 +1,9 @@
 # The portal as a container for salmobase (AGENTS.md plan 4): a tagged salmo-snp version, served by gunicorn under
 # /snp/ (static files too), behind salmobase's Apache. Two volumes: salmobase's datafiles folder, read only (the
 # published releases, the genomes, the AQUA-FAANG tracks and the models' files are read where they are), and the
-# portal's own data folder (results, the secret key). docs/SALMOBASE.md has the Apache lines and the way without
-# Docker. Build it from the repository root, checked out at a tag or a commit of main:
+# portal's own data folder (results, the secret key). On the salmobase server it runs from
+# deploy/compose.salmobase.yml, on salmobase's Docker network (docs/SALMOBASE.md, which also has the block for
+# salmobase's Apache file). By hand, from the repository root, checked out at a tag or a commit of main:
 #   docker build -f snpportal/deploy/Dockerfile -t salmo-snp:<version> .
 # Run it (the data folder belongs to uid 1000, the container's user, which must also be able to read datafiles):
 #   docker run -d --name salmo-snp --restart unless-stopped -p 127.0.0.1:8090:8000 \

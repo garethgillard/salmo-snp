@@ -1,0 +1,35 @@
+# The portal beside salmobase on its server (docs/SALMOBASE.md). salmobase runs as a Docker Compose project (its
+# services app, db and docs; https://gitlab.com/elixir-nmbu/salmobase): this file is a second project, in a folder of
+# its own, whose one container joins salmobase's network under the name `snp`. Apache, which runs inside salmobase's
+# app container, then reaches it as http://snp:8000 (the block for salmobase's Apache file is in docs/SALMOBASE.md),
+# and the portal is built, started, updated and stopped without touching salmobase's own containers.
+# In a folder that holds this file as docker-compose.yml, the clone as src/salmo-snp, and a .env with:
+#   SALMOBASE_NETWORK=<salmobase's compose network: `docker network ls`, usually <its folder's name>_default>
+#   DATAFILES=<the datafiles folder that salmobase's app container mounts at /datafiles>
+#   SITE=salmobase.org                    (or test.salmobase.org: the name the site answers to)
+#   PORTAL_USER=<`id -u`:`id -g` of the user who owns ./data>   (default 1000:1000)
+#   PORTAL_PORT=8090                      (optional: the port on the server's own 127.0.0.1, for the checks)
+# Then: docker compose build && docker compose up -d && docker compose logs --tail 20 snp
+services:
+  snp:
+    build:
+      context: src/salmo-snp
+      dockerfile: snpportal/deploy/Dockerfile
+    user: ${PORTAL_USER:-1000:1000}
+    volumes:
+      - ${DATAFILES:?the datafiles folder that salmobase serves}:/datafiles:ro   # read where it is published; never written
+      - ./data:/data                                                           # results, the secret key
+    environment:
+      DJANGO_ALLOWED_HOSTS: ${SITE:?the name the site answers to, e.g. salmobase.org}
+    ports:
+      - 127.0.0.1:${PORTAL_PORT:-8090}:8000   # this server only: tools/smoke.sh before Apache knows the portal
+    mem_limit: 4g       # a ceiling, so that scoring a large list cannot starve salmobase's own containers
+    cpus: 2
+    restart: unless-stopped
+    networks:
+      salmobase:
+        aliases: [snp]
+networks:
+  salmobase:
+    name: ${SALMOBASE_NETWORK:?the name of salmobase's compose network}
+    external: true

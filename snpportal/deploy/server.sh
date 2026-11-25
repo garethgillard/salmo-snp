@@ -15,6 +15,7 @@
 # SNPPORTAL_KEEP_HOURS every hour, and starts gunicorn.
 set -e
 DATA=${SNPPORTAL_DATA:-/data}
+[ -w "${HOME:-/nonexistent}" ] || export HOME="$DATA"  # a container run as another user: gunicorn keeps a socket in ~
 export SNPPORTAL_RESULTS_DIR="${SNPPORTAL_RESULTS_DIR:-$DATA/results}"
 export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-snpsite.settings}" DJANGO_DEBUG="${DJANGO_DEBUG:-0}"
 export DJANGO_STATIC_URL="${DJANGO_STATIC_URL:-/snp/static/}" SNPPORTAL_SERVE_STATIC="${SNPPORTAL_SERVE_STATIC:-1}"
