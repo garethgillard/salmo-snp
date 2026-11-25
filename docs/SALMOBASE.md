@@ -23,8 +23,8 @@ says (AGENTS.md "Deploying the NREC demo").
 ## How the portal runs there
 
 - **One process**: gunicorn, started by `snpportal/deploy/server.sh`, answering everything under `/snp/` (its
-  static files too) behind salmobase's Apache, which needs two proxy lines. It is not part of salmobase's own
-  Django; salmobase links to it with a button.
+  static files too) behind salmobase's Apache, which needs one block of configuration. It is not part of
+  salmobase's own Django.
 - **The data is read where it is published.** One setting, `SNPSCORE_SALMOBASE`, names the server's datafiles
   folder (what `https://salmobase.org/datafiles/` serves). The portal writes nothing there.
 
@@ -72,8 +72,9 @@ the first three; the table at the end collects all of it.
 
 ## Beside salmobase's own site
 
-The portal is a second application on the same host name. What keeps the two apart, each point tried behind Apache
-with a stand-in for salmobase's application (a Django site with a form of its own):
+The portal is a second application on the same host name. What keeps the two apart; the addresses, the cookies and
+the headers were tried behind Apache with a stand-in for salmobase's application (a Django site with a form of its
+own):
 
 - **Addresses**: everything of the portal is under `/snp/`: its pages, its forms and its static files
   (`/snp/static/`). It answers nothing else, and salmobase's `/static/` and `/datafiles/` are not touched.
@@ -113,7 +114,7 @@ What its answers decide. Write them into the table at the end of this file.
 | Python 3.11 or newer (or `uv`, or conda)? | Way B is possible | Way A only; or ask for a Python |
 | May this user keep a service running (`Linger=yes`, or the way salmobase's own services are kept)? | A user service | Ask the server's administrator for a system service with the same lines |
 | Where is the datafiles folder, and can the service's user read it? | That path is `SNPSCORE_SALMOBASE` | Stop: the design needs it |
-| Who edits Apache's configuration? | They add the two lines below, once | Stop and tell G |
+| Who edits Apache's configuration? | They add the block below, once | Stop and tell G |
 | Does the server reach GitHub and PyPI (and Docker Hub for way A)? | Install there | Build the image, or a folder of wheels, on Orion and copy it over |
 
 Start on the test server (`test.salmobase`), with `DJANGO_ALLOWED_HOSTS=test.salmobase.org`; repeat on the live
@@ -242,7 +243,8 @@ smoke: ok
 ```
 
 It ends with `smoke: ok` or says which example failed, and exits accordingly. `EXAMPLES=known_loci` scores only
-that one. The health page alone: `/snp/health/?tracks=1`.
+that one. The second argument is the name the site answers to: `test.salmobase.org` on the test server. The health
+page alone: `/snp/health/?tracks=1`.
 
 ## Working from Orion
 
@@ -280,6 +282,9 @@ Only when G says. Pull main on Orion first and read what changed in this file.
 Then the smoke test. To go back: the same with the commit before (way A: `docker run` the image of the commit
 before, which is still there). Results and the secret key are in the data folder and survive both.
 
+To take the portal away: `docker rm -f salmo-snp` (way A) or `systemctl --user disable --now salmo-snp` (way B),
+Apache's block out and a reload, and `~/salmo-snp` removed. Nothing else on the server was changed by it.
+
 ## A new data release, or new tier rules
 
 1. Build and publish the release from Orion (ORION.md, steps 1 to 5). The live portal does not change.
@@ -295,7 +300,7 @@ snpscore pool --release release/trout-<version> --if-stale --memory 16GB --threa
 MODE=dry bash prep/orion_publish.sh <version> trout-<version>     # sends the two pool folders only; then MODE=run
 ```
 
-Then restart the portal, which reads a pool when it starts.
+Then restart the portal: a running one may keep the old pool's numbers.
 
 ## What is not known yet
 
