@@ -44,9 +44,9 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
    - NREC (demo and staging until salmobase): git checkout, updated only when G says so (the manual `deploy`
      workflow, a batch of tested changes at a time; G, 2026-11-06), never by a merge;
    - salmobase (the live installation, being prepared: G, 2026-11-25): the portal behind salmobase's Apache at
-     /snp/, linked from salmobase with a button (not merged into its Django), as a container or from a virtual
-     environment, reading the published data where it is on the server (`SNPSCORE_SALMOBASE`: its datafiles
-     folder); installed and updated by the chat on Orion (docs/SALMOBASE.md);
+     /snp/ (not merged into its Django), as a container of its own on salmobase's Docker network, reading the
+     published data where it is on the server (`SNPSCORE_SALMOBASE`: its datafiles folder); installed and updated
+     by the chat on Orion (docs/SALMOBASE.md);
    - breeding companies and everyone else: the local install.
    Docker and bioconda only wrap the package. Nothing depends on Docker-only features.
 5. The data is hosted online (salmobase or any static web server) as one folder: releases/<version>/ (the snapshot
@@ -272,11 +272,14 @@ Decided:
   Claude's choices, PROVISIONAL (DECISIONS #65): the portal shows the releases its version names, not a newer one
   in the folder; the server builds no pool (they come from Orion with the release). The NREC demo stays until G
   says otherwise.
-  What the live site shows from outside (2026-11-25; docs/SALMOBASE.md has it): Apache 2.4 on Debian in front,
-  salmobase's own Django behind it, `/snp/` free on salmobase.org and test.salmobase.org. So the portal is a second
-  application on one host name: its cookies have names of their own and the path `/snp/` on a server, and it was
-  tried behind Apache beside a stand-in for salmobase's site. Neither salmobase's source nor the server could be
-  read from a cloud session: what is still unknown is a table in docs/SALMOBASE.md, filled in by the survey.
+  How salmobase itself runs (its repository, https://gitlab.com/elixir-nmbu/salmobase, public; G pointed to it,
+  2026-11-25; docs/SALMOBASE.md has it): a Docker Compose project (app, db, docs) with Apache inside the `app`
+  container, its configuration copied into the image, `/docs` sent to the docs container by name, and `/snp` free.
+  So the portal is a container of its own in a compose project of its own (`deploy/compose.salmobase.yml`) on
+  salmobase's network, named `snp`, and one block in salmobase's Apache file sends `/snp` to it: the one change in
+  salmobase's repository. Being a second Django on one host name, its cookies have names of their own and the path
+  `/snp/`. Tried with salmobase's real Apache file and a stand-in for its Django. The server itself cannot be
+  reached from a cloud session: what is still unknown is a table in docs/SALMOBASE.md, filled in by the survey.
   Navigation between salmobase's pages and the portal is left for later (G, 2026-11-25: "Don't worry about
   navigation to and from salmobase for now"): the portal is an address.
 

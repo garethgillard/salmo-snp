@@ -17,12 +17,18 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   158.39.75.9 158-39-75-9.sslip.io`, which needs G's Mac (the VM's SSH key and the release folder); always pass the IP
   address, as the script rewrites the Caddy sites and allowed hosts from the names it is given.
 - salmobase, being prepared (G, 2026-11-25; ../docs/SALMOBASE.md is the brief for the chat on Orion, which installs
-  and updates it): `deploy/server.sh` in a container (`deploy/Dockerfile`) or from a virtual environment, behind
-  Apache at /snp/ (it serves its own static files under /snp/static/). `SNPSCORE_SALMOBASE` names the server's
-  datafiles folder: settings.py finds the releases folder and the default release there, and snpscore reads tracks,
-  genomes and model files from it (`bbi.local`). Nothing may write under it (tests_server.py). In a cloud session
-  `dockerd &` starts Docker; build with `--secret id=ca,src=/root/.ccr/ca-bundle.crt --network host` and the proxy
-  as build args (HTTPS_PROXY), so pip trusts the session's proxy.
+  and updates it). salmobase runs under Docker Compose with Apache inside its `app` container (its repository:
+  gitlab.com/elixir-nmbu/salmobase), so the portal is a container of its own on salmobase's network
+  (`deploy/compose.salmobase.yml`; `deploy/server.sh` in the image of `deploy/Dockerfile`), reached by the name
+  `snp` from one block in salmobase's Apache file. It serves everything under /snp/ (its static files under
+  /snp/static/). `SNPSCORE_SALMOBASE` names the server's datafiles folder: settings.py finds the releases folder
+  and the default release there, and snpscore reads tracks, genomes and model files from it (`bbi.local`). Nothing
+  may write under it (tests_server.py). Being a second Django on salmobase's host name, its cookies have names of
+  their own (settings.py) and, on a server, the path /snp/ (`jobs.cookie_path()`: pass it to every cookie set).
+- Trying a deployment in a cloud session: `dockerd &` starts Docker; build with `--secret
+  id=ca,src=/root/.ccr/ca-bundle.crt --network host` and the proxy as build args (HTTPS_PROXY), so pip trusts the
+  session's proxy. Apache is the `httpd:2.4` image (apt has no apache2 here); a mock of the server's datafiles
+  folder is hard links (`cp -al`) of the releases, genome and model in ~/.local/share/salmo-snp.
 - Run `python -m django ...` from snpportal/ or from outside the repository, never from its root: there the
   `snpportal/` folder hides the installed package, and Django finds no management command (server.sh changes to its
   data folder for this).

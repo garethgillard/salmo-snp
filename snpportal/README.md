@@ -102,22 +102,28 @@ genome file with the manifest's sha256 is kept.
 
 ## On the salmobase server
 
-The live installation (being prepared: G, 2026-11-25) runs behind salmobase's Apache at `/snp/`, linked from
-salmobase with a button, not merged into its Django. [../docs/SALMOBASE.md](../docs/SALMOBASE.md) is the brief for
-installing and updating it there, with the commands; in short:
+The live installation (being prepared: G, 2026-11-25) is an address of salmobase, `/snp/`, not merged into its
+Django. [../docs/SALMOBASE.md](../docs/SALMOBASE.md) is the brief for installing and updating it there, with the
+commands; in short:
 
-- `deploy/server.sh` starts it, in the container (`deploy/Dockerfile`) or from a virtual environment: the secret
-  key, a look at each species' release (`manage.py snpportal_prepare`), Django's checks, an hourly cleanup, gunicorn.
-  gunicorn serves everything under `/snp/`, static files included (`DJANGO_STATIC_URL=/snp/static/`,
-  `SNPPORTAL_SERVE_STATIC=1`), so Apache needs one proxy rule; results are kept 24 h (`SNPPORTAL_KEEP_HOURS`).
-- `SNPSCORE_SALMOBASE` names the server's datafiles folder (what `https://salmobase.org/datafiles/` serves), mounted
-  read only. The portal then reads where they are published: the releases (`datasets/salmo-snp/releases/`; the
-  default is the release this version names, and each species' named one for new work), the genomes, the
-  AQUA-FAANG tracks and the models' files (`snpscore.bbi.local` maps an address under salmobase's datafiles to the
-  file). A file that is not there is read from its address. Without the setting, `SNPSCORE_RELEASE` and
-  `SNPSCORE_GENOME_DIR` name a release folder and the genomes, as on the NREC demo.
+- salmobase runs as a Docker Compose project with Apache inside its `app` container (its repository:
+  https://gitlab.com/elixir-nmbu/salmobase). The portal is a container of its own in a compose project of its own
+  (`deploy/compose.salmobase.yml`) on salmobase's network, named `snp`; one block in salmobase's Apache file sends
+  `/snp` to it, as that file already sends `/docs` to salmobase's docs container.
+- `deploy/server.sh` starts it (in the image of `deploy/Dockerfile`, or from a virtual environment on a server
+  without Docker): the secret key, a look at each species' release (`manage.py snpportal_prepare`), Django's checks,
+  an hourly cleanup, gunicorn. gunicorn serves everything under `/snp/`, static files included
+  (`DJANGO_STATIC_URL=/snp/static/`, `SNPPORTAL_SERVE_STATIC=1`); results are kept 24 h (`SNPPORTAL_KEEP_HOURS`).
+- `SNPSCORE_SALMOBASE` names the server's datafiles folder (what `https://salmobase.org/datafiles/` serves; the
+  image sets it to `/datafiles`, where the compose file mounts that folder read only). The portal then reads where
+  they are published: the releases (`datasets/salmo-snp/releases/`; the default is the release this version names,
+  and each species' named one for new work), the genomes, the AQUA-FAANG tracks and the models' files
+  (`snpscore.bbi.local` maps an address under salmobase's datafiles to the file). A file that is not there is read
+  from its address. Without the setting, `SNPSCORE_RELEASE` and `SNPSCORE_GENOME_DIR` name a release folder and the
+  genomes, as on the NREC demo.
 - `SNPPORTAL_DATA` (`/data` in the container) holds results, the secret key and, outside a container, the static
-  files. Nothing else is written.
+  files. Nothing else is written. The container runs as any user (`user:` in the compose file), so the data folder
+  needs no special owner.
 - Beside salmobase's own Django on the same host name: the portal's cookies have names of their own
   (`snpportal_csrftoken`, not Django's usual `csrftoken`) and, with `SNPPORTAL_COOKIE_PATH=/snp/` (server.sh sets
   it), are sent to its own pages only; its pages may be framed by its own pages alone (the Table's drawer frames the
@@ -127,11 +133,12 @@ installing and updating it there, with the commands; in short:
 - `deploy/survey.sh` reads what a server offers (it changes nothing); `../tools/smoke.sh <address>` tests a running
   portal: its health page, and every example of each species scored through the job queue.
 
-Tried in a cloud session on 2026-11-25 against a mock of the server's folders made from releases 2026-11-25 and
-trout-2026-11-25 (the datafiles folder read only): as a plain process and as the container, the smoke test passed,
-a prediction ran from the model files in place, and nothing in the datafiles folder changed. And behind Apache
-2.4, beside a stand-in for salmobase's own Django that took every other address: the smoke test and an upload
-passed through the proxy, and each site's forms worked with the other's cookies in the same browser.
+Tried in a cloud session on 2026-11-25, nothing on the server itself: the container on a mock of the server's
+datafiles folder made from releases 2026-11-25 and trout-2026-11-25 (read only), in its own compose project on the
+network of a stand-in for salmobase's (salmobase's real Apache file with the block, a Django with a form of its
+own). The smoke test and an upload passed through that Apache, each site's forms worked with the other's cookies in
+the same browser, a prediction ran from the model files in place, the portal's container was replaced without a
+restart of Apache, and nothing in the datafiles folder changed.
 
 ## How it works
 
