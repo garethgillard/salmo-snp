@@ -28,7 +28,8 @@ from . import explore, figures, jobs, palette, search, serve
 EMISSIONS = "https://salmobase.org/datafiles/datasets/Aqua-Faang/figures/chromHMM.png"
 STATE_MODELS = {"Bivalent": "DevMap only", "Poised_enhancer_2": "BodyMap only", "Unknown_2": "gill only",  # separate models
                 "Bivalent_or_mixed_active/polycomb": "ImmunoMap only", "Active_TSS_or_enhancer": "ImmunoMap tracks only",
-                "Flanking_TSS_or_poised_enhancer": "ImmunoMap tracks only"}
+                "Flanking_TSS_or_poised_enhancer": "ImmunoMap tracks only",
+                "Weak_accessible_chromatin": "rainbow trout ImmunoMap only"}
 TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.scored)
     "active": "An active state (Active TSS or Active enhancer) in at least one of the 27 conditions.",
     "active_elsewhere": "An active state only outside the chosen conditions (snpscore's --trait; never in the portal, "
@@ -119,6 +120,8 @@ LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall
     "public_af": ("Allele frequencies in 504 public fish, pooled", "504-fish panel"),
     "synchrosmolt_af": ("Allele frequencies in the Synchrosmolt parents, whole-genome sequenced", "Synchrosmolt (NMBU)"),
     "motif": ("TF motif changes at SNPs in robust ATAC peaks (879 vertebrate motifs)", "JASPAR 2024"),
+    "chrombpnet_gill": ("Predicted effect of the alt allele on gill ATAC-seq accessibility (a ChromBPNet model's "
+                        "prediction; shown, not counted in tiers)", "salmo-chrombpnet (NMBU)"),
     "axiom": ("SNPs on the Axiom array of the Complex Gill Disease study, with frequencies in 1,710 fish", "ENA PRJEB107807"),
     "molqtl": ("molQTL lead SNPs in 12 fish (display only)", "nf-RASQUAL"),
     "cm": ("Genetic map position (cM)", "Brekke et al."),
@@ -422,6 +425,8 @@ def methods_text(m, w):
     except (ImportError, AttributeError, TypeError, KeyError, ValueError):
         pass
     layers = {x["name"] for x in m.get("layers", [])}
+    scores = [x.get("label") or x["name"] for x in m.get("layers", []) if x.get("format") == "variant_scores"]
+    counted = bool((w or {}).get("variant_scores"))  # G has set a percentile for a score layer
     n = len([c for c in explore.layer("chromatin").get("columns", []) if c != "summary"])
     text = (f"SNPs were annotated with snpscore {m.get('snpscore_version') or ''} against release {m.get('version')} on "
             f"{m.get('assembly', 'Ssal_v3.1')}: AQUA-FAANG robust ATAC peaks with their ChromHMM state in {n} conditions"
@@ -432,7 +437,9 @@ def methods_text(m, w):
             + (", the nearest ATAC-seq summit and its signal" if "summit" in layers else "")
             + (" and allele frequencies of the 504-fish reference panel" if "public_af" in layers else "")
             + ". Each SNP's tier_score is the sum of the weights of its evidence over all conditions, and tiers "
-              "are cut-offs on that score (rules in weights.yaml, sha256 given in each download; PROVISIONAL).")
+              "are cut-offs on that score (rules in weights.yaml, sha256 given in each download; PROVISIONAL)."
+            + (f" Model predictions of each alt allele's effect ({', '.join(scores)}) are reported beside the tiers"
+               + ("." if counted else " and are not part of the tier score.") if scores else ""))
     return [text], []
 
 

@@ -50,12 +50,21 @@
     <details id="aquafaang-tracks"><summary>Which AQUA-FAANG data does the Locus browser show?</summary>
       <p class="sp-small">Signal (RNA-seq, ATAC-seq and ChIP-seq, the mean of each condition's replicates), chromatin states
         and robust ATAC peaks, read from salmobase for the region on screen: the BodyMap tissues, the DevMap embryo stages
-        and, for Atlantic salmon, the data added in November 2026 (counted in the tiers from release 2026-11-20): gill
-        ATAC-seq re-made in 2026 (weaker than the other tissues; gill states from their own model) and the ImmunoMap,
-        head kidney after PBS, poly I:C or Vibrio ('HK' rows: in vivo, six fish each; 'HK cells': leukocytes in vitro,
-        RNA-seq only, not counted; states from its own six-state model, whose three combined labels have their own
-        colours; Naseer et al. 2025, <a href="https://doi.org/10.1101/gr.280579.125" rel="noreferrer">Genome Research</a>).
-        Hover a row's name for its details.</p></details>
+        and the ImmunoMap, head kidney after PBS, poly I:C or Vibrio ('HK' rows: in vivo; 'HK cells': leukocytes in vitro,
+        signal only, not counted). In salmon the ImmunoMap (six fish per treatment; Naseer et al. 2025,
+        <a href="https://doi.org/10.1101/gr.280579.125" rel="noreferrer">Genome Research</a>) has states from its own
+        six-state model, whose three combined labels have their own colours, and gill ATAC-seq was re-made in 2026 (weaker
+        than the other tissues; gill states from their own model); both count in the tiers from release 2026-11-20. In
+        trout the ImmunoMap (INRAE) has states for PBS and for Vibrio, from one model each, and none for poly I:C; they
+        count in the tiers from the release after trout-2026-11-24. Hover a row's name for its details.</p></details>
+    <details id="predicted-effects"><summary>What are the predicted allele effects (ChromBPNet)?</summary>
+      <p class="sp-small">A ChromBPNet model learns from one tissue's ATAC-seq reads how DNA sequence shapes open chromatin,
+        and then predicts the accessibility around a SNP twice, once with each allele. The score is the size of the
+        predicted change (the absolute log2 fold change, alt over ref). An arrow in the Table and on the card, and in the
+        Locus browser a tick up in red or down in blue, says whether the alt allele is predicted more or less accessible;
+        'top 1%' ranks the score among 100,000 random public SNPs. The first model is gill's, for Atlantic salmon, scored
+        for the public SNPs inside the model's own peaks: a SNP outside that set shows 'not scored', which is not a low
+        score. These are a model's predictions, not measurements, and they do not count in the tiers.</p></details>
   </section>
 
   <section class="sp-card sp-faq" id="formats"><h2>Input formats</h2>

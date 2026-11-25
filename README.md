@@ -6,7 +6,8 @@ changes, conserved sequence, TF motifs and published associations. Each SNP gets
 to 4 (none found), with the evidence behind it. The portal also shows each SNP's evidence card and a locus browser,
 fine-maps GWAS summary statistics with a functional prior, and designs marker panels with vendor-ready files.
 Rainbow trout (USDA_OmykA_1.1, the assembly of the AQUA-FAANG trout data) is a second species, with its own data
-release and 17 AQUA-FAANG conditions; a species bar at the top right of the portal switches between the two.
+release and 17 AQUA-FAANG conditions (19 from the release after trout-2026-11-24, with head kidney after PBS and
+Vibrio); a species bar at the top right of the portal switches between the two.
 
 Public demo: https://158.39.75.9/snp/ (public data only: don't upload confidential lists there).
 

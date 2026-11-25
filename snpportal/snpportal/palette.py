@@ -25,20 +25,23 @@ ABBR = {"Active_TSS": "TSS", "Flanking_upstream": "Fl", "Flanking_downstream": "
         "Bivalent": "Biv", "Repressed_polycomb": "Pc", "ZNF_genes_and_repeats": "ZNF", "Quiescent": "Q", "Unknown_1": "?",
         # the ImmunoMap model's combined labels and the gill model's second unknown state (salmobase, 2026)
         "Active_TSS_or_enhancer": "Act", "Flanking_TSS_or_poised_enhancer": "Fl/P", "Bivalent_or_mixed_active/polycomb": "Mix",
-        "Unknown_2": "?"}
+        "Unknown_2": "?",
+        "Weak_accessible_chromatin": "wAcc"}  # the trout ImmunoMap's PBS model: an ATAC-only state with weak emission
 STATE_PALETTES = {
     "portal": {"Active_TSS": "#B2182B", "Flanking_upstream": "#F4A582", "Flanking_downstream": "#F4A582",
                "Active_enhancer": "#E66101", "Primed_enhancer": "#FEE08B", "Poised_enhancer_1": "#92C5DE",
                "Poised_enhancer_2": "#92C5DE", "Accessible_chromatin": "#2166AC", "Bivalent": "#762A83",
                "Repressed_polycomb": "#878787", "ZNF_genes_and_repeats": "#BABABA", "Quiescent": "#F0F0F0", "Unknown_1": "#DDDDDD",
                "Active_TSS_or_enhancer": "#D6604D", "Flanking_TSS_or_poised_enhancer": "#FDB863",
-               "Bivalent_or_mixed_active/polycomb": "#C2A5CF", "Unknown_2": "#DDDDDD"},
+               "Bivalent_or_mixed_active/polycomb": "#C2A5CF", "Unknown_2": "#DDDDDD",
+               "Weak_accessible_chromatin": "#A9C4E2"},  # PROVISIONAL (Claude): a pale Accessible chromatin
     "aquafaang": {"Active_TSS": "#BF2026", "Flanking_upstream": "#E81E25", "Flanking_downstream": "#E81E25",
                   "Active_enhancer": "#F99B1F", "Primed_enhancer": "#FFD078", "Poised_enhancer_1": "#F9E700",
                   "Poised_enhancer_2": "#F9F291", "Accessible_chromatin": "#7CD3F6", "Bivalent": "#9C247F",
                   "Repressed_polycomb": "#006367", "ZNF_genes_and_repeats": "#50BE96", "Quiescent": "#FFFFFF", "Unknown_1": "#C0C0C0",
                   "Active_TSS_or_enhancer": "#DC5D22", "Flanking_TSS_or_poised_enhancer": "#F0885B",
-                  "Bivalent_or_mixed_active/polycomb": "#C47CB2", "Unknown_2": "#C0C0C0"},
+                  "Bivalent_or_mixed_active/polycomb": "#C47CB2", "Unknown_2": "#C0C0C0",
+                  "Weak_accessible_chromatin": "#C4EAFA"},
 }
 STATE_PALETTE_NAMES = {"portal": "portal palette", "aquafaang": "AQUA-FAANG itemRgb"}
 COOKIE = "snpportal_palette"  # a viewer's choice of state palette
@@ -108,6 +111,8 @@ SNP_SETS = {  # public SNP datasets in the locus browser: the 504-fish panel kee
     "public_af": "#495057", "aquafaang12": "#7570B3", "synchrosmolt_af": "#A6761D", "axiom": "#E7298A"}
 BASES = {"A": "#1A9850", "C": "#2166AC", "G": "#E69500", "T": "#D73027"}  # sequence logos: the usual base colours
 USER_TRACK = "#3949AB"  # indigo: a user's own BED track in the locus browser, where its file names no colour
+EFFECTS = {"up": "#C81E1E", "down": "#1E3CC8"}  # a score layer's signed effect in the locus browser: the alt allele raises
+# (red) or lowers (blue) the model's prediction, the colours of the ChromBPNet scorer's own browser track
 MOTIF = "#66A61E"  # ColorBrewer Dark2 green: a TF motif change (score block, locus browser row); no term or tissue uses it
 REGBUILD = "#56B4E9"  # Okabe-Ito sky blue: 'Ensembl regulatory' in the 'why this tier' bar (apart from the blues under CVD)
 
@@ -175,5 +180,7 @@ def _css(active):
         rules.append(f".sp-tissue-{tissue}{{color:{colour}}}")
     for name, colour in SNP_SETS.items():
         rules.append(f".sp-set-{name}{{background:{colour}}}")
+    for name, colour in EFFECTS.items():
+        rules.append(f".sp-effect-{name}{{background:{colour}}}")
     root = ":root{" + ";".join(f"--sp-{k}:{v}" for k, v in props.items()) + "}"
     return "\n".join([root] + rules)

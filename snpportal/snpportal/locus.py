@@ -205,14 +205,19 @@ def molqtl_rows(chrom, start, end):
 
 
 def score_rows(chrom, start, end, limit=20000):
-    """{label: [(pos, ref, alt, score, percentile)]} of the release's per-variant score layers (I15) in a window."""
-    out = {}
+    """{label: {sites: [(pos, ref, alt, score, percentile, effect)], up, down, reference}} of the release's per-variant
+    score layers (I15) in a window. effect is the signed effect of the alt allele, None in a layer without one; up,
+    down and reference are the layer's words for it (jobs.score_words)."""
+    out, words = {}, jobs.score_words()
     for name, label in jobs.score_layers():
         path = jobs.release() / f"{name}.parquet"
         if path.exists():
-            out[label] = jobs.connect([jobs.release()]).execute(
-                f"SELECT \"end\", ref, alt, score, percentile FROM read_parquet({lit(path)}) "
+            con = jobs.connect([jobs.release()])
+            has = "effect" in [r[0] for r in con.execute(f"DESCRIBE SELECT * FROM read_parquet({lit(path)})").fetchall()]
+            sites = con.execute(
+                f"SELECT \"end\", ref, alt, score, percentile, {'effect' if has else 'NULL'} FROM read_parquet({lit(path)}) "
                 f"WHERE chrom = ? AND \"end\" > ? AND \"end\" <= ? ORDER BY \"end\" LIMIT {int(limit)}", [chrom, start, end]).fetchall()
+            out[label] = dict(zip(("up", "down", "reference"), words[name]), sites=sites)
     return out
 
 

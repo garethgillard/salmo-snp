@@ -450,10 +450,10 @@ class VariantScoreTest(SimpleTestCase):  # I15: a SYNTHETIC per-variant score la
             lines = [x.split("\t")[:5] for x in (FIXTURE / "snps.vcf").read_text().splitlines() if not x.startswith("#")]
             scored, unscored = lines[:2], lines[2]
             scores = tmp / "variant_scores_SYNTHETIC.tsv"
-            scores.write_text("chrom\tpos\tref\talt\tscore\n" + "".join(f"{c}\t{p}\t{r}\t{a}\t{s}\n" for (c, p, _, r, a), s
-                                                                        in zip(scored, (0.25, 0.75))))
+            scores.write_text("chrom\tpos\tref\talt\tscore\teffect\n" + "".join(  # effect: signed, of the alt allele
+                f"{c}\t{p}\t{r}\t{a}\t{s}\t{e}\n" for (c, p, _, r, a), s, e in zip(scored, (0.25, 0.75), (0.25, -0.75))))
             layer = {"name": "synscore", "type": "point", "format": "variant_scores", "file": str(scores),
-                     "label": "SynScore", "description": "SYNTHETIC test scores"}
+                     "label": "SynScore", "description": "SYNTHETIC test scores", "direction": ["more open", "less open"]}
             load = b.load_yaml
             with mock.patch.object(b, "load_yaml", lambda p: (lambda c: {**c, "layers": c["layers"] + [layer]}
                                                               if "layers" in c else c)(load(p))):
@@ -466,13 +466,18 @@ class VariantScoreTest(SimpleTestCase):  # I15: a SYNTHETIC per-variant score la
                     url = self.client.post(reverse("snpportal:upload"), {"paste": paste}).url.split("?")[0]
                     table = self.client.get(url, {"tab": "table", "cols": "1", "col": ["tier", "scores"]}).content.decode()
                     self.assertIn("Scores", table)
-                    self.assertIn("SynScore 0.75 · top 1%", table)  # the higher of the two: percentile 1
+                    self.assertIn("SynScore ↓ 0.75 · top 1%", table)  # the higher of the two: percentile 1; its alt allele lowers it
+                    self.assertIn("The alt allele is predicted less open (effect -0.75). Higher than 100.0% of the variants scored", table)
                     self.assertIn("SynScore not scored", table)  # outside the scored set
                     key = url.rstrip("/").split("/")[-1]
                     card = self.client.get(reverse("snpportal:card", args=[key, 0]), follow=True).content.decode()
-                    self.assertIn("SynScore 0.25", card)  # the card in the Table's drawer: one key fact per score
+                    self.assertIn("SynScore ↑ 0.25", card)  # the card in the Table's drawer: one key fact per score
                     c, p = scored[0][0], int(scored[0][1])
                     browser = self.client.get(reverse("snpportal:locus"), {"r": f"{c}:{p - 5000}-{p + 5000}"}).content.decode()
-                    self.assertIn("SynScore 0.25", browser)  # the lane's tick title
+                    self.assertIn("Predicted allele effects", browser)  # the browser's group of score rows
+                    self.assertIn("SynScore 0.25 (", browser)  # a tick's title
+                    self.assertIn("the alt allele is predicted more open (effect +0.25)", browser)
+                    self.assertIn(f'fill="{palette.EFFECTS["up"]}"', browser)  # up and red: the alt allele raises the prediction
+                    self.assertIn("ChromBPNet Gill", browser)  # the release's own layer has a row too
                 finally:
                     logging.disable(logging.NOTSET)

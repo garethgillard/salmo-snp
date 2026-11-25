@@ -259,11 +259,15 @@ def test_rainbow_trout_release(tmp_path):
     m = json.loads((out / "manifest.json").read_text())
     assert (m["species"]["key"], m["assembly"], list(m["chrom_sizes"])) == ("rainbow_trout", "USDA_OmykA_1.1", ["28", "Y"])
     layers = {l["name"]: l for l in m["layers"]}
-    conditions = [c for c in layers["chromatin"]["columns"] if c not in ("summary", "id")]  # 17 genome-wide; those with a peak here
+    conditions = [c for c in layers["chromatin"]["columns"] if c not in ("summary", "id")]  # 19 genome-wide; those with a peak here
     assert {"Brain_Mature_Male", "Liver_Immature_Female", "LateBlastulation"} <= set(conditions) and not any("Gonad" in c for c in conditions)
+    assert {"HeadKidney_invivo_pbs", "HeadKidney_invivo_vibrio"} <= set(conditions)  # the ImmunoMap (unified peaks v6); no poly I:C states
     assert m["catalog"]["rows"] == 13 and [d["file"] for d in m["demo"]] == ["demo/known_loci.tsv", "demo/known_svs.tsv", "demo/svs_demo_SYNTHETIC.tsv",
                                                                                  "demo/public_50k.vcf"]
-    assert layers["pike"]["rows"] > 0 and layers["summit"]["rows"] > 0 and len(layers["summit"]["urls"]) == 17  # as for salmon
+    assert layers["pike"]["rows"] > 0 and layers["summit"]["rows"] > 0 and len(layers["summit"]["urls"]) == 18  # as for salmon;
+    # 17 and head kidney after PBS: Vibrio has no merged-replicate peak file
+    con = duckdb.connect()
+    assert con.execute(f"SELECT count(*) FROM read_parquet('{out / 'summit.parquet'}') WHERE condition = 'HeadKidney_invivo_pbs'").fetchall()[0][0] > 0
     again = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "again", reuse=out)
     reused = json.loads((again / "manifest.json").read_text())  # a rebuild that copies every unchanged layer
     assert [(l["name"], l["sha256"], l["rows"]) for l in reused["layers"]] == [(l["name"], l["sha256"], l["rows"]) for l in m["layers"]]

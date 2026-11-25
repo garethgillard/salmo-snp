@@ -316,15 +316,25 @@ def read_summits(paths, layer, out):
 
 
 def read_variant_scores(path, layer):
-    # Precomputed per-variant scores (ROADMAP I15: DeepFARM, a CADD-like score): a tab-separated file, optionally
-    # gzipped, with a header chrom, pos (1-based), ref, alt, score. percentile = the share of the scored set with a
-    # lower score (0 to 1, ties share one value), so scores of different models read alike; annotate gives
-    # <layer>_score and <layer>_percentile, and <layer> false (shown 'not scored') for a variant outside the set.
+    # Precomputed per-variant scores (ROADMAP I15: ChromBPNet allele effects, a CADD-like score): a tab-separated file,
+    # optionally gzipped, with a header chrom, pos (1-based), ref, alt, score (higher = more effect). Two more columns
+    # are read when the header names them:
+    #   percentile  the score's rank, 0 to 1, in the model's own reference set (ChromBPNet: 100,000 random public
+    #               SNPs), so it reads the same whichever variants were scored. Without it, the share of the scored
+    #               set with a lower score (ties share one value);
+    #   effect      the signed effect of the alt allele (ChromBPNet: log2 fold change of predicted accessibility, alt
+    #               over ref). annotate turns it to the input's alt allele; the portal draws its direction.
+    # annotate gives <layer>_score, <layer>_percentile (and <layer>_effect), and <layer> false (shown 'not scored')
+    # for a variant outside the set.
+    with (gzip.open if str(path).endswith(".gz") else open)(path, "rt", encoding="utf-8") as f:
+        head = f.readline().rstrip("\r\n").split("\t")
+    percentile = "try_cast(percentile AS DOUBLE)" if "percentile" in head else "NULL::DOUBLE"
+    effect = ", try_cast(effect AS DOUBLE) AS effect" if "effect" in head else ""
     return f"""
         SELECT chrom, pos - 1 AS start, pos AS "end", ref, alt, score,
-               round(percent_rank() OVER (ORDER BY score), 4) AS percentile
+               round(coalesce(percentile, percent_rank() OVER (ORDER BY score)), 4) AS percentile{", effect" if effect else ""}
         FROM (SELECT chrom, try_cast(pos AS BIGINT) AS pos, upper(ref) AS ref, upper(alt) AS alt,
-                     try_cast(score AS DOUBLE) AS score
+                     try_cast(score AS DOUBLE) AS score, {percentile} AS percentile{effect}
               FROM read_csv({lit(path)}, delim='\t', header=true, all_varchar=true, quote=''))
         WHERE pos IS NOT NULL AND score IS NOT NULL"""
 

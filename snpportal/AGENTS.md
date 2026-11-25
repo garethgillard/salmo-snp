@@ -24,6 +24,12 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   a release the code no longer names, once no job, Design panel or saved project kept there was made with it; it
   never touches the default release or the genomes, and removes nothing when it could not look (tests/test_deploy.py).
 - Health: `/snp/health/` (JSON, no content) and a Django system check (`manage.py check`: the release re-hashed).
+- Model predictions (G, 2026-11-25: "that useful track from chrombpnet to show effects"): a release's score layers
+  (format variant_scores; the first is the gill ChromBPNet model's) are the Locus browser's 'Predicted allele
+  effects' group (browser.scores_group: a tick per scored SNP, up and red where the alt allele is predicted more
+  accessible, down and blue where less, `palette.EFFECTS`; height = rank) and the Table's Scores column and the
+  card's chip, with an arrow (results.score_text). The words come from the layer's `direction` and `reference` in
+  layers.yaml (jobs.score_words); nothing is counted until weights.yaml says so.
 - Tracks AQUA-FAANG publishes after a release (2026: salmon gill ATAC-seq, the ImmunoMap) go live with a deploy:
   `snpdata tracks --added-since <release>/tracks.yaml` (in ../snpdata) regenerates tracks.yaml and writes
   `snpportal/lib/tracks_added.yaml`, which lib/tracks.load_tracks adds to a release registry of the same hub.

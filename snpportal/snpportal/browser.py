@@ -19,7 +19,7 @@ from django.utils.safestring import mark_safe
 from .lib import locus as sl
 from snpscore.formats import lit
 
-from . import explore, jobs, locus, locus_svg, mytracks, palette
+from . import explore, jobs, locus, locus_svg, mytracks, palette, results
 from .views import private
 
 W = 1000  # SVG user units across the track column, drawn 1:1 so text never stretches
@@ -36,6 +36,7 @@ STATE_ORDER = locus_svg.STATE_ORDER  # stacked bottom to top; Quiescent is not d
 LEGEND_STATES = ("Active_TSS", "Flanking_upstream", "Active_enhancer", "Primed_enhancer", "Poised_enhancer_1",
                  "Accessible_chromatin", "Bivalent", "Repressed_polycomb", "ZNF_genes_and_repeats", "Quiescent")
 IMMUNOMAP_STATES = ("Active_TSS_or_enhancer", "Flanking_TSS_or_poised_enhancer", "Bivalent_or_mixed_active/polycomb")
+TROUT_IMMUNOMAP_STATES = ("Weak_accessible_chromatin", "Bivalent_or_mixed_active/polycomb")  # one model per treatment
 ASSAYS = {"RNA": ("RNA-seq", "expression; + strand up, &#8722; down; conditions on a log scale"), "ATAC": ("ATAC-seq", "open chromatin"),
           "H3K27ac": ("ChIP-seq H3K27ac", "active enhancers and promoters"), "H3K4me3": ("ChIP-seq H3K4me3", "active promoters"),
           "H3K4me1": ("ChIP-seq H3K4me1", "enhancers, active and primed"), "H3K27me3": ("ChIP-seq H3K27me3", "polycomb repression"),
@@ -430,8 +431,10 @@ def peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes):
     if any(v is None for v in found.values()):
         notes.append("Some per-condition peak tracks did not load in time (grey rows); reload to try again.")
     note = "AQUA-FAANG robust ATAC peaks, coloured by chromatin state"
-    if set(found) - set(conditions):
-        note += f" · Combined: the {len(conditions)} conditions the tiers count; the gill and head kidney (HK) rows are shown only"
+    extra = [short(c) for c in found if c not in conditions]  # rows of newer tracks that this release's tiers don't count
+    if extra:
+        note += (f" · Combined: the {len(conditions)} conditions the tiers count; shown only: "
+                 + (", ".join(extra) if len(extra) <= 6 else f"{len(extra)} other rows"))
     return group("peaks", "Regulatory elements", note,
                  [row("Combined", trk(32, "".join(body)), f"n/{len(conditions)}: conditions with the peak")],
                  separated(more), f"{len(more)} conditions", open_)
@@ -553,9 +556,11 @@ def hmm_group(s, ax, data, cfg, prefix, deadline, open_, notes):
             parts = [state_rect(ax, a, e, 1, 11, st, short(c)) for a, e, st in segs.get(c) or ()]
         more.append(row(short(c), trk(13, "".join(parts)), tissue=tissue_of(c), dense=True, title=long(c, "states")))
     legend = [(f"st-{x}", x.replace("_", " ").replace(" 1", "")) for x in LEGEND_STATES]
-    if any(immuno(c) for c in conditions):  # the ImmunoMap's 6-state model has three combined labels
-        legend += [(f"st-{x}", x.replace("_", " ")) for x in IMMUNOMAP_STATES]
-        note += " · head kidney (HK): the ImmunoMap's own 6-state model"
+    if any(immuno(c) for c in conditions):  # the ImmunoMap's models have labels of their own: salmon's 6-state model
+        # three combined ones, trout's (one model for each treatment) a weak accessible state
+        salmon = jobs.species()["key"] == jobs.SALMON["key"]
+        legend += [(f"st-{x}", x.replace("_", " ")) for x in (IMMUNOMAP_STATES if salmon else TROUT_IMMUNOMAP_STATES)]
+        note += " · head kidney (HK): the ImmunoMap's own " + ("6-state model" if salmon else "models, one for each treatment")
     if any(c.startswith("Gill_") for c in conditions):
         note += " · gill: its own model of weaker 2026 data"
     return group("hmm", "Chromatin states", note, [row("Combined", trk(h + 2, "".join(body)), f"conditions per state, 0–{total}")],
@@ -686,13 +691,40 @@ def other_group(s, ax, data):
                        f'fill="{G[700]}"><title>Aligns to northern pike: {p["end"] - p["start"]:,} bp</title></rect>' for p in data["pike"])
         rows.append(row("Aligns to pike", trk(13, pike or locus_svg._t(4, 10, "none in this window", 9.5, G[700])),
                         "salmon-trout-pike alignment"))
-    for label, sites in (data.get("scores") or {}).items():  # I15: per-variant scores, tick height = percentile
-        ticks = [f'<rect x="{ax.x(pos - 1):.1f}" y="{13 - 11 * p:.1f}" width="1.5" height="{max(1, 11 * p):.1f}" fill="{G[900]}">'
-                 f'<title>{escape(label)} {score:.2f} ({ref}&gt;{alt}): higher than {100 * p:.1f}% of the variants scored</title></rect>'
-                 for pos, ref, alt, score, p in sites]
-        rows.append(row(label, trk(14, "".join(ticks) or locus_svg._t(4, 10, "no scored variants in this window", 9.5, G[700])),
-                        "variant score; height = rank"))
     return group("other", "Other annotation", "", rows)
+
+
+def scores_group(s, ax, data):
+    """Predicted allele effects: one row per score layer of the release (layers.yaml format variant_scores, such as
+    a ChromBPNet model), one tick per scored variant in the window, its height the score's rank. Where the layer has
+    the signed effect of the alt allele, the tick points up in red when the model's prediction rises with it
+    (ChromBPNet: more accessible) and down in blue when it falls, as the scorer's own browser track colours them;
+    without one it is a grey tick up. None in a release without score layers."""
+    rows, legend, mid, reach = [], [], 17, 15
+    for label, layer in (data.get("scores") or {}).items():
+        signed = any(e is not None for *_, e in layer["sites"])
+        ticks = [f'<line x1="{-W}" x2="{2 * W}" y1="{mid}" y2="{mid}" stroke="{G[300]}" stroke-width="0.6"/>'] if signed else []
+        base = mid if signed else 2 * mid - 1
+        for pos, ref, alt, score, p, effect in layer["sites"]:
+            h = max(2, reach * p * (1 if signed else 2))
+            down = signed and (effect or 0) < 0
+            colour = G[700] if not effect else palette.EFFECTS["down" if down else "up"]
+            x, w = ax.x(pos - 1), max(2.2, ax.x(pos) - ax.x(pos - 1))
+            tip = f"{label} {results.score_number(score)} ({ref}>{alt})" + (
+                f": the alt allele is predicted {layer['down'] if down else layer['up']} "
+                f"(effect {results.score_number(effect, sign=True)})" if effect else "")
+            ticks.append(f'<rect x="{x:.1f}" y="{base if down else base - h:.1f}" width="{w:.1f}" height="{h:.1f}" fill="{colour}">'
+                         f'<title>{escape(tip)}; higher than {100 * p:.1f}% of {escape(layer["reference"])}</title></rect>')
+        if not layer["sites"]:
+            ticks.append(locus_svg._t(4, mid - 4, "no scored variants in this window", 9.5, G[700]))
+        n = len(layer["sites"])
+        rows.append(row(label, trk(2 * mid, "".join(ticks)), f"{n:,} scored variant{'' if n == 1 else 's'} here"))
+        if signed and not legend:
+            legend = [("sp-effect-up", f"up: alt allele {layer['up']}"), ("sp-effect-down", f"down: alt allele {layer['down']}")]
+    if not rows:
+        return None
+    return group("scores", "Predicted allele effects", "model predictions for the variants each model scored &middot; height = rank",
+                 rows, legend=legend)
 
 
 # ---- the page ----
@@ -720,6 +752,7 @@ def context(request, s, layout):
     deadline = float(jobs.setting("SNPPORTAL_SIGNAL_DEADLINE", 4.0))
     notes = []
     groups = [tracks_group(request, v, ax), genes_group(request, v, ax, data, open_), public_group(v, ax, data, open_), motifs_group(v, ax, data),
+              scores_group(v, ax, data),
               peaks_group(v, ax, data, cfg, prefix, deadline, open_, notes),
               hmm_group(v, ax, data, cfg, prefix, deadline, open_, notes)]
     synthetic = bool(info.get("synthetic")) or any(locus.synthetic_track(t) for t in (cfg or {}).get("tracks", []))

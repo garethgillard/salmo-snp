@@ -333,6 +333,19 @@ def score_layers(where=None):
             if layer.get("format") == "variant_scores"]
 
 
+def score_words(where=None):
+    """{layer name: (up, down, reference)}: how a score layer's signed effect and its percentile read. `direction` in
+    layers.yaml names what the alt allele is predicted to be when the effect is above and below zero (ChromBPNet:
+    'more accessible', 'less accessible'), `reference` the set the percentile ranks among."""
+    out = {}
+    for layer in manifest(where).get("layers", []):
+        if layer.get("format") == "variant_scores":
+            words = layer.get("direction") or []
+            up, down = words if len(words) == 2 else ("higher", "lower")
+            out[layer["name"]] = (str(up), str(down), str(layer.get("reference") or "the variants scored"))
+    return out
+
+
 def release_info():
     """Version, assembly, build date, manifest sha256 and synthetic layers of the current release."""
     m = manifest()

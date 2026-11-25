@@ -33,9 +33,14 @@ species:
     - ["504 public fish", "462 public fish"]
     - ["504 fish", "462 fish"]
     - ["wild and farmed, pooled", "farmed, imputed from 1x"]
-    - ["brain, gonad, liver and muscle of 12 AquaGen fish (BodyMap); 5 embryo stages from embryo pools (DevMap)",
-       "brain, liver and muscle of the AQUA-FAANG BodyMap fish; 5 embryo stages from embryo pools (DevMap)"]
-    - ["No immune tissue, gill or skin.", "No gonad, immune tissue, gill or skin."]
+    - ["brain, gonad, liver, muscle and gill of 12 AquaGen fish (BodyMap); head kidney of juvenile fish after PBS, poly I:C or Vibrio (ImmunoMap); 5 embryo stages from embryo pools (DevMap)",
+       "brain, liver and muscle of the AQUA-FAANG BodyMap fish; head kidney after PBS or Vibrio (ImmunoMap); 5 embryo stages from embryo pools (DevMap)"]
+    - ["No skin or intestine.", "No gonad, gill, skin or intestine."]
+    - [" gill (2026; immature female and male, mature male),", ""]
+    - ["(the ImmunoMap: PBS, poly I:C, Vibrio)", "(the ImmunoMap: PBS, Vibrio)"]
+    - ["gill has its own 12-state model, and the", "the"]
+    - ["ImmunoMap a 6-state one whose active states AQUA-FAANG named by the peak's distance to a TSS.",
+       "ImmunoMap has one model for each treatment (ATAC, H3K4me3, H3K27ac and H3K27me3)."]
     - ["brain, gonad, liver, muscle", "brain, liver, muscle"]
     - ["Brain, Gonad, Liver, Muscle", "Brain, Liver, Muscle"]
     - ["NC_059466.1", "NC_048589.1"]
@@ -45,8 +50,10 @@ species:
   # The Data page's "Samples and population scope" lines (the public frequencies' `population` follows them).
   samples:
     - "Chromatin states, ATAC peaks and signal: the AQUA-FAANG rainbow trout BodyMap (brain, liver and muscle of immature
-      and mature females and males; gill, gonad, head kidney and distal intestine have signal tracks but no chromatin
-      states) and embryo pools at five stages (DevMap)."
+      and mature females and males; its gill, gonad, head kidney and distal intestine have signal tracks but no
+      chromatin states), the ImmunoMap (INRAE, ENA PRJEB57395: head kidney after in vivo PBS, 6 fish, or Vibrio, 4
+      fish, with chromatin states; poly I:C and head kidney leukocytes in vitro have signal tracks only) and embryo
+      pools at five stages (DevMap)."
     - "No molQTL, expression table or genetic map in this release."
   # Things to try on the Search page.
   searches: ["greb1l", "rock1", "sdy", "28:12,020,000-12,210,000", "28:12.02-12.21Mb", "Y:6001303"]
@@ -103,7 +110,9 @@ layers:
     file: RainbowTrout_unified_peaks.bed
     url: https://salmobase.org/datafiles/datasets/Aqua-Faang/robust_ATAC_peaks/unified_annotated_peaks/RainbowTrout_unified_peaks.bed
     id: true
-    description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 17 conditions (brain, liver and muscle by maturity and sex, and five embryo stages; empty = no peak there)
+    # The unified peaks v6 (2026-11-25; VERSION.md beside the file) added the ImmunoMap's head kidney, PBS and Vibrio:
+    # 205,722 peaks in 19 conditions (releases up to trout-2026-11-24: 194,002 in 17). Poly I:C has no states.
+    description: AQUA-FAANG robust ATAC peaks with the ChromHMM state in each of 19 conditions (brain, liver and muscle by maturity and sex, head kidney after PBS and after Vibrio (the ImmunoMap), and five embryo stages; empty = no peak there)
     citation: AQUA-FAANG consortium, rainbow trout unified ATAC peaks and ChromHMM states (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Developmental contexts of gene-regulatory evolution following whole genome duplication in salmonids. Nat Ecol Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6
 
   - name: summit
@@ -137,6 +146,10 @@ layers:
          url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/RainbowTrout/BodyMap/ATAC/Muscle/results/bwa/mergedReplicate/macs/narrowPeak/RainbowTrout_ATAC_Muscle_Mature_Female.mRp.clN_peaks.narrowPeak'}
       - {condition: Muscle_Mature_Male, file: narrowPeak/RainbowTrout_ATAC_Muscle_Mature_Male.mRp.clN_peaks.narrowPeak,
          url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/RainbowTrout/BodyMap/ATAC/Muscle/results/bwa/mergedReplicate/macs/narrowPeak/RainbowTrout_ATAC_Muscle_Mature_Male.mRp.clN_peaks.narrowPeak'}
+      # The ImmunoMap: PBS only. Vibrio has states but no merged-replicate peak file on salmobase (two of its six fish
+      # failed, and the merge that included them was withdrawn): add it here if one is made (docs/DECISIONS.md #64).
+      - {condition: HeadKidney_invivo_pbs, file: narrowPeak/RainbowTrout_ATAC_HeadKidney_invivo_pbs.mRp.clN_peaks.narrowPeak,
+         url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/RainbowTrout/ImmunoMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/RainbowTrout_ATAC_HeadKidney_invivo_pbs.mRp.clN_peaks.narrowPeak'}
       - {condition: LateBlastulation, file: narrowPeak/RainbowTrout_ATAC_LateBlastulation.mRp.clN_peaks.narrowPeak,
          url: 'https://salmobase.org/datafiles/datasets/Aqua-Faang/nfcore/RainbowTrout/DevMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/RainbowTrout_ATAC_LateBlastulation.mRp.clN_peaks.narrowPeak'}
       - {condition: MidGastrulation, file: narrowPeak/RainbowTrout_ATAC_MidGastrulation.mRp.clN_peaks.narrowPeak,
@@ -150,8 +163,9 @@ layers:
     description: >-
       Nearest ATAC-seq peak summit inside a robust peak, within 500 bp: distance (bp, 0 = at the summit), signal (MACS2
       fold enrichment at the summit), rank (the share of that condition's peaks with a lower signal, 0 to 1, so that
-      conditions of different library quality read alike) and condition. Summits of the 17 conditions that lie within
-      25 bp of each other count as one: signal, rank and condition are those of the highest-ranked of them
+      conditions of different library quality read alike) and condition. Summits of the 18 conditions with a peak file
+      (every condition but head kidney after Vibrio) that lie within 25 bp of each other count as one: signal, rank
+      and condition are those of the highest-ranked of them
     citation: AQUA-FAANG consortium, nf-core/atacseq MACS2 peaks of the merged replicates per condition, rainbow trout (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Developmental contexts of gene-regulatory evolution following whole genome duplication in salmonids. Nat Ecol Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6
 
   - name: region

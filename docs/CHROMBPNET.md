@@ -296,7 +296,12 @@ Work in steps. Report to G after steps 1, 4 and 6, and don't start the full run 
    - alleles exactly as in `public_af.parquet`;
    - a bigger score means a stronger predicted effect, because salmo-snp ranks scores into percentiles. Use |logFC|,
      or the integrative score (`abs_logfc_x_jsd_x_active_allele_quantile`) if the benchmark favours it;
-   - variants that weren't scored are left out.
+   - variants that weren't scored are left out;
+   - since 2026-11-25 two more columns are read when the header names them: `effect`, the signed log2 fold change
+     (alt over ref), which the portal draws as a tick up in red or down in blue and as an arrow in the Table, and
+     `percentile`, the scorer's rank of |logFC| among its 100,000 random public SNPs, which then replaces the rank
+     salmo-snp would compute within the file. The first such file is the gill model's: the request, with the SNP
+     set and the address, is in salmo-snp's docs/ORION.md ("The next build", What it needs first).
 2. **A layers.yaml entry** for each file, written for G to add:
    ```yaml
      - name: chrombpnet

@@ -141,8 +141,9 @@ COLUMNS = {
                "among that condition's peaks (top 5% = stronger than 95% of them); hover for the signal and the condition",
                ("summit_distance",), [("summit_distance", True), ("summit_rank", False)]),
     "regbuild": ("Ensembl reg.", "Ensembl 116 regulatory build feature", ("regbuild_type",), [("regbuild_type", True)]),
-    "scores": ("Scores", "Per-variant scores (such as DeepFARM): the score, and how high it ranks among the variants the "
-               "model scored; 'not scored' outside them", ("variant_scores",), []),
+    "scores": ("Scores", "Per-variant scores (such as ChromBPNet's predicted effect on accessibility): an arrow where the model "
+               "gives the direction of the alt allele's effect, the score, and how high it ranks in the model's reference "
+               "set (else among the variants it scored); 'not scored' outside them", ("variant_scores",), []),
     "maf": ("MAF", MAF_TIP, ("maf", "af", "public_af_maf"), [("{maf}", True)]),
     "cm": ("cM (F/M)", "Genetic map position, female / male cM (Brekke et al. 2023 linkage map, interpolated)",
            ("cm_female",), [("cm_female", True)]),
@@ -215,7 +216,8 @@ def _open(request, key, write=False, chip=False):
             con.execute(f"CREATE VIEW v0 AS {jobs.scored_sql('r', weights, columns, trait, d)}")
     else:
         con.execute("CREATE VIEW v0 AS SELECT * FROM r")
-    scores = variant_scores_sql([(n, label) for n, label in jobs.score_layers(d) if n + "_percentile" in columns])
+    scores = variant_scores_sql([(n, label) for n, label in jobs.score_layers(d) if n + "_percentile" in columns],
+                                columns, jobs.score_words(d))
     extra = f", {scores} AS variant_scores" if scores else ""
     if (d / "gwas.parquet").exists():  # GWAS jobs: the association statistics for the Table's p and beta columns
         con.execute(f"CREATE VIEW v1 AS SELECT v0.*, s.neglog10p, s.beta, s.se{extra} FROM v0 "
@@ -808,14 +810,20 @@ def locus_note(g):
     return " · ".join(x for x in (where, alleles) if x)
 
 
-def variant_scores_sql(layers):
+def variant_scores_sql(layers, columns=(), words=None):
     """The view's variant_scores column for the release's score layers [(name, label)] (I15): a list of {label, score,
-    percentile}, both NULL where the SNP is outside a model's scored set. None without score layers."""
+    percentile, effect, up, down, reference}. score, percentile and effect are NULL where the SNP is outside a model's
+    scored set, effect also in a layer without one (it is the signed effect of this row's alt allele); up, down and
+    reference are the layer's words (jobs.score_words). None without score layers."""
     if not layers:
         return None
-    items = ", ".join(f"{{'label': {lit(label)}, 'score': CASE WHEN {ident(n)} THEN {ident(n + '_score')} END, "
-                      f"'percentile': CASE WHEN {ident(n)} THEN {ident(n + '_percentile')} END}}" for n, label in layers)
-    return f"[{items}]"
+    def item(n, label):
+        up, down, reference = (words or {}).get(n) or ("higher", "lower", "the variants scored")
+        effect = f"CASE WHEN {ident(n)} THEN {ident(n + '_effect')} END" if n + "_effect" in columns else "NULL::DOUBLE"
+        return (f"{{'label': {lit(label)}, 'score': CASE WHEN {ident(n)} THEN {ident(n + '_score')} END, "
+                f"'percentile': CASE WHEN {ident(n)} THEN {ident(n + '_percentile')} END, 'effect': {effect}, "
+                f"'up': {lit(up)}, 'down': {lit(down)}, 'reference': {lit(reference)}}}")
+    return f"[{', '.join(item(n, label) for n, label in layers)}]"
 
 
 def row_scores(snp):
@@ -823,17 +831,33 @@ def row_scores(snp):
     on the fly) built from the release's score layers' own columns."""
     if "variant_scores" in snp:
         return snp["variant_scores"] or []
-    return [{"label": label, "score": snp.get(n + "_score") if snp.get(n) else None,
-             "percentile": snp.get(n + "_percentile") if snp.get(n) else None}
+    words = jobs.score_words()
+    return [dict(zip(("up", "down", "reference"), words[n]), label=label, score=snp.get(n + "_score") if snp.get(n) else None,
+                 percentile=snp.get(n + "_percentile") if snp.get(n) else None,
+                 effect=snp.get(n + "_effect") if snp.get(n) else None)
             for n, label in jobs.score_layers() if n + "_percentile" in snp]
 
 
+def score_number(x, sign=False):
+    """A score for display: two decimals, or two significant digits below 0.1 (a ChromBPNet log2 fold change is often
+    0.01 to 0.05); with `sign`, a + before a positive one."""
+    text = f"{abs(x):.2f}" if abs(x) >= 0.1 or not x else f"{abs(x):.2g}"
+    return ("-" if x < 0 else "+" if sign and x > 0 else "") + text
+
+
 def score_text(s):
-    """(label, text, tooltip) of one variant score: '0.82 · top 5%', or 'not scored'."""
+    """(label, text, tooltip) of one variant score: '0.82 · top 5%', with an arrow first where the model gives the
+    direction of the alt allele's effect ('↑ 0.82 · top 5%'), or 'not scored'."""
     if s["score"] is None:
         return s["label"], "not scored", "Outside the variants this model scored: no score, not a low one"
     top = max(1, round(100 * (1 - s["percentile"])))
-    return s["label"], f"{s['score']:.2f} · top {top}%", f"Higher than {100 * s['percentile']:.1f}% of the variants scored"
+    tip = f"Higher than {100 * s['percentile']:.1f}% of {s.get('reference') or 'the variants scored'}"
+    effect = s.get("effect")
+    if not effect:  # no signed effect in this layer (or exactly none)
+        return s["label"], f"{score_number(s['score'])} · top {top}%", tip
+    way = s.get("up") or "higher" if effect > 0 else s.get("down") or "lower"
+    return (s["label"], f"{'↑' if effect > 0 else '↓'} {score_number(s['score'])} · top {top}%",
+            f"The alt allele is predicted {way} (effect {score_number(effect, sign=True)}). {tip}")
 
 
 def summit_text(g):

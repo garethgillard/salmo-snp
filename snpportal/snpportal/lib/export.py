@@ -166,6 +166,7 @@ def methods_text(manifest, weights, preset="all", release_dir=None, finemap=None
     ]
     if weights.get("weights"):
         w, presets = weights["weights"], weights.get("presets") or {}
+        scores = [l["name"] for l in manifest.get("layers", []) if l.get("format") == "variant_scores"]
         conds = ", ".join(presets.get(preset) or [])
         some = bool(conds) and preset != "all"  # a subset of the conditions; else all of them, so nothing is active elsewhere
         text.append(
@@ -181,7 +182,9 @@ def methods_text(manifest, weights, preset="all", release_dir=None, finemap=None
             + (f", and a transcription factor motif changed inside a robust ATAC peak ({w['motif']}: one allele matches a "
                "JASPAR 2024 vertebrate motif at p < 1e-5 and the other does not, at least 4 bits apart)" if w.get("motif") else "")
             + "; tiers 1-3 need a score of at least "
-            f"{', '.join(str(t) for t in weights.get('tiers', []))}. These rules are PROVISIONAL.")
+            f"{', '.join(str(t) for t in weights.get('tiers', []))}. These rules are PROVISIONAL."
+            + (f" The model predictions ({', '.join(scores)}) are reported beside the tiers and did not count towards "
+               "them." if scores and not weights.get("variant_scores") else ""))
     models = next((l for l in manifest.get("layers", []) if l.get("format") == "gff3_transcripts"), None)
     if models and manifest.get("genome"):
         text.append(

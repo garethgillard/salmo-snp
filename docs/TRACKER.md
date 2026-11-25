@@ -6,11 +6,12 @@ Specs: [ROADMAP.md](ROADMAP.md). Questions only G can answer: [DECISIONS.md](DEC
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
 ## Where things stand (2026-11-25)
-- **The next build is planned, not started** (G, 2026-11-25: "plan the next build using the new gill
+- **The next build is planned and prepared, not started** (G, 2026-11-25: "plan the next build using the new gill
   salmo-chrombpnet model available, and the new trout immunomap data on salmobase"): [ORION.md](ORION.md) "The next
-  build" (Next, S3f). Salmon gains a gill ChromBPNet score for every public SNP, shown and not counted; trout gains
-  the ImmunoMap's head kidney, PBS and Vibrio (19 conditions, 205,722 peaks). It waits for the score file from the
-  ChromBPNet work and for G's answers to DECISIONS #60 to #64.
+  build" (Next, S3f). Salmon gains the gill ChromBPNet model's score of the SNPs in its peaks, shown with the
+  direction of the effect and not counted; trout gains the ImmunoMap's head kidney, PBS and Vibrio (19 conditions,
+  205,722 peaks). G answered DECISIONS #60 to #64 the same day and the repository is ready; the salmon build waits
+  for one file, the scores, from the ChromBPNet work on Orion.
 - **The demo since 2026-11-25** (G: "make a working deployment to NREC"): main at 2e61590 (PRs #31 to #36) with
   releases 2026-11-24 and trout-2026-11-24, built on Orion and fetched from salmobase by the deploy itself
   (https://salmobase.org/datafiles/datasets/salmo-snp; every file checked on the VM, each release with its pool).
@@ -50,7 +51,8 @@ Background and reasoning: the plan doc "Functional SNP portal plan for salmon br
 ## Rainbow trout (2026-11-12, G: a second species, with a species bar)
 Built on the session branch, for G to inspect before anything is deployed (AGENTS.md Plan 7, DECISIONS #38-#45):
 - [x] `snpdata/rainbow_trout/layers.yaml` and `tracks.yaml`: USDA_OmykA_1.1; AQUA-FAANG peaks and states (17
-  conditions), blacklist, LORe, Ss4R, synteny, 603 signal tracks; Ensembl 116 genes, regulatory build, GERP, orthologs;
+  conditions), blacklist, LORe, Ss4R, synteny, 603 signal tracks (19 conditions and 733 tracks with the ImmunoMap, from
+  the release after trout-2026-11-24); Ensembl 116 genes, regulatory build, GERP, orthologs;
   NCBI models; JASPAR motifs; EVA rs IDs; public frequencies from the Maryland low-pass study (ENA PRJEB109732)
 - [x] snpdata: manifest `species`, named chromosomes (Y), pooled cohort frequencies, downloads that resume, a
   build-time example list; snpscore: assembly names and the pool's sites from the release
@@ -114,14 +116,26 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
       GPU, SIFT 4G as the cross-check; 80,820 public missense SNPs; checked against rarity in the 504 fish);
       G's choices: DECISIONS #59
 - [ ] S3f The build after that (G, 2026-11-25; planned in [ORION.md](ORION.md) "The next build", with what was
-      measured for it): for salmon the layer `chrombpnet_gill`, the gill ChromBPNet model's score of every site the
-      release has a frequency for (9,288,186; about 35 GPU-hours in the ChromBPNet repository on Orion), shown with
-      its percentile and not counted; for trout the ImmunoMap from the unified peaks v6 (head kidney after PBS and
-      Vibrio: 19 conditions, 205,722 peaks; 350,142 public SNPs in a peak with a head kidney state), its tracks in
-      the Locus browser (733 signal tracks), PBS's summits, and `motif` computed again (1,083,423). Before the build:
-      the score file, one pull request here (layers, tracks, wording, fixture, layers written in a full order), and
-      G's answers to DECISIONS #60 to #64 (the SNP set and score; users' own SNPs; whether trout head kidney counts;
-      the new label `Weak_accessible_chromatin`; Vibrio's summits)
+      measured for it). For salmon the layer `chrombpnet_gill`: the gill ChromBPNet model's prediction of what the
+      alt allele does to accessibility, for the public and Synchrosmolt SNPs inside its training peaks first
+      (216,592; every site, 9,288,186, later: G), shown and not counted. For trout the ImmunoMap from the unified
+      peaks v6 (head kidney after PBS and Vibrio: 19 conditions, 205,722 peaks; 350,142 public SNPs in a peak with a
+      head kidney state), its tracks in the Locus browser (733 signal tracks), PBS's summits, and `motif` computed
+      again (1,083,423).
+  - [x] G's answers (DECISIONS #60 to #64, 2026-11-25): the score and, for now, a smaller set; users' own SNPs stay
+        'not scored'; trout head kidney counts; `Weak_accessible_chromatin` is a weak state; Vibrio's summits only
+        if a merged peak call is quick to make
+  - [x] The effects track G asked for ("make sure we have that useful track from chrombpnet to show effects"): a
+        score file may carry the signed `effect` and its own `percentile`; the Table and the card show an arrow, and
+        the Locus browser a row of ticks per model, up and red where the alt allele is predicted more accessible,
+        down and blue where less. Tested on real predictions: the model's own scorer, run in a cloud session,
+        scored the fixture's 697 SNPs in gill peaks (its 44 test SNPs there matched the published scores)
+  - [x] The repository prepared (one pull request): the `chrombpnet_gill` layer in the salmon registry; the trout
+        registry's 19 conditions, PBS's peak file, wording and samples; `rainbow_trout/tracks.yaml` regenerated; the
+        new state's weight, colour and legend; both fixtures and the tests
+  - [ ] The score file, from the ChromBPNet work on Orion (the request is in ORION.md): the salmon build cannot
+        start without it
+  - [ ] The builds on Orion, the checks of ORION.md's tables, publishing, then serve.py names the releases
 - [ ] S3e Still to ask or get: allelic imbalance in the 12 fish from the Orion repository (the truth set the summit
       rule and the ChromBPNet scores need); the large gill eQTL set, if its authors share it
 - [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52, #54, #58), then weights.yaml and

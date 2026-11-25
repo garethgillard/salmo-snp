@@ -33,7 +33,9 @@ as the work goes on. Read [../AGENTS.md](../AGENTS.md) first: its rules apply he
 
 G, 2026-11-25: "plan the next build using the new gill salmo-chrombpnet model available, and the new trout immunomap
 data on salmobase". Nothing is built yet. The numbers below were read from salmobase on 2026-11-25 and measured
-against releases 2026-11-24 and trout-2026-11-24 in a cloud session. The questions for G are DECISIONS #60 to #64.
+against releases 2026-11-24 and trout-2026-11-24 in a cloud session. G answered the plan's questions the same day
+(DECISIONS #60 to #64), and the repository is ready for the build but for one file: the gill scores (What it needs
+first, 1).
 
 **New on salmobase since the last build**
 
@@ -54,58 +56,69 @@ against releases 2026-11-24 and trout-2026-11-24 in a cloud session. The questio
 
 | Part | What changes | Check after the build |
 |---|---|---|
-| `chrombpnet_gill` (new) | A per-variant score layer, which needs no new code (snpdata/README.md "A per-variant score"): the gill model's predicted effect of the alt allele on accessibility, each SNP scored by the fold that held its chromosome out. `build` adds the percentile within the scored set. The portal shows it in the Table's Scores column, on the card and as a Locus browser row; it counts nothing (weights.yaml `variant_scores: {}`, DECISIONS #53). **The score file does not exist yet** (What it needs first, 1) | Rows = the scored set: 9,288,186 with #60's recommendation; `snpscore annotate` gives a public SNP `chrombpnet_gill_score` and `chrombpnet_gill_percentile` |
+| `chrombpnet_gill` (new) | A per-variant score layer (snpdata/README.md "A per-variant score"), in layers.yaml since 2026-11-25: the gill model's prediction of what the alt allele does to accessibility, each SNP scored by the fold that held its chromosome out. Columns: `score` (the absolute log2 fold change), `effect` (the log2 fold change, signed) and `percentile` (the scorer's, among 100,000 random public SNPs). Shown in the Table's Scores column and on the card with an arrow for the direction, and in the Locus browser's Predicted allele effects row (up and red: the alt allele more accessible; down and blue: less). It counts nothing (weights.yaml `variant_scores: {}`, DECISIONS #53). First set (#60): the public and Synchrosmolt SNPs inside the model's training peaks; every site later. **The score file does not exist yet** (What it needs first, 1) | About 216,592 rows, with `effect` and `percentile` among the columns; a public SNP in a gill peak has `chrombpnet_gill_score`, `_effect` and `_percentile` after `snpscore annotate` |
 | `chromatin` | Input v6. Nothing scored changes: read with the build's reader, it has the 328,894 peaks of release 2026-11-24 and the same state in every one of the 27 conditions. `summary` is filled again (empty since v3; nothing shows it) | 328,894 rows |
-| The public pool | Built again. The tiers stay as they are unless a weight changes (pike is still 0: DECISIONS #54) | 3,436,671 sites; tiers 0.38%, 6.16%, 8.49%, 84.98%, as for 2026-11-24 |
+| The public pool | Built again, as weights.yaml changed (a weak state that only trout has: nothing changes for salmon). pike is still 0 (DECISIONS #54) | 3,436,671 sites; tiers 0.38%, 6.16%, 8.49%, 84.98%, as for 2026-11-24 |
 | Unchanged | Every other layer and table of 2026-11-24: `summit` 2,468,735, `pike` 1,226,940, `synchrosmolt_af` 3,993,949, `motif` 533,163, `public_af` 7,572,808, `molqtl` 2,656, `liftover_icsasg_v2` 735,344 blocks, the catalogue's 46 rows, the six examples | `snpscore diff 2026-11-24 <new>`: `chrombpnet_gill` and `chromatin` are new or changed. It compares file checksums, so it also lists the layers whose rows share a start (`transcripts`, `transcripts_ncbi`, as on 2026-11-25): compare those row by row |
 
 ### Rainbow trout, release `trout-<date>` (the one before: trout-2026-11-24)
 
 | Part | What changes | Check after the build |
 |---|---|---|
-| `chromatin` | Input v6: 205,722 peaks (194,002) in 19 conditions, `HeadKidney_invivo_pbs` and `HeadKidney_invivo_vibrio` being new. 46,534 peaks carry a head kidney state and 12,043 exist only there; the 17 other conditions keep their states. A release built from v6 counts head kidney in the tiers, as salmon's do since 2026-11-20 (#62). One label is new to the rules, `Weak_accessible_chromatin` (14,494 PBS peaks): it is in neither list of weights.yaml, so it counts nothing until G says (#63). The trout head kidney models name no peak an active enhancer, so active there means Active TSS | 205,722 rows, 19 condition columns (the input has no overlapping peaks) |
+| `chromatin` | Input v6: 205,722 peaks (194,002) in 19 conditions, `HeadKidney_invivo_pbs` and `HeadKidney_invivo_vibrio` being new. 46,534 peaks carry a head kidney state and 12,043 exist only there; the 17 other conditions keep their states. Head kidney counts in the tiers, as salmon's does (G, #62). The new label `Weak_accessible_chromatin` (14,494 PBS peaks) is a weak state (G, #63). The trout head kidney models name no peak an active enhancer, so active there means Active TSS | 205,722 rows, 19 condition columns (the input has no overlapping peaks) |
 | `summit` | PBS's merged-replicate MACS2 peaks join the 17 files. Vibrio has no such file on salmobase: the merged files of conditions with a failed fish were withdrawn (#64) | More than 1,257,737 rows; 18 conditions (19 with a Vibrio file) |
 | `motif` | Computed again, as it follows `chromatin` | 1,083,423 rows: the public sites inside a v6 peak (1,029,347) |
-| tracks.yaml | Regenerated from the trout trackhub with its ImmunoMap folder: 733 signal tracks (603), 19 state tracks and 19 robust peak tracks (17 each). The 130 new signal tracks are ATAC, H3K27ac, H3K27me3, H3K4me3, input and RNA-seq of head kidney in vivo (PBS, poly I:C, Vibrio) and of leukocytes in vitro | The Locus browser offers 'HK PBS' and 'HK Vibrio' state rows; the Table's Chromatin filter offers head kidney |
-| Wording | 19 conditions; the ImmunoMap's samples in the species block, the Data page and Help | The pages name 19 conditions |
-| The public pool | The same 3,372,181 sites. Tiers change at head kidney peaks: of the 18,801,055 public sites, 350,142 lie in a peak with a head kidney state, 158,124 where head kidney is active, and 7,266 where no other condition is | The tier shares of trout-2026-11-24 were 0.28%, 4.92%, 4.88%, 89.92% |
+| tracks.yaml | Regenerated on 2026-11-25 from the trout trackhub with its ImmunoMap folder: 733 signal tracks (603), 19 state tracks and 19 robust peak tracks (17 each). The 130 new signal tracks are ATAC, H3K27ac, H3K27me3, H3K4me3, input and RNA-seq of head kidney in vivo (PBS, poly I:C, Vibrio) and of leukocytes in vitro | The Locus browser offers 'HK PBS' and 'HK Vibrio' state rows; the Table's Chromatin filter offers head kidney |
+| Wording | 19 conditions; the ImmunoMap in the samples, the Methods and Help texts and the state legend (the species block of layers.yaml) | The trout pages name 19 conditions, and their sample texts name head kidney after PBS or Vibrio |
+| The public pool | The same 3,372,181 sites. Tiers change at head kidney peaks: of the 18,801,055 public sites, 350,142 lie in a peak with a head kidney state, 158,124 where head kidney is active, and 7,266 where no other condition is; 19,925 lie in a peak whose only counted state is the new weak one | The tier shares of trout-2026-11-24 were 0.28%, 4.92%, 4.88%, 89.92%; expect tiers 1 to 3 to grow a little |
 | Unchanged | `pike` 1,192,301, `public_af` 18,801,055, `flank_variants` 46,593,552, the gene and regulatory layers, the catalogue's 13 rows, the four examples | `snpscore diff`, read as for salmon |
 
 ### What it needs first
 
-1. **The gill scores, from the ChromBPNet work** (its own repository and chat on Orion). Score the SNPs of #60 with
-   the gill model, each by its held-out fold, and publish the salmo-snp score file under the model's release on
-   salmobase, for example `datasets/chrombpnet/AtlanticSalmon/v1/Gill/scores/chrombpnet_gill.tsv.gz`, with its
-   checksum. The scorer writes that file (header `chrom pos ref alt score`) and its layers.yaml entry. The sites
-   are in release 2026-11-24 on Orion, `/mnt/project/ELIXIR/salmo-snp/release/2026-11-24/public_af.parquet` and
-   `synchrosmolt_af.parquet` (chrom, `end` as the 1-based position, ref, alt). At the 13.5 ms a SNP its notes
-   measured on a GPU: 28 GPU-hours for the 7,572,808 public sites, 35 for those and the Synchrosmolt sites together.
+1. **The gill scores, from the ChromBPNet work** (its own repository and chat on Orion). Until the file is at the
+   address layers.yaml names, `snpdata fetch` stops at this layer and the salmon build cannot start. The request, as
+   text for that chat:
+
+   ```
+   Make the gill score file for the next salmo-snp release (salmo-snp docs/ORION.md, "The next build").
+   1. The SNPs: those of salmo-snp release 2026-11-24 inside the Gill v1 model's training peaks. Take chrom, "end"
+      (the 1-based position), ref and alt from public_af.parquet and synchrosmolt_af.parquet in
+      /mnt/project/ELIXIR/salmo-snp/release/2026-11-24/, keep single-base ref and alt, and keep a SNP when
+      start < pos <= end of a peak in training_peaks.narrowPeak.gz (its chromosomes are named chr1-chr29).
+      Expected: 216,592 SNPs, 176,608 of them public sites.
+   2. Score them with the Gill v1 model, each SNP by the fold that held its chromosome out (the release's scorer
+      with --gpu, or variant-scorer as the benchmark did).
+   3. Write chrombpnet_gill.tsv.gz: tab-separated, the header chrom pos ref alt score effect percentile, one row
+      per scored SNP, chromosomes named 1-29, with score = abs_logfc, effect = logfc and
+      percentile = abs_logfc_percentile of the scorer's scores.tsv.
+   4. After a dry run and G's go-ahead, publish it with its sha256 as
+      datafiles/datasets/chrombpnet/AtlanticSalmon/v1/Gill/scores/chrombpnet_gill.tsv.gz (salmo-snp's layers.yaml
+      names that address: say so if it goes elsewhere). The scorer's whole table and its browser track
+      (variants.Gill.bed) are welcome beside it.
+   Later, not now (G, 2026-11-25): every public and Synchrosmolt site, 9,288,186 SNPs, about 35 GPU-hours.
+   ```
+
+   The scorer was tried in a cloud session (4 cores, no GPU): its scores of 44 of the model's test SNPs equal the
+   published ones to 0.00001, and it takes 0.3 to 0.5 s a SNP there. The fixture's 697 scores were made that way
+   (`snpdata/tests/fixture/chrombpnet_gill.tsv.gz`: real predictions, the same three columns).
 2. **From the AQUA-FAANG files, if Vibrio is to have summits (#64)**: a MACS2 call on the merged reads of Vibrio's
-   four fish, beside PBS's in `nfcore/RainbowTrout/ImmunoMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/`.
+   four fish, beside PBS's in `nfcore/RainbowTrout/ImmunoMap/ATAC/results/bwa/mergedReplicate/macs/narrowPeak/`,
+   and one more line in the trout layers.yaml (`summit.files`). The build goes without it otherwise.
    Also: VERSION.md cites `chromatin_states/RainbowTrout/ImmunoMap/README.md`, which is not on salmobase (404).
-3. **One pull request in this repository before the build** (a cloud session can make it: the two inputs the trout
-   fixture needs new, the v6 peaks and PBS's peak file, are on salmobase):
-   - salmon `layers.yaml`: the `chrombpnet_gill` entry, with the score file's address;
-   - trout `layers.yaml`: 19 conditions in the descriptions and the samples, PBS's peak file in `summit`;
-   - `snpdata tracks --hub <the trout hub>` in `snpdata/rainbow_trout/`, for its tracks.yaml (done with this plan:
-     the ImmunoMap folder is among the trout hub's sources, and the command reads the trout state file list
-     again, which had stopped it since 2026-11-20);
-   - the portal: a colour and a short name for `Weak_accessible_chromatin` (salmobase's colour is 196,234,250),
-     and the Help and Data pages' ImmunoMap text for trout;
-   - weights.yaml, only if G answers #63 or #54;
-   - the trout fixture with v6 and PBS's peaks (the cuts `prep/make_fixture_trout.py` makes), and tests of the two
-     conditions;
-   - positional layers written in a full order ("Next" below): the builds after this one then give the same bytes
-     for the same rows, and the diff lists only what changed;
-   - after publishing: serve.py `RELEASE` and `RELEASES` name the new releases.
-4. **G's answers** to DECISIONS #60 to #64. With the recommendations as they stand, nothing else waits.
+3. **In this repository**: done on 2026-11-25 in one pull request. The salmon registry has the `chrombpnet_gill`
+   layer and the trout registry the 19 conditions, PBS's peak file, the ImmunoMap's wording and samples;
+   `rainbow_trout/tracks.yaml` is regenerated; weights.yaml lists `Weak_accessible_chromatin` as weak; the portal
+   draws the effects row and the new state; both fixtures and the tests follow. Left for after publishing: serve.py
+   `RELEASE` and `RELEASES` name the new releases. Not needed for this build: positional layers written in a full
+   order ("Next" below), which would let later diffs list only what changed.
 
 ### Not in this build
 
 | Candidate | Why |
 |---|---|
+| A gill score for every public and Synchrosmolt site (9,288,186) | Later (G, 2026-11-25): about 35 GPU-hours. The same file and layer then hold them all, and the percentile keeps its meaning |
 | ChromBPNet models of other conditions | One layer each (`chrombpnet_<model>`), as their releases reach salmobase; only gill is there |
-| Scores for a user's own SNPs that are not public sites | They show 'not scored'. Scoring them in the install needs numpy and onnxruntime, a dependency decision (#61) |
+| Scores for a user's own SNPs that are not in the scored set | They show 'not scored'. Scoring them in the install needs numpy and onnxruntime, a dependency decision (#61) |
 | Benchmark files in the snapshot | No: a snapshot holds only data the portal or the package uses (G, 2026-11-24) |
 | A pool with coding consequences (`snpscore pool --assay`) | Not now (G, 2026-11-24). It still blocks DECISIONS #5 |
 | fSalSal1 position conversion | Can be made on Orion (one minimap2 run); skipped for now (G, 2026-11-24) |
