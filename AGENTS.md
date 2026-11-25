@@ -242,6 +242,20 @@ Decided:
   releases, so it works with any salmon release. How: snpportal/README.md "Predictions on demand". Also that day: a
   release builds without a score file that is not published yet ("It might not include chrombpnet scores").
 
+- Faster and simpler builds, tests and deploys (G, 2026-11-25: "Yes if it's changed you can fetch again. Yes reuse
+  where you can to save time between releases"; then "Look for ways for in the next releases to speed up and simply
+  the building, testing and deploying. From now, the builds will run on orion in a separate orion ssh chat, using a
+  build plan it pulls from the repo and serve the data by syncing it to salmobase. For now we deploy to NREC, but
+  soon we'll move the app to the salmobase server. There we can use the same data that's deployed on salmobase").
+  Built: `snpdata fetch` downloads a salmobase file again when the server's copy has changed; a build copies the
+  layers that did not change from the release before, only from one built by the same code, and writes layers in a
+  full row order, so the same input gives the same bytes; the plan and the steps of a build are the first section
+  of docs/ORION.md, which the Orion chat pulls; `tools/check.sh` runs the suites side by side; `salmo-snp
+  download` and the demo's species.sh fetch only the files that changed; the demo's update.sh runs the new commit's
+  own steps. Proposed and not built, for G to choose (DECISIONS #65-#68; docs/ORION.md "Faster and simpler builds,
+  tests and deploys"): the app on salmobase reading the published data in place, a scripted test of a release, who
+  says which release is current, and how the build chat hands back.
+
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
   the ImmunoMap's bivalent or mixed active/polycomb (G, 2026-11-20) and the trout ImmunoMap's weak accessible
@@ -352,10 +366,10 @@ Tests use the small fixture in `snpdata/tests/fixture`, so they need no download
 
 ```bash
 conda env create -f environment.yml && conda activate salmo-snp   # conda-forge only; installs the three folders editable
-bash tools/check.sh                                    # what CI runs: pyflakes, then the four suites (~4 min)
+bash tools/check.sh                                    # what CI runs: pyflakes, then the four suites side by side (~2 min)
 (cd snpscore && python -m pytest -q)                   # or one suite at a time
 (cd snpdata && python -m pytest -q)
-(cd snpportal && python -m pytest -q tests && SNPPORTAL_WORKERS=0 python manage.py test snpportal)
+(cd snpportal && python -m pytest -q tests && SNPPORTAL_WORKERS=0 python manage.py test snpportal --parallel)
 salmo-snp serve                                        # the portal on http://127.0.0.1:8000/snp/, with the data below
 salmo-snp serve --release snpdata/release/dev          # or a release you built
 ```
@@ -438,9 +452,10 @@ info` says where); then `salmo-snp serve`. A new release is built and published 
   (serve.py DATA_URL: the files of its SHA256SUMS, the genome from the manifest's address, the pool from
   releases/<version>/pool/), checks it and puts it in place: a salmon release becomes /srv/snpportal/release (the one
   it replaces moving to releases/<version> for the results made with it), another species' goes in
-  /srv/snpportal/releases/, which settings.py finds beside the default release. A deploy runs the update.sh already
-  on the VM, so a change to update.sh takes effect on the deploy after the one that installs it; species.sh is the
-  new one at once (update.sh runs it after the checkout). A stale pool of any species is the deploy workflow's
+  /srv/snpportal/releases/, which settings.py finds beside the default release. Only what changed is fetched: a
+  file a release on the VM already holds with the same sha256 is copied from it, and a genome with the manifest's
+  sha256 is kept. update.sh runs the steps of the commit it has just checked out (since 2026-11-25: a change to them
+  takes effect in the deploy that brings it, not one deploy later). A stale pool of any species is the deploy workflow's
   (update.sh names each stale release; the job builds its pool from the release on salmobase and sends it,
   `update.sh pool <version>`). A new release, in short: build and publish it on Orion, name it in serve.py RELEASE or
   RELEASES, merge, deploy. Until 2026-11-24 the releases were GitHub data releases (data-<version>:

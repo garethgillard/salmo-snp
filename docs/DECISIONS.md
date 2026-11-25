@@ -168,3 +168,22 @@ make sure we have that useful track from chrombpnet to show effects."
 | 62 | Do the trout ImmunoMap's head kidney conditions count in the tiers, as salmon's do (#47)? | Yes: the trout release is built from the unified peaks v6 (19 conditions; PBS and Vibrio. Poly I:C has no states) | - |
 | 63 | How does the new label `Weak_accessible_chromatin` count? | Weak, one point, as `Accessible_chromatin` (weights.yaml `weak_states`). It decides alone at 5,940 peaks with 19,925 public SNPs | #2 (should accessible-only states count at all) covers both labels |
 | 64 | Trout Vibrio has no merged-replicate peak file on salmobase (withdrawn: the merge included its two failed fish), so no summits | A MACS2 call on the four good fish's merged reads if that is quick to make with the AQUA-FAANG files; else the build goes without Vibrio's summits (the summit term counts nothing yet, #58) | Skipped for release trout-2026-11-25: its `summit` layer has 18 conditions. The trout registry lists PBS's peak file; Vibrio's is one more line when it exists |
+
+
+## Builds, tests and deploys (G, 2026-11-25: faster and simpler for the next releases)
+
+G answered the two questions of that day's builds: "Yes if it's changed you can fetch again. Yes reuse where you can
+to save time between releases." Both are built ([ORION.md](ORION.md) "How a build runs"): `snpdata fetch` downloads a
+salmobase file again when the server's copy has changed, and a build copies the layers that did not change from the
+release before. Then: "Look for ways for in the next releases to speed up and simply the building, testing and
+deploying. From now, the builds will run on orion in a separate orion ssh chat, using a build plan it pulls from the
+repo and serve the data by syncing it to salmobase. For now we deploy to NREC, but soon we'll move the app to the
+salmobase server. There we can use the same data that's deployed on salmobase." What was measured, what was changed
+at once and what each proposal would take: ORION.md "Faster and simpler builds, tests and deploys".
+
+| # | Question | Now | Recommendation |
+|---|---|---|---|
+| 65 | How does the app on the salmobase server get its data? | Planned as a container with its own copies of a release and a genome (snpportal/README.md "salmobase container", written before the data was on salmobase). The NREC demo fetches each release and its genome at a deploy | Read the published folder in place: one read-only mount of the server's datafiles and one setting, from which the releases, the genomes, the AQUA-FAANG tracks and the model files are read from the disk; the pools in the app's own folder, built there when the published one does not fit the weights. Needs to be known: Docker or Podman on the server, its memory, who edits its Apache |
+| 66 | A scripted test of a release before it is published? | The build checks every file and prints row counts; the portal is tried by hand in the Orion chat, and again in the cloud session after publishing | Yes: one script in the build job that installs the release as a user would, starts the portal on both species, scores every example and asks the health page; nothing is published when it fails |
+| 67 | Who says which release is current? | The code: serve.py `RELEASE` and `RELEASES`. Every data release needs a pull request, the tests and a deploy before the live app shows it | The live app takes what the publisher names (`releases/latest.json`, one version per species, written after the server's copy is checked), and refuses a release in a format newer than it reads; a release is then live when it is published. An install keeps the release its version names (the same data for the same version), and `salmo-snp download latest` fetches the newest |
+| 68 | How does the build chat hand back? | As text that G pastes into the chat that works on the code, which then checks the release again and opens the pull request | With #67 nothing has to follow a build in the code. Until then: the five lines of ORION.md's step 5; or the build chat opens the pull request itself, which needs a GitHub token for this repository on Orion |
