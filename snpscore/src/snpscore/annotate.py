@@ -11,6 +11,7 @@ from pathlib import Path
 import duckdb
 
 from . import assay, coding, motif
+from .bbi import local
 from .fasta import Fasta
 from .formats import ACCEPTED, InputError, TooMany, detect, lit, q, source
 from .score import load_weights, scored
@@ -385,7 +386,8 @@ def genome_location(manifest):
     """$SNPSCORE_GENOME (a server's own copy of the release's genome) if set, unless the release's own genome file
     lies beside it under another name (another species' release on that server), else the release's genome file in
     $SNPSCORE_GENOME_DIR (salmo-snp's data folder, which may hold the genomes of several releases) when it is there,
-    else the local path if the release's build machine had it and it is still there, else its URL (or None)."""
+    else the local path if the release's build machine had it and it is still there, else its URL (or None): as the
+    file itself where the URL is salmobase's and this runs on its server (bbi.local), with its two indexes."""
     genome = manifest.get("genome")
     if not genome:
         return None
@@ -398,7 +400,10 @@ def genome_location(manifest):
     here = Path(folder) / name if folder and name else None
     if here and all(Path(f"{here}{ext}").exists() for ext in ("", ".fai", ".gzi")):
         return str(here)
-    return genome["path"] if genome.get("path") and Path(genome["path"]).exists() else genome["url"]
+    if genome.get("path") and Path(genome["path"]).exists():
+        return genome["path"]
+    served = local(genome["url"])
+    return served if all(Path(f"{served}{ext}").exists() for ext in (".fai", ".gzi")) else genome["url"]
 
 
 def add_sequence_checks(con, location, write_dir, weights=None, public_af=None):

@@ -3,6 +3,8 @@ on NREC (deploy/nrec.sh sets the DJANGO_* variables below; salmobase itself uses
 import os
 from pathlib import Path
 
+from snpportal import serve  # the releases this code names, and where the data is published (no Django in it)
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only")
@@ -26,8 +28,16 @@ STATIC_URL = os.environ.get("DJANGO_STATIC_URL", "/static/")  # served by runser
 # the salmobase container: /snp/static/, served by the portal itself (SNPPORTAL_SERVE_STATIC=1), as /static/ is salmobase's
 SNPPORTAL_SERVE_STATIC = os.environ.get("SNPPORTAL_SERVE_STATIC") == "1"
 
+# On the salmobase server (G, 2026-11-25) the portal reads the published data where it is: SNPSCORE_SALMOBASE names
+# the server's datafiles folder (what https://salmobase.org/datafiles/ serves). The releases folder and the default
+# release follow from it (the releases this code names: serve.RELEASE and RELEASES), and snpscore reads the tracks,
+# the genomes and the models' files from that folder instead of asking the web server (snpscore.bbi.local). Nothing
+# is written there: results and the secret key are in the portal's own data folder.
+_published = serve.published(os.environ.get("SNPSCORE_SALMOBASE"))
+
 # Release folder built by snpdata (`snpdata build --out release/dev`)
-SNPSCORE_RELEASE = os.environ.get("SNPSCORE_RELEASE", str(BASE_DIR.parent / "snpdata" / "release" / "dev"))
+SNPSCORE_RELEASE = os.environ.get("SNPSCORE_RELEASE") or str(
+    _published / serve.RELEASE if _published else BASE_DIR.parent / "snpdata" / "release" / "dev")
 
 # Portal settings (defaults shown). Results live in SNPPORTAL_RESULTS_DIR (default: <system temp>/snpportal).
 if os.environ.get("SNPPORTAL_RESULTS_DIR"):
@@ -36,6 +46,8 @@ SNPPORTAL_WORKERS = int(os.environ.get("SNPPORTAL_WORKERS", 1))  # background jo
 SNPPORTAL_KEEP_HOURS = float(os.environ.get("SNPPORTAL_KEEP_HOURS", 24))
 if os.environ.get("SNPPORTAL_RELEASES_DIR"):  # salmo-snp serve: the data folder's releases/, to switch between (I17)
     SNPPORTAL_RELEASES_DIR = os.environ["SNPPORTAL_RELEASES_DIR"]
+elif _published:  # the salmobase server: every published release, each species' named one for new work
+    SNPPORTAL_RELEASES_DIR = str(_published)
 elif (Path(SNPSCORE_RELEASE).parent / "releases").is_dir():  # a server: the other species' releases beside the default
     SNPPORTAL_RELEASES_DIR = str(Path(SNPSCORE_RELEASE).parent / "releases")  # one (/srv/snpportal/release, releases/)
 SNPPORTAL_LOCAL = os.environ.get("SNPPORTAL_LOCAL") == "1"  # salmo-snp serve: nothing expires, the pages say it is local

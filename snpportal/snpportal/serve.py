@@ -27,6 +27,14 @@ RELEASES = {"atlantic_salmon": RELEASE, "rainbow_trout": "trout-2026-11-25"}  # 
 DATA_URL = os.environ.get("SALMO_SNP_DATA_URL") or "https://salmobase.org/datafiles/datasets/salmo-snp"
 
 
+def published(datafiles):
+    """The releases folder inside a server's own copy of what DATA_URL serves: <datafiles>/datasets/salmo-snp/releases
+    for salmobase's datafiles folder (the salmobase server reads its releases there, in place: settings.py), or None
+    when DATA_URL is not an address under salmobase's datafiles."""
+    from snpscore.bbi import SALMOBASE
+    return Path(datafiles, DATA_URL[len(SALMOBASE):], "releases") if datafiles and DATA_URL.startswith(SALMOBASE) else None
+
+
 def data_home():
     if os.environ.get("SALMO_SNP_HOME"):
         return Path(os.environ["SALMO_SNP_HOME"])
