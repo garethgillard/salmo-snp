@@ -30,6 +30,12 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   accessible, down and blue where less, `palette.EFFECTS`; height = rank) and the Table's Scores column and the
   card's chip, with an arrow (results.score_text). The words come from the layer's `direction` and `reference` in
   layers.yaml (jobs.score_words); nothing is counted until weights.yaml says so.
+- Predictions on demand (G, 2026-11-25): the card's 'Predict' button runs a sequence model for one SNP in this
+  process (predict.py; lib/predict.py holds the model's rules, lib/models.yaml the models by assembly). numpy and
+  onnxruntime are imported only then and are an optional extra: nothing else may import them, and the pages must
+  work without them (the card then says how to get them). A job's SNP is named by job and row in the address,
+  never by position. The button undoes the results page's hx-select, which the drawer inherits. README
+  "Predictions on demand".
 - Tracks AQUA-FAANG publishes after a release (2026: salmon gill ATAC-seq, the ImmunoMap) go live with a deploy:
   `snpdata tracks --added-since <release>/tracks.yaml` (in ../snpdata) regenerates tracks.yaml and writes
   `snpportal/lib/tracks_added.yaml`, which lib/tracks.load_tracks adds to a release registry of the same hub.

@@ -412,8 +412,9 @@ def fetch(layers_yaml, data_dir, mirror=None):
     `sites_only` is streamed through sites_only(). With `mirror` (a URL or folder made by `snpdata publish --raw`), every
     file comes from <mirror>/raw/ instead, as published (already processed), checked against its SHA256SUMS. A source
     with `local` instead of `url` (an input that isn't online) is read from that path under data_dir, processed the same
-    way; when it isn't there, fetch says so and goes on. A salmobase url is read from the disk instead where
-    SNPDATA_SALMOBASE names a copy of its datafiles folder (on_disk())."""
+    way; when it isn't there, fetch says so and goes on. So it does for a per-variant score file (format
+    variant_scores) that is not published yet (404): build then leaves that layer out. A salmobase url is read from
+    the disk instead where SNPDATA_SALMOBASE names a copy of its datafiles folder (on_disk())."""
     data = Path(data_dir)
     data.mkdir(parents=True, exist_ok=True)
     cfg = load_yaml(layers_yaml)
@@ -442,7 +443,16 @@ def fetch(layers_yaml, data_dir, mirror=None):
                     with open(part, "w") as f:
                         f.writelines(f"{c}\t{s}\t{e}\n" for c, s, e in covered(BBIFile(bw.name), int(layer.get("max_gap", 0))))
             else:
-                download(url, part)
+                try:
+                    download(url, part)
+                except urllib.error.HTTPError as e:
+                    if e.code != 404 or layer.get("format") != "variant_scores":
+                        raise
+                    # a score file is another project's, published on its own schedule: the release is built without it
+                    part.unlink(missing_ok=True)
+                    print(f"snpdata: {layer['url']} is not published (404): build will leave the layer "
+                          f"{layer.get('name', target.name)} out", flush=True)
+                    continue
                 if layer.get("query") and part.read_bytes()[:11] == b"Query ERROR":  # BioMart answers 200 with its error
                     message = part.read_text()[:200]
                     part.unlink()
@@ -649,6 +659,10 @@ def build(layers_yaml, data_dir, out_dir, reuse=None, memory=None, threads=None,
     ends = {}  # chrom -> largest end over the positional layers
     for layer in cfg["layers"]:
         paths = [data / s["file"] for s in sources(layer)]
+        if layer["format"] == "variant_scores" and not all(p.exists() for p in paths):
+            # a model's scores come from another project (fetch says when they are not published): a release without them
+            print(f"{layer['name']}: left out, {paths[0].name} is not in {data}", flush=True)
+            continue
         settings = {k: v for k, v in (dict(layer, meme="motif.meme") if layer["format"] == "motif_effects" else layer).items()
                     if k not in ("file", "files", "columns", "query", "info")}
         was = old_layers.get(layer["name"])

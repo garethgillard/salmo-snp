@@ -8,7 +8,7 @@ set -euo pipefail
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
 cd "${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 PYTHON=3.12  # .github/workflows/tests.yml's python-version: change both together
-PACKAGES=(-e "snpscore[test]" -e snpdata -e snpportal)
+PACKAGES=(-e "snpscore[test]" -e snpdata -e "snpportal[chrombpnet]")  # chrombpnet: numpy and onnxruntime, for the card's Predict button
 works() { .venv/bin/python -c "import snpscore, snpdata, snpportal, django, pytest" 2>/dev/null; }
 wanted() { [ "$(.venv/bin/python -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)" = "$PYTHON" ]; }
 if command -v uv >/dev/null; then  # always installs: a resumed session gets what pyproject.toml now asks for (~1 s)

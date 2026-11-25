@@ -819,7 +819,7 @@ def job_card(request, key, row, job):
     """Card context for one SNP of a job, for the request's trait (the Table's drawer shows it); a GWAS job's card adds
     the SNP's p, beta and fine-mapping (association.snp_line), and every card whether this browser's Design panel
     holds the SNP. None when the row doesn't exist."""
-    from . import association, panel
+    from . import association, panel, predict
     con, types, where, chosen = results.open_result(request, key)
     hit = con.execute(results.CARD_SQL, [row]).fetchone()
     if hit is None:
@@ -838,7 +838,7 @@ def job_card(request, key, row, job):
     ev = evidence(snp, jobs.weights(d), chosen["trait"], synthetic, snps)
     ev["facts"] = ordered(ev["facts"] + gwas_chips(association.snp_line(request, key, row, job)))
     ctx = card_context(request, ev, f"{reverse('snpportal:locus')}?{urlencode({'key': key, 'row': row, **gwas_query})}")
-    ctx.update(job=job, synthetic=synthetic, panel=panel.holds(request, snp))
+    ctx.update(job=job, synthetic=synthetic, panel=panel.holds(request, snp), predict=predict.job_buttons(snp, key, row))
     return ctx
 
 
@@ -876,5 +876,7 @@ def variant(request, spec):
     info = jobs.release_info()
     ev = evidence(snp, jobs.weights(), trait, bool(info.get("synthetic")))
     ctx = card_context(request, ev, f"{reverse('snpportal:locus')}?{urlencode({'r': region_text(chrom, max(0, pos - 1 - 10_000), pos + 10_000)})}")
-    ctx.update(nav="explore", title=ev["title"], synthetic=ev["synthetic"], crumbs=[("Locus browser", reverse("snpportal:locus")), ("Variant", None)])
+    from . import predict
+    ctx.update(nav="explore", title=ev["title"], synthetic=ev["synthetic"], crumbs=[("Locus browser", reverse("snpportal:locus")), ("Variant", None)],
+               predict=predict.variant_buttons(snp, spec))
     return render(request, "snpportal/card.html" if ctx["hx"] else "snpportal/variant.html", ctx)

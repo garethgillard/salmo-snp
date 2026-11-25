@@ -302,6 +302,7 @@ annotate gives `chrombpnet_gill` (true when the variant was scored), `chrombpnet
 allele effects' rows, and the benchmark compares the top 10% and 1% with matched controls. A layer counts in tiers
 only once G sets `variant_scores: {chrombpnet_gill: <percentile>}` and a `chrombpnet_gill` weight in snpscore's
 weights.yaml. The gill ChromBPNet scores are the first such layer (layers.yaml; where the file comes from:
-[docs/ORION.md](../docs/ORION.md)).
+[docs/ORION.md](../docs/ORION.md)). A score file is another project's, published on its own schedule: where its
+address answers 404, `fetch` says so and goes on, and `build` leaves the layer out of that release.
 
 Progress and next steps: [docs/TRACKER.md](../docs/TRACKER.md).

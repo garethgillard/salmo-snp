@@ -56,7 +56,7 @@ first, 1).
 
 | Part | What changes | Check after the build |
 |---|---|---|
-| `chrombpnet_gill` (new) | A per-variant score layer (snpdata/README.md "A per-variant score"), in layers.yaml since 2026-11-25: the gill model's prediction of what the alt allele does to accessibility, each SNP scored by the fold that held its chromosome out. Columns: `score` (the absolute log2 fold change), `effect` (the log2 fold change, signed) and `percentile` (the scorer's, among 100,000 random public SNPs). Shown in the Table's Scores column and on the card with an arrow for the direction, and in the Locus browser's Predicted allele effects row (up and red: the alt allele more accessible; down and blue: less). It counts nothing (weights.yaml `variant_scores: {}`, DECISIONS #53). First set (#60): the public and Synchrosmolt SNPs inside the model's training peaks; every site later. **The score file does not exist yet** (What it needs first, 1) | About 216,592 rows, with `effect` and `percentile` among the columns; a public SNP in a gill peak has `chrombpnet_gill_score`, `_effect` and `_percentile` after `snpscore annotate` |
+| `chrombpnet_gill` (new) | A per-variant score layer (snpdata/README.md "A per-variant score"), in layers.yaml since 2026-11-25: the gill model's prediction of what the alt allele does to accessibility, each SNP scored by the fold that held its chromosome out. Columns: `score` (the absolute log2 fold change), `effect` (the log2 fold change, signed) and `percentile` (the scorer's, among 100,000 random public SNPs). Shown in the Table's Scores column and on the card with an arrow for the direction, and in the Locus browser's Predicted allele effects row (up and red: the alt allele more accessible; down and blue: less). It counts nothing (weights.yaml `variant_scores: {}`, DECISIONS #53). First set (#60): the public and Synchrosmolt SNPs inside the model's training peaks; every site later. **The score file does not exist yet** (What it needs first, 1) | About 216,592 rows, with `effect` and `percentile` among the columns; a public SNP in a gill peak has `chrombpnet_gill_score`, `_effect` and `_percentile` after `snpscore annotate`. Or no such layer, and a line in the build's log saying so, when the file was not published in time |
 | `chromatin` | Input v6. Nothing scored changes: read with the build's reader, it has the 328,894 peaks of release 2026-11-24 and the same state in every one of the 27 conditions. `summary` is filled again (empty since v3; nothing shows it) | 328,894 rows |
 | The public pool | Built again, as weights.yaml changed (a weak state that only trout has: nothing changes for salmon). pike is still 0 (DECISIONS #54) | 3,436,671 sites; tiers 0.38%, 6.16%, 8.49%, 84.98%, as for 2026-11-24 |
 | Unchanged | Every other layer and table of 2026-11-24: `summit` 2,468,735, `pike` 1,226,940, `synchrosmolt_af` 3,993,949, `motif` 533,163, `public_af` 7,572,808, `molqtl` 2,656, `liftover_icsasg_v2` 735,344 blocks, the catalogue's 46 rows, the six examples | `snpscore diff 2026-11-24 <new>`: `chrombpnet_gill` and `chromatin` are new or changed. It compares file checksums, so it also lists the layers whose rows share a start (`transcripts`, `transcripts_ncbi`, as on 2026-11-25): compare those row by row |
@@ -75,9 +75,11 @@ first, 1).
 
 ### What it needs first
 
-1. **The gill scores, from the ChromBPNet work** (its own repository and chat on Orion). Until the file is at the
-   address layers.yaml names, `snpdata fetch` stops at this layer and the salmon build cannot start. The request, as
-   text for that chat:
+1. **The gill scores, from the ChromBPNet work** (its own repository and chat on Orion). A build does not wait for
+   them (G, 2026-11-25: the release "might not include chrombpnet scores"): while the file is not at the address
+   layers.yaml names, `snpdata fetch` says so and goes on, and `snpdata build` leaves the layer out; the build after
+   the file is published takes it. The portal can predict one SNP at a time without the file (the card's button:
+   snpportal/README.md "Predictions on demand"). The request, as text for that chat:
 
    ```
    Make the gill score file for the next salmo-snp release (salmo-snp docs/ORION.md, "The next build").

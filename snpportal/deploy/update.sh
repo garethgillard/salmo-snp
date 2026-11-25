@@ -77,7 +77,8 @@ fi
 install() {  # check out $1, install its packages, say if the pool is stale, collect static files, restart; succeed only when the portal answers
   git checkout -q --force --detach "$1"
   # the newest versions the packages allow (security fixes arrive with each deploy)
-  /srv/snpportal/venv/bin/pip install -q --upgrade --upgrade-strategy eager gunicorn -e snpscore -e snpportal || return 1
+  # chrombpnet: numpy and onnxruntime, so that the card's Predict button runs the model here (about 150 MB while it runs)
+  /srv/snpportal/venv/bin/pip install -q --upgrade --upgrade-strategy eager gunicorn -e snpscore -e "snpportal[chrombpnet]" || return 1
   # The public pool is never built here: the VM's 2 GB RAM can't, and trying swapped for 17 min until the SSH session
   # dropped (2026-11-06). The deploy workflow builds it and sends it (`pool` above) when this line says so.
   bash snpportal/deploy/species.sh || true  # the releases this code names, fetched once from salmobase

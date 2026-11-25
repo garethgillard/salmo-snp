@@ -417,6 +417,57 @@ class ResultsTest(SimpleTestCase):
         ET.fromstring(mark)
 
 
+    def test_predict_on_demand(self):
+        """The card's button for a sequence model (G, 2026-11-25): offered for a SNP of an assembly that has a model;
+        its address names the job's row and never the position; the result replaces the button. The model itself is
+        lib.predict's (tests/test_predict.py): a stand-in here."""
+        from . import predict
+        from .lib import predict as lp
+        chrom, pos, ref, alt = jobs.connect([self.d]).execute(
+            f"SELECT chrom, pos, ref, alt FROM read_parquet('{self.d / 'result.parquet'}', file_row_number=true) WHERE file_row_number = 0").fetchall()[0]
+        card_url = reverse("snpportal:card", args=[self.key, 0])
+        url = reverse("snpportal:predict_job", args=[self.key, 0, "chrombpnet_gill"])
+        self.assertNotIn(str(pos), url)
+        with mock.patch.object(lp, "missing_packages", lambda: []):
+            card = self.client.get(card_url, HTTP_HX_REQUEST="true").content.decode()
+        self.assertIn("Predict with ChromBPNet Gill", card)
+        self.assertIn(f'hx-get="{url}"', card)
+        self.assertIn('hx-select="unset"', card)  # the Table's drawer inherits the results page's hx-select
+        with mock.patch.object(lp, "missing_packages", lambda: ["onnxruntime"]):  # the base install: no button, but how to get one
+            card = self.client.get(card_url, HTTP_HX_REQUEST="true").content.decode()
+        self.assertNotIn("Predict with ChromBPNet Gill", card)
+        self.assertIn("needs onnxruntime in this install: pip install numpy onnxruntime", card)
+        canned = {"model": "Gill", "version": "v1", "fold": 2, "chrom": chrom, "pos": pos, "ref": ref, "alt": alt, "other_strand": False,
+                  "ref_counts": 43.25, "alt_counts": 37.35, "effect": -0.21179, "score": 0.21179, "percentile": 0.9922, "jsd": 0.0574,
+                  "jsd_percentile": 0.99967, "active_allele_quantile": 0.1, "ref_profile": [0.04] * 1000, "alt_profile": [0.03] * 1000}
+        asked = []
+
+        def stand_in(model, folder, sequence, chrom, pos, ref, alt, threads=1):
+            asked.append((model["name"], Path(folder).parts[-2:], chrom, pos, ref, alt))
+            return canned
+        predict._CACHE.clear()
+        with mock.patch.object(lp, "predict", stand_in):
+            page = self.client.get(url, HTTP_HX_REQUEST="true").content.decode()
+            again = self.client.get(url, HTTP_HX_REQUEST="true").content.decode()  # from this process's memory
+        self.assertEqual(asked, [("chrombpnet_gill", ("chrombpnet_gill", "v1"), chrom, pos, ref, alt)])
+        self.assertEqual(page, again)
+        for text in (f"the alt allele {alt} is predicted", f"<strong>less accessible</strong> than {ref}", "log2 fold change -0.21",
+                     "43.2 &rarr; 37.4 predicted Tn5 cuts in the 1,000 bp", "99.2% of 100,000 random public SNPs (top 1%)",
+                     "&gt;99.9% of them", "not counted in the tier", "on this server for this SNP alone"):
+            self.assertIn(text, page)
+        self.assertEqual(len(svgs(page)), 1)  # the two predicted profiles, a valid SVG
+        self.assertIn(palette.EFFECTS["down"], page)
+        predict._CACHE.clear()
+        with mock.patch.object(lp, "predict", mock.Mock(side_effect=lp.Unavailable("The model's files could not be fetched from salmobase.org: offline"))):
+            page = self.client.get(url, HTTP_HX_REQUEST="true").content.decode()
+        self.assertIn("ChromBPNet Gill: The model&#x27;s files could not be fetched from salmobase.org: offline", page)
+        self.assertEqual(self.client.get(reverse("snpportal:predict_job", args=[self.key, 0, "nomodel"])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("snpportal:predict_job", args=[self.key, 10 ** 7, "chrombpnet_gill"])).status_code, 404)
+        with mock.patch.object(lp, "predict", stand_in):  # a variant page's SNP has its own address; alleles are needed
+            self.assertEqual(self.client.get(reverse("snpportal:predict_variant", args=[f"{chrom}-{pos}-{ref}-{alt}", "chrombpnet_gill"])).status_code, 200)
+            self.assertEqual(self.client.get(reverse("snpportal:predict_variant", args=[f"{chrom}-{pos}", "chrombpnet_gill"])).status_code, 404)
+
+
 @skipUnless(os.environ.get("SNPSCORE_DEV") and (DATA / "release" / "dev").exists()
             and (DATA / "data" / "demo" / "public_50k.vcf").exists(), "SNPSCORE_DEV=1 with release/dev and data/demo")
 class DevTimingTest(SimpleTestCase):
