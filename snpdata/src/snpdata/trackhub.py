@@ -1,4 +1,4 @@
-"""Signal track registry: the AQUA-FAANG trackhub bigWigs (BodyMap, DevMap and, for salmon, ImmunoMap trackDb.txt) and
+"""Signal track registry: the AQUA-FAANG trackhub bigWigs (BodyMap, DevMap and ImmunoMap trackDb.txt) and
 the per-condition ChromHMM and robust ATAC peak bigBeds, written as tracks.yaml. Regenerate it with `snpdata tracks`
 (needs the network); `snpdata build` copies it into the release, and the portal reads release/<v>/tracks.yaml.
 `--added-since <a release's tracks.yaml>` also writes the entries that release lacks (the portal's tracks_added.yaml),
@@ -21,12 +21,12 @@ SOURCES = ("BodyMap", "DevMap")
 # Per species (the hub's folder name, which also starts every file name): the ChromHMM and robust ATAC peak file lists,
 # relative to the hub (their paths are relative to their parent), the trackDb folders (sources), the conditions with a
 # chromatin_<condition> column in the release ('scored'; default: every ChromHMM condition) and the default rows of the
-# 'all' preset. Salmon's gill (2026) and ImmunoMap states are shown, not scored: the release's chromatin layer is the
-# 21-condition unified peaks v1 (layers.yaml).
+# 'all' preset. The trout hub has an ImmunoMap folder since 2026-11-25 (head kidney; states for PBS and Vibrio).
 SPECIES = {
     "AtlanticSalmon": {"chromhmm": "../../chromatin_states/chromhmm_salmon_files.txt", "peaks": "../../robust_ATAC_peaks/salmon_files.txt",
                        "sources": ("BodyMap", "DevMap", "ImmunoMap"), "scored": CHROMATIN_CONDITIONS},
     "RainbowTrout": {"chromhmm": "../../chromatin_states/chromhmm_trout_files.txt", "peaks": "../../robust_ATAC_peaks/trout_files.txt",
+                     "sources": ("BodyMap", "DevMap", "ImmunoMap"),
                      "all": ["Brain_Immature_Female", "Gill_Immature_Female", "Gonad_Immature_Female", "Liver_Immature_Female",
                              "Muscle_Immature_Female", "LateBlastulation"]},
 }
@@ -110,7 +110,7 @@ def from_trackhub(hub=HUB, defaults=None):
     lists = SPECIES[species]
     listed = {key: urljoin(hub, lists[key]) for key in ("chromhmm", "peaks")}
     texts = {key: bbi.read_all(url).decode() for key, url in listed.items()}
-    hmm = parse_bigbeds(texts["chromhmm"], urljoin(listed["chromhmm"], "../"))  # its conditions, for 'scored'
+    hmm = parse_bigbeds(texts["chromhmm"], urljoin(listed["chromhmm"], "../"), species=species)  # its conditions, for 'scored'
     scored = set(lists.get("scored") or (t["condition"] for t in hmm))  # the release's chromatin_<condition> columns
     with_states = {t["condition"] for t in hmm} & scored
     beds = {key: parse_bigbeds(texts[key], urljoin(listed[key], "../"), assay, species, with_states)

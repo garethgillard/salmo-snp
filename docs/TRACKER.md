@@ -6,6 +6,11 @@ Specs: [ROADMAP.md](ROADMAP.md). Questions only G can answer: [DECISIONS.md](DEC
 Background and reasoning: the plan doc "Functional SNP portal plan for salmon breeding".
 
 ## Where things stand (2026-11-25)
+- **The next build is planned, not started** (G, 2026-11-25: "plan the next build using the new gill
+  salmo-chrombpnet model available, and the new trout immunomap data on salmobase"): [ORION.md](ORION.md) "The next
+  build" (Next, S3f). Salmon gains a gill ChromBPNet score for every public SNP, shown and not counted; trout gains
+  the ImmunoMap's head kidney, PBS and Vibrio (19 conditions, 205,722 peaks). It waits for the score file from the
+  ChromBPNet work and for G's answers to DECISIONS #60 to #64.
 - **The demo since 2026-11-25** (G: "make a working deployment to NREC"): main at 2e61590 (PRs #31 to #36) with
   releases 2026-11-24 and trout-2026-11-24, built on Orion and fetched from salmobase by the deploy itself
   (https://salmobase.org/datafiles/datasets/salmo-snp; every file checked on the VM, each release with its pool).
@@ -103,11 +108,20 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
       passed (ORION.md "On Orion": what was fixed, and the two results explained). Published the same day on
       salmobase, https://salmobase.org/datafiles/datasets/salmo-snp (links in salmobase's share on Orion, then
       rsync: `prep/orion_publish.sh`), tested before and after; serve.py `DATA_URL` defaults to it, so installs,
-      `tools/get_data.sh` and the demo's species.sh fetch from there (ORION.md "Hosting on salmobase"). The NREC demo
-      gets the two releases at its next deploy, when G says
+      `tools/get_data.sh` and the demo's species.sh fetch from there (ORION.md "Hosting on salmobase"). On the NREC
+      demo since 2026-11-25
 - [ ] S3d A missense effect score, on Orion: the plan is [MISSENSE.md](MISSENSE.md) (a protein language model on one
       GPU, SIFT 4G as the cross-check; 80,820 public missense SNPs; checked against rarity in the 504 fish);
       G's choices: DECISIONS #59
+- [ ] S3f The build after that (G, 2026-11-25; planned in [ORION.md](ORION.md) "The next build", with what was
+      measured for it): for salmon the layer `chrombpnet_gill`, the gill ChromBPNet model's score of every site the
+      release has a frequency for (9,288,186; about 35 GPU-hours in the ChromBPNet repository on Orion), shown with
+      its percentile and not counted; for trout the ImmunoMap from the unified peaks v6 (head kidney after PBS and
+      Vibrio: 19 conditions, 205,722 peaks; 350,142 public SNPs in a peak with a head kidney state), its tracks in
+      the Locus browser (733 signal tracks), PBS's summits, and `motif` computed again (1,083,423). Before the build:
+      the score file, one pull request here (layers, tracks, wording, fixture, layers written in a full order), and
+      G's answers to DECISIONS #60 to #64 (the SNP set and score; users' own SNPs; whether trout head kidney counts;
+      the new label `Weak_accessible_chromatin`; Vibrio's summits)
 - [ ] S3e Still to ask or get: allelic imbalance in the 12 fish from the Orion repository (the truth set the summit
       rule and the ChromBPNet scores need); the large gill eQTL set, if its authors share it
 - [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52, #54, #58), then weights.yaml and

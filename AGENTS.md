@@ -209,6 +209,13 @@ Decided:
   Orion over `ssh orion` from G's Mac (attached to the cloud session), with the Mac giving only the inputs that are
   not online. G's rule for all Orion work (2026-11-20): never set a SLURM time limit.
 
+- The build after those (G, 2026-11-25): "plan the next build using the new gill salmo-chrombpnet model available,
+  and the new trout immunomap data on salmobase". Planned, not built: docs/ORION.md "The next build". Salmon gains
+  the layer `chrombpnet_gill` (the gill model's score per SNP, shown and not counted); trout is built from the
+  unified peaks v6, with the ImmunoMap's head kidney after PBS and Vibrio (19 conditions). G has not answered what
+  Claude recommends there: DECISIONS #60-#64 (which SNPs are scored, users' own SNPs, whether trout head kidney
+  counts in the tiers, the new label Weak_accessible_chromatin, Vibrio's summits).
+
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
   and the ImmunoMap's bivalent or mixed active/polycomb (G, 2026-11-20). Not counted: repressed polycomb, quiescent, ZNF
