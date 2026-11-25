@@ -2,8 +2,10 @@ name: deploy
 # The NREC demo is updated only when G says so (G, 2026-11-06): a batch of merged, tested changes at a time, never on
 # every merge. Actions > deploy > Run workflow on main, or a session asked to in the chat (AGENTS.md "Deploying the
 # NREC demo"). When the VM says a release's public pool is stale (a weights.yaml or snpscore change), each such pool,
-# of any species, is built here from the release on salmobase and sent (the VM's 2 GB RAM can't build it). A new data
-# release is built on Orion and published on salmobase (docs/ORION.md); the deploy's species.sh installs it.
+# of any species, is built here from the release on salmobase and sent (the VM's 2 GB RAM can't build it): only for the
+# releases this code names (serve.py RELEASE, RELEASES). An older release kept on the VM for the results made with it
+# keeps its pool, which fits those results' rules. A new data release is built on Orion and published on salmobase
+# (docs/ORION.md); the deploy's species.sh installs it.
 on:
   workflow_dispatch:
 
@@ -52,8 +54,14 @@ jobs:
         run: |
           pip install -q ./snpscore ./snpportal
           failed=0
+          # the releases this code names (serve.py RELEASE and RELEASES): only their pools are used for new results
+          named=" $(sed -n 's/^RELEASE = "\([^"]*\)".*/\1/p' snpportal/snpportal/serve.py) $(sed -n 's/^RELEASES = {\(.*\)}.*/\1/p' snpportal/snpportal/serve.py | grep -o ': "[^"]*"' | tr -d ':" ' | tr '\n' ' ')"
           for version in $STALE; do
             [ "$version" = default ] && version=$(sed -n 's/^RELEASE = "\([^"]*\)".*/\1/p' snpportal/snpportal/serve.py)
+            case "$named" in
+              *" $version "*) ;;
+              *) echo "::notice::the pool of $version is stale, and this code no longer names that release: left as it is"; continue ;;
+            esac
             release=~/.local/share/salmo-snp/releases/$version
             # the release from salmobase (serve.py DATA_URL); one not published yet: say so and go on
             bash tools/get_data.sh "$version" --no-genome &&

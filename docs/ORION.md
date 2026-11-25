@@ -177,9 +177,15 @@ made the environment and the two builds. Much of it was read from the notes of t
 - Both releases published on salmobase on 2026-11-25, tested before and after the upload, and the pull request that
   makes salmobase the default merged (Hosting on salmobase, below).
 
+**Deployed (2026-11-25, G asked)**: the deploy's species.sh installed 2026-11-24 and trout-2026-11-24 on the NREC
+demo from salmobase, each with its published pool, and the live site was checked with them (docs/TRACKER.md, "Where
+things stand"). The installer was also run from a cloud session against the address: every file of 2026-11-24
+matched its checksum.
+
 **Next**
-1. "Deploy to NREC" when G says: the deploy's species.sh installs 2026-11-24 and trout-2026-11-24 from salmobase.
-   Then remove 2026-11-05 and trout-2026-11-13 from `/srv/snpportal/releases/` (below).
+1. Remove the older releases from `/srv/snpportal/releases/` on the VM (2026-11-05, trout-2026-11-13, and
+   2026-11-20 a day after the deploy): 4.9 GB are free, and species.sh refuses to fetch a release under 5 GB. By
+   hand over SSH, or as a rule in species.sh if G wants one (which releases may go, and when, is G's to say).
 2. So that `snpscore diff` lists only real changes: write positional layers in a full order (every column after
    `chrom, start`), which gives the same bytes on any number of threads.
 3. Before anyone uses `salmo-snp download latest` or `snpdata publish --raw` for both species: the first two
