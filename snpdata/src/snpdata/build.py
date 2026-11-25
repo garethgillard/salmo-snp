@@ -405,6 +405,25 @@ def on_disk(url):
     return str(path) if path and path.is_file() else url
 
 
+FETCHED = ".fetched.json"  # in the data folder: what salmobase had when each of its files was fetched
+
+
+def published(location):
+    """What a salmobase file is now, {size, modified}: the server's answer to a HEAD request, or the file itself in a
+    local copy of its datafiles folder (on_disk). None when that can't be told (no network, no such file, an answer
+    without either): fetch then keeps what it has."""
+    try:
+        if "://" not in location:
+            st = os.stat(location)
+            return {"size": st.st_size, "modified": int(st.st_mtime)}
+        request = urllib.request.Request(location, method="HEAD", headers={"User-Agent": "snpdata (salmobase SNP portal build)"})
+        with urllib.request.urlopen(request, timeout=60) as r:
+            size, modified = r.headers.get("Content-Length"), r.headers.get("Last-Modified")
+        return {"size": int(size) if size else None, "modified": modified} if size or modified else None
+    except (OSError, ValueError):
+        return None
+
+
 def fetch(layers_yaml, data_dir, mirror=None):
     """Download every `url` in layers.yaml (layers, genome, aliases, rsid, synteny, bgee) that isn't in data_dir yet. A
     bigBed url with a .bed `file` is converted to BED, a bigWig url with a .bed `file` to the stretches it covers
@@ -414,14 +433,37 @@ def fetch(layers_yaml, data_dir, mirror=None):
     with `local` instead of `url` (an input that isn't online) is read from that path under data_dir, processed the same
     way; when it isn't there, fetch says so and goes on. So it does for a per-variant score file (format
     variant_scores) that is not published yet (404): build then leaves that layer out. A salmobase url is read from
-    the disk instead where SNPDATA_SALMOBASE names a copy of its datafiles folder (on_disk())."""
+    the disk instead where SNPDATA_SALMOBASE names a copy of its datafiles folder (on_disk()).
+    salmobase's files change under the same address (the unified peaks: v3, v5, v6), so a file from there is fetched
+    again when the server's copy has another size or date than when it was fetched (G, 2026-11-25; FETCHED keeps
+    what it was). A file fetched before that record existed is fetched again when the server's has another size, if
+    it is kept as downloaded; a converted one is taken as current."""
     data = Path(data_dir)
     data.mkdir(parents=True, exist_ok=True)
     cfg = load_yaml(layers_yaml)
     if mirror:
         return fetch_mirror(raw_sources(cfg), data, mirror)
+    seen = json.loads((data / FETCHED).read_text()) if (data / FETCHED).exists() else {}
+
+    def record(name, state):  # written at once: a fetch that stops later keeps what it learned
+        seen[name] = state
+        (data / FETCHED).write_text(json.dumps(seen, indent=1, sort_keys=True) + "\n")
     for layer in raw_sources(cfg):
         target = data / layer["file"]
+        now = published(on_disk(layer["url"])) if str(layer.get("url", "")).startswith(SALMOBASE) else None
+        if now and target.exists():
+            was = seen.get(layer["file"])
+            if was:
+                changed = was != now
+            else:  # fetched before the record existed: only a file kept as downloaded can be compared, by its size
+                converted = (layer.get("sites_only") or layer.get("query")
+                             or target.suffix == ".bed" and layer["url"].endswith((".bb", ".bw")))
+                changed = not converted and now["size"] not in (None, target.stat().st_size)
+            if changed:
+                print(f"snpdata: {layer['url']} has changed on salmobase: fetching it again", flush=True)
+                target.unlink()
+            elif not was:
+                record(layer["file"], now)  # the first look: taken as the file that is here
         if layer.get("local") and not target.exists() and not (data / layer["local"]).exists():
             print(f"snpdata: {target.name} needs {data / layer['local']} (not online: see layers.yaml); skipped", flush=True)
         elif (layer.get("url") or layer.get("local")) and not target.exists():
@@ -458,6 +500,8 @@ def fetch(layers_yaml, data_dir, mirror=None):
                     part.unlink()
                     raise SystemExit(f"snpdata: {layer['url']} answered: {message}")
             part.rename(target)
+            if now:
+                record(layer["file"], now)
 
 
 def covered(bw, max_gap=0):
@@ -607,17 +651,36 @@ def hashes(paths):
     return md5.hexdigest(), sha.hexdigest()
 
 
+def code_sha256():
+    """What a layer is computed with, as checksums of the source: {'build': this module, 'motif': snpscore's motif
+    scoring and genome reader}. The manifest records it, and `build --reuse` copies a layer only from a release with
+    the same (the package versions change too seldom to tell)."""
+    def sha(*paths):
+        return hashlib.sha256(b"".join(Path(p).read_bytes() for p in paths)).hexdigest()
+    return {"build": sha(__file__), "motif": sha(motif.__file__, Path(motif.__file__).with_name("fasta.py"))}
+
+
 def build(layers_yaml, data_dir, out_dir, reuse=None, memory=None, threads=None, temp=None):
     """Write every layer as Parquet, plus alias.parquet, rsid.parquet, catalog/known_loci.tsv, the track registry
     (tracks.yaml next to layers.yaml) and manifest.json, which records versions, hashes,
     chromosome sizes, provisional rules and where the genome is (local path if present, else its URL) for sequence
     checks. With `reuse` (an earlier release folder), a layer whose settings and input files are the same as that
-    release's is copied from it instead of computed again (the motif layer only when the layers it is computed from
-    were copied too, by the same snpscore): for a rebuild that changes the catalogue or one layer."""
+    release's is copied from it instead of computed again, byte for byte (the motif layer only when the layers it is
+    computed from were copied too): the next release after a change to the catalogue or to a few layers. Only from a
+    release built by the same code (CODE), so a layer never keeps what an older reader made of its input. Each step's
+    line says the seconds it took."""
     cfg = load_yaml(layers_yaml)
     here, data, out = Path(layers_yaml).parent, Path(data_dir), Path(out_dir)
     old = json.loads((Path(reuse) / "manifest.json").read_text()) if reuse else {}
+    code = code_sha256()
+    same_code = {k: (old.get("code") or {}).get(k) == v for k, v in code.items()}
     old_layers, copied = {x["name"]: x for x in old.get("layers", [])}, set()
+    clock = [time.time()]
+
+    def say(text):  # a step's line, with the seconds since the line before: the log shows where a build's time goes
+        now = time.time()
+        print(f"{text} ({now - clock[0]:.0f} s)", flush=True)
+        clock[0] = now
     out.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
     # On a shared machine (a SLURM job) DuckDB's defaults are the whole node's: `memory` (e.g. '32GB'), `threads` and a
@@ -642,6 +705,7 @@ def build(layers_yaml, data_dir, out_dir, reuse=None, memory=None, threads=None,
         "created": datetime.date.today().isoformat(),
         "snpscore_version": snpscore_version,
         "duckdb_version": duckdb.__version__,
+        "code": code,
         "provisional": cfg.get("provisional", []),
         "layers": [],
     }
@@ -667,10 +731,11 @@ def build(layers_yaml, data_dir, out_dir, reuse=None, memory=None, threads=None,
                     if k not in ("file", "files", "columns", "query", "info")}
         was = old_layers.get(layer["name"])
         needs = {layer[k] for k in ("sites", "within") if k in layer}  # the built layers this one is computed from
-        if (was and all(was.get(k) == v for k, v in settings.items()) and was.get("source_sha256") == hashes(paths)[1]
+        if (was and same_code["build"] and (Path(reuse) / was["file"]).is_file()
+                and all(was.get(k) == v for k, v in settings.items()) and was.get("source_sha256") == hashes(paths)[1]
                 and was.get("info_settings", "") in ("", [s.get("info", layer.get("info")) for s in sources(layer)])
                 and needs <= copied
-                and (layer["format"] != "motif_effects" or old.get("snpscore_version") == snpscore_version)):
+                and (layer["format"] != "motif_effects" or same_code["motif"] and old.get("snpscore_version") == snpscore_version)):
             shutil.copyfile(Path(reuse) / was["file"], out / was["file"])
             if layer["format"] == "motif_effects":
                 shutil.copyfile(Path(reuse) / "motif.meme", out / "motif.meme")
@@ -679,7 +744,7 @@ def build(layers_yaml, data_dir, out_dir, reuse=None, memory=None, threads=None,
                     ends[chrom] = max(end, ends.get(chrom, 0))
             manifest["layers"].append(was)
             copied.add(layer["name"])
-            print(f"{layer['name']}: {was['rows']} rows (reused)", flush=True)
+            say(f"{layer['name']}: {was['rows']} rows, reused")
             continue
         if layer["format"] == "motif_effects":  # computed from built layers and the genome; annotate reads the motifs
             shutil.copyfile(paths[0], out / "motif.meme")
@@ -696,8 +761,11 @@ def build(layers_yaml, data_dir, out_dir, reuse=None, memory=None, threads=None,
             check_unique(con, layer["name"], UNIQUE[layer["type"]])
         positional = layer["type"] in POSITIONAL
         parquet = out / f"{layer['name']}.parquet"
-        con.execute(f"COPY (SELECT * FROM layer ORDER BY {'chrom, start' if positional else 'gene_id'}) TO {lit(parquet)} "
-                    "(FORMAT parquet, COMPRESSION zstd)")  # zstd: about half the size of the default for the 7.6M sites
+        # In a full order (chrom, start, end, then every other column; gene_id first for the tables by gene): rows that
+        # share a start come out the same way in every build, so an unchanged layer has the same bytes and checksum
+        # (until 2026-11-25 `transcripts` differed between builds of the same input). zstd: about half the size of
+        # the default for the 7.6M sites
+        con.execute(f"COPY (SELECT * FROM layer ORDER BY ALL) TO {lit(parquet)} (FORMAT parquet, COMPRESSION zstd)")
         if positional:
             for chrom, end in con.execute('SELECT chrom, max("end") FROM layer GROUP BY chrom').fetchall():
                 ends[chrom] = max(end, ends.get(chrom, 0))
@@ -716,7 +784,7 @@ def build(layers_yaml, data_dir, out_dir, reuse=None, memory=None, threads=None,
             "rows": con.execute("SELECT count(*) FROM layer").fetchone()[0],
             "columns": [r[0] for r in con.execute("DESCRIBE layer").fetchall()][3 if positional else 1:],
         })
-        print(f"{layer['name']}: {manifest['layers'][-1]['rows']} rows", flush=True)
+        say(f"{layer['name']}: {manifest['layers'][-1]['rows']} rows")
     fai = data / (genome["file"] + ".fai") if genome else None
     manifest["chrom_sizes"] = chrom_sizes(fai, ends, cfg.get("chromosome_names"))
 
@@ -733,15 +801,15 @@ def build(layers_yaml, data_dir, out_dir, reuse=None, memory=None, threads=None,
                             "source_file": ", ".join(s["file"] for s in rsid["files"]),
                             "urls": [s.get("url") for s in rsid["files"]], "citation": rsid.get("citation"),
                             "source_sha256": hashes(paths)[1], "sha256": hashes([out / "rsid.parquet"])[1]}
-        print(f"rsid: {manifest['rsid']['rows']} rows", flush=True)
+        say(f"rsid: {manifest['rsid']['rows']} rows")
     for name, spec in (cfg.get("liftover") or {}).items():
         for table, entry in build_liftover(con, name, spec, out, data).items():
             manifest.setdefault("liftover", {})[table] = entry
-            print(f"liftover_{table}: {entry['blocks']} blocks", flush=True)
+            say(f"liftover_{table}: {entry['blocks']} blocks")
     keys = cfg.get("flank_keys")
     if keys and genome and (data / genome["file"]).exists():
         manifest["flank_keys"] = build_flank_keys(con, keys, out, data / genome["file"])
-        print(f"flank_keys: {manifest['flank_keys']['rows']} rows", flush=True)
+        say(f"flank_keys: {manifest['flank_keys']['rows']} rows")
     for name, block, sql in (("synteny", cfg.get("synteny"), lambda b: read_synteny(data / b["file"])),
                              ("bgee", cfg.get("bgee"), lambda b: read_bgee([data / s["file"] for s in bgee_sources(b)]))):
         paths = [data / block["file"]] if name == "synteny" and block else [data / s["file"] for s in bgee_sources(block)]
@@ -752,7 +820,7 @@ def build(layers_yaml, data_dir, out_dir, reuse=None, memory=None, threads=None,
         manifest[name] = {"file": target.name, "rows": con.execute(f"SELECT count(*) FROM read_parquet({lit(target)})").fetchone()[0],
                           "url": block.get("url"), "citation": block.get("citation"), "source_sha256": hashes(paths)[1],
                           "sha256": hashes([target])[1]}
-        print(f"{name}: {manifest[name]['rows']} rows", flush=True)
+        say(f"{name}: {manifest[name]['rows']} rows")
     catalog = cfg.get("catalog")
     if catalog and (here / catalog["file"]).exists():
         (out / "catalog").mkdir(exist_ok=True)

@@ -8,7 +8,13 @@ and the portal.
 - A release holds data only, never the tier rules (they are snpscore's weights.yaml), so it is built once and then
   served as static files. A new release gets a new version folder; a published one never changes.
 - Layers use BED coordinates; interval layers must not overlap. Paths in layers.yaml are relative to --data.
-- `fetch` streams the public VCFs and keeps sites and frequencies only: genotypes are never written.
+- `fetch` streams the public VCFs and keeps sites and frequencies only: genotypes are never written. It keeps a
+  file that is there, except a salmobase file whose size or date on the server has changed since it was fetched
+  (`.fetched.json` in the data folder): that one is downloaded again (G, 2026-11-25).
+- `build --reuse <release>` copies a layer only when its settings and input checksums are the same and the release
+  was built by the same code (the manifest's `code`: checksums of build.py and of snpscore's motif.py and fasta.py).
+  So after a change to a reader every layer is computed again; never weaken that to save a build's minutes. Layers
+  are written in a full row order (`ORDER BY ALL`): the same input gives the same bytes.
 - data/ and release/ are never committed. Never edit files in data/raw by hand.
 - The motif layer uses snpscore's motif scoring, so a release records the snpscore version it was built with.
 - After changing layers, re-cut the test fixture: `bash prep/make_fixture.sh`.

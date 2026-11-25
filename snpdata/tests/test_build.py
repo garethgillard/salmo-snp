@@ -2,6 +2,7 @@
 genotypes, and parsing the AQUA-FAANG trackhub. Offline, except the release/dev check (SNPSCORE_DEV=1)."""
 import gzip
 import json
+import re
 from pathlib import Path
 
 import duckdb
@@ -257,6 +258,42 @@ def test_score_layer_not_published(release, tmp_path, monkeypatch, capsys):
     assert "later" not in names and "chrombpnet_gill" in names and not (out / "later.parquet").exists()
 
 
+def test_fetch_again_when_salmobase_changed(tmp_path, monkeypatch, capsys):
+    """salmobase's files change under the same address (the unified peaks: v3, v5, v6): fetch asks what the server has
+    and downloads such a file again when it differs from what was fetched (G, 2026-11-25). Other hosts' files, named
+    by their release, are fetched once."""
+    import importlib
+
+    import yaml
+    b = importlib.import_module("snpdata.build")
+    ours, theirs = b.SALMOBASE + "datasets/x/peaks.bed", "https://example.org/release-1/genes.bed"
+    (tmp_path / "layers.yaml").write_text(yaml.safe_dump({"layers": [
+        {"name": "peaks", "type": "interval", "format": "bed", "file": "peaks.bed", "url": ours},
+        {"name": "genes", "type": "interval", "format": "bed", "file": "genes.bed", "url": theirs}]}))
+    served, asked, state = {ours: b"v5\n", theirs: b"genes\n"}, [], {"size": 3, "modified": "Mon, 23 Nov 2026"}
+
+    def download(url, target):
+        asked.append(url)
+        Path(target).write_bytes(served[url])
+    monkeypatch.setattr(b, "download", download)
+    monkeypatch.setattr(b, "published", lambda location: dict(state))
+    raw = tmp_path / "raw"
+    b.fetch(tmp_path / "layers.yaml", raw)
+    b.fetch(tmp_path / "layers.yaml", raw)  # nothing changed: nothing fetched
+    assert asked == [ours, theirs] and json.loads((raw / b.FETCHED).read_text()) == {"peaks.bed": state}
+    served[ours], state = b"v6\n", {"size": 3, "modified": "Wed, 25 Nov 2026"}  # the same size, a newer file
+    b.fetch(tmp_path / "layers.yaml", raw)
+    assert asked == [ours, theirs, ours] and (raw / "peaks.bed").read_bytes() == b"v6\n"
+    assert f"{ours} has changed on salmobase: fetching it again" in capsys.readouterr().out
+    (raw / b.FETCHED).unlink()  # a folder from before fetch kept this record: another size is another file
+    (raw / "peaks.bed").write_bytes(b"an older version\n")
+    b.fetch(tmp_path / "layers.yaml", raw)
+    assert asked == [ours, theirs, ours, ours] and (raw / "peaks.bed").read_bytes() == b"v6\n"
+    monkeypatch.setattr(b, "published", lambda location: None)  # no network: what is here is kept
+    b.fetch(tmp_path / "layers.yaml", raw)
+    assert len(asked) == 4
+
+
 def test_ncbi_transcripts(release):
     """RefSeq models on chromosomes 1-29 (accessions renamed through the alias table), exon and CDS parts only."""
     con = duckdb.connect()
@@ -276,7 +313,7 @@ def test_sha256sums(release):
     assert sums["manifest.json"] == hashlib.sha256((release / "manifest.json").read_bytes()).hexdigest()
 
 
-def test_rainbow_trout_release(tmp_path):
+def test_rainbow_trout_release(tmp_path, capsys, monkeypatch):
     """The second species (rainbow_trout/layers.yaml on tests/fixture/rainbow_trout): its own assembly, chromosomes (Y among
     them), conditions, catalogue and example list; frequencies pooled over the cohorts' site files; build --reuse."""
     out = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "trout-test",
@@ -293,10 +330,30 @@ def test_rainbow_trout_release(tmp_path):
     # 17 and head kidney after PBS: Vibrio has no merged-replicate peak file
     con = duckdb.connect()
     assert con.execute(f"SELECT count(*) FROM read_parquet('{out / 'summit.parquet'}') WHERE condition = 'HeadKidney_invivo_pbs'").fetchall()[0][0] > 0
+    capsys.readouterr()
     again = build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "again", reuse=out)
     reused = json.loads((again / "manifest.json").read_text())  # a rebuild that copies every unchanged layer
+    said = capsys.readouterr().out  # one line per step, with its seconds: "chromatin: 34 rows, reused (0 s)"
+    assert all(re.search(rf"^{l['name']}: {l['rows']} rows, reused \(\d+ s\)$", said, re.M) for l in m["layers"])
     assert [(l["name"], l["sha256"], l["rows"]) for l in reused["layers"]] == [(l["name"], l["sha256"], l["rows"]) for l in m["layers"]]
     assert reused["chrom_sizes"] == m["chrom_sizes"] and (again / "motif.meme").read_bytes() == (out / "motif.meme").read_bytes()
+    # only from a release built by the same code: after a change to the build (or to the motif scoring) the layers it
+    # made are computed again, and a release that lacks a layer's file gives nothing either
+    import importlib
+    b = importlib.import_module("snpdata.build")
+    assert set(m["code"]) == {"build", "motif"} and reused["code"] == m["code"] == b.code_sha256()
+    monkeypatch.setattr(b, "code_sha256", lambda: {**m["code"], "motif": "another"})
+    build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "motif-changed", reuse=out)
+    said = capsys.readouterr().out
+    assert "chromatin: " in said and "reused" in said and not re.search(r"^motif: \d+ rows, reused", said, re.M)
+    monkeypatch.setattr(b, "code_sha256", lambda: {**m["code"], "build": "another"})
+    build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "build-changed", reuse=out)
+    assert "reused" not in capsys.readouterr().out
+    monkeypatch.undo()
+    (again / "pike.parquet").unlink()
+    build(DATA / "rainbow_trout" / "layers.yaml", DATA / "tests" / "fixture" / "rainbow_trout", tmp_path / "third", reuse=again)
+    said = capsys.readouterr().out
+    assert re.search(r"^pike: \d+ rows \(", said, re.M) and re.search(r"^chromatin: \d+ rows, reused", said, re.M)
     assert m["rsid"]["older"] == "Omyk_1.0" and m["rsid"]["rows"] > 0 and m["flank_keys"]["rows"] > 0
     con = duckdb.connect()
     files = [str(DATA / "tests" / "fixture" / "rainbow_trout" / s) for s in layers["public_af"]["source_file"].split(", ")]

@@ -9,7 +9,11 @@
 #   MEMORY=32GB THREADS=16   DuckDB's limits (defaults: 16GB, and the cores this job may use)
 #   SPILL=<folder>           where DuckDB may spill to (default: <release folder>/../.spill-<version>, removed after)
 #   SNPDATA_SALMOBASE=<dir>  a copy of salmobase's datafiles folder: fetch reads salmobase's files from it
-#   PREVIOUS=<release>       an earlier release folder: `snpscore diff` lists what changed since
+#   PREVIOUS=<release>       the release before, as a folder (default: the newest release of the species in OUT):
+#                            a layer whose settings and inputs did not change is copied from it instead of computed
+#                            again (`snpdata build --reuse`; G, 2026-11-25), and `snpscore diff` lists what changed
+#                            since. A folder with the manifest alone gives the diff
+#   FRESH=1                  compute every layer again, whatever PREVIOUS holds
 #   SKIP_FETCH=1             use the inputs as they are (no network)
 #   RAW=<dir> OUT=<dir>      the inputs and where releases go (defaults: data/raw or data/rainbow_trout/raw, release).
 #                            With another RAW the salmon examples (prep/make_demo.sh) are left as they are. (Not
@@ -18,8 +22,8 @@ set -euo pipefail
 species=${1:?salmon or trout}
 version=${2:?the release name: <date> for salmon, trout-<date> for rainbow trout}
 case $species in
-  salmon) layers=layers.yaml; default=data/raw ;;
-  trout) layers=rainbow_trout/layers.yaml; default=data/rainbow_trout/raw ;;
+  salmon) layers=layers.yaml; default=data/raw; named='[0-9]*' ;;
+  trout) layers=rainbow_trout/layers.yaml; default=data/rainbow_trout/raw; named='trout-[0-9]*' ;;
   *) echo "the species is salmon or trout" >&2; exit 1 ;;
 esac
 case "$species:$version" in
@@ -29,6 +33,10 @@ esac
 data=${RAW:-$default}
 out=${OUT:-release}/$version
 [ ! -e "$out" ] || { echo "$out exists: a release never changes, so choose another name (or remove a failed build)" >&2; exit 1; }
+previous=${PREVIOUS:-}
+if [ -z "$previous" ]; then  # the newest of the species' releases already there (their names sort by date)
+  for r in "${OUT:-release}"/$named/; do [ -f "$r/manifest.json" ] && previous=${r%/}; done
+fi
 threads=${THREADS:-$(python -c 'import os; print(len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count())')}
 memory=${MEMORY:-16GB}
 spill=${SPILL:-$(dirname "$out")/.spill-$version}
@@ -42,16 +50,19 @@ if [ "$species" = salmon ] && [ "$data" = "$default" ]; then
   step "example inputs (public 50k, SYNTHETIC chip and GWAS)"
   bash prep/make_demo.sh
 fi
-step "build -> $out ($threads threads, $memory)"
-snpdata build --layers "$layers" --data "$data" --out "$out" --memory "$memory" --threads "$threads" --temp "$spill"
+reuse=()
+if [ -n "$previous" ] && [ -z "${FRESH:-}" ]; then reuse=(--reuse "$previous"); fi
+step "build -> $out ($threads threads, $memory${reuse[1]:+, unchanged layers from $previous})"
+snpdata build --layers "$layers" --data "$data" --out "$out" --memory "$memory" --threads "$threads" --temp "$spill" \
+  ${reuse[@]+"${reuse[@]}"}
 rm -rf "$spill"
 step "public pool"
 snpscore pool --release "$out" --memory "$memory" --threads "$threads"
 step "every file against the manifest"
 snpscore verify "$out"
-if [ -n "${PREVIOUS:-}" ]; then
-  step "changes since $PREVIOUS"
-  snpscore diff "$PREVIOUS" "$out"
+if [ -n "$previous" ]; then
+  step "changes since $previous"
+  snpscore diff "$previous" "$out"
 fi
 step "summary (compare with docs/ORION.md)"
 python - "$out" <<'PY'
