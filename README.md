@@ -6,8 +6,8 @@ changes, conserved sequence, TF motifs and published associations. Each SNP gets
 to 4 (none found), with the evidence behind it. The portal also shows each SNP's evidence card and a locus browser,
 fine-maps GWAS summary statistics with a functional prior, and designs marker panels with vendor-ready files.
 Rainbow trout (USDA_OmykA_1.1, the assembly of the AQUA-FAANG trout data) is a second species, with its own data
-release and 17 AQUA-FAANG conditions (19 from the release after trout-2026-11-24, with head kidney after PBS and
-Vibrio); a species bar at the top right of the portal switches between the two.
+release and 19 AQUA-FAANG conditions (17 up to trout-2026-11-24, before head kidney after PBS and Vibrio); a
+species bar at the top right of the portal switches between the two.
 
 Public demo: https://158.39.75.9/snp/ (public data only: don't upload confidential lists there).
 
@@ -39,7 +39,7 @@ You need:
    ```
    In a clone of the repository, `bash tools/get_data.sh` does the same. `--from <folder>` reads a copy of the
    published folder on a disk or a share instead, for computers without internet.
-   **Rainbow trout** (USDA_OmykA_1.1) is a second release, `trout-2026-11-24`: `salmo-snp download --species
+   **Rainbow trout** (USDA_OmykA_1.1) is a second release, `trout-2026-11-25`: `salmo-snp download --species
    rainbow_trout` (or `--species all` for both). With both installed, the species bar at the top right of every page
    picks the species new lists are scored against; results keep the species they were scored for.
 3. Start it, and open http://127.0.0.1:8000/snp/ (only this computer can reach it; Ctrl-C stops it):

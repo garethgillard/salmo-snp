@@ -1,9 +1,10 @@
 # Building the data releases on Orion and hosting them on salmobase: brief (2026-11-24)
 
 This brief is for the chat that builds the releases on Orion, NMBU's HPC cluster, over SSH. It holds what G decided,
-what the next build contains (planned on 2026-11-25), how a build runs, what the first builds there found and made
-(releases 2026-11-24 and trout-2026-11-24), and how a release reaches salmobase and the live app. Keep it up to date
-as the work goes on. Read [../AGENTS.md](../AGENTS.md) first: its rules apply here too.
+what the latest build contains (releases 2026-11-25 and trout-2026-11-25, planned and built on 2026-11-25) and what
+is left for the next, how a build runs, what the first builds there found and made (releases 2026-11-24 and
+trout-2026-11-24), and how a release reaches salmobase and the live app. Keep it up to date as the work goes on.
+Read [../AGENTS.md](../AGENTS.md) first: its rules apply here too.
 
 ## Decided (G, 2026-11-24)
 
@@ -29,13 +30,33 @@ as the work goes on. Read [../AGENTS.md](../AGENTS.md) first: its rules apply he
   version), so Orion fetches everything fresh, which takes minutes there, and takes from the Mac only what is not
   online: the Synchrosmolt VCF. One command builds a release: `bash prep/build_release.sh <species> <version>`.
 
-## The next build (planned 2026-11-25)
+## The latest build: releases 2026-11-25 and trout-2026-11-25
 
 G, 2026-11-25: "plan the next build using the new gill salmo-chrombpnet model available, and the new trout immunomap
-data on salmobase". Nothing is built yet. The numbers below were read from salmobase on 2026-11-25 and measured
-against releases 2026-11-24 and trout-2026-11-24 in a cloud session. G answered the plan's questions the same day
-(DECISIONS #60 to #64), and the repository is ready for the build but for one file: the gill scores (What it needs
-first, 1).
+data on salmobase". Planned, prepared, built on Orion and published on salmobase the same day
+(`releases/latest.json` names 2026-11-25 since 13:11 GMT). G answered the plan's questions that day (DECISIONS #60
+to #64). The tables below were the plan: their numbers were measured before the build, against releases 2026-11-24
+and trout-2026-11-24.
+
+**The result**, checked from a cloud session on the published files (2026-11-25):
+
+- **Salmon `2026-11-25`**: `chrombpnet_gill` has 216,586 SNPs with score, percentile and effect (105,604 predicted
+  more accessible, 110,981 less), built from the file the ChromBPNet work published at 13:01 GMT (the manifest's
+  source checksum is the published one, 88007cf6...); 176,598 of them are public sites. Every other layer has the
+  rows of 2026-11-24, and the pool's 3,436,671 sites are in the same tiers to the SNP (13,048, 211,572, 291,705,
+  2,920,346).
+- **Trout `trout-2026-11-25`**: `chromatin` 205,722 peaks in 19 conditions; `summit` 1,383,135 from 18 peak files
+  (PBS's among them, Vibrio's not); `motif` 1,083,423, the number predicted; tracks.yaml with 733 signal tracks and
+  19 state and 19 peak tracks; the new wording and samples. The pool's 3,372,181 sites: tiers 0.28%, 4.98%, 5.05%
+  and 89.69% (9,592, 167,768, 170,441, 3,024,380; before: 9,368, 166,066, 164,629, 3,032,118).
+- **The installer**: `salmo-snp download` fetched the salmon release from the address with every file matching its
+  checksum, and `snpscore verify` passed. The portal on it: the Table's Scores column, the Locus browser's effects
+  row and the card's Predict button (none of the 40 known-loci SNPs lies in a gill peak, so each shows 'not scored'
+  and the button is how to see its prediction). For trout the manifest, the pool and tracks.yaml were read from the
+  address.
+- Worth knowing about the scores: SNPs in gill peaks do not rank high by |log2 fold change| alone. Their median
+  percentile among the 100,000 random SNPs is 0.44, and 0.7% are in the top 1%. The score is a relative change, and
+  the scorer's active-allele quantile, which says whether the place is accessible at all, is not in the layer.
 
 **New on salmobase since the last build**
 
@@ -52,7 +73,7 @@ first, 1).
   peaks, the nf-core output and an ImmunoMap folder in the trout trackhub. Poly I:C has signal tracks but no states
   (its H3K4me3 and H3K27ac failed), so no peak is named for it. The in vitro leukocytes have signal tracks only.
 
-### Atlantic salmon, release `<date>` (the one before: 2026-11-24)
+### Atlantic salmon, release 2026-11-25 (the one before: 2026-11-24)
 
 | Part | What changes | Check after the build |
 |---|---|---|
@@ -61,7 +82,7 @@ first, 1).
 | The public pool | Built again, as weights.yaml changed (a weak state that only trout has: nothing changes for salmon). pike is still 0 (DECISIONS #54) | 3,436,671 sites; tiers 0.38%, 6.16%, 8.49%, 84.98%, as for 2026-11-24 |
 | Unchanged | Every other layer and table of 2026-11-24: `summit` 2,468,735, `pike` 1,226,940, `synchrosmolt_af` 3,993,949, `motif` 533,163, `public_af` 7,572,808, `molqtl` 2,656, `liftover_icsasg_v2` 735,344 blocks, the catalogue's 46 rows, the six examples | `snpscore diff 2026-11-24 <new>`: `chrombpnet_gill` and `chromatin` are new or changed. It compares file checksums, so it also lists the layers whose rows share a start (`transcripts`, `transcripts_ncbi`, as on 2026-11-25): compare those row by row |
 
-### Rainbow trout, release `trout-<date>` (the one before: trout-2026-11-24)
+### Rainbow trout, release trout-2026-11-25 (the one before: trout-2026-11-24)
 
 | Part | What changes | Check after the build |
 |---|---|---|
@@ -73,9 +94,10 @@ first, 1).
 | The public pool | The same 3,372,181 sites. Tiers change at head kidney peaks: of the 18,801,055 public sites, 350,142 lie in a peak with a head kidney state, 158,124 where head kidney is active, and 7,266 where no other condition is; 19,925 lie in a peak whose only counted state is the new weak one | The tier shares of trout-2026-11-24 were 0.28%, 4.92%, 4.88%, 89.92%; expect tiers 1 to 3 to grow a little |
 | Unchanged | `pike` 1,192,301, `public_af` 18,801,055, `flank_variants` 46,593,552, the gene and regulatory layers, the catalogue's 13 rows, the four examples | `snpscore diff`, read as for salmon |
 
-### What it needs first
+### What it needed
 
-1. **The gill scores, from the ChromBPNet work** (its own repository and chat on Orion). A build does not wait for
+1. **The gill scores, from the ChromBPNet work** (its own repository and chat on Orion): published in time, at
+   13:01 GMT on 2026-11-25, with 216,586 of the 216,592 SNPs asked for. A build does not wait for
    them (G, 2026-11-25: the release "might not include chrombpnet scores"): while the file is not at the address
    layers.yaml names, `snpdata fetch` says so and goes on, and `snpdata build` leaves the layer out; the build after
    the file is published takes it. The portal can predict one SNP at a time without the file (the card's button:
@@ -110,11 +132,11 @@ first, 1).
 3. **In this repository**: done on 2026-11-25 in one pull request. The salmon registry has the `chrombpnet_gill`
    layer and the trout registry the 19 conditions, PBS's peak file, the ImmunoMap's wording and samples;
    `rainbow_trout/tracks.yaml` is regenerated; weights.yaml lists `Weak_accessible_chromatin` as weak; the portal
-   draws the effects row and the new state; both fixtures and the tests follow. Left for after publishing: serve.py
-   `RELEASE` and `RELEASES` name the new releases. Not needed for this build: positional layers written in a full
-   order ("Next" below), which would let later diffs list only what changed.
+   draws the effects row and the new state; both fixtures and the tests follow. After publishing, serve.py
+   `RELEASE` and `RELEASES` were set to the new releases (the pull request after the build). Not done: positional
+   layers written in a full order ("Next" below), which would let later diffs list only what changed.
 
-### Not in this build
+### Left for the next build
 
 | Candidate | Why |
 |---|---|
@@ -246,7 +268,8 @@ things stand"). The installer was also run from a cloud session against the addr
 matched its checksum.
 
 **Next**
-0. The next build: the plan above, and what it needs first.
+0. The next build: "Left for the next build" above. The NREC demo takes releases 2026-11-25 and trout-2026-11-25
+   at its next deploy, when G says (twice, for the Predict button's packages: snpportal/README.md "Deploying the demo").
 1. The older releases on the VM (2026-11-05, trout-2026-11-13, and 2026-11-20 a day after the deploy) go at the
    next deploy: species.sh now removes a release the code no longer names once nothing kept on the server was made
    with it (G, 2026-11-25), before it fetches, so the room counts (4.9 GB were free, under the 5 GB a fetch asks for).
@@ -334,6 +357,7 @@ code no longer names, once nothing kept on the server was made with them ("Next"
 ```
 We are on Orion over SSH. Clone https://github.com/garethgillard/salmo-snp.git into ~/git/ if it is not there (else
 pull main), and read AGENTS.md, then docs/ORION.md: it says what the next Atlantic salmon and rainbow trout data
-releases contain ("The next build"), what they need first, and how the builds before were run here ("On Orion").
+releases contain ("The latest build" and, in it, "Left for the next build"), and how the builds before were run here
+("On Orion").
 Tell me before any job is submitted and before anything is published; never set a SLURM time limit.
 ```
