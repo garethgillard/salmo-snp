@@ -32,6 +32,10 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 - Run `python -m django ...` from snpportal/ or from outside the repository, never from its root: there the
   `snpportal/` folder hides the installed package, and Django finds no management command (server.sh changes to its
   data folder for this).
+- The demo from its Docker image (G, 2026-11-26): `deploy/update.sh image [version]` (the deploy workflow's `image`
+  input) runs the image published on salmobase in the place of the checkout's gunicorn, with the VM's folders and
+  settings, and never builds a pool there (`SNPPORTAL_POOL_BUILD=0`, read by snpportal_prepare); the checkout's deploy
+  is the default and the fallback (README "Deploying the demo"; tests/test_deploy.py).
 - The demo's deploy scripts (2026-11-25): `deploy/update.sh` checks the commit out and then runs that commit's own
   steps (so a change to them needs one deploy, not two), and `deploy/species.sh` fetches only the files of a new
   release that no release on the VM holds with the same sha256, and no genome it has. Both are tried on a mock of

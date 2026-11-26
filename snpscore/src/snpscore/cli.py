@@ -81,8 +81,11 @@ def main():
                         "504-fish panel) or the 12 AQUA-FAANG fish's (salmon)")
     o.add_argument("--if-stale", action="store_true",
                    help="only if the release has no pool, or one made with other weights or another snpscore version")
-    o.add_argument("--assay", action="store_true",
-                   help="also run the sequence and assay checks (needs --memory 8GB: 4GB is too little)")
+    o.add_argument("--assay", action="store_true", default=None,
+                   help="run the sequence step (reference check, assay QC, coding consequences) even with a remote genome; "
+                        "the default runs it when the genome is on this computer")
+    o.add_argument("--no-sequence", dest="assay", action="store_false", default=None,
+                   help="leave the sequence step out: no coding consequences, so the synonymous weight can't apply")
     o.add_argument("--threads", type=int, default=4)
     o.add_argument("--memory", default="4GB", help="DuckDB memory limit")
     o.add_argument("--weights", help=RULES_HELP)
@@ -184,7 +187,18 @@ def main():
 
 
 def print_benchmark(sets):
-    """One set: its table with 95% intervals; several: enrichment per feature (rows) and set (columns)."""
+    """One set: its table with 95% intervals; several: enrichment per feature (rows) and set (columns). Ends with the
+    v0.1 check when the eQTL set is among them (DECISIONS 4b)."""
+    from .benchmark import v01_check
+    check = v01_check(sets)
+    try:
+        _print_tables(sets)
+    finally:
+        if check:
+            print(check[1])
+
+
+def _print_tables(sets):
     num = lambda v, f: "" if v is None else format(v, f)  # noqa: E731
     if len(sets) == 1:
         (name, (trait, rows)), = sets.items()

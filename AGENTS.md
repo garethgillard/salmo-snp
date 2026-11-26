@@ -328,17 +328,36 @@ Decided:
   README user-guide rewrites for each change until the first official release; a statement a change makes false
   (how long results are kept, say) is still corrected where it stands.
 
+- The scoring decisions (G, 2026-11-26: the questionnaire, https://claude.ai/artifact/LuWBehDLFAb8yXQzdjEnQ3, and the
+  scoring chat's hand-off; docs/DECISIONS.md has each row): active = Active_TSS and Active_enhancer at equal weight
+  (3); weak (1) = primed enhancers and the flanking states, while poised, bivalent, accessible chromatin, the ImmunoMap's
+  bivalent or mixed active/polycomb and the trout ImmunoMap's weak accessible chromatin count 0 (G: "I want the weak
+  states set to 0", read as these and not primed and flanking; correct it if G says otherwise). Not counted either:
+  repressed polycomb, quiescent, ZNF genes and repeats, Unknown_1 and Unknown_2. Synonymous 1, like a UTR, and the
+  public pools carry coding consequences so that it applies to them as to uploads ("Add it": `snpscore pool` runs the
+  sequence step whenever the genome is on the disk). Conservation is the highest of its evidence, not a sum ("pike
+  aligned only is 1, but a CNE or a GERP alignment is 2"): `constrained` 2 = a GERP element or a pike CNE (the `cne`
+  layer, both species; trout untested), once if both, and `pike` 1 only where neither (gaps closed up to 50 bp). The
+  other weights (coding and splice 3; UTR, Ensembl regulatory where AQUA-FAANG has no peak, motif and active elsewhere
+  1) and the tier cut-offs 5 / 3 / 1 stay; the presets stay (disease_resistance = HeadKidney + Gill + Liver, G
+  2026-11-20; development = the 5 DevMap stages; one per tissue and `all`); molQTL 0; summit 0 until allelic imbalance
+  and the ChromBPNet effects have tested it, then 1 for the rule; ChromBPNet and allelic imbalance 0 until each passes
+  a test among SNPs inside peaks, then 1 point from a least change of |log2 FC| 0.2 ("If there's so few snps, we can
+  lower to 0.2"). Distance to the gene start stays a matching variable. SNPs with one tier and score: known locus,
+  constrained, assay pass, MAF (results.tie_break). The eQTL benchmark is a check, not a calibration; v0.1 needs the
+  lower 95% bound of tiers 1-2 at eQTL leads above 1 (`snpscore benchmark` prints the line; the release build stops on
+  a fail); a one-tissue molQTL set is scored with that tissue's preset. The GWAS prior's slope is 0.3, the uniform
+  prior shown beside it. The missense plan as written, and when it counts: damaging 3, other missense 2, synonymous 1.
+  The mixer: a weight and a cut-off each up to 99 ("Cap the score at <100 is fine"), one decimal place, the user's
+  cut-offs in view. The pool of release 2026-11-25 goes from tiers 1-4 0.38 / 6.16 / 8.49 / 84.98% to 1.09 / 5.75 /
+  18.42 / 74.74% (423,043 SNPs up a tier, 36,729 down; before synonymous). The salmon-centred conservation alignment
+  waits: G takes it up here, with no score until its layers exist.
+- The demo from the Docker image (G, 2026-11-26: "set up the deploy to NREC to copy now the docker image to set up
+  there, and to copy the release from salmobase"): `update.sh image [version]`, the deploy workflow's `image` input
+  (DECISIONS #76). The checkout's deploy stays the default and the fallback until the first image deploy passes its
+  smoke test; it needs Docker on the VM (`DOCKER=1 bash deploy/nrec.sh`, once, from G's Mac) and a published image.
+
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
-- Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
-  the ImmunoMap's bivalent or mixed active/polycomb (G, 2026-11-20) and the trout ImmunoMap's weak accessible
-  chromatin (G, 2026-11-25). Not counted: repressed polycomb, quiescent, ZNF
-  genes and repeats, Unknown_1 (the published models') and Unknown_2 (the first gill model's; gone from the unified
-  peaks since their v4 of 2026-11-23).
-- Trait presets (condition prefixes): maturation = Brain + Gonad; growth_and_fillet = Muscle + Liver;
-  disease_resistance = HeadKidney + Gill + Liver (G, 2026-11-20; Liver alone before the ImmunoMap); development = the
-  5 DevMap stages; plus one preset per tissue (gill and head_kidney too) and `all`.
-- Weights and tier cut-offs: see weights.yaml (active 3, CDS/splice 3, constrained 2, weak/UTR/active elsewhere/Ensembl
-  regulatory 1; tiers at 5, 3, 1). Ensembl regulatory features count only where AQUA-FAANG has no peak (68-86% overlap).
 - Benchmark controls matched on distance to the nearest gene and public MAF (0.05 bins), not LD.
 - Known loci set includes GWAS lead SNPs (six6, bco1l), not only likely-causal missense SNPs (vgll3).
 - Portal roadmap v2, stage 1 (2026-10-06):
@@ -381,7 +400,10 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     reported beyond 500 bp (`max_distance`); strength is the rank among the condition's own peaks, because fold
     enrichment differs between conditions (median 3.1 to 6.5).
   - The summit rule (weights.yaml `summit`): within 50 bp of a summit in the strongest quarter of its condition.
-    Weights: pike 0, summit 0. Recommended to G: pike 1; summit 0 until allelic imbalance or ChromBPNet can test it.
+    Weights: pike 1 and summit 0 (Decided, 2026-11-26).
+- The `cne` layer (2026-11-26, DECISIONS #74): where two CNEs reach one base (two pike rows in an alignment block, or
+  a trout block in two files) the older clade keeps it; neighbouring runs of one CNE in two alignment blocks are not
+  joined, so the counts compare with the scoring chat's (salmon: 1,438,398 runs, 33,649,069 bp, 403,884 CNEs).
 - Rainbow trout release (2026-11-12, DECISIONS #38-#45; the tier rules are salmon's weights.yaml, unchanged):
   - Layers: AQUA-FAANG unified peaks and ChromHMM states (17 conditions: brain, liver, muscle by maturity and sex, five
     embryo stages; no gonad states; from the release after trout-2026-11-24 also the ImmunoMap's head kidney after
@@ -410,9 +432,10 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   says why it leaves the background out). A Design panel takes the rules of its first source and refuses a list
   scored with others; saved versions keep them and download with their stored tiers. Outputs name the rules
   (validation.json `rules`, Parquet key-value metadata, the pool's stamp, the benchmark's head, gwas.json).
-- A user's own tier rules (2026-11-26, DECISIONS #69-#71): only the scoring blocks (weights, tiers, the state lists,
-  summit, variant_scores) are theirs, the other blocks stay the portal's; a weight is at most 100, a cut-off at most
-  1000, a file at most 100 KB without YAML anchors; faders 0-10 and 1-20 (rules.py). Kept in the browser only; a job
+- A user's own tier rules (2026-11-26, DECISIONS #69-#71; the bounds and decimals G's, 2026-11-26): only the scoring
+  blocks (weights, tiers, the state lists, summit, variant_scores) are theirs, the other blocks stay the portal's; a
+  weight and a cut-off each at most 99 with one decimal place, a file at most 100 KB without YAML anchors; faders 0-10
+  and 1-20 in steps of 0.5 (rules.py). Kept in the browser only; a job
   keeps the rules it was scored with, and Apply re-tiers it through the job queue. Results with own rules compare
   with the public pool tiered again with their rules (jobs.own_background, cached in the results folder).
 - Structural variants (2026-11-24, DECISIONS #55-#57): each evidence term counts once however many elements an SV
@@ -423,8 +446,8 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   (Stenløkk 2022 chr18 and chr9 inversions, `local_adaptation`; Bertolotti 2020 farmed-vs-wild outliers,
   `domestication`), trout 2 (Omy05, `anadromy`; Omy17, `fillet_yield`). Examples: Known SVs, and 300 SYNTHETIC SVs
   that build makes (layers.yaml `demo_svs`).
-- Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
-  counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
+- Coding consequences, molQTL benchmark, priors (2026-10-07): stop_retained counts as synonymous (synonymous 1: Decided,
+  2026-11-26); splice donor/acceptor keep the splice weight; molQTL benchmark positives = leads with BF < 0.1;
   priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).
 - Ss4R duplicates (2026-10-07): `ss4r` layer from the AQUA-FAANG SalmonTroutOrthologs.tsv on salmobase: the other
   salmon genes of a gene's clade on the paired chromosome of its syntenic quartet (any other chromosome when the quartet

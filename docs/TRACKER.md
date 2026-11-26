@@ -167,10 +167,15 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
         GPU-hours); other tissues' models as they are released
 - [ ] S3e Still to ask or get: allelic imbalance in the 12 fish from the Orion repository (the truth set the summit
       rule and the ChromBPNet scores need); the large gill eQTL set, if its authors share it
-- [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52, #54, #58), then weights.yaml and
-      the pools. Before #5 changes anything: the pool needs coding consequences (it is built without the genome, so
-      the synonymous weight would apply to uploads but not to the public background)
-- [ ] S5 The GWAS prior calibrated per tier, its range shown, with a flat prior and a cap (#51)
+- [x] S4 G's decisions on the order of the evidence (2026-11-26: the questionnaire and the scoring chat's hand-off;
+      DECISIONS, AGENTS.md "Decided"): weights.yaml (weak states split, pike 1 only where nothing is constrained,
+      synonymous 1, constrained = GERP or a pike CNE), the `cne` layer for both species (snpdata/cne.py; DECISIONS
+      #74), pools built with the genome so that they carry coding consequences (#75), the tie-break (#7), the
+      benchmark's v0.1 check (4b) in its output and the release build, the mixer's bounds 0-99 with one decimal place
+      (#69), and the NREC demo from the Docker image (#76). The next build (docs/ORION.md) brings the layer and the
+      pools; on release 2026-11-25's pool the rules give tiers 1-4 of 1.09 / 5.75 / 18.42 / 74.74%.
+- [ ] S5 The GWAS prior calibrated per tier, its range shown, with a flat prior and a cap (#51). The slope is G's 0.3
+      (2026-11-26), and the uniform prior is shown beside it; the calibration per tier and the cap wait for S6.
 - [ ] S6 Evidence at the base: the ChromBPNet scores and allelic imbalance in the 12 fish (both from the Orion
       repository, docs/CHROMBPNET.md), tested for what they add among SNPs inside peaks; then a bonus G sets (#53)
 - [ ] S7 Customisation: a supported own-weights file, named profiles, the rules stated in every export, and an

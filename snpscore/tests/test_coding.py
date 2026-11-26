@@ -90,16 +90,24 @@ def test_alleles(release, tmp_path):
 
 
 def test_tiers_unchanged(release, tmp_path):
-    # The coding weight counts every CDS change but synonymous ones, the synonymous weight (equal by default) the rest
+    # The coding weight counts every CDS change but synonymous ones, the synonymous weight the rest: with the two equal
+    # the tiers are those from before coding.py; with G's synonymous 1 (2026-11-26) only synonymous changes score lower
     rows, out = run(release, tmp_path, [c[:5] for c in CASES])
     weights = yaml.safe_load(WEIGHTS.read_text())
+    equal = {**weights, "weights": {**weights["weights"], "synonymous": weights["weights"]["coding"]}}
     con = duckdb.connect()
     con.execute(f"CREATE TABLE a AS SELECT * FROM read_parquet('{out}')")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE a)").fetchall()]
     con.execute(f"CREATE TABLE old AS SELECT * EXCLUDE ({', '.join(COLUMNS)}) FROM a")  # as before coding.py
-    old = con.execute(f"SELECT id, tier, tier_score FROM ({scored('old', weights, [c for c in columns if c not in COLUMNS], 'all')})").fetchall()
-    assert sorted(old) == sorted((k, r["tier"], r["tier_score"]) for k, r in rows.items())
-    assert {"term": "synonymous", "weight": weights["weights"]["coding"]} in rows["synonymous"]["tier_terms"]
+    old = con.execute(f"SELECT id, tier, tier_score FROM ({scored('old', equal, [c for c in columns if c not in COLUMNS], 'all')})").fetchall()
+    same = con.execute(f"SELECT id, tier, tier_score FROM ({scored('a', equal, columns, 'all')})").fetchall()
+    assert sorted(old) == sorted(same)
+    synonymous = {k for k, r in rows.items() if r["coding_consequence"] in ("synonymous_variant", "stop_retained_variant")}
+    was = {k: (t, s) for k, t, s in old}
+    assert synonymous and all((r["tier"], r["tier_score"]) == was[k] for k, r in rows.items() if k not in synonymous)
+    assert all(r["tier_score"] == was[k][1] - weights["weights"]["coding"] + weights["weights"]["synonymous"]
+               for k, r in rows.items() if k in synonymous)
+    assert {"term": "synonymous", "weight": weights["weights"]["synonymous"]} in rows["synonymous"]["tier_terms"]
     lower = {**weights, "weights": {**weights["weights"], "synonymous": 0}}
     new = dict(con.execute(f"SELECT id, tier_score FROM ({scored('a', lower, columns, 'all')})").fetchall())
     assert {k for k, r in rows.items() if new[k] != r["tier_score"]} == {"synonymous", "minus_synonymous",

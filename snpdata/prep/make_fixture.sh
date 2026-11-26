@@ -24,6 +24,7 @@ bed AtlanticSalmon_unified_peaks.bed
 bed AtlanticSalmon_blacklist.bed
 bed gerp_constrained_elements.salmo_salar.bed
 bed Ssal_A_to_Eluc.aligned.bed
+bed Ssal_A_pike_cnes.bed
 # ATAC summits: the 27 conditions' MACS2 peak files, cut to 300 kb around vgll3 (chromosome 25) to keep the fixture small.
 mkdir -p "$OUT/narrowPeak"
 for f in "$RAW"/narrowPeak/*.narrowPeak; do

@@ -2,11 +2,12 @@
 
 The rules in use are the shipped weights.yaml, or a copy of it that SNPSCORE_WEIGHTS names (rules_file): an own
 rules file kept outside the package, which an update of the package leaves alone. Every file is checked when it is
-loaded for scoring (check_weights): a mistyped name or a weight that is not a whole number stops the run with a
-message naming it, instead of changing tiers without a word."""
+loaded for scoring (check_weights): a mistyped name or a weight that is not a number with at most one decimal place
+stops the run with a message naming it, instead of changing tiers without a word."""
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 from pathlib import Path
 
@@ -64,11 +65,18 @@ def describe_rules(path=None):
             "shipped": path.resolve() == WEIGHTS.resolve()}
 
 
+def tenths(value):
+    """A number with at most one decimal place: a weight or a tier cut-off. The shipped rules use whole numbers; a
+    user's own may use one decimal place (G, 2026-11-26), and tier_score then has one too."""
+    return (isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+            and abs(value * 10 - round(value * 10)) < 1e-6)
+
+
 def check_weights(w):
     """The mistakes in a set of rules, as plain messages that name the key ([] when it can be used): a block, state,
-    term or preset condition that is mistyped, a weight that is not a whole number of 0 or more, tier cut-offs out of
-    order, an entry the scoring needs that was left out. These are the edits that otherwise change tiers silently or
-    stop with a Python error."""
+    term or preset condition that is mistyped, a weight that is not a number of 0 or more with at most one decimal
+    place, tier cut-offs out of order, an entry the scoring needs that was left out. These are the edits that otherwise
+    change tiers silently or stop with a Python error."""
     if not isinstance(w, dict):
         return ["the file holds no rules: it should be named blocks, as the shipped weights.yaml"]
     out = [f"unknown block '{k}' (mistyped? the blocks are {', '.join(BLOCKS)})" for k in w if k not in BLOCKS]
@@ -92,15 +100,16 @@ def check_weights(w):
         scores = {}
     weights = w.get("weights")
     if "weights" in w and not isinstance(weights, dict):
-        out.append("weights: 'term: whole number' lines, as in the shipped file")
+        out.append("weights: 'term: number' lines, as in the shipped file")
     elif isinstance(weights, dict):
         for term, value in weights.items():
             if term not in TERMS and term not in scores:
                 out.append(f"weights: unknown term '{term}' (mistyped? the terms are {', '.join(TERMS)}, and the score "
                            "layers named under variant_scores)")
-            elif isinstance(value, bool) or not isinstance(value, int) or value < 0:
-                out.append(f"weights: '{term}' is {value!r}; a weight is a whole number, 0 or more (0 shows it without counting it)")
-        out += [f"weights: '{t}' is missing (a whole number; 0 counts nothing)" for t in REQUIRED if t not in weights]
+            elif not tenths(value) or value < 0:
+                out.append(f"weights: '{term}' is {value!r}; a weight is a number of 0 or more with at most one decimal "
+                           "place (0 shows it without counting it)")
+        out += [f"weights: '{t}' is missing (a number; 0 counts nothing)" for t in REQUIRED if t not in weights]
         if weights.get("summit") and not isinstance(w.get("summit"), dict):
             out.append("weights: 'summit' counts, but the summit block (max_distance, min_rank) is missing")
         out += [f"variant_scores: '{name}' has no weight under weights (add one; 0 shows it without counting it)"
@@ -116,11 +125,10 @@ def check_weights(w):
         elif rule.get("min_score") is not None and not (number(rule["min_score"]) and rule["min_score"] >= 0):
             out.append(f"variant_scores: '{name}' min_score is {rule['min_score']!r}; the least score that counts, 0 or more")
     tiers = w.get("tiers")
-    if "tiers" in w and not (isinstance(tiers, list) and len(tiers) == 3
-                             and all(isinstance(t, int) and not isinstance(t, bool) for t in tiers)
-                             and tiers[0] > tiers[1] > tiers[2] >= 1):
-        out.append(f"tiers: {tiers!r}; the minimum tier_score of tiers 1, 2 and 3, three whole numbers from high to low, "
-                   "the last 1 or more, e.g. [5, 3, 1]")
+    if "tiers" in w and not (isinstance(tiers, list) and len(tiers) == 3 and all(tenths(t) for t in tiers)
+                             and tiers[0] > tiers[1] > tiers[2] > 0):
+        out.append(f"tiers: {tiers!r}; the minimum tier_score of tiers 1, 2 and 3, three numbers from high to low with at "
+                   "most one decimal place, the last above 0, e.g. [5, 3, 1]")
     presets = w.get("presets")
     if "presets" in w and not isinstance(presets, dict):
         out.append("presets: 'name: [condition names or their beginnings]' lines ([] for all conditions)")
@@ -248,8 +256,15 @@ def scored(table, weights, columns, trait, synthetic=()):
                   ("region", "splice", "region_class = 'splice_region'", "'splice region'")]
     if "region_class" in columns:
         terms.append(("region", "utr", "region_class IN ('five_prime_UTR', 'three_prime_UTR')", "'UTR'"))
-    if "gerp" in columns:
-        terms.append(("gerp", "constrained", "gerp", "'constrained'"))
+    # Conservation is the highest of its evidence, not a sum (G, 2026-11-26): a GERP constrained element or a pike CNE
+    # is `constrained`, counted once if both; sequence aligned to pike (`pike`) counts only where neither is.
+    kept = [c for c in ("gerp", "cne") if c in columns]
+    conserved = " OR ".join(f"coalesce({c}, false)" for c in kept) or "false"
+    if kept:
+        age = "cne_age" if "cne_age" in columns else "NULL"
+        named = (["CASE WHEN coalesce(gerp, false) THEN 'GERP' END"] if "gerp" in kept else []) + \
+                ([f"CASE WHEN coalesce(cne, false) THEN 'CNE' || coalesce(' (' || {age} || ')', '') END"] if "cne" in kept else [])
+        terms.append((kept[0], "constrained", conserved, f"'constrained: ' || concat_ws(', ', {', '.join(named)})"))
     if "regbuild" in columns:  # mostly the same elements as the AQUA-FAANG peaks, so only counted where there is no peak
         no_peak = " AND NOT chromatin" if "chromatin" in columns else ""
         terms.append(("regbuild", "regbuild", f"regbuild{no_peak}", "'Ensembl ' || regbuild_type"))
@@ -258,8 +273,8 @@ def scored(table, weights, columns, trait, synthetic=()):
         terms.append(("motif", "motif", f"coalesce(motif_changed, false){in_peak}", "'motif: ' || motif_tfs"))
     if "molqtl" in columns and "molqtl" in w:  # nf-RASQUAL lead SNP: display only while its weight is 0
         terms.append(("molqtl", "molqtl", "molqtl", "'molQTL lead: ' || molqtl_tissues"))
-    if "pike" in columns and "pike" in w:  # sequence that aligns to northern pike: display only while its weight is 0
-        terms.append(("pike", "pike", "coalesce(pike, false)", "'aligns to pike'"))
+    if "pike" in columns and "pike" in w:  # sequence that aligns to northern pike, where nothing above is constrained
+        terms.append(("pike", "pike", f"coalesce(pike, false) AND NOT ({conserved})", "'aligns to pike'"))
     rule = weights.get("summit") or {}
     if {"summit_distance", "summit_rank"} <= set(columns) and "summit" in w and rule:  # near a strong ATAC summit
         terms.append(("summit", "summit", f"coalesce(summit_distance <= {int(rule['max_distance'])} "
@@ -274,25 +289,34 @@ def scored(table, weights, columns, trait, synthetic=()):
                           f"{lit(name + ' ')} || printf('%.2f', {q(name + '_score')})"))
     terms = [t for t in terms if t[0] not in synthetic]
 
-    def weight(term):  # whole numbers, so tier_score and tier_terms keep their INTEGER type in every release
-        value = w[term]
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise ValueError(f"weights.yaml: weight '{term}' must be a whole number")
-        return f"{value}::INTEGER"
+    for _, term, _, _ in terms:
+        if not tenths(w[term]):
+            raise ValueError(f"weights.yaml: weight '{term}' must be a number with at most one decimal place")
+    # Whole numbers keep tier_score and tier_terms INTEGER, as in every release. Rules with a decimal weight or cut-off
+    # (a user's own; G, 2026-11-26) are summed in tenths, so the cut-offs compare exactly, and tier_score is a DOUBLE.
+    whole = all(isinstance(v, int) and not isinstance(v, bool) for v in [w[t] for _, t, _, _ in terms] + list(weights["tiers"]))
+    scale, kind = (1, "INTEGER") if whole else (10, "DOUBLE")
+
+    def weight(term):  # in units of 1/scale
+        return f"{round(w[term] * scale)}::INTEGER"
+
+    def shown(term):  # as written in the rules
+        return f"{w[term]}::INTEGER" if whole else f"{float(w[term])}::DOUBLE"
 
     score = " + ".join(f"CASE WHEN {cond} THEN {weight(term)} ELSE 0 END" for _, term, cond, _ in terms) or "0"
     evidence = ", ".join(f"CASE WHEN {cond} THEN {text} END" for _, _, cond, text in terms) or "NULL"
-    fired = ", ".join(f"CASE WHEN {cond} THEN {{'term': {lit(term)}, 'weight': {weight(term)}}} END"
+    fired = ", ".join(f"CASE WHEN {cond} THEN {{'term': {lit(term)}, 'weight': {shown(term)}}} END"
                       for _, term, cond, _ in terms)
     tier_terms = (f"list_filter([{fired}], lambda x: x IS NOT NULL)" if terms
-                  else "[]::STRUCT(term VARCHAR, weight INTEGER)[]")
-    t1, t2, t3 = weights["tiers"]
+                  else f"[]::STRUCT(term VARCHAR, weight {kind})[]")
+    t1, t2, t3 = (round(t * scale) for t in weights["tiers"])
+    score_out = "tier_score" if whole else f"round(tier_score / {scale}.0, 1)"
     added = [c for c in ADDED if c in columns]
     source = f"(SELECT * EXCLUDE ({', '.join(added)}) FROM {table})" if added else table
     return f"""
         SELECT * EXCLUDE (_active, _active_any, _weak, tier_score, tier_evidence, tier_terms),
                CASE WHEN tier_score >= {t1} THEN 1 WHEN tier_score >= {t2} THEN 2 WHEN tier_score >= {t3} THEN 3 ELSE 4 END AS tier,
-               tier_score, tier_evidence, tier_terms
+               {score_out} AS tier_score, tier_evidence, tier_terms
         FROM (SELECT *, {score} AS tier_score, concat_ws('; ', {evidence}) AS tier_evidence, {tier_terms} AS tier_terms
               FROM (SELECT *, {having(chosen, weights['active_states'])} AS _active,
                               {having(every, weights['active_states'])} AS _active_any,

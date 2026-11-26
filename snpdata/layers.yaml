@@ -243,6 +243,24 @@ layers:
       gaps of up to 50 bp closed (fetch converts the depth bigWig to these stretches)
     citation: AQUA-FAANG consortium, salmon-trout-pike whole-genome alignment (HAL), alignment depth of Ssal_v3.1 to northern pike (salmobase.org); Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Developmental contexts of gene-regulatory evolution following whole genome duplication in salmonids. Nat Ecol Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6
 
+  - name: cne
+    type: interval
+    format: bed
+    file: Ssal_A_pike_cnes.bed
+    url: https://zenodo.org/records/21415252/files/Supplementary_Data_4.txt
+    cnes:  # fetch projects the pike CNEs through these alignments (snpdata/cne.py): one file per salmon chromosome
+      reference: Ssal_A
+      maf: https://salmobase.org/datafiles/datasets/Aqua-Faang/alignments/salmon-trout-pike/maf_ref_Ssal_A/ssa{n:02d}_AB.maf.gz
+      files: 29
+    columns: [id, age]
+    description: >-
+      Conserved non-coding elements (CNEs) of northern pike (Esox lucius) from the AQUA-FAANG atlas paper (Supplementary
+      Data 4: 453,692 elements in the file, where the paper reports 416,589), each with the oldest clade that shares it
+      (Euteleostomi to Protacanthopterygii), projected onto Ssal_v3.1 through the AQUA-FAANG salmon-trout-pike
+      alignment: the bases aligned column by column to a CNE base, both duplicates. Counted as constrained, like a GERP
+      element, and once if both (G, 2026-11-26)
+    citation: Baudement M-O, Perojil Morata D, Gillard GB, ..., Kent MP, Lien S, Macqueen DJ. Developmental contexts of gene-regulatory evolution following whole genome duplication in salmonids. Nat Ecol Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6, Supplementary Data 4 (Zenodo record 21415252, CC BY 4.0); AQUA-FAANG consortium, salmon-trout-pike whole-genome alignment (salmobase.org)
+
   - name: blacklist
     type: interval
     format: bed

@@ -23,8 +23,10 @@ from . import jobs
 from .lib import export as snp_export
 
 SCORING = ("weights", "tiers", "active_states", "weak_states", "summit", "variant_scores")  # the blocks that are yours
-MAX_WEIGHT, MAX_CUTOFF, MAX_BYTES = 100, 1000, 100_000  # PROVISIONAL bounds: a weight, a tier cut-off, a rules file
-FADERS = {"weight": 10, "cutoff": 20}  # the sliders' top (PROVISIONAL); the number boxes go up to the bounds
+# A weight and a tier cut-off each up to 99, with one decimal place (G, 2026-11-26: "cap the score at <100"; decimals
+# in the number boxes); a rules file at most 100 KB (PROVISIONAL).
+MAX_WEIGHT, MAX_CUTOFF, MAX_BYTES = 99, 99, 100_000
+FADERS = {"weight": 10, "cutoff": 20}  # the sliders' top, in steps of 0.5 (PROVISIONAL); the number boxes go to the bounds
 GROUPS = ("Chromatin and regulatory elements", "Genes and proteins", "Conservation", "Allele effects")
 TERMS = [  # (term, label, what counts, the release layer it needs, group): the mixer's sliders, in its order; the
     # score layers join the allele effects
@@ -39,8 +41,9 @@ TERMS = [  # (term, label, what counts, the release layer it needs, group): the 
     ("synonymous", "Synonymous", "A synonymous change in coding sequence (or stop retained)", "region", 1),
     ("splice", "Splice region", "In a splice region", "region", 1),
     ("utr", "UTR", "In a 5' or 3' UTR", "region", 1),
-    ("constrained", "Constrained", "In a GERP constrained element (Ensembl's 65 fish)", "gerp", 2),
-    ("pike", "Pike conserved", "Sequence that aligns to northern pike", "pike", 2),
+    ("constrained", "Constrained", "In a GERP constrained element (Ensembl's 65 fish) or a pike CNE; once if both", "gerp", 2),
+    ("pike", "Aligns to pike", "Sequence that aligns to northern pike, where nothing is constrained (conservation counts its "
+             "highest evidence, not a sum)", "pike", 2),
     ("motif", "TF motif", "In a robust ATAC peak, one allele matches a JASPAR motif and the other doesn't", "motif", 3),
     ("molqtl", "molQTL lead", "A caQTL or eQTL lead SNP of the 12 AQUA-FAANG fish (nf-RASQUAL)", "molqtl", 3),
 ]
@@ -91,10 +94,11 @@ def compose(given):
             problems.append("focus: a list of tissues (the beginnings of condition names), e.g. [Gill, HeadKidney]")
     problems += snpscore.check_weights(rules) + snp_export.check_rules(rules)
     weights = rules.get("weights") if isinstance(rules.get("weights"), dict) else {}
+    number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)  # noqa: E731
     problems += [f"weights: '{t}' is {v}; at most {MAX_WEIGHT} here" for t, v in weights.items()
-                 if isinstance(v, int) and not isinstance(v, bool) and v > MAX_WEIGHT]
+                 if number(v) and v > MAX_WEIGHT]
     tiers = rules.get("tiers")
-    if isinstance(tiers, list) and any(isinstance(t, int) and t > MAX_CUTOFF for t in tiers):
+    if isinstance(tiers, list) and any(number(t) and t > MAX_CUTOFF for t in tiers):
         problems.append(f"tiers: {tiers}; a cut-off is at most {MAX_CUTOFF} here")
     return rules, problems, unused
 

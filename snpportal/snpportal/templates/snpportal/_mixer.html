@@ -30,8 +30,8 @@
             <legend>{{ title }}</legend>
             {% for term, label, why, score in sliders %}<div class="sp-ch{% if score %} sp-ch-score{% endif %}" data-term="{{ term }}"{% if score %} data-score="{{ term }}"{% endif %} title="{{ why }}">
               <label class="sp-ch-name" for="sp-mix-{{ term }}">{{ label }}</label>
-              <input class="sp-fader" id="sp-mix-{{ term }}" type="range" min="0" max="{{ mixer.faders.weight }}" step="1">
-              <input class="form-control form-control-sm sp-ch-box" type="number" min="0" max="{{ mixer.max_weight }}" step="1" aria-label="{{ label }}: weight">
+              <input class="sp-fader" id="sp-mix-{{ term }}" type="range" min="0" max="{{ mixer.faders.weight }}" step="0.5">
+              <input class="form-control form-control-sm sp-ch-box" type="number" min="0" max="{{ mixer.max_weight }}" step="0.1" aria-label="{{ label }}: weight">
               <span class="sp-ch-std" title="The standard value">&#9656; <span data-std></span></span>
               {% if score %}<span class="sp-ch-pct"><label>counts with a change of at least <input class="form-control form-control-sm" type="number" min="0" step="0.05" data-min-score placeholder="any"> log2</label>
                 <label>and a rank from <input class="form-control form-control-sm" type="number" min="0" max="1" step="0.01" data-percentile placeholder="any"></label></span>{% endif %}
@@ -41,8 +41,8 @@
             <legend>Tier cut-offs <span class="sp-muted">the least score of each tier; lower is tier 4</span></legend>
             {% for n in "123" %}<div class="sp-ch sp-ch-cut" data-cut="{{ forloop.counter0 }}">
               <label class="sp-ch-name" for="sp-mix-tier{{ n }}"><span class="sp-badge sp-tier-{{ n }}">Tier {{ n }}</span></label>
-              <input class="sp-fader" id="sp-mix-tier{{ n }}" type="range" min="1" max="{{ mixer.faders.cutoff }}" step="1">
-              <input class="form-control form-control-sm sp-ch-box" type="number" min="1" max="{{ mixer.max_cutoff }}" step="1" aria-label="Tier {{ n }}: the least score">
+              <input class="sp-fader" id="sp-mix-tier{{ n }}" type="range" min="1" max="{{ mixer.faders.cutoff }}" step="0.5">
+              <input class="form-control form-control-sm sp-ch-box" type="number" min="0.1" max="{{ mixer.max_cutoff }}" step="0.1" aria-label="Tier {{ n }}: the least score">
               <span class="sp-ch-std" title="The standard value">&#9656; <span data-std></span></span>
             </div>{% endfor %}
           </fieldset>

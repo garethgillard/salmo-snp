@@ -14,6 +14,14 @@
 # workflow built for the code installed here: the VM's 2 GB RAM can't build one. It replaces that release's pool (the
 # default release's without a version; another species' in /srv/snpportal/releases/<version>) only if
 # snpscore.pool.stale says it fits the release, weights.yaml and snpscore.
+# `image [version]` runs the portal from its Docker image instead (G, 2026-11-26: "set up the deploy to NREC to copy
+# now the docker image to set up there, and to copy the release from salmobase"): the image published in salmobase's
+# datafiles (docker/latest.json names the newest; deploy/publish_image.sh puts it there), checked against its sha256
+# and loaded (deploy/image.sh); the checkout moves to the tag v<version>, whose species.sh fetches the releases that
+# version names from salmobase; then the container takes 127.0.0.1:8000 from the checkout's gunicorn, reading this
+# VM's folders and settings (env), and Caddy is left as it is. It never builds a pool here (SNPPORTAL_POOL_BUILD=0):
+# the workflow sends stale ones as before. If it does not answer, the checkout's portal comes back and this fails;
+# a deploy of a commit (the default) goes back to the checkout's portal. Docker is installed once by nrec.sh (DOCKER=1).
 set -euo pipefail
 ROOT=${SNPPORTAL_ROOT:-/srv/snpportal}  # another root only in the test (snpportal/tests/test_deploy.py)
 cd "$ROOT/salmo-snp"
@@ -30,8 +38,19 @@ version() {  # the version of the release in folder $1
   "$ROOT/venv/bin/python" -c 'import json, sys; print(json.load(open(sys.argv[1] + "/manifest.json"))["version"])' "$1"
 }
 
-answers() {  # restart the portal; succeed when it answers
-  sudo systemctl restart snpportal
+DOCKER=(docker)
+command -v docker >/dev/null && ! docker info >/dev/null 2>&1 && DOCKER=(sudo docker)  # not in the docker group yet
+
+container() {  # whether the portal runs from the Docker image (update.sh image)
+  command -v docker >/dev/null && [ -n "$("${DOCKER[@]}" ps -q -f name='^snp$' 2>/dev/null)" ]
+}
+
+answers() {  # restart the portal (the container, when it runs; else the checkout's gunicorn); succeed when it answers
+  if container; then "${DOCKER[@]}" restart snp >/dev/null; else sudo systemctl restart snpportal; fi
+  answering
+}
+
+answering() {  # succeed when the portal answers
   host=$(sed -n 's/^DJANGO_ALLOWED_HOSTS=\([^,]*\).*/\1/p' "$ROOT/env")
   for _ in $(seq 20); do
     sleep 2
@@ -53,8 +72,49 @@ if [ -n "${UPDATE_STEPS:-}" ]; then  # the steps of the commit that `install` (b
     if stale "$r"; then echo "the public pool is stale: $(version "$r") (new weights.yaml or snpscore)" >&2; fi
   done
   (set -a && . "$ROOT/env" && cd snpportal && "$ROOT/venv/bin/python" manage.py collectstatic --noinput -v 0)
+  if container; then  # back from the image: the checkout's gunicorn serves again
+    "${DOCKER[@]}" rm -f snp >/dev/null
+    sudo systemctl enable -q snpportal || true
+  fi
   answers
   exit
+fi
+
+if [[ $want == image || $want == image\ * ]]; then
+  command -v docker >/dev/null && "${DOCKER[@]}" info >/dev/null 2>&1 ||
+    { echo "Docker is not installed on this VM: run deploy/nrec.sh once with DOCKER=1 (G's Mac)" >&2; exit 1; }
+  base=$(sed -n 's/^DATA_URL = "\([^"]*\)".*/\1/p' snpportal/snpportal/serve.py)/docker
+  v=${want#image}
+  v=${v# }
+  [ -n "$v" ] || v=$(curl -fsSL "$base/latest.json" | "$ROOT/venv/bin/python" -c 'import json, sys; print(json.load(sys.stdin)["version"])')
+  [[ $v =~ ^[0-9A-Za-z._-]+$ ]] || { echo "no image version: is one published in $base?" >&2; exit 1; }
+  git fetch -q origin "refs/tags/v$v:refs/tags/v$v" && git checkout -q --force --detach "v$v" ||
+    { echo "no tag v$v on GitHub: the image's releases can't be named" >&2; exit 1; }
+  "${DOCKER[@]}" image inspect "salmo-snp:$v" >/dev/null 2>&1 || sh snpportal/deploy/image.sh load "$base/salmo-snp-$v.docker.tar.gz"
+  bash snpportal/deploy/species.sh || true  # the releases this version names, from salmobase
+  for r in "$release" "$ROOT"/releases/*; do  # the workflow builds and sends stale pools, as for the checkout
+    [ -f "$r/manifest.json" ] || continue
+    if stale "$r"; then echo "the public pool is stale: $(version "$r") (new weights.yaml or snpscore)" >&2; fi
+  done
+  # this VM's settings, except the checkout's static folder and settings module (the image has its own)
+  grep -v '^DJANGO_STATIC_ROOT=\|^DJANGO_SETTINGS_MODULE=' "$ROOT/env" > "$ROOT/image.env"
+  echo "SNPPORTAL_POOL_BUILD=0" >> "$ROOT/image.env"  # 2 GB RAM: never here (2026-11-06)
+  chmod 600 "$ROOT/image.env"
+  mkdir -p "$ROOT/image"
+  sudo systemctl stop snpportal || true
+  "${DOCKER[@]}" rm -f snp >/dev/null 2>&1 || true
+  "${DOCKER[@]}" run -d --name snp --restart unless-stopped --user "$(id -u):$(id -g)" --env-file "$ROOT/image.env" \
+    -e SNPPORTAL_DATA="$ROOT/image" -v "$ROOT:$ROOT" -p 127.0.0.1:8000:8000 "salmo-snp:$v" >/dev/null
+  if answering; then
+    sudo systemctl disable -q snpportal || true  # a reboot starts the container (--restart), not the checkout's gunicorn
+    echo "deployed the image salmo-snp:$v"
+    exit 0
+  fi
+  echo "the image salmo-snp:$v did not answer: back to the checkout's portal" >&2
+  "${DOCKER[@]}" logs --tail 20 snp >&2 || true
+  "${DOCKER[@]}" rm -f snp >/dev/null 2>&1 || true
+  sudo systemctl start snpportal || true
+  exit 1
 fi
 
 if [[ $want == release\ * ]]; then  # `release <version>`: another species' release as a tar on stdin (species.sh)

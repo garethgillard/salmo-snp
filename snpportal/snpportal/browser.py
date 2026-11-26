@@ -670,6 +670,15 @@ def assay_group(s, assay, open_):
 
 # ---- other annotation ----
 
+CNE_AGES = ("Euteleostomi", "Actinopteri", "Neopterygii", "Teleostei", "Clupeocephala", "Euteleosteomorpha",
+            "Protacanthopterygii")  # the clades of the pike CNEs' ages, oldest first (Baudement et al. 2026)
+
+
+def cne_opacity(age):
+    """A CNE's shade on the Locus browser: full for the oldest clade, lighter for younger ones."""
+    return 1 - 0.1 * CNE_AGES.index(age) if age in CNE_AGES else 0.4
+
+
 def other_group(s, ax, data):
     body = []
     for r in data.get("regbuild", []):
@@ -693,6 +702,12 @@ def other_group(s, ax, data):
                        f'fill="{G[700]}"><title>Aligns to northern pike: {p["end"] - p["start"]:,} bp</title></rect>' for p in data["pike"])
         rows.append(row("Aligns to pike", trk(13, pike or locus_svg._t(4, 10, "none in this window", 9.5, G[700])),
                         "salmon-trout-pike alignment"))
+    if "cne" in data:  # pike CNEs projected onto this genome (G, 2026-11-26): darker the older the clade that shares them
+        cne = "".join(f'<rect x="{ax.x(c["start"]):.1f}" y="2" width="{max(1, ax.x(c["end"]) - ax.x(c["start"])):.1f}" height="9" '
+                      f'fill="{G[700]}" fill-opacity="{cne_opacity(c.get("age")):.2f}"><title>Pike CNE {escape(str(c.get("id") or ""))}, '
+                      f'shared back to {escape(str(c.get("age") or "?"))}: {c["end"] - c["start"]:,} bp</title></rect>' for c in data["cne"])
+        rows.append(row("Pike CNEs", trk(13, cne or locus_svg._t(4, 10, "none in this window", 9.5, G[700])),
+                        "Baudement et al. 2026"))
     return group("other", "Other annotation", "", rows)
 
 

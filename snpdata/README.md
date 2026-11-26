@@ -212,7 +212,10 @@ again from the same input has the same bytes and sha256.
 | `gene` | one row per `gene_id` (`build` checks) | `<layer>_<column>` for the SNP's nearest gene |
 | `features` | overlapping features for the viewers | nothing (never annotated) |
 
-Layers today: `chromatin` (interval with `chromatin_id`), `region`, `regbuild`, `gerp`, `pike` (interval: the sequence
+Layers today: `chromatin` (interval with `chromatin_id`), `region`, `regbuild`, `gerp`, `cne` (interval with `cne_id`
+and `cne_age`: the AQUA-FAANG paper's pike CNEs, Supplementary Data 4 on Zenodo, projected by `fetch` through the
+salmon-trout-pike MAF files referenced to the release's genome, snpdata/cne.py; where two meet one base the older
+clade keeps it; G, 2026-11-26), `pike` (interval: the sequence
 aligned to northern pike in the AQUA-FAANG salmon-trout-pike alignment, gaps of up to `max_gap` 50 bp closed; `fetch`
 converts the depth bigWig to these stretches), `blacklist`, `lore` (interval), `summit` (nearest, within 500 bp: signal,
 rank, condition; the summits of the conditions' MACS2 peaks that lie inside a robust peak, each with the values of the

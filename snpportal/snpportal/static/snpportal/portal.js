@@ -718,6 +718,10 @@
     problems.textContent = "";
     (list || []).forEach(function (p) { var li = document.createElement("div"); li.textContent = p; problems.appendChild(li); });
   }
+  function tenth(text) {  // a weight or cut-off: one decimal place at most (G, 2026-11-26)
+    var x = parseFloat(text);
+    return isNaN(x) ? NaN : Math.round(x * 10) / 10;
+  }
   function set(ch, value) {
     var fader = ch.querySelector(".sp-fader"), number = ch.querySelector(".sp-ch-box");
     number.value = value;
@@ -754,7 +758,7 @@
     var r = copy(base || standard);
     r.weights = Object.assign({}, r.weights);
     box.querySelectorAll("[data-term]").forEach(function (ch) {
-      var t = ch.getAttribute("data-term"), v = Math.max(0, parseInt(ch.querySelector(".sp-ch-box").value, 10) || 0);
+      var t = ch.getAttribute("data-term"), v = Math.max(0, tenth(ch.querySelector(".sp-ch-box").value) || 0);
       var pct = ch.querySelector("[data-percentile]");
       if (!pct) { r.weights[t] = v; return; }
       r.variant_scores = Object.assign({}, r.variant_scores);  // a score layer counts only with a weight, from a rank and/or a size
@@ -764,7 +768,7 @@
         r.variant_scores[t] = isNaN(e) ? (isNaN(p) ? 0 : p) : {percentile: isNaN(p) ? null : p, min_score: e};
       } else { delete r.weights[t]; delete r.variant_scores[t]; }
     });
-    r.tiers = [0, 1, 2].map(function (i) { return parseInt(box.querySelector('[data-cut="' + i + '"] .sp-ch-box').value, 10) || 1; });
+    r.tiers = [0, 1, 2].map(function (i) { return tenth(box.querySelector('[data-cut="' + i + '"] .sp-ch-box').value) || 1; });
     var ticks = box.querySelectorAll("[data-focus]"), focus = [];
     ticks.forEach(function (cb) { if (cb.checked) focus = focus.concat(cb.getAttribute("data-focus").split(",")); });
     if (focus.length && box.querySelectorAll("[data-focus]:checked").length < ticks.length) r.focus = focus; else delete r.focus;
@@ -819,10 +823,17 @@
   box.addEventListener("input", function (e) {
     var ch = e.target.closest(".sp-ch");
     if (ch && e.target.classList.contains("sp-fader")) ch.querySelector(".sp-ch-box").value = e.target.value;
-    if (ch && e.target.classList.contains("sp-ch-box")) set(ch, Math.max(+e.target.min || 0, parseInt(e.target.value, 10) || 0));
+    if (ch && e.target.classList.contains("sp-ch-box")) {  // the fader follows; the box keeps what is typed ("2." on the way to 2.5)
+      var f = ch.querySelector(".sp-fader"), v = tenth(e.target.value);
+      if (!isNaN(v)) f.value = Math.min(+f.max, Math.max(+f.min, v));
+    }
     if (ch || e.target.matches("[data-percentile], [data-min-score]")) changed();
   });
-  box.addEventListener("change", function (e) { if (e.target.matches("[data-state], [data-focus]")) changed(); });
+  box.addEventListener("change", function (e) {
+    var ch = e.target.closest(".sp-ch");
+    if (ch && e.target.classList.contains("sp-ch-box")) set(ch, Math.max(+e.target.min || 0, tenth(e.target.value) || 0));  // typed: tidied
+    if (e.target.matches("[data-state], [data-focus], .sp-ch-box")) changed();
+  });
   box.addEventListener("show.bs.modal", function () { fill(current || saved() || standard); showState(); });
   box.querySelector('[data-mix="standard"]').addEventListener("click", function () { fill(standard); });
   var mine = box.querySelector('[data-mix="mine"]');

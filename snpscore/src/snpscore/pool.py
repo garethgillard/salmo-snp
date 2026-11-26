@@ -15,7 +15,7 @@ import time
 import uuid
 from pathlib import Path
 
-from .annotate import annotate, connect
+from .annotate import annotate, connect, genome_location
 from .assay import breakdown
 from .formats import lit, q
 from .score import load_weights, rules_file, scored
@@ -96,12 +96,23 @@ def maf_bin_sql(maf):
     return "(" + " + ".join(f"({maf} >= {e:g})::INTEGER" for e in MAF_EDGES) + ")"
 
 
-def build_pool(release_dir, background=None, assay=False, threads=4, memory_limit="4GB", progress=None, sites=SITES):
+def local_genome(release_dir):
+    """Whether the release's genome is on this computer (annotate.genome_location), so the sequence step can read all
+    of it: a remote genome gives a sample of reference checks and no coding consequences."""
+    location = genome_location(json.loads((Path(release_dir) / "manifest.json").read_text()))
+    return bool(location) and "://" not in location
+
+
+def build_pool(release_dir, background=None, assay=None, threads=4, memory_limit="4GB", progress=None, sites=SITES):
     """Annotate the public sites in `background` (a VCF; None: the release's own public_af sites, `sites`) against
-    the release, without sequence checks unless `assay`, and write pool/pool.parquet (annotate columns, tier columns
-    for the 'all' preset, then tier__<preset> and tier_score__<preset> for every preset) and pool/background.json.
-    Returns the pool folder."""
+    the release and write pool/pool.parquet (annotate columns, tier columns for the 'all' preset, then tier__<preset>
+    and tier_score__<preset> for every preset) and pool/background.json. Returns the pool folder. `assay`: the sequence
+    step (reference check, assay QC, coding consequences): True, False, or None for whenever the genome is on this
+    computer (local_genome), so that a pool has coding consequences and the synonymous weight applies to it as to
+    uploads (G, 2026-11-26)."""
     release = Path(release_dir).resolve()
+    if assay is None:
+        assay = local_genome(release)
     out = release / "pool"
     out.mkdir(exist_ok=True)
     t0, step = time.time(), progress or (lambda stage: None)

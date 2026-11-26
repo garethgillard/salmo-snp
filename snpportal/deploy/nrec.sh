@@ -10,7 +10,8 @@
 # the Python packages (the newest versions they allow; they need Python >= 3.11, so Ubuntu 24.04), Caddy (HTTPS from
 # Let's Encrypt), a 2 GB swap file if there is none, and three systemd units: gunicorn, and an hourly snpportal_cleanup. DuckDB gets half the RAM and every CPU. Code updates after that come
 # from GitHub Actions when G asks (update.sh, README "Deploying the demo"); rerun this for a new release or new web names. Safe to
-# rerun: results and the secret key are kept.
+# rerun: results and the secret key are kept. DOCKER=1 also installs Docker, once, for update.sh image (the demo from
+# its Docker image; G, 2026-11-26).
 set -euo pipefail
 HOST=$1
 shift
@@ -44,9 +45,12 @@ for v in $(sed -n 's/^RELEASES = {\(.*\)}.*/\1/p' "$ROOT/snpportal/snpportal/ser
   else echo "the genome of $v is not on this Mac ($g): the VM keeps the one it has" >&2; fi  # a release built elsewhere
 done
 
-ssh "$HOST" "NAMES='$NAMES' NAME=$NAME GENOME=$(basename "$GENOME") bash -s" <<'REMOTE'
+ssh "$HOST" "DOCKER='${DOCKER:-}' NAMES='$NAMES' NAME=$NAME GENOME=$(basename "$GENOME") bash -s" <<'REMOTE'
 set -euo pipefail
 cd /srv/snpportal
+if [ -n "${DOCKER:-}" ] && ! command -v docker >/dev/null; then  # once, for update.sh image (G, 2026-11-26)
+  sudo apt-get update -q && sudo apt-get install -y -q docker.io && sudo usermod -aG docker "$USER"
+fi
 if ! command -v caddy >/dev/null; then  # Caddy's own apt repository (caddyserver.com/docs/install)
   sudo apt-get update -q
   sudo apt-get install -y -q python3-venv debian-keyring debian-archive-keyring apt-transport-https curl gnupg

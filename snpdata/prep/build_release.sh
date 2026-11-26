@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One release from start to finish, the same way on any machine (a SLURM job on Orion, a Mac): the inputs that are
-# missing, the example inputs, the build, the public pool, a check of every file, and a summary to compare with
-# docs/ORION.md. Run in snpdata/; it stops at the first step that fails, and a second run goes on from the inputs
+# missing, the example inputs, the build, the public pool, the benchmark's v0.1 check (salmon), a check of every file,
+# and a summary to compare with docs/ORION.md. Run in snpdata/; it stops at the first step that fails, and a second run goes on from the inputs
 # that are there. Nothing is published: that is `snpdata publish <release> --to <the site folder>`.
 #   bash prep/build_release.sh salmon 2026-11-26      -> release/atlantic_salmon-Ssal_v3.1-2026-11-26
 #   bash prep/build_release.sh trout 2026-11-26       -> release/rainbow_trout-USDA_OmykA_1.1-2026-11-26
@@ -64,8 +64,15 @@ step "build -> $out ($threads threads, $memory${reuse[1]:+, unchanged layers fro
 snpdata build --layers "$layers" --data "$data" --out "$out" --memory "$memory" --threads "$threads" --temp "$spill" \
   ${reuse[@]+"${reuse[@]}"}
 rm -rf "$spill"
-step "public pool"
+step "public pool (with the genome: the sequence step gives coding consequences, so synonymous counts as in uploads)"
 snpscore pool --release "$out" --memory "$memory" --threads "$threads"
+if [ -f "$out/molqtl.parquet" ]; then  # salmon: the v0.1 check (G, 2026-11-26, DECISIONS 4b), kept outside the release
+  step "benchmark: tiers 1-2 at eQTL leads, the lower 95% bound above 1"
+  snpscore benchmark --release "$out" --positives molqtl:ca molqtl:e --by-tissue -o "$out/../benchmark-$version.tsv" |
+    tee "$out/../benchmark-$version.txt"
+  grep -q '^v0.1 check (DECISIONS 4b).*: pass$' "$out/../benchmark-$version.txt" ||
+    { echo "build_release.sh: the v0.1 check failed (see benchmark-$version.txt): report it before publishing" >&2; exit 1; }
+fi
 step "every file against the manifest"
 snpscore verify "$out"
 if [ -n "$previous" ]; then

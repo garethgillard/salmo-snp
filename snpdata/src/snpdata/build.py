@@ -437,7 +437,8 @@ def fetch(layers_yaml, data_dir, mirror=None):
     """Download every `url` in layers.yaml (layers, genome, aliases, rsid, synteny, bgee) that isn't in data_dir yet. A
     bigBed url with a .bed `file` is converted to BED, a bigWig url with a .bed `file` to the stretches it covers
     (covered()); a `query` is sent as ?query=... (Ensembl BioMart); a source with
-    `sites_only` is streamed through sites_only(). With `mirror` (a URL or folder made by `snpdata publish --raw`), every
+    `sites_only` is streamed through sites_only(); one with `cnes` (the paper's pike CNEs at `url`) is projected onto
+    the genome through the alignments that block names (cne.project()). With `mirror` (a URL or folder made by `snpdata publish --raw`), every
     file comes from <mirror>/raw/ instead, as published (already processed), checked against its SHA256SUMS. A source
     with `local` instead of `url` (an input that isn't online) is read from that path under data_dir, processed the same
     way; when it isn't there, fetch says so and goes on. So it does for a per-variant score file (format
@@ -484,6 +485,14 @@ def fetch(layers_yaml, data_dir, mirror=None):
             if layer.get("sites_only"):  # its header names the source: the local name, else the url (also when read from disk)
                 sites_only(url, part, layer["sites_only"], layer.get("count_gt", False), layer.get("snps_only", False),
                            layer.get("local") or layer["url"])
+            elif layer.get("cnes"):  # pike CNEs projected through the salmon-trout-pike alignment (cne.py)
+                from . import cne
+                with tempfile.NamedTemporaryFile(suffix=".txt") as source:
+                    download(url, Path(source.name))
+                    spec = layer["cnes"]
+                    made = cne.project(source.name, [on_disk(m) for m in cne.maf_locations(spec)], part,
+                                       spec.get("reference", "Ssal_A"))
+                print(f"snpdata: {target.name}: {made['runs']:,} runs, {made['bases']:,} bp, {made['ids']:,} CNEs", flush=True)
             elif url.endswith(".bb") and target.suffix == ".bed":
                 with tempfile.NamedTemporaryFile(suffix=".bb") as bb:
                     download(url, Path(bb.name))

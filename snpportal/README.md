@@ -88,10 +88,22 @@ that key, stores it as the repository secret `NREC_DEPLOY_KEY` with the host key
 rerun it to replace the key). Releases are not in git: they are built on Orion and published on salmobase (docs/ORION.md), and after a deploy `deploy/species.sh` installs a release that serve.py names and the VM lacks from there, with the pool published beside it (a salmon release becomes /srv/snpportal/release). The same script then removes from /srv/snpportal/releases/ a release the code no longer names, once no job, Design panel or saved project kept on the server was made with it (G, 2026-11-25; `deploy/species.sh cleanup` runs only that). The `species-data` workflow (a build on GitHub's runner, sent to the VM) and `nrec.sh` still work. The public pool
 after a change to weights.yaml or snpscore is the workflow's: the VM (2 GB RAM) can't build it (it swapped for 17
 minutes until the SSH session dropped, 2026-11-06), so update.sh says it is stale, and the job then builds it on
-GitHub's runner (the release from salmobase through `tools/get_data.sh --no-genome`, whose `salmo-snp download` builds
-it, about 3 minutes) and sends it with the same key (`update.sh pool [version]`, a .tar.gz on stdin), which installs it
+GitHub's runner (the release and its genome from salmobase through `tools/get_data.sh`, whose `salmo-snp download`
+builds it with the sequence step, so it carries coding consequences) and sends it with the same key (`update.sh pool [version]`, a .tar.gz on stdin), which installs it
 only if it fits the deployed release, weights and snpscore. This covers every species' release on the VM: update.sh
 names each release whose pool is stale, and the job builds each from its release on salmobase.
+
+From the Docker image (G, 2026-11-26: "set up the deploy to NREC to copy now the docker image to set up there, and
+to copy the release from salmobase"): run the workflow with the input `image` set to `latest` or a version. update.sh
+then loads the image published in salmobase's datafiles (`docker/latest.json`, checked against its sha256), moves the
+checkout to the tag `v<version>` so that species.sh fetches that version's releases from salmobase, and runs the
+container in the place of the checkout's gunicorn on 127.0.0.1:8000, with the VM's folders and settings (Caddy is
+unchanged; results stay). The container never builds a pool there (`SNPPORTAL_POOL_BUILD=0`); stale ones come from the
+workflow as before, now built with the genome so that they carry coding consequences. If it does not answer, the
+checkout's portal takes the port back and the job fails; a run without the input (a commit) goes back to the checkout's
+portal. It needs Docker on the VM, once: `DOCKER=1 bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io` from G's
+Mac, and a published image (a vX.Y.Z tag; then `deploy/publish_image.sh` on Orion). Until the first image deploy passes
+its smoke test, the checkout's deploy stays the default.
 
 update.sh runs the steps of the commit it has just checked out (packages, releases, static files, restart), so a
 change to them takes effect in the deploy that brings it (tests/test_deploy.py). Until 2026-11-25 a deploy ran the

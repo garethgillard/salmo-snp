@@ -352,6 +352,35 @@ the trout ortholog and in the salmon and trout duplicate copies.
   identical. Fewer variants where conservation is higher is what selection against changes would leave (the share of
   rare variants changes little, 46.0 to 48.5%).
 
+### Pike CNEs: conservation that counts for more (2026-11-26)
+
+The scoring chat's test, on release 2026-11-25 (G asked for the layer in the questionnaire; DECISIONS #74). The CNEs
+are the AQUA-FAANG paper's pike conserved non-coding elements (Supplementary Data 4), projected onto Ssal_v3.1
+through the salmon-trout-pike alignment: 1,438,398 runs, 33.6 Mb, 403,884 CNEs (89% of the file's), 84% of them on
+two salmon chromosomes (both duplicates). Of the paper's 16,641 salmon enhancer-CNEs (Supplementary Data 5, Ssal_A
+rows) all are found on their chromosome. In the pool: 27,472 SNPs in a CNE (0.80%), 8,058 in a GERP element, 1,249 in
+both; every CNE SNP is pike-aligned. eQTL leads (1,475 in the pool) against all other pool sites of the same gene
+distance and MAF bin, Mantel-Haenszel odds ratios (pike 1.93, GERP 2.89 and an active state 1.50 on the same design):
+
+| Evidence | Leads | Share of pool | OR (95%) |
+|---|---|---|---|
+| In a CNE | 23 | 0.80% | 2.03 (1.34-3.07) |
+| CNE outside CDS, UTR, splice and peaks | 15 | 0.66% | 2.04 (1.23-3.40) |
+| CNE among tier-4 SNPs | 12 | 0.59% | 1.88 (1.06-3.33) |
+| CNE by age: oldest / Teleostei-Clupeocephala / youngest | 4 / 9 / 10 | 0.22 / 0.29 / 0.28% | 1.38 / 2.15 / 2.32 |
+| CNE among pike-aligned SNPs | 23 of 490 | 4.3% | 1.25 (0.82-1.90) |
+| GERP or CNE | 33 | 1.00% | 2.26 (1.60-3.20) |
+| GERP or CNE, among pike-aligned SNPs | 33 | 5.3% | 1.44 (1.01-2.06) |
+| Pike only (no GERP, no CNE) | 457 | 17.5% | 1.85 (1.66-2.07) |
+| GERP and CNE | 1 | 0.04% | 2.03 (0.29-14.4) |
+
+So a CNE is as enriched as a GERP element and reaches three times as many SNPs, and it adds to pike alignment
+(1.44 among pike-aligned SNPs for GERP or CNE). GERP and CNE overlap little and only one lead is in both, so nothing
+supports scoring the two together higher: G's rule (2026-11-26) is the highest of the conservation evidence, a GERP
+element or a CNE 2, pike alignment alone 1. Not run: the design with testable controls only, and the age-at-maturity
+GWAS. In the pool, all of G's answers give tiers 1-4 of 1.09 / 5.75 / 18.42 / 74.74% (0.38 / 6.16 / 8.49 / 84.98%
+before): 423,043 SNPs rise a tier and 36,729 fall (snpscore's own count, the same as the scoring chat's).
+
 ### ATAC summits: distance and signal strength (2026-11-24)
 
 G asked for a layer of scoring from the distance to the ATAC summit and the signal strength. The nf-core MACS2 peak

@@ -99,3 +99,72 @@ def test_update_runs_the_steps_of_the_commit_it_deploys(tmp_path):
     assert "one-more-package" in (root / "pip.log").read_text().splitlines()[-1]  # the new commit's pip line, at once
     out, head = deploy(commit({"broken": ""}))  # a commit the portal does not answer at
     assert out.returncode == 1 and head == more and "back to" in out.stderr  # taken back, and the deploy fails
+
+
+@pytest.mark.skipif(os.name == "nt", reason="a bash script of the Linux demo VM")
+def test_update_runs_the_published_image(tmp_path):
+    """update.sh image (G, 2026-11-26): the image named by salmobase's docker/latest.json is loaded, the checkout moves
+    to its tag (whose species.sh fetches the releases), the container takes the port from the checkout's gunicorn with
+    the VM's settings but never builds a pool; one that does not answer gives the port back; a commit's deploy goes back
+    to the checkout's gunicorn."""
+    root, origin, stubs = tmp_path / "srv", tmp_path / "origin", tmp_path / "bin"
+    git = ["git", "-c", "user.name=test", "-c", "user.email=test@example.org", "-c", "init.defaultBranch=main"]
+    origin.mkdir()
+    subprocess.run([*git, "init", "-q", str(origin)], check=True)
+    files = {"snpportal/deploy/update.sh": UPDATE.read_text(), "snpportal/deploy/species.sh": "exit 0\n",
+             "snpportal/deploy/image.sh": f'echo "load $2" >> "{root}/image.log"\n', "snpportal/manage.py": "",
+             "snpportal/snpportal/serve.py": 'DATA_URL = "https://data.example/salmo-snp"\n'}
+    for name, text in files.items():
+        (origin / name).parent.mkdir(parents=True, exist_ok=True)
+        (origin / name).write_text(text)
+    subprocess.run([*git, "-C", str(origin), "add", "-A"], check=True)
+    subprocess.run([*git, "-C", str(origin), "commit", "-q", "-m", "v9.9.9"], check=True)
+    subprocess.run([*git, "-C", str(origin), "tag", "v9.9.9"], check=True)
+    subprocess.run([*git, "clone", "-q", str(origin), str(root / "salmo-snp")], check=True)
+    (root / "venv" / "bin").mkdir(parents=True)
+    (root / "venv" / "bin" / "python").symlink_to(sys.executable)
+    (root / "venv" / "bin" / "pip").write_text("#!/bin/sh\nexit 0\n")
+    (root / "venv" / "bin" / "pip").chmod(0o755)
+    (root / "env").write_text("DJANGO_SETTINGS_MODULE=snpsite.settings\nDJANGO_ALLOWED_HOSTS=demo.example\n"
+                              "DJANGO_STATIC_ROOT=/srv/snpportal/static\nSNPSCORE_RELEASE=/srv/snpportal/release\n")
+    stubs.mkdir()
+    docker = f"""echo "$@" >> "{root}/docker.log"
+case "$1" in
+  info) exit 0 ;;
+  ps) [ -e "{root}/running" ] && echo abc123; exit 0 ;;
+  image) exit 1 ;;
+  run) touch "{root}/running" ;;
+  rm) rm -f "{root}/running" ;;
+esac"""
+    for path, body in ((stubs / "sudo", f'echo "$@" >> "{root}/sudo.log"'), (stubs / "sleep", "exit 0"), (stubs / "docker", docker),
+                       (stubs / "curl", f'case "$*" in *latest.json*) echo \'{{"version": "9.9.9"}}\' ;; '
+                                        f'*) [ -e "{root}/broken" ] && echo 500 || echo 200 ;; esac')):
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(0o755)
+
+    def update(what):
+        env = {**os.environ, "SNPPORTAL_ROOT": str(root), "PATH": f"{stubs}{os.pathsep}{os.environ['PATH']}", "HOME": str(tmp_path)}
+        env.pop("SSH_ORIGINAL_COMMAND", None)
+        return subprocess.run(["bash", str(root / "salmo-snp" / "snpportal" / "deploy" / "update.sh"), what], env=env,
+                              capture_output=True, text=True)
+
+    out = update("image")
+    assert out.returncode == 0 and "deployed the image salmo-snp:9.9.9" in out.stdout, out.stderr
+    assert "load https://data.example/salmo-snp/docker/salmo-snp-9.9.9.docker.tar.gz" in (root / "image.log").read_text()
+    run = next(line for line in (root / "docker.log").read_text().splitlines() if line.startswith("run "))
+    assert f"--env-file {root}/image.env" in run and f"-v {root}:{root}" in run and "-p 127.0.0.1:8000:8000 salmo-snp:9.9.9" in run
+    settings = (root / "image.env").read_text()
+    assert "DJANGO_STATIC_ROOT" not in settings and "DJANGO_ALLOWED_HOSTS=demo.example" in settings
+    assert "SNPPORTAL_POOL_BUILD=0" in settings  # the VM's 2 GB never build a pool
+    assert "systemctl stop snpportal" in (root / "sudo.log").read_text()
+    tag = subprocess.run([*git, "-C", str(root / "salmo-snp"), "describe", "--tags"], capture_output=True, text=True).stdout.strip()
+    assert tag == "v9.9.9"
+    (root / "broken").touch()  # an image that does not answer: the checkout's portal takes the port back
+    out = update("image 9.9.9")
+    assert out.returncode == 1 and "back to the checkout's portal" in out.stderr and not (root / "running").exists()
+    assert (root / "sudo.log").read_text().splitlines()[-1] == "systemctl start snpportal"
+    (root / "broken").unlink()
+    assert update("image").returncode == 0 and (root / "running").exists()
+    out = update(subprocess.run([*git, "-C", str(origin), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip())
+    assert out.returncode == 0 and "deployed" in out.stdout and not (root / "running").exists(), out.stderr  # a commit: gunicorn again
+    assert "systemctl enable -q snpportal" in (root / "sudo.log").read_text()

@@ -23,6 +23,7 @@ from django.views.decorators.http import require_POST
 
 import snpscore
 from snpscore.formats import lit, q
+from snpscore.pool import local_genome
 
 from . import figures, jobs, palette, results, search, views
 from .lib.locus import MAX_WINDOW
@@ -289,7 +290,8 @@ def public_rows(windows, limit=MAX_CANDIDATES):
 def candidates(windows, trait="all", sort="pos"):
     """Public sites in the windows, annotated and tiered for `trait`, ordered by ?sort (SORTS): (rows as dicts, column
     names, source). Reads the pool's rows when the release has pool/pool.parquet, else annotates the sites of
-    public_af.parquet now (sequence checks off)."""
+    public_af.parquet now: with the sequence step when the genome is on the disk, as the pool is built, so that a
+    synonymous change counts as such on both ways (G, 2026-11-26)."""
     release, w = jobs.release(), jobs.weights()
     pool = jobs.pool_file()  # its tiers only when the rules in use made them; else the sites are scored now
     with tempfile.TemporaryDirectory(prefix="snpportal-explore-") as tmp:  # public sites only, never user data
@@ -302,7 +304,7 @@ def candidates(windows, trait="all", sort="pos"):
                 return [], [], "public_af"
             with open(tmp / "sites.tsv", "w") as f:
                 f.write("chrom\tpos\tid\tref\talt\n" + "".join("\t".join("" if v is None else str(v) for v in r) + "\n" for r in rows))
-            snpscore.annotate(tmp / "sites.tsv", release, tmp / "sites.parquet", sequence=False)
+            snpscore.annotate(tmp / "sites.tsv", release, tmp / "sites.parquet", sequence=local_genome(release))
             con, source, path = jobs.connect([release, tmp]), "annotated now", tmp / "sites.parquet"
         cols = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet({lit(path)}))").fetchall()]
         keep = [c for c in cols if not c.startswith("tier")]  # the pool's stored tiers; recomputed for `trait` below

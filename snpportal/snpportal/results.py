@@ -138,6 +138,8 @@ COLUMNS = {
     "gerp": ("GERP", "GERP constrained-element score (65 fish)", ("gerp_score",), [("gerp_score", True)]),
     "pike": ("Pike", "Sequence that aligns to northern pike, the closest relative without the salmonid genome duplication "
              "(AQUA-FAANG salmon-trout-pike alignment, gaps of up to 50 bp closed)", ("pike",), [("pike", False)]),
+    "cne": ("CNE", "In a conserved non-coding element of northern pike (Baudement et al. 2026), projected through the "
+            "salmon-trout-pike alignment, with the oldest clade that shares it", ("cne",), [("cne", False)]),
     "summit": ("ATAC summit", "The nearest ATAC-seq summit inside a robust peak, within 500 bp: how far, and how its signal ranks "
                "among that condition's peaks (top 5% = stronger than 95% of them); hover for the signal and the condition",
                ("summit_distance",), [("summit_distance", True), ("summit_rank", False)]),
@@ -598,6 +600,7 @@ def table(request, key, job=None):
     selection_conds, conds = conds, shown_conds  # the selection leaves the − rows out; the table shows what the selector asks
     where = _where(conds)
     order = [f"{sql.format(maf=maf)} {'ASC' if asc != desc else 'DESC'} NULLS LAST" for sql, asc in (COLUMNS[sort][3] if sort else [])]
+    order += tie_break(types, maf) if sort == "tier" else []  # one tier and score: DECISIONS #7
     # Count and page on the raw result r (no tiers join) unless the filters or the sort use a column only v has right
     only_v = (set(types) - {c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()}) | set(jobs.TIER_COLUMNS)
     uses_v = any(re.search(rf"\b{re.escape(c)}\b", sql) for c in only_v for sql in [where] + order)
@@ -905,7 +908,7 @@ def _row(r, groups, in_preset, active_states, caveats):
            "region": region_text(g), "region_tip": coding_tip(g),
            "distance": _dist(distance) if distance else "",  # outside the gene only
            "gerp": "" if g("gerp_score") is None else f"{g('gerp_score'):.1f}", "regbuild": g("regbuild_type") or "",
-           "pike": "yes" if g("pike") else "", "summit": summit_text(g),
+           "pike": "yes" if g("pike") else "", "cne": (g("cne_age") or "yes") if g("cne") else "", "summit": summit_text(g),
            "maf": "" if g("_maf") is None else f"{g('_maf'):.2f}", "ref_check": g("ref_check") or "",
            "cm": "" if g("cm_female") is None else f"{g('cm_female'):.1f} / {g('cm_male'):.1f}" if g("cm_male") is not None else f"{g('cm_female'):.1f}",
            "p": p_text(g("neglog10p")), "beta": "" if g("beta") is None else f"{g('beta'):.3f}" + (f" ({g('se'):.3f})" if g("se") is not None else ""),
@@ -1033,9 +1036,19 @@ def _drawer(request, key, job, row, link, here, out, steps):
 
 # ---- the top SNPs (the report) ----
 
+def tie_break(types, maf):
+    """The order of SNPs that share a tier and a score (G, 2026-11-26, DECISIONS #7): a known locus first, then a
+    constrained one (a GERP element or a pike CNE), then an assay pass, then the higher MAF; list order after that."""
+    conserved = [f"coalesce({c}, false)" for c in ("gerp", "cne") if c in types]
+    return ((["known_locus IS NOT NULL DESC"] if "known_locus" in types else [])
+            + ([f"({' OR '.join(conserved)}) DESC"] if conserved else [])
+            + (["assay_status = 'pass' DESC NULLS LAST"] if "assay_status" in types else [])
+            + ([f"{maf} DESC NULLS LAST"] if maf else []))
+
+
 def top(request, key, job, n):
     """{rows, matching, ties, gwas} for the first `n` SNPs with the request's trait and table filters, ordered as the
-    Table: tier, then score (highest first), then list order; GWAS jobs by p. `ties` says how many SNPs share the
+    Table: tier, then score (highest first), then tie_break(); GWAS jobs by p. `ties` says how many SNPs share the
     tier and score at the cut, when the cut splits them."""
     con, types, where, chosen = open_result(request, key)
     gwas = job.get("input_kind") == "gwas" and "neglog10p" in types
@@ -1044,7 +1057,8 @@ def top(request, key, job, n):
                         "gene_ortholog_human", "known_locus", "known_locus_dist", "assay_status",
                         "assay_reasons", "neglog10p", "lore", "blacklist", "strand_ambiguous", "flank_variants") if c in types]
     order = "neglog10p DESC NULLS LAST, " if gwas else \
-        "tier ASC NULLS LAST, tier_score DESC NULLS LAST, " if {"tier", "tier_score"} <= set(types) else ""
+        ", ".join(["tier ASC NULLS LAST", "tier_score DESC NULLS LAST"] + tie_break(types, maf)) + ", " \
+        if {"tier", "tier_score"} <= set(types) else ""
     cur = con.execute(f"SELECT file_row_number, {', '.join(map(ident, cols))}{f', {maf} AS _maf' if maf else ''} "
                       f"FROM v {where} ORDER BY {order}file_row_number LIMIT {int(n)}")
     names = [d[0] for d in cur.description]
@@ -1071,12 +1085,13 @@ def top(request, key, job, n):
     ties = None
     if rows and not gwas and len(rows) < matching and rows[-1]["tier"] is not None:
         t, s = rows[-1]["tier"], rows[-1]["score"]
-        cut = f"tier = {int(t)} AND tier_score = {int(s)}" if s is not None else f"tier = {int(t)} AND tier_score IS NULL"
+        cut = f"tier = {int(t)} AND tier_score = {s}" if s is not None else f"tier = {int(t)} AND tier_score IS NULL"
         tied = con.execute(f"SELECT count(*) FROM v {where} {'AND' if where else 'WHERE'} {cut}").fetchone()[0]
         shown = sum(r["tier"] == t and r["score"] == s for r in rows)
         if tied > shown:
             at = "the top score" if (rows[0]["tier"], rows[0]["score"]) == (t, s) else f"tier {t}, score {s}"
-            ties = f"{shown} of {tied:,} SNPs tied at {at} are shown; ties in list order."
+            ties = (f"{shown} of {tied:,} SNPs tied at {at} are shown: known loci first, then constrained ones, "
+                    "then assay pass, then the higher MAF.")
     return {"rows": rows, "matching": matching, "ties": ties, "gwas": gwas, "chosen": chosen, "columns": set(types)}
 
 

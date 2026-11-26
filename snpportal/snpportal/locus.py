@@ -537,9 +537,13 @@ def facts(snp, ev, states, chosen, active_states):
     if summit and "summit" not in fired:  # the nearest ATAC summit: how far, and how strong among its condition's peaks
         out.append(chip("ATAC summit " + summit[0] if g("summit_distance") else "at an ATAC summit" + summit[0][len("at the summit"):],
                         "", summit[1], "summit"))
+    if g("cne") and "constrained" not in fired:  # a pike CNE that the rules in use don't count
+        out.append(chip(f"CNE, {g('cne_age')}" if g("cne_age") else "CNE", "", f"In conserved non-coding element {g('cne_id') or ''} of "
+                        "northern pike (Baudement et al. 2026), shared back to this clade; not counted by the rules in use", "pike"))
     if g("pike") and "pike" not in fired:
         out.append(chip("aligns to pike", "", "Sequence that aligns to northern pike, the closest relative without the salmonid genome "
-                        "duplication (AQUA-FAANG salmon-trout-pike alignment): display only, not counted in tiers", "pike"))
+                        "duplication (AQUA-FAANG salmon-trout-pike alignment): counted only where nothing is constrained "
+                        "(GERP or a CNE)", "pike"))
     if ev.get("known"):
         k = ev["known"]
         out.append(chip(f"★ {k['id']}" if not g("known_locus_dist") and ev.get("sv") else "★ published SNP" if not g("known_locus_dist")

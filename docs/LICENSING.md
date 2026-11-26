@@ -96,6 +96,7 @@ shows their contents openly, and they will later be published on salmobase.org.
 | NCBI RefSeq annotation (Ssal_v3.1) | Second gene annotation | NCBI data, no use restrictions |
 | Synchrosmolt parents (NMBU; the whole-genome set from G, not online; ENA PRJEB114348 in releases up to 2026-11-05) | Allele frequencies only | ENA open data for PRJEB114348; publishing the whole-genome set's frequencies agreed (G, 2026-11-24) |
 | JASPAR 2024 | Transcription factor motifs | CC BY 4.0 |
+| Baudement et al. 2026, Supplementary Data 4 (Zenodo record 21415252) | Pike conserved non-coding elements, projected onto each release's genome (the `cne` layer) | CC BY 4.0 |
 | Brekke et al. 2023 linkage map (bioRxiv supplement) | Recombination map | CC BY 4.0 |
 
 Users' own data (their variants and results) is never part of a release or of the repository. In the local install it

@@ -381,10 +381,13 @@ class PortalTest(SimpleTestCase):
         self.assertNotIn("presets", ok["unused"])  # its presets.all is the focus; the others are the standard's
         for text, said in ((standard.replace("  splice: 3", "  splice: three"), "'splice' is 'three'"),
                            ("weights: &w {active: 3}\ntiers: *w\n", "anchors"), ("presetz: {}\n", "unknown block 'presetz'"),
-                           (standard.replace("  active: 3", "  active: 1000"), "at most 100")):
+                           (standard.replace("  active: 3", "  active: 1000"), "at most 99"),  # G, 2026-11-26: below 100
+                           (standard.replace("  active: 3", "  active: 2.25"), "one decimal place")):
             bad = check(text=text)
             self.assertFalse(bad["ok"], said)
             self.assertIn(said, " ".join(bad["problems"]))
+        tenth = check(text=standard.replace("  active: 3", "  active: 2.5").replace("tiers: [5, 3, 1]", "tiers: [5, 3, 0.5]"))
+        self.assertEqual((tenth["ok"], tenth["rules"]["weights"]["active"], tenth["rules"]["tiers"]), (True, 2.5, [5, 3, 0.5]))
         mine = {**yaml.safe_load(standard), "weights": {**yaml.safe_load(standard)["weights"], "coding": 7}}
         mine = {k: mine[k] for k in ("weights", "tiers", "active_states", "weak_states", "summit", "variant_scores")}
         refused = self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T", "rules": json.dumps({**mine, "tiers": [1, 3, 5]})})
