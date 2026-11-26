@@ -107,7 +107,6 @@ TISSUES = {"Brain": "#0072B2", "Gill": "#56B4E9", "Gonad": "#CC79A7", "Liver": "
 # Genic region (results.REGION_LABELS) -> fill: sequential oranges from the protein outwards, apart from the tier blues
 REGIONS = {"coding": "#A63603", "UTR": "#E6550D", "exon": "#FD8D3C", "intron": "#FDAE6B", "intergenic": "#FEE6CE",
            "other": GREY[300]}
-CENTRE = "#FF1744"  # the locus browser's centre position on its ruler: a fluorescent red that no track uses
 
 SNP_SETS = {  # public SNP datasets in the locus browser: the 504-fish panel keeps the old lane's grey; the others are
     # ColorBrewer Dark2 hues that no tissue uses
