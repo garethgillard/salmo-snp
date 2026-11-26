@@ -140,7 +140,7 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
     # the user's SNPs: tier-coloured lollipops, stem height = tier_score
     if snps:
         top_score = max([s.get("tier_score") or 0 for s in snps] + [1])
-        lane_label("Your SNPs", y + 18, snp_note)
+        lane_label("Your SVs" if any(s.get("end") is not None for s in snps) else "Your SNPs", y + 18, snp_note)
         for s in sorted(snps, key=lambda s: -(s.get("tier") or 4)):  # best tiers on top
             fill = palette.TIERS.get(s.get("tier") or 4, palette.TIERS[4])[0]
             x, h = ax.x(s["pos"] - 0.5), 8 + 26 * (s.get("tier_score") or 0) / top_score

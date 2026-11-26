@@ -1,0 +1,5 @@
+{% comment %}The name of the results a Score page form makes (job.json label; views.start_job): the date and time, or the
+   chosen file's name (portal.js, data-name-from), until typed over; blank: the file's name or 'Pasted ...'.{% endcomment %}
+<p class="sp-hint sp-name-row"><label for="{{ id }}">Name</label>
+  <input class="form-control form-control-sm" id="{{ id }}" type="text" name="name" maxlength="80" autocomplete="off"
+         value="{% if not blank %}{{ default_name }}{% endif %}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if file %} data-name-from="{{ file }}"{% endif %}></p>

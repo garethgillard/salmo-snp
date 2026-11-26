@@ -53,7 +53,7 @@ SNPSCORE_RELEASE = os.environ.get("SNPSCORE_RELEASE") or str(
 if os.environ.get("SNPPORTAL_RESULTS_DIR"):
     SNPPORTAL_RESULTS_DIR = os.environ["SNPPORTAL_RESULTS_DIR"]
 SNPPORTAL_WORKERS = int(os.environ.get("SNPPORTAL_WORKERS", 1))  # background job threads; 0 = run inline (tests)
-SNPPORTAL_KEEP_HOURS = float(os.environ.get("SNPPORTAL_KEEP_HOURS", 24))
+SNPPORTAL_KEEP_HOURS = float(os.environ.get("SNPPORTAL_KEEP_HOURS", 24 * 30))  # a month for now (G, 2026-11-26)
 if os.environ.get("SNPPORTAL_RELEASES_DIR"):  # salmo-snp serve: the data folder's releases/, to switch between (I17)
     SNPPORTAL_RELEASES_DIR = os.environ["SNPPORTAL_RELEASES_DIR"]
 elif _published:  # the salmobase server: every published release, each species' named one for new work

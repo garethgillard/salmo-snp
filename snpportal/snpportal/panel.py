@@ -3,7 +3,7 @@ Table copies its whole selection: the cart), compared with an existing chip (the
 checked and exported as vendor files.
 
 It belongs to one browser: its folder (results/panel-<uuid>) is named by an HttpOnly cookie, never by a URL, and
-jobs.cleanup removes it 24 hours after it was started (its 'created' marker). To keep it longer, download its TSV
+jobs.cleanup removes it SNPPORTAL_KEEP_HOURS (30 days) after it was started (its 'created' marker). To keep it longer, download its TSV
 and score that list again later. Its SNPs carry their tiers for all 27 conditions, so SNPs from lists scored for
 other conditions compare."""
 from __future__ import annotations
@@ -77,7 +77,7 @@ def rules_dir(d):
 def _new():
     d = jobs.results_dir() / f"panel-{uuid.uuid4()}"
     d.mkdir(mode=0o700)
-    (d / "created").touch(mode=0o600)  # never changes: cleanup counts the 24 hours from it
+    (d / "created").touch(mode=0o600)  # never changes: cleanup counts SNPPORTAL_KEEP_HOURS from it
     jobs._write_json(d / "panel.json", {"sources": [], "next": 1, "created_utc": jobs.utc(),
                                         "release": jobs.manifest().get("version")})  # its sources' release (I17)
     return d
@@ -280,7 +280,8 @@ def page(request):
     """/snp/panel/: the sources, the panel at a glance, the chip comparison, the assay check, the SNP list and the
     downloads; an empty panel says how to fill it."""
     d = _folder(request)
-    ctx = {"nav": "panel", "title": "Design panel", "error": request.GET.get("error"), "local": jobs.local()}
+    ctx = {"nav": "panel", "title": "Design panel", "error": request.GET.get("error"), "local": jobs.local(),
+           "keep_hours": jobs.keep_text()}
     if jobs.local():  # saved projects (I7): the save form offers their names
         from . import projects
         ctx["projects"] = projects.everything()

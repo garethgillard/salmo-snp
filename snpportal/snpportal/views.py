@@ -155,7 +155,7 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
         "sv_lines": SV_PASTE_LINES,
         "targets": targets, "flanks": FLANKS, "flank": FLANK, "paste_lines": PASTE_LINES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}",
-        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(),
+        "keep_hours": jobs.keep_text(), "local": jobs.local(), "default_name": jobs.default_name(),
         "positions": jobs.position_choices(),
         "results_dir": jobs.results_dir(),
     }, status=status))
@@ -222,12 +222,13 @@ def start_job(request):
                                   ".txt, optionally gzipped) or a PLINK .bim/.map file: see Format help.")
         if not upload.size:
             raise jobs.InputError("The uploaded file is empty.")
-        name = Path(upload.name or "").name[:80] or "Uploaded list"  # the file's name names the results
+        name = jobs.job_name(request.POST.get("name"), Path(upload.name or "").name[:80] or "Uploaded list")  # else the file's
         positions = request.POST.get("positions") if request.POST.get("positions") in dict(jobs.position_choices()) else None
         return jobs.create(Path(upload.path), suffix, "snps", preset, name, positions=positions or None), preset
     if paste:
         rows = jobs.parse_paste(paste, PASTE_LINES)
-        return jobs.create_from_rows(rows, f"Pasted {jobs.utc()}", preset, kind="snps", input_format="paste"), preset
+        return jobs.create_from_rows(rows, jobs.job_name(request.POST.get("name"), f"Pasted {jobs.utc()}"), preset, kind="snps",
+                                     input_format="paste"), preset
     raise jobs.InputError("Choose a file, paste some positions or pick an example.")
 
 
@@ -241,11 +242,11 @@ def start_sv_job(request, preset):
                                   "BED file or a table (.tsv, .csv or .txt, optionally gzipped): see Format help.")
         if not upload.size:
             raise jobs.InputError("The uploaded file is empty.")
-        name = Path(upload.name or "").name[:80] or "Uploaded SVs"
+        name = jobs.job_name(request.POST.get("name"), Path(upload.name or "").name[:80] or "Uploaded SVs")
         return jobs.create(Path(upload.path), suffix, "sv", preset, name)
     if paste:
         rows = jobs.parse_sv_paste(paste, SV_PASTE_LINES)
-        return jobs.create_from_sv_rows(rows, f"Pasted SVs {jobs.utc()}", preset)
+        return jobs.create_from_sv_rows(rows, jobs.job_name(request.POST.get("name"), f"Pasted SVs {jobs.utc()}"), preset)
     raise jobs.InputError("Choose a file of structural variants, or paste some regions.")
 
 
@@ -370,6 +371,18 @@ def delete(request, key):
     if request.POST.get("next") != "score":
         return redirect("snpportal:results", key=key)
     return keep_mine(redirect("snpportal:upload"), [k for k in _mine_keys(request) if k != str(key)])
+
+
+@require_POST
+@private
+def rename(request, key):
+    """Rename results from the Score page's list: the name (job.json label) every page and the list show."""
+    job = jobs.read(key)
+    if job is None:
+        raise Http404("Result not found or expired")
+    jobs.update(key, label=jobs.job_name(request.POST.get("name"), job.get("label") or "Results"))
+    jobs.log.info("job_renamed job_ref=%s", jobs.job_ref(key))  # never the name: it can be a file's
+    return redirect("snpportal:upload")
 
 
 def _mine_keys(request):

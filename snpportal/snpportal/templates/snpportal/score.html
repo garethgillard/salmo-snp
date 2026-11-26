@@ -11,12 +11,16 @@
 <div class="col-lg-7 sp-stack">
 {% if error %}<div class="sp-status sp-status-fail" role="alert"><strong>&#9888; {% if tab == 'gwas' %}Can't analyse these summary statistics.{% else %}Can't score this list.{% endif %}</strong> {{ error }}</div>{% endif %}
 
-{# this browser's results (the cookie lists them); each opens or is deleted here #}
+{# this browser's results (the cookie lists them); each opens, is renamed or is deleted here #}
 {% if mine %}<section class="sp-mine-box" aria-labelledby="mine-h">
   <h2 id="mine-h">Your results</h2>
   <ul class="sp-mine">{% for r in mine %}<li{% if r.current %} class="sp-mine-current"{% endif %}>
     <a class="sp-mine-name" href="{{ r.url }}">{{ r.name }}</a>
     <span class="sp-small sp-muted text-nowrap">{% if r.state == 'done' %}{{ r.n|thousands }} {{ r.unit }}{% elif r.state == 'failed' %}failed{% else %}scoring&hellip;{% endif %} &middot; {{ r.when }}</span>
+    <details class="sp-mine-ren"><summary class="btn btn-sm btn-link" title="Rename these results">Rename</summary>
+      <form method="post" action="{% url 'snpportal:rename' r.key %}">{% csrf_token %}
+        <input class="form-control form-control-sm" type="text" name="name" value="{{ r.name }}" maxlength="80" required aria-label="New name for {{ r.name }}">
+        <button class="btn btn-sm btn-primary" type="submit">Save</button></form></details>
     <form method="post" action="{% url 'snpportal:delete' r.key %}" data-confirm="Delete {{ r.name }}? This can't be undone." data-confirm-ok="Delete">{% csrf_token %}<input type="hidden" name="next" value="score">
       <button class="btn btn-sm btn-link sp-mine-del" type="submit" title="Delete these results" aria-label="Delete {{ r.name }}">Delete</button></form>
   </li>{% endfor %}</ul>
@@ -49,6 +53,7 @@
       {% if positions|length > 1 %}<p class="sp-hint d-flex flex-wrap gap-2 align-items-center"><label for="positions">Positions on</label>
         <select class="form-select form-select-sm w-auto" id="positions" name="positions">{% for value, label in positions %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
         <span class="sp-muted">rows that can't be converted are listed in the upload report</span></p>{% endif %}
+      {% include 'snpportal/_job_name.html' with id='name-file' file='snps-file' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
     <form class="tab-pane{% if tab == 'paste' %} active{% endif %}" id="pane-paste" role="tabpanel" aria-labelledby="tab-paste" method="post" action="{% url 'snpportal:upload' %}">
@@ -57,6 +62,7 @@
       <textarea class="form-control sp-paste" id="paste" name="paste" rows="4" required aria-describedby="paste-help"
                 placeholder="25 28996360 C T&#10;9 23837450&#10;rs863754587"></textarea>
       <p class="sp-hint" id="paste-help">One per line: chromosome and position (optionally ref and alt), or an rs ID; up to {{ paste_lines|thousands }} lines &middot; <a href="{% url 'snpportal:help' %}#format-plain">Format help</a></p>
+      {% include 'snpportal/_job_name.html' with id='name-paste' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
     <form class="tab-pane{% if tab == 'regions' %} active{% endif %}" id="pane-regions" role="tabpanel" aria-labelledby="tab-regions" method="post" action="{% url 'snpportal:candidates' %}">
@@ -65,6 +71,7 @@
       <textarea class="form-control sp-paste" id="targets" name="targets" rows="4" required aria-describedby="targets-help"
                 placeholder="vgll3&#10;ENSSSAG00000053708&#10;26:14.5-15Mb">{{ targets }}</textarea>
       <p class="sp-hint" id="targets-help">Genes, positions or intervals, one per line: scores the public variants in them &middot; <a href="{% url 'snpportal:help' %}#search">Format help</a></p>
+      {% include 'snpportal/_job_name.html' with id='name-regions' blank=True placeholder='Public variants in the genes or regions' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}
         <label class="sp-small d-flex align-items-center gap-2">Flank
           <select class="form-select form-select-sm w-auto" name="flank">
@@ -85,6 +92,7 @@
       <p class="sp-hint" id="sv-help">Deletions, duplications, inversions, insertions or any regions: an SV VCF (END, SVLEN, SVTYPE), BED or a
         chrom, start, end table; each is scored by the functional evidence it overlaps; up to {{ max_mb }} MB or {{ sv_lines|thousands }} lines &middot;
         <a href="{% url 'snpportal:help' %}#format-sv">Format help</a></p>
+      {% include 'snpportal/_job_name.html' with id='name-sv' file='sv-file' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
     <form class="tab-pane{% if tab == 'gwas' %} active{% endif %}" id="pane-gwas" role="tabpanel" aria-labelledby="tab-gwas" method="post" action="{% url 'snpportal:gwas_score' %}" enctype="multipart/form-data">
@@ -97,13 +105,14 @@
                  accept=".gz,.tsv,.txt,.csv,.tab,.fastGWA,.linear,.logistic,.hybrid,.regenie,.stats,.mlma,.assoc"></div>
       </div>
       <p class="sp-hint" id="gwas-help">fastGWA, PLINK2, regenie, BOLT-LMM or GEMMA output, or chrom, pos and p; up to {{ max_mb }} MB &middot; <a href="{% url 'snpportal:help' %}#format-gwas">Format help</a></p>
+      {% include 'snpportal/_job_name.html' with id='name-gwas' file='gwas-file' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
   </div>
 </section>
 {% if local %}<p class="sp-small sp-muted mb-0" id="privacy">Running on this computer: your lists and results stay here, in
   {{ results_dir }}, until you delete them.</p>
-{% else %}<p class="sp-small sp-muted mb-0" id="privacy">Results are kept for {{ keep_hours }} h; anyone with their link can open them.
+{% else %}<p class="sp-small sp-muted mb-0" id="privacy">Results are kept for {{ keep_hours }}; anyone with their link can open them.
   Confidential? <a href="{% url 'snpportal:run_locally' %}">Run it locally</a>.</p>{% endif %}
 </div>
 

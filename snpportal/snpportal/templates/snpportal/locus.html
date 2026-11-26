@@ -49,6 +49,7 @@
           <p class="sp-small sp-muted mb-1"><span class="spinner-border sp-spin" aria-hidden="true"></span>Loading {{ title }}&hellip;</p></div>{% endfor %}
       </div>
     </section>
+    {% if motifs %}{% include 'snpportal/_browser_group.html' with g=motifs %}{% endif %}
     {% include 'snpportal/_browser_group.html' with g=other %}
   </div>
   {% endif %}

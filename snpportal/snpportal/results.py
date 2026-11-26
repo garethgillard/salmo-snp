@@ -103,6 +103,7 @@ STAGES = ["LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomit
 STAGE_LABELS = figures.STAGE_LABELS
 SAMPLES = ("brain, gonad, liver, muscle and gill of 12 AquaGen fish (BodyMap); head kidney of juvenile fish after PBS, "
            "poly I:C or Vibrio (ImmunoMap); 5 embryo stages from embryo pools (DevMap)")
+SV_ID_TIP = "SV id, else its span (Ssal_v3.1, 1-based, start to end): click for its card"
 NO_PEAK = f"No AQUA-FAANG peak in the 27 conditions sampled ({SAMPLES}). No skin or intestine."
 CARD_SQL = "SELECT * FROM v WHERE file_row_number = ?"  # the card reads one row, never the whole result
 
@@ -726,6 +727,8 @@ def table(request, key, job=None):
         label, tip, _, sorts = COLUMNS[k]
         if k == "maf" and maf_source == "yours":
             tip = "Minor allele frequency from your maf or af column"
+        if k == "id" and is_sv(types):
+            tip = SV_ID_TIP
         on = k == sort
         href = link(sort=k, desc="1" if on and not desc else "", page=None) if sorts else None
         headers.append((k, label, tip, href, ("descending" if desc else "ascending") if on else "", on_column.get(k),

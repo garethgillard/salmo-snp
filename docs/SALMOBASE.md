@@ -64,7 +64,7 @@ first and the last; the table at the end collects all of it.
 
   A file that is not there is read from its address instead, as on any other machine, so nothing breaks when a
   path differs: the container's first lines say how much it found (below).
-- **Its own folder** (`data/` beside its compose file): `results/` (each kept 24 hours, mode 0700) and
+- **Its own folder** (`data/` beside its compose file): `results/` (each kept 30 days, mode 0700) and
   `secret_key`. No database.
 - **Which releases it shows**: the ones its version names (`snpportal/snpportal/serve.py`, `RELEASE` and
   `RELEASES`), found in the releases folder. A release that is published but not named yet is not shown, so a
@@ -97,7 +97,7 @@ own under Django's usual cookie names):
 - **Its own container**: it shares no database, no code and no session with salmobase's application. While it is
   stopped or being updated the site answers as before, and `/snp/` answers an error from Apache.
 - **What it may use**: one list is scored at a time (others wait, at most ten), with two threads and 2 GB at the
-  most; an upload is at most 300 MB and is deleted once scored; results go after 24 hours. Its compose file caps
+  most; an upload is at most 300 MB and is deleted once scored; results go after 30 days. Its compose file caps
   the container at 4 GB and two cores, so that scoring cannot starve salmobase's own containers.
 
 Navigation between salmobase's pages and the portal (a menu entry there, a way back here) is left for later (G,

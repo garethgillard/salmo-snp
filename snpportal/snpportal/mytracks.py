@@ -301,7 +301,7 @@ def page(request):
     added = next((m for m in tracks if m.get("id") == request.GET.get("added")), None)
     return render(request, "snpportal/tracks.html", {
         "nav": "explore", "title": "Your tracks", "tracks": tracks, "assembly": assembly, "added": added,
-        "error": _error(request.GET.get("error"), assembly), "local": jobs.local(), "keep_hours": (jobs.keep_seconds() or 0) / 3600,
+        "error": _error(request.GET.get("error"), assembly), "local": jobs.local(), "keep_hours": jobs.keep_text(),
         "max_mb": float(jobs.setting("SNPPORTAL_MAX_TRACK_MB", MAX_MB)), "max_rows": int(jobs.setting("SNPPORTAL_MAX_TRACK_ROWS", MAX_ROWS)),
         "max_unpacked": float(jobs.setting("SNPPORTAL_MAX_TRACK_UNPACKED_MB", MAX_UNPACKED_MB))})
 

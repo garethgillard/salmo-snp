@@ -114,7 +114,7 @@ commands; in short:
 - `deploy/server.sh` starts it (in the image of `deploy/Dockerfile`, or from a virtual environment on a server
   without Docker): the secret key, a look at each species' release (`manage.py snpportal_prepare`), Django's checks,
   an hourly cleanup, gunicorn. gunicorn serves everything under `/snp/`, static files included
-  (`DJANGO_STATIC_URL=/snp/static/`, `SNPPORTAL_SERVE_STATIC=1`); results are kept 24 h (`SNPPORTAL_KEEP_HOURS`).
+  (`DJANGO_STATIC_URL=/snp/static/`, `SNPPORTAL_SERVE_STATIC=1`); results are kept 30 days (`SNPPORTAL_KEEP_HOURS`, 720).
 - `SNPSCORE_SALMOBASE` names the server's datafiles folder (what `https://salmobase.org/datafiles/` serves; the
   image sets it to `/datafiles`, where the compose file mounts that folder read only). The portal then reads where
   they are published: the releases (`datasets/salmo-snp/releases/`; the default is the release this version names,
@@ -236,7 +236,7 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 - A curated panel of whole Table selections from any results ('Add to panel', the cart), compared with an existing
   chip, its assay readiness and vendor files (all, or the SNPs not on the chip).
 - One browser's only: an HttpOnly cookie names its folder `results/panel-<uuid>`, never a URL. On a server it is
-  deleted 24 hours after it was started (its `created` marker); locally (`SNPPORTAL_LOCAL`) it is kept until cleared.
+  deleted `SNPPORTAL_KEEP_HOURS` (30 days) after it was started (its `created` marker); locally (`SNPPORTAL_LOCAL`) it is kept until cleared.
   Its TSV, scored again, brings it back.
 - Two equal columns (sources, chip and downloads; at a glance and the genome figure), then the SNP list: 50 rows
   (`show=all`: up to 2,000), problems first (assay fail/warn, MAF below the designer's minimum, LORe, a kept neighbour

@@ -463,7 +463,7 @@ def help_page(request):
         "nav": "help", "title": "Help", "formats": FORMATS,
         "aliases": [(name, ", ".join(names)) for name, names in formats.ALIASES.items()],
         "chrom_aliases": chrom_aliases("25"), "assembly_share": f"{ASSEMBLY_WARNING:.0%}",
-        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(), "searches": jobs.species().get("searches") or search.EXAMPLES,
+        "keep_hours": jobs.keep_text(), "local": jobs.local(), "searches": jobs.species().get("searches") or search.EXAMPLES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}", "max_snps": int(jobs.setting("SNPPORTAL_MAX_SNPS", 3_000_000)),
         "vendor_cap": int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000)), "locus_name": export.locus_name("25", 28996360, {"25"}),
         "bins": (panel.INFINIUM_I_MIN, panel.INFINIUM_I_POLYPLOID, panel.INFINIUM_II_MIN), "close_bp": panel.CLOSE_BP})
@@ -495,7 +495,7 @@ def run_locally(request):
         "layers_check": (f"python3 -c \"import hashlib, json; m = json.load(open('{folder}/manifest.json')); print(hashlib.sha256(''.join("
                          "sorted(x['name'] + ' ' + str(x.get('sha256')) + chr(10) for x in m['layers'])).encode()).hexdigest())\""),
         "command": f"snpscore annotate my_snps.vcf.gz --release {folder} --trait all -o my_snps.tsv",
-        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(),
+        "keep_hours": jobs.keep_text(), "local": jobs.local(),
         "data_url": serve.DATA_URL})
 
 

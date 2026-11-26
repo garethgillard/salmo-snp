@@ -7,7 +7,7 @@
 #                        SNPSCORE_RELEASE (a release folder) and SNPSCORE_GENOME_DIR, as before.
 #   SNPPORTAL_DATA       the portal's own folder (default /data): results/, static/ and secret_key.
 # Also: DJANGO_ALLOWED_HOSTS (the site's name), SNPPORTAL_BIND (default 0.0.0.0:8000, for a container; a server:
-# 127.0.0.1:<port>, behind Apache), GUNICORN_WORKERS (1), SNPPORTAL_KEEP_HOURS (24).
+# 127.0.0.1:<port>, behind Apache), GUNICORN_WORKERS (1), SNPPORTAL_KEEP_HOURS (720: 30 days).
 # It makes the secret key at the first start, looks at each species' release (snpportal_prepare: a missing default
 # release stops it; the public pool of a release whose folder it may write to is built; a published folder is read
 # only, its pools are built on Orion and published with the release, and a line says when one does not fit this

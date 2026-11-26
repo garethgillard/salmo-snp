@@ -10,8 +10,8 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 ## Where it runs
 - On users' own computers, the main product (G, 2026-11-03): `salmo-snp serve` (serve.py) sets `SNPPORTAL_LOCAL`, so
   results stay until deleted and the Score, Help, Design panel and Run locally pages say they are on this computer.
-- The public demo (no password) on an NREC VM, https://158.39.75.9/snp/ (G, 2026-10-12): gunicorn behind Caddy, 24 h
-  retention. Code goes there only when G says so (G, 2026-11-06; ../AGENTS.md "Deploying the NREC demo"): the
+- The public demo (no password) on an NREC VM, https://158.39.75.9/snp/ (G, 2026-10-12): gunicorn behind Caddy, results
+  kept 30 days (G, 2026-11-26). Code goes there only when G says so (G, 2026-11-06; ../AGENTS.md "Deploying the NREC demo"): the
   manual `deploy` workflow runs the tests, then `deploy/update.sh` on the VM, and sends a public pool built on GitHub's
   runner when the VM's is stale (README "Deploying the demo"); merging to main deploys nothing. A new data release goes up with `bash deploy/nrec.sh nrec
   158.39.75.9 158-39-75-9.sslip.io`, which needs G's Mac (the VM's SSH key and the release folder); always pass the IP
@@ -105,7 +105,7 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 ## Provisional (G to confirm)
 Thresholds and defaults live in snpscore's weights.yaml (`assay`, `design`, `finemap` blocks, copied into each job),
 in tracks.yaml `defaults`, or in a named constant; Methods, the report and every download say they are provisional. Portal-side ones:
-`SNPPORTAL_MAX_VENDOR_SNPS` (50,000 per vendor file), `SNPPORTAL_MAX_CHIP_SNPS` (1,000,000 chip markers), the panel gap highlight (3x the mean spacing, rounded), the
+`SNPPORTAL_MAX_VENDOR_SNPS` (50,000 per vendor file), `SNPPORTAL_MIN_FREE_GB` (2: a server makes no new job with less disk free, as results stay a month), `SNPPORTAL_MAX_CHIP_SNPS` (1,000,000 chip markers), the panel gap highlight (3x the mean spacing, rounded), the
 candidate flank (50 kb around a gene), the Manhattan thinning (p > 0.01 thinned to the top SNP per 50 kb),
 the regional plot window (lead +- credible set + 20 kb, 50-250 kb), the GWAS loci cap (`association.MAX_LOCI`: the 200
 strongest loci are listed and fine-mapped) and the settings form's suggestive-p ceiling (0.01); Push 3: the probe
@@ -116,7 +116,7 @@ unpacked for a gzipped file (`SNPPORTAL_MAX_TRACK_UNPACKED_MB`), 20 tracks a use
 
 ## Data safety
 - Uploaded files are deleted right after scoring; results are deleted on 'Delete now', and on a server after
-  `SNPPORTAL_KEEP_HOURS` (24 h). Locally (`SNPPORTAL_LOCAL`) nothing expires.
+  `SNPPORTAL_KEEP_HOURS` (30 days: G, 2026-11-26, "for now, for a month"). Locally (`SNPPORTAL_LOCAL`) nothing expires.
 - A user's own BED tracks (mytracks.py) follow the same rules: the upload is deleted once converted, a track is
   private to the browser that added it on a server (a signed cookie), filters only the results its owner used it on,
   expires with the results, and its names are never logged.

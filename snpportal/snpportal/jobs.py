@@ -284,6 +284,18 @@ def utc(t=None):
     return datetime.fromtimestamp(time.time() if t is None else t, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
+def job_name(given, fallback):
+    """A job's name (job.json label): the one its user gave, spaces collapsed and at most 80 characters, else
+    `fallback`. Never logged: it can be a file's name."""
+    return " ".join(str(given or "").split())[:80] or fallback
+
+
+def default_name():
+    """The Score page's name for a new list: the date and time where the portal runs (the user's computer, on a local
+    install); choosing a file puts its name there instead (portal.js)."""
+    return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
+
+
 def limits():
     return {"threads": int(setting("SNPPORTAL_DUCKDB_THREADS", 2)), "memory_limit": str(setting("SNPPORTAL_DUCKDB_MEMORY", "2GB"))}
 
@@ -613,9 +625,20 @@ def local():
     return bool(setting("SNPPORTAL_LOCAL", False))
 
 
+KEEP_HOURS = 24 * 30  # results, Design panels and own tracks on a server (G, 2026-11-26: "for now, for a month")
+MIN_FREE_GB = 2  # PROVISIONAL: a server makes no new job with less disk free (SNPPORTAL_MIN_FREE_GB), as results stay a month
+
+
 def keep_seconds():
-    """How long results and Design panels are kept: SNPPORTAL_KEEP_HOURS (24), or None (until deleted) when local()."""
-    return None if local() else 3600 * float(setting("SNPPORTAL_KEEP_HOURS", 24))
+    """How long results and Design panels are kept: SNPPORTAL_KEEP_HOURS (KEEP_HOURS, 30 days), or None (until
+    deleted) when local()."""
+    return None if local() else 3600 * float(setting("SNPPORTAL_KEEP_HOURS", KEEP_HOURS))
+
+
+def keep_text():
+    """How long a server keeps results, in words for the pages: '30 days', '24 hours'."""
+    hours = float(setting("SNPPORTAL_KEEP_HOURS", KEEP_HOURS))
+    return f"{hours / 24:g} days" if hours >= 48 and hours % 24 == 0 else f"{hours:g} hours"
 
 
 def expires(key):
@@ -668,6 +691,10 @@ def create(src, suffix, input_kind="snps", preset="all", label="", input_format=
     creating anything when MAX_QUEUED jobs are already waiting."""
     if executor() is not None and len(_queued) >= MAX_QUEUED:
         raise QueueFull()
+    if not local() and shutil.disk_usage(results_dir()).free < float(setting("SNPPORTAL_MIN_FREE_GB", MIN_FREE_GB)) * 1e9:
+        log.warning("job_refused reason=disk_space")  # results are kept a month, so a full disk would fail jobs halfway
+        raise InputError("The server is short of disk space for new results just now. Please try again later, or run "
+                         "the portal on your own computer (Run locally).")
     from . import health
     try:  # the rules in use, checked as at start: a mistake made in them while the portal runs is said before a job is made
         health.rules()
@@ -1123,7 +1150,7 @@ def delete(key):
 
 
 def cleanup():
-    """Delete job folders whose job.json is older than SNPPORTAL_KEEP_HOURS (default 24), Design panel folders whose
+    """Delete job folders whose job.json is older than SNPPORTAL_KEEP_HOURS (default 30 days), Design panel folders whose
     'created' marker is, and stray upload files; nothing on a local install. Safe to run concurrently: anything already
     gone is skipped. Returns the number of entries removed."""
     if keep_seconds() is None:

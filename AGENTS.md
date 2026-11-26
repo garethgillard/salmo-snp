@@ -310,8 +310,9 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   - Locus browser default tracks (tracks.yaml defaults): ATAC, replicate R1, at most 8 rows; preset `all` = first condition
     per tissue incl. Gill and one embryo stage.
   - Palette: tier 2 #2171B5 (AA contrast), ChromHMM colours in one dict (palette.STATES) until G picks AQUA-FAANG itemRgb.
-  - Portal limits: 3M SNPs, 300 MB upload, 10,000 pasted lines, 24 h retention on a server (a local install keeps
-    results until deleted, G 2026-11-03); privacy statement and citation text need G.
+  - Portal limits: 3M SNPs, 300 MB upload, 10,000 pasted lines; results kept 30 days on a server (G, 2026-11-26: "for
+    now, for a month"; 24 h before), until deleted on a local install (G, 2026-11-03); privacy statement and
+    citation text need G.
 - Portal roadmap v2, stages 2-3 (all in weights.yaml blocks, labelled PROVISIONAL in the UI):
   - Assay QC `assay`: 35 bp flanks, GC 0.30-0.70, repeat share <= 0.5, homopolymer <= 6, no public variant in the flanks (warn);
     LORe/blacklist/A/T-C/G warn; fail on ref mismatch, non-SNP or N. Only ~15% of public SNPs pass (salmon is ~60% repeat): revisit.

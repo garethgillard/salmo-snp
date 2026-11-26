@@ -150,7 +150,7 @@ class ToolsTest(SimpleTestCase):
         self.assertIn(f"<strong>{n:,}</strong> SNPs in the panel; {n:,} in more than one source",
                       self.client.get(reverse("snpportal:design_panel")).content.decode())
         d = jobs.results_dir() / f"panel-{cookie.value}"
-        os.utime(d / "created", (1, 1))  # 24 hours on: gone for its browser too, and cleanup removes it
+        os.utime(d / "created", (1, 1))  # long past SNPPORTAL_KEEP_HOURS: gone for its browser too, and cleanup removes it
         self.assertIn("Your panel is empty", self.client.get(reverse("snpportal:design_panel")).content.decode())
         jobs.cleanup()
         self.assertFalse(d.exists())

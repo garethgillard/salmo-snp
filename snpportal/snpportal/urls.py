@@ -51,6 +51,7 @@ urlpatterns = [
     path("results/<uuid:key>/chip/", tools.chip, name="chip"),
     path("results/<uuid:key>/panel/", tools.design, name="panel_design"),
     path("results/<uuid:key>/delete/", views.delete, name="delete"),
+    path("results/<uuid:key>/rename/", views.rename, name="rename"),
     # the known-loci catalogue page; POST genes or intervals -> a candidate job
     path("known-loci/", explore.known_loci, name="known_loci"),
     path("candidates/", explore.candidate_job, name="candidates"),

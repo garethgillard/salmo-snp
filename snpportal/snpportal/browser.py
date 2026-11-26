@@ -286,9 +286,11 @@ def genes_group(request, s, ax, data, open_=()):
             fill = palette.TIERS.get(p.get("tier") or 4, palette.TIERS[4])[0]
             x, h = ax.x(p["pos"] - 0.5), 8 + 26 * (p.get("tier_score") or 0) / top
             dot = (f'<line x1="{x:.1f}" x2="{x:.1f}" y1="40" y2="{40 - h:.1f}" stroke="{G[500]}"/>'
-                   f'<circle cx="{x:.1f}" cy="{40 - h:.1f}" r="4" fill="{fill}" stroke="{G[900]}" stroke-width="0.6"><title>{escape(p["title"])}</title></circle>')
+                   f'<circle cx="{x:.1f}" cy="{40 - h:.1f}" r="4" fill="{fill}" stroke="{G[900]}" stroke-width="0.6"><title>{escape(p["title"])}</title></circle>'
+                   ) if p.get("end") is None else locus_svg.sv_bar(ax, p, 40, h, fill, 7)  # an SV: a bar over its span
             body.append(f'<a href="{escape(p["url"])}">{dot}</a>' if p.get("url") else dot)
-        rows.append(row("Your SNPs", trk(44, "".join(body)), f"tiers: {s['trait'].replace('_', ' ')}"))
+        sv = any(p.get("end") is not None for p in snps)
+        rows.append(row("Your SVs" if sv else "Your SNPs", trk(44, "".join(body)), f"tiers: {s['trait'].replace('_', ' ')}"))
     if data.get("known"):
         body = []
         h = locus_svg._published(body, ax, data["known"], 0, noop, {})
@@ -751,7 +753,7 @@ def context(request, s, layout):
     prefix = f"snpportal:{(info.get('sha256') or 'release')[:12]}"
     deadline = float(jobs.setting("SNPPORTAL_SIGNAL_DEADLINE", 4.0))
     notes = []
-    groups = [tracks_group(request, v, ax), genes_group(request, v, ax, data, open_), public_group(v, ax, data, open_), motifs_group(v, ax, data),
+    groups = [tracks_group(request, v, ax), genes_group(request, v, ax, data, open_), public_group(v, ax, data, open_),
               scores_group(v, ax, data),
               peaks_group(v, ax, data, cfg, prefix, deadline, open_, notes),
               hmm_group(v, ax, data, cfg, prefix, deadline, open_, notes)]
@@ -761,7 +763,8 @@ def context(request, s, layout):
         synthetic = synthetic or bool(job.get("synthetic_input") or job.get("synthetic_layers"))
     a, b = s["start"] + 1, s["end"]
     ctx.update(
-        chromosome=chromosome(s), ruler=ruler(ax, v), groups=[g for g in groups if g], other=other_group(v, ax, data), notes=notes,
+        chromosome=chromosome(s), ruler=ruler(ax, v), groups=[g for g in groups if g], notes=notes,
+        motifs=motifs_group(v, ax, data), other=other_group(v, ax, data),  # TF motifs second to last (G, 2026-11-26)
         synthetic=synthetic, moves=moves(s, open_), query=query(s, open_), limits=(sl.MIN_WINDOW, sl.MAX_WINDOW), assays=[(k, v[0]) for k, v in ASSAYS.items()],
         assays_open="assays" in open_, tissue_legend=tissue_legend(), size_text=locus_svg.fmt_bp(s.get("size") or 0),
         width_text=locus_svg.fmt_bp(s["end"] - s["start"]), truncated=data.get("truncated"),

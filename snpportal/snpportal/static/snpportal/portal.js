@@ -80,9 +80,20 @@
     });
     zone.addEventListener("drop", function (e) {
       e.preventDefault();
-      if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; show(); }
+      if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; input.dispatchEvent(new Event("change")); }
     });
     input.addEventListener("change", show);
+  });
+
+  // The name of the results (the Score page's forms): the chosen file's name replaces the date and time, until the
+  // user types a name of their own.
+  document.querySelectorAll("[data-name-from]").forEach(function (name) {
+    var input = document.getElementById(name.getAttribute("data-name-from"));
+    if (!input) return;
+    name.addEventListener("input", function () { name.setAttribute("data-typed", "1"); });
+    input.addEventListener("change", function () {
+      if (!name.hasAttribute("data-typed") && input.files.length) name.value = input.files[0].name.slice(0, 80);
+    });
   });
 
   // j/k move between table rows that open a card (rows with [data-card]); Enter opens it. With a card open they step

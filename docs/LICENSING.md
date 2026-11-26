@@ -99,7 +99,7 @@ shows their contents openly, and they will later be published on salmobase.org.
 | Brekke et al. 2023 linkage map (bioRxiv supplement) | Recombination map | CC BY 4.0 |
 
 Users' own data (their variants and results) is never part of a release or of the repository. In the local install it
-stays on the user's computer. On the public demo, uploaded files are deleted after scoring and results after 24 hours.
+stays on the user's computer. On the public demo, uploaded files are deleted after scoring and results after 30 days.
 
 ## Third-party software
 

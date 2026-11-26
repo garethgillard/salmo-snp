@@ -337,7 +337,19 @@ class PortalTest(SimpleTestCase):
             os.utime(self.results / key / "job.json", (old, old))
             self.assertEqual(jobs.cleanup(), 0)
             self.assertTrue((self.results / key).exists())
-        self.assertIsNotNone(jobs.expires(key))  # the public site still deletes after 24 h
+        self.assertIsNotNone(jobs.expires(key))  # a server still deletes, after 30 days (KEEP_HOURS)
+
+    def test_a_month_on_a_server(self):
+        """Results stay 30 days on a server (G, 2026-11-26) and the pages say so from the setting; a server short of
+        disk space makes no new job, and says why."""
+        self.assertEqual(jobs.keep_text(), "30 days")
+        self.assertContains(self.client.get(reverse("snpportal:upload")), "Results are kept for 30 days")
+        key = jobs.create_from_rows([("25", 28996360, "vgll3", "C", "T")], "Kept")
+        self.assertAlmostEqual(jobs.expires(key) - time.time(), 30 * 86400, delta=60)
+        with override_settings(SNPPORTAL_KEEP_HOURS=24):
+            self.assertEqual(jobs.keep_text(), "24 hours")
+        with mock.patch.object(jobs.shutil, "disk_usage", return_value=mock.Mock(free=10 ** 9)):
+            self.assertContains(self.paste("25 28996360 C T"), "short of disk space", status_code=400)
 
     def test_release_edit_keeps_job_tiers_and_shows_banner(self):
         key = self.key(self.upload())
@@ -350,6 +362,30 @@ class PortalTest(SimpleTestCase):
             tiers = dict((t, n) for t, n in results.open_result(mock.Mock(GET=QueryDict()), key)[0].execute(
                 "SELECT tier, count(*) FROM v GROUP BY 1").fetchall())
             self.assertEqual({str(t): n for t, n in tiers.items()}, before["all"])
+
+    def test_names_and_renaming(self):
+        """The Score page's forms name the results: the date and time, or the file's name (G, 2026-11-26); and the list
+        of this browser's results renames them."""
+        page = self.client.get(reverse("snpportal:upload")).content.decode()
+        self.assertIn(f'value="{jobs.default_name()[:13]}', page)  # the date and the hour, preset
+        self.assertIn('data-name-from="snps-file"', page)  # a chosen file's name replaces it (portal.js)
+        key = self.key(self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T", "name": "  Smolt   chip  "}))
+        self.assertEqual(jobs.read(key)["label"], "Smolt chip")
+        blank = self.key(self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T", "name": ""}))
+        self.assertTrue(jobs.read(blank)["label"].startswith("Pasted "))  # no name given: as before
+        with open(FIXTURE / "snps.vcf", "rb") as f:
+            named = self.key(self.client.post(reverse("snpportal:upload"), {"snps": f, "name": "x" * 200}))
+        self.assertEqual(jobs.read(named)["label"], "x" * 80)
+        listed = self.client.get(reverse("snpportal:results", args=[key]))  # opening results lists them
+        self.assertEqual(self.client.post(reverse("snpportal:rename", args=[key]), {"name": "Smolt chip v2"}).url,
+                         reverse("snpportal:upload"))
+        self.assertEqual(jobs.read(key)["label"], "Smolt chip v2")
+        self.assertContains(self.client.get(reverse("snpportal:upload")), "Smolt chip v2")
+        self.client.post(reverse("snpportal:rename", args=[key]), {"name": "   "})  # a blank name changes nothing
+        self.assertEqual(jobs.read(key)["label"], "Smolt chip v2")
+        self.assertEqual(self.client.get(reverse("snpportal:rename", args=[key])).status_code, 405)
+        self.assertEqual(self.client.post(reverse("snpportal:rename", args=[uuid.uuid4()]), {"name": "x"}).status_code, 404)
+        self.assertEqual(listed.status_code, 200)
 
     def test_score_page_lists_this_browsers_results(self):
         a = jobs.create_from_rows([("25", 28996360, "vgll3", "C", "T")], "First list")

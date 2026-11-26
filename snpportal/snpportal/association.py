@@ -121,7 +121,8 @@ def _score(request):
                                       "GCTA-fastGWA, PLINK2 .glm, regenie, BOLT-LMM or GEMMA output.")
             if not upload.size:
                 raise jobs.InputError("The uploaded file is empty.")
-            key = jobs.create(Path(upload.path), suffix, "gwas", preset, "Uploaded GWAS summary statistics")
+            key = jobs.create(Path(upload.path), suffix, "gwas", preset,
+                              jobs.job_name(request.POST.get("name"), "Uploaded GWAS summary statistics"))
         else:
             raise jobs.InputError("Choose a summary-statistics file or the GWAS example.")
     except jobs.InputError as e:
