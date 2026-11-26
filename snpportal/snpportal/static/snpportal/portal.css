@@ -821,3 +821,13 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-methods .sp-section:first-child { margin-top: 0; }
 @media print { .sp-toc { display: none; } }
 /* end content pages */
+
+/* == gwas: the Association page. The Manhattan in its figure card, then the loci table on the page (its own scroll box),
+   the PIP figure and the QQ plot as folds, the settings as a fold == */
+.sp-gwas-loci { margin-top: 1.75rem; }
+.sp-gwas-loci h2 { margin-bottom: .35rem; }
+.sp-gwas-loci > p { max-width: var(--sp-measure); }
+#fig-manhattan > svg { width: 100%; }  /* the plot fills its card */
+.sp .sp-gwas-loci td a, .sp .sp-gwas-loci th a { color: var(--sp-ink); font-weight: 500; text-decoration: none; }  /* as the Table */
+.sp .sp-gwas-loci td a:hover, .sp .sp-gwas-loci th a:hover { color: var(--sp-link); text-decoration: underline; }
+/* end gwas */

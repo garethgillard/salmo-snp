@@ -324,12 +324,12 @@ def manhattan_svg(points, sizes, lines, leads, title, desc, synthetic=False):
     for px, c, pos, nlp in capped:
         body.append(f'<path d="M{px:.1f} {top_px - 1} l4 7 l-8 0z" fill="{G[900]}"><title>{escape(c)}:{pos:,} '
                     f'p {sg.p_text(nlp)} (above the axis)</title></path>')
-    red, labels, last = palette.STATUS["fail"][0], [], -99
+    ink, labels, last = G[900], [], -99  # threshold lines in ink: red belongs to the data, not to a line
     for y, label, dash, tip in sorted((x for x in lines if x[0] <= ymax), key=lambda x: -x[0]):  # top line first
         dashed = f' stroke-dasharray="{dash}"' if dash else ""
-        body.append(f'<line x1="{left}" x2="{width - right}" y1="{sy(y):.1f}" y2="{sy(y):.1f}" stroke="{red}"{dashed}><title>{escape(tip)}</title></line>')
+        body.append(f'<line x1="{left}" x2="{width - right}" y1="{sy(y):.1f}" y2="{sy(y):.1f}" stroke="{ink}"{dashed}><title>{escape(tip)}</title></line>')
         last = max(sy(y) + 3.5, last + 12)  # labels at least 12 px apart
-        labels.append(f'<g><title>{escape(tip)}</title>' + figures._text(width - right + 6, last, label, font_size=10, fill=red) + "</g>")
+        labels.append(f'<g><title>{escape(tip)}</title>' + figures._text(width - right + 6, last, label, font_size=11, fill=ink) + "</g>")
     for x in leads:
         px, py = sx(x["chrom"], x["pos"]), sy(x["neglog10p"])
         mark = (f'<path d="M{px:.1f} {py - 7:.1f} l6 7 l-6 7 l-6 -7z" fill="{palette.WHITE}" stroke="{G[900]}" stroke-width="1.6">'
@@ -339,7 +339,7 @@ def manhattan_svg(points, sizes, lines, leads, title, desc, synthetic=False):
     for c in chroms:
         mid = x0[c] + avail * span[c] / total / 2
         if mid - last > 14:
-            body.append(figures._text(mid, height - bottom + 16, c, "middle", font_size=10, fill=G[700]))
+            body.append(figures._text(mid, height - bottom + 16, c, "middle", font_size=11, fill=G[700]))
             last = mid
     body += labels
     body.append(figures._text((left + width - right) / 2, height - 8, "chromosome (Ssal_v3.1)", "middle", font_size=11, fill=G[700]))
@@ -429,10 +429,10 @@ def pip_svg(panels, title, desc, synthetic=False):
 
 FIGURES = {  # name -> (title, definition)
     "manhattan": ("Manhattan plot", "-log10 p of every SNP along the genome. SNPs with p > 0.01 are thinned to the strongest per "
-                  "50 kb; tier 1-2 SNPs for the chosen conditions are drawn on top in tier colours. Lines: genome-wide significance, "
+                  "50 kb; tier 1-2 SNPs are drawn on top in tier colours. Lines: genome-wide significance, "
                   "Bonferroni and suggestive thresholds (conventions, not rules for salmon). Diamonds mark locus leads: click "
                   "one for its regional plot."),
-    "qq": ("QQ plot by tier", "Observed against expected -log10 p per tier for the chosen conditions, each thinned to about 2,000 "
+    "qq": ("QQ plot by tier", "Observed against expected -log10 p per tier, each thinned to about 2,000 "
            "quantiles, with lambda_GC = median(z^2)/0.4549 per tier. Grey band: 95% interval of the expected order "
            "statistics for all SNPs. A tier lifting off the diagonal earlier than others is enriched for association, but "
            "tiers differ in size and allele frequency."),
@@ -572,8 +572,7 @@ def association(request, key):
                    changed=sum(values[k] != defaults[k] for k in FIELDS), settings=a["query"].items(),
                    qc=qc_items(report, a["cfg"]), qc_line=qc_line(report, a["cfg"]), finemapped=any(s.get("n") for s in a["fm"].values()),
                    total=a["total"], max_loci=MAX_LOCI)
-        ctx["actions"] = [{"label": "Export", "url": f"{reverse('snpportal:results', args=[key])}?{query}&tab=export"},
-                          {"label": "Report", "url": f"{reverse('snpportal:report', args=[key])}?{query}"},
+        ctx["actions"] = [{"label": "Print report", "url": f"{reverse('snpportal:report', args=[key])}?{query}"},
                           {"label": "Score another list", "url": reverse("snpportal:upload")}]
     ctx.setdefault("actions", []).append(
         {"label": "Delete", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",

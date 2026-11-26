@@ -11,11 +11,11 @@
   {% include 'snpportal/_progress.html' %}
 {% elif job.state == 'failed' %}
   <div class="sp-status sp-status-fail" role="alert">
-    <p><strong>&#10007; These summary statistics could not be analysed.</strong> {{ job.error }}</p>
+    <p><strong>{% icon 'fail' %} These summary statistics could not be analysed.</strong> {{ job.error }}</p>
     <p><a href="{% url 'snpportal:upload' %}?input=gwas">Upload them again</a> · <a href="{% url 'snpportal:help' %}">Help with formats</a></p>
   </div>
 {% else %}
-  {% if release_changed %}<div class="sp-status sp-status-warn" role="status">&#9888; The annotation release or its rules have changed since
+  {% if release_changed %}<div class="sp-status sp-status-warn" role="status">{% icon 'warn' %} The annotation release or its rules have changed since
     these results were made. They still use release {{ job.release }} as it was then.</div>{% endif %}
 
   <div id="assoc" hx-target="#assoc" hx-select="#assoc" hx-swap="outerHTML">
@@ -26,13 +26,13 @@
     <li class="nav-item"><a class="nav-link" href="{% url 'snpportal:results' key %}?{{ query }}&amp;tab=export">Export</a></li>
   </ul>
 
-  <details class="sp-more mb-2"{% if qc_line.1 %} open{% endif %}><summary>{{ qc_line.0 }}. QC details</summary>
+  <details class="sp-more mb-2"{% if qc_line.1 %} open{% endif %}><summary>Upload check <span class="sp-muted fw-normal">{{ qc_line.0 }}</span></summary>
     <dl class="sp-dl sp-small mb-2">{% for name, value in qc %}<dt>{{ name }}</dt><dd>{{ value|thousands }}</dd>{% endfor %}</dl>
   </details>
 
   {% include 'snpportal/_figure.html' with fig=figs.manhattan %}
 
-  <section class="sp-card mt-3" aria-labelledby="loci-h">
+  <section class="sp-gwas-loci" aria-labelledby="loci-h">
     <h2 id="loci-h">Loci</h2>
     <p class="sp-small sp-muted">Loci: SNPs within &plusmn;{{ values.window }} kb of each lead with p &lt; {{ values.sugg }},
       strongest first, by distance only (no LD). Long-range LD in farmed lines can split or merge loci.{% if total > max_loci %}
@@ -43,13 +43,13 @@
         <th scope="col" title="Highest PIP under the uniform prior; the functional prior's pick where it differs">Top SNP by PIP</th>
         <th scope="col">Gene</th><th scope="col" class="sp-num" title="95% credible set size: uniform &rarr; functional prior">95% credible set</th></tr></thead>
       <tbody>{% for x in loci %}<tr>
-        <th scope="row"><a class="link-primary" href="{{ x.region }}" title="Regional plot">{{ x.locus }}</a>{% if not x.significant %} <span class="sp-badge sp-badge-flag" title="lead p above the significance threshold">suggestive</span>{% endif %}{% if x.lore %} <span class="sp-badge sp-badge-flag" title="region where the duplicated chromosomes still pair; probes may cross-hybridise">LORe</span>{% endif %}</th>
-        <td class="sp-mono">{% if x.card %}<a href="{{ x.card }}">{{ x.id }}</a>{% else %}{{ x.id }}{% endif %}</td>
+        <th scope="row"><a href="{{ x.region }}" title="Regional plot">{{ x.locus }}</a>{% if not x.significant %} <span class="sp-badge sp-badge-flag" title="lead p above the significance threshold">suggestive</span>{% endif %}{% if x.lore %} <span class="sp-badge sp-badge-flag" title="region where the duplicated chromosomes still pair; probes may cross-hybridise">LORe</span>{% endif %}</th>
+        <td>{% if x.card %}<a href="{{ x.card }}">{{ x.id }}</a>{% else %}{{ x.id }}{% endif %}</td>
         <td class="sp-num">{{ x.p }}</td>
         <td class="sp-num">{% if x.beta is not None %}{{ x.beta|floatformat:3 }} ({{ x.se|floatformat:3 }}){% else %}&ndash;{% endif %}</td>
         <td class="sp-num">{{ x.n_snps|thousands }} ({{ x.n_significant|thousands }})</td>
-        <td>{% if x.top %}{% include 'snpportal/_badges.html' with kind='tier' value=x.top.tier short=1 %} <a class="sp-mono" href="{{ x.top.card }}">{{ x.top.id }}</a>
-          {% if x.top_f %}&rarr; {% include 'snpportal/_badges.html' with kind='tier' value=x.top_f.tier short=1 %} <a class="sp-mono" href="{{ x.top_f.card }}">{{ x.top_f.id }}</a> <span class="sp-muted">(functional)</span>{% endif %}
+        <td>{% if x.top %}{% include 'snpportal/_badges.html' with kind='tier' value=x.top.tier short=1 %} <a href="{{ x.top.card }}">{{ x.top.id }}</a>
+          {% if x.top_f %}&rarr; {% include 'snpportal/_badges.html' with kind='tier' value=x.top_f.tier short=1 %} <a href="{{ x.top_f.card }}">{{ x.top_f.id }}</a> <span class="sp-muted">(functional)</span>{% endif %}
           {% else %}<span class="sp-muted">n/a</span>{% endif %}</td>
         <td{% if x.gene_tip %} title="{{ x.gene_tip }}"{% endif %}>{{ x.gene|default_if_none:"" }}</td>
         <td class="sp-num text-nowrap">{% if x.fm.n %}{{ x.fm.size_uniform }} &rarr; {{ x.fm.size_functional }}{% else %}<span class="sp-muted">n/a</span>{% endif %}</td>
@@ -60,15 +60,15 @@
 
   {% if finemapped %}
   <p class="sp-small mt-3 mb-1">One causal variant per locus, no LD: PIPs depend on the prior SD and &lambda;, and the functional prior
-    on provisional weights. <a href="{% url 'snpportal:methods' %}">Method &rarr;</a></p>
-  {% include 'snpportal/_figure.html' with fig=figs.pip %}
+    on provisional weights. <a href="{% url 'snpportal:methods' %}#finemap">Method &rarr;</a></p>
+  <details class="sp-more"><summary>How the functional prior shifts PIPs</summary>{% include 'snpportal/_figure.html' with fig=figs.pip %}</details>
   {% elif loci %}<div class="sp-status sp-status-not_checked mt-3" role="status">No locus could be fine-mapped: that needs se (with beta
     or z), or N and allele frequencies, for each SNP.</div>{% endif %}
 
   <details class="sp-more mt-3"><summary>QQ plot</summary>{% include 'snpportal/_figure.html' with fig=figs.qq %}</details>
 
   <details class="sp-more"{% if changed %} open{% endif %}><summary>Fine-mapping settings{% if changed %} ({{ changed }} changed){% endif %}</summary>
-    <form method="get" class="sp-card sp-filters sp-small" aria-label="Fine-mapping settings">
+    <form method="get" class="sp-filters sp-small pb-3" aria-label="Fine-mapping settings">
       <input type="hidden" name="trait" value="{{ trait }}">
       {% for name, label, value, tip in fields %}<label{% if tip %} title="{{ tip }}"{% endif %}>{{ label }} <input class="form-control form-control-sm sp-pos" name="{{ name }}" value="{{ value }}" inputmode="decimal"></label>{% endfor %}
       <button class="btn btn-sm btn-primary" type="submit">Apply</button>
