@@ -601,17 +601,17 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("Open the full locus browser", "#cs-locus .sp-cs-act"),
                   ("Its peak: chromatin state per condition", "#cs-locus svg svg"),
                   ("As a marker: assay check, GC and MAF", "#cs-marker > summary")],
-     "shot": {"path": "results/{snps}/?tab=table&snp=2", "width": 1000, "crop": [".sp-card-bar", "#cs-marker > summary", "tr.sp-selected"]}},
+     "shot": {"path": "results/{snps}/?tab=table&snp=2", "width": 1400, "crop": [".sp-card-bar", "#cs-marker > summary", "tr.sp-selected"]}},
     {"slug": "locus", "title": "Explore a locus",
      "text": "The locus browser lines up genes, public SNPs, TF motif changes, regulatory elements, chromatin states and "
              "live RNA, ATAC and ChIP data from salmobase. From a card, Open locus browser shows it over the table.",
      "alt": "Locus browser at vgll3 on chromosome 25: genes and published SNPs, regulatory elements, chromatin states and "
             "the functional assays.",
-     "callouts": [("Zoom and move", ".sp-bctl .btn-group:nth-of-type(1)"),
+     "callouts": [("Zoom and move: drag the ruler or the tracks", ".sp-trk-ruler"),
                   ("Genes, published loci and variants", "#g-genes"),
                   ("Open a group: one track per condition", "#g-hmm .sp-tog"),
                   ("RNA, ATAC and ChIP from salmobase", "#g-assays .sp-grp-h")],
-     "shot": {"path": "locus/?r=25:28983861-29008860", "width": 1280, "crop": [".sp-bctl", "#g-assays .sp-grp-h"]}},
+     "shot": {"path": "locus/?r=25:28983861-29008860", "width": 1280, "crop": [".sp-trk-chr", "#g-assays .sp-grp-h"]}},
     {"slug": "panel", "title": "Build a genotyping panel",
      "text": "Add to Design panel on the Table brings its selection to the Design panel. Compare the panel with your chip, "
              "drop SNPs by hand and download KASP, Illumina or Axiom files.",
@@ -622,7 +622,7 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("Vendor files", "section[aria-labelledby=dl-h] form"),
                   ("Ready to genotype?", "section[aria-labelledby=glance-h]")],
      "shot": {"before": [("results/{snps}/?tab=table", "button[form=add-panel]"), ("panel/", "button[name=demo]")],
-              "path": "panel/", "width": 1200, "crop": [".sp-page-header", ".sp-eq"]}},
+              "path": "panel/", "width": 1440, "crop": [".sp-page-header", ".sp-eq"]}},
     {"slug": "gwas", "title": "Analyse GWAS summary statistics",
      "text": "Upload GWAS results for a Manhattan plot, the loci and fine-mapping that weights SNPs by their functional "
              "evidence (one causal variant per locus, no LD). The example is synthetic.",
