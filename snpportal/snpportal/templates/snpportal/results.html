@@ -8,15 +8,15 @@
   {% include 'snpportal/_progress.html' %}
 {% elif job.state == 'failed' %}
   <div class="sp-status sp-status-fail" role="alert">
-    <p><strong>&#10007; This list could not be scored.</strong> {{ job.error }}</p>
+    <p><strong>{% icon 'fail' %} This list could not be scored.</strong> {{ job.error }}</p>
     <p><a href="{% url 'snpportal:upload' %}">Score another list</a> · <a href="{% url 'snpportal:help' %}">Help with formats</a></p>
   </div>
 {% else %}
-  {% if release_changed %}<div class="sp-status sp-status-warn" role="status">&#9888; The release has changed since these results were made;
+  {% if release_changed %}<div class="sp-status sp-status-warn" role="status">{% icon 'warn' %} The release has changed since these results were made;
     they still use release {{ job.release }} as it was. <a href="{% url 'snpportal:upload' %}">Score the list again</a> to update them.</div>{% endif %}
 
   {% comment %}Links and forms that stay on this page (tabs, table filters, sort, pages, the drawer) swap in the new
-     #results and the header actions (#sp-actions, so Report follows the Table's filters). Only those: a boosted link to
+     #results and the header actions (#sp-actions, so Print report follows the Table's filters). Only those: a boosted link to
      another page or a file would swap in nothing. Tiers always count all 27 conditions; everything also works without
      JavaScript.{% endcomment %}
   <div id="results" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-select-oob="#sp-actions">

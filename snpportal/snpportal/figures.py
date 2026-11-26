@@ -52,9 +52,10 @@ def svg(width, height, title, desc, body, synthetic=False):
 
 
 def share_label(n, total):
-    """n of total as a percentage for labels: '<1%' rather than '0%' for a few, so a small count never reads as none."""
+    """n of total as a whole percentage for labels: '<1%' rather than '0%' for a few, so a small count never reads as
+    none, and '>99%' rather than '100%' for all but a few, so the shares never add up to more than 100%."""
     x = 100 * n / total if total else 0
-    return "0%" if not n else "<1%" if x < 1 else f"{x:.0f}%"
+    return "0%" if not n else "<1%" if x < 1 else ">99%" if x > 99 and n < total else f"{x:.0f}%"
 
 
 def _a(href, inner):
@@ -114,28 +115,33 @@ def bar(parts, title, desc="", synthetic=False, marks=None):
 def summary(head, groups, title, desc="", synthetic=False, width=580):
     """The Overview's summary, drawn to sit beside the ideogram: key numbers, then one stacked bar per way of grouping
     the SNPs, with its title and note above and a two-column legend of counts and shares below. head: [(number,
-    label, note, href)]; groups: [{title, note, parts: [(name, n, fill, href)], background: [(name, share, fill)] or
-    None}]. A background is a thin bar under the SNPs' bar: the same split for public sites. Parts with an href link
-    to the table filtered to them."""
-    out, col = [], width / max(len(head), 1)
+    label, note, href)], a note's lines split by '\\n'; groups: [{title, note, parts: [(name, n, fill, href)],
+    background: [(name, share, fill)] or None}]. A background is a thin bar under the SNPs' bar: the same split for
+    public sites. Parts with an href link to the table filtered to them. Labels and legends have class sp-ph, which
+    portal.css enlarges on phones (the figure is drawn at about half size there), so lines are spaced for that; the
+    notes beside the titles (class sp-fnote) are left out there."""
+    out, col, line = [], width / max(len(head), 1), 22  # a line holds a phone's enlarged text
+    ph = {"class": "sp-ph"}
+    bottom = 0
     for i, (number, label, note, href) in enumerate(head):
         x = i * col
-        out.append(_a(href, _text(x, 28, number, font_size=28, font_weight=700) + _text(x, 46, label, font_size=12.5)))
-        if note:
-            out.append(_text(x, 62, note, font_size=11, fill=palette.GREY[700]))
-    y = 88
+        out.append(_a(href, _text(x, 28, number, font_size=28, font_weight=600) + _text(x, 50, label, font_size=13, **ph)))
+        for k, text in enumerate((note or "").split("\n") if note else ()):
+            out.append(_text(x, 50 + line * (k + 1), text, font_size=12, fill=palette.GREY[700], **ph))
+            bottom = max(bottom, k + 1)
+    y = 50 + line * bottom + 34
     for g in groups:
         total = sum(n for _, n, _, _ in g["parts"]) or 1
-        out.append(_text(0, y, g["title"], font_size=12.5, font_weight=600)
-                   + _text(width, y, g["note"], "end", font_size=11, fill=palette.GREY[700]))
-        x, y = 0.0, y + 7
+        out.append(_text(0, y, g["title"], font_size=13, font_weight=600, **ph)
+                   + _text(width, y, g["note"], "end", font_size=12, fill=palette.GREY[700], **{"class": "sp-fnote"}))
+        x, y = 0.0, y + 8
         for name, n, fill, href in g["parts"]:
             w = width * n / total
             out.append(_rect(x, y, w, 26, fill, f"{g['title']}: {name}, {n:,} SNP{'' if n == 1 else 's'} ({share_label(n, total)})",
                              href, f' stroke="{palette.WHITE}"'))
-            if w > 7.5 * len(f"{n:,}") + 8:
+            if w > 11.5 * len(f"{n:,}") + 8:  # room for the number at a phone's size too
                 out.append(_text(x + w / 2, y + 17.5, f"{n:,}", "middle", fill=palette.text_on(fill), font_weight=600,
-                                 pointer_events="none"))
+                                 pointer_events="none", **ph))
             x += w
         y += 26
         if g.get("background"):
@@ -146,11 +152,11 @@ def summary(head, groups, title, desc="", synthetic=False, width=580):
                 x += width * share
             y += 9
         for i, (name, n, fill, href) in enumerate(g["parts"]):
-            lx, ly = (i % 2) * width / 2, y + 10 + (i // 2) * 16
-            out.append(_a(href, f'<rect x="{lx:.0f}" y="{ly}" width="11" height="11" fill="{fill}" stroke="{palette.GREY[500]}"/>'
-                                + _text(lx + 16, ly + 9.5, f"{name}: {n:,} ({share_label(n, total)})", font_size=11)))
-        y += 10 + (len(g["parts"]) + 1) // 2 * 16 + 24
-    return svg(width, y - 18, title, desc, "".join(out), synthetic)
+            lx, ly = (i % 2) * width / 2, y + 12 + (i // 2) * line
+            out.append(_a(href, f'<rect x="{lx:.0f}" y="{ly}" width="12" height="12" fill="{fill}" stroke="{palette.GREY[500]}"/>'
+                                + _text(lx + 18, ly + 10.5, f"{name}: {n:,} ({share_label(n, total)})", font_size=12, **ph)))
+        y += 12 + (len(g["parts"]) + 1) // 2 * line + 26
+    return svg(width, y - 22, title, desc, "".join(out), synthetic)
 
 
 def ideogram(chroms, bins, chrom_tiers, title, desc="", synthetic=False, link=None, chip=None, chip_label="chip", width=580):
@@ -173,25 +179,26 @@ def ideogram(chroms, bins, chrom_tiers, title, desc="", synthetic=False, link=No
     def shade(k):  # tier 1-2 SNPs in a bin -> a blue from light (1) to the darkest tier blue (the busiest bin)
         return mix(palette.TIERS[3][0], palette.TIERS[1][0], 0.45 + 0.55 * math.log1p(k) / math.log1p(most_bin))
 
-    parts = [_text(left - 6, 12, "Mb", "end", fill=palette.GREY[700], font_size=10),
-             _text(cx, 26, "SNPs", "end", fill=palette.GREY[700], font_size=10.5),
-             _text(bx, 26, "tier 1–2", fill=palette.GREY[700], font_size=10.5)]
+    md = {"class": "sp-md"}  # portal.css enlarges these on phones, where the figure is drawn at about half size
+    parts = [_text(left - 6, 12, "Mb", "end", fill=palette.GREY[700], font_size=11),
+             _text(cx, 26, "SNPs", "end", fill=palette.GREY[700], font_size=11, **md),
+             _text(bx, 26, "tier 1–2", fill=palette.GREY[700], font_size=11, **md)]
     for mb in range(0, int(longest / 1e6) + 1, 20):
         x = left + mb * 1e6 * scale
         parts.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="16" y2="{top + len(chroms) * row - 4}" stroke="{palette.GREY[200]}"/>'
-                     + _text(x, 12, mb, "middle", fill=palette.GREY[700], font_size=10))
+                     + _text(x, 12, mb, "middle", fill=palette.GREY[700], font_size=11))
     for chrom, size in chroms:
         y = y_of[chrom]
         total = sum(int(n) for n in (chrom_tiers.get(chrom) or {}).values())
-        parts.append(_a(link and link(chrom, None, None, None), _text(left - 6, y + 9.5, chrom, "end", font_size=11))
+        parts.append(_a(link and link(chrom, None, None, None), _text(left - 6, y + 9.5, chrom, "end", font_size=11.5, **md))
                      + f'<rect x="{left}" y="{y + 1}" width="{size * scale:.1f}" height="10" rx="3" fill="{palette.WHITE}" '
                        f'stroke="{palette.GREY[300]}"/>'
-                     + _text(cx, y + 9.5, f"{total:,}", "end", font_size=11, fill=palette.GREY[700 if total else 500]))
+                     + _text(cx, y + 9.5, f"{total:,}", "end", font_size=11.5, fill=palette.GREY[700 if total else 500], **md))
         k = top12[chrom]
         if k:
             parts.append(_rect(bx, y + 2, max(1.0, bar_w * k / most_chrom), 8, palette.TIERS[2][0],
                                f"Chromosome {chrom}: {k:,} of {total:,} SNPs in tier 1–2", link and link(chrom, None, None, "1-2")))
-        parts.append(_text(bx + bar_w + number_w, y + 9.5, f"{k:,}", "end", font_size=11, fill=palette.GREY[900 if k else 500]))
+        parts.append(_text(bx + bar_w + number_w, y + 9.5, f"{k:,}", "end", font_size=11.5, fill=palette.GREY[900 if k else 500], **md))
     w = max(1e6 * scale, 2.5)  # a lone SNP's bin stays visible
     for chrom, b, *n in sorted(bins, key=lambda x: x[2] + x[3]):  # blue bins over grey ones
         if chrom not in y_of:
@@ -206,27 +213,28 @@ def ideogram(chroms, bins, chrom_tiers, title, desc="", synthetic=False, link=No
                                f"{chrom}:{mb}-{mb + 1} Mb: {n:,} {chip_label} markers"))
     y = top + len(chroms) * row + 8
     steps = sorted({1, most_bin} | ({round(math.sqrt(most_bin))} if most_bin > 3 else set()))
-    legend = [f'<rect x="{left}" y="{y}" width="11" height="11" fill="{IDEOGRAM_OTHER}" stroke="{palette.GREY[500]}"/>'
-              + _text(left + 16, y + 9.5, "SNPs, none in tier 1–2", font_size=11)]
-    x = left + 170
-    legend.append(_text(x, y + 9.5, "tier 1–2 SNPs per Mb:", font_size=11))
-    x += 124
-    for s in steps:
-        legend.append(f'<rect x="{x}" y="{y}" width="11" height="11" fill="{shade(s)}"/>' + _text(x + 15, y + 9.5, f"{s:,}", font_size=11))
-        x += 24 + 7 * len(f"{s:,}")
+    ph = {"class": "sp-ph"}  # a legend line each, spaced for a phone's enlarged text
+    legend = [f'<rect x="{left}" y="{y}" width="12" height="12" fill="{IDEOGRAM_OTHER}" stroke="{palette.GREY[500]}"/>'
+              + _text(left + 18, y + 10.5, "SNPs, none in tier 1–2", font_size=12, **ph)]
+    y += 22
+    x = left
+    for s in steps:  # the scale, then what it counts
+        legend.append(f'<rect x="{x}" y="{y}" width="12" height="12" fill="{shade(s)}"/>' + _text(x + 18, y + 10.5, f"{s:,}", font_size=12, **ph))
+        x += 34 + 12 * len(f"{s:,}")
+    legend.append(_text(x, y + 10.5, "tier 1–2 SNPs per Mb", font_size=12, **ph))
     parts += legend
     if chip:
-        y += 18
-        parts.append(f'<rect x="{left}" y="{y + 4}" width="11" height="3" fill="{palette.GREY[700]}"/>'
-                     + _text(left + 16, y + 9.5, f"{chip_label}: 1 Mb bins with markers", font_size=11))
-    return svg(width, y + 16, title, desc, "".join(parts), synthetic)
+        y += 22
+        parts.append(f'<rect x="{left}" y="{y + 4}" width="12" height="3" fill="{palette.GREY[700]}"/>'
+                     + _text(left + 18, y + 10.5, f"{chip_label}: 1 Mb bins with markers", font_size=12, **ph))
+    return svg(width, y + 18, title, desc, "".join(parts), synthetic)
 
 
 def heatmap(rows, title, desc="", synthetic=False, link=None, scale_max=None):
     """Share of SNPs active per condition, one row per tissue (plus the embryo stages), with the fold over the
     background printed when known. rows: [(group, colour, [(label, condition, share, fold or None, in preset)])];
     link(condition) -> href. Darker = higher share; outlined = one of the trait's conditions."""
-    left, cw, ch, pad, top = 76, 66, 40, 5, 6
+    left, cw, ch, pad, top = 86, 66, 44, 5, 6
     ncol = max([len(cells) for _, _, cells in rows] + [1])
     width = left + ncol * (cw + pad)
     top_share = scale_max or max([share for _, _, cells in rows for _, _, share, _, _ in cells] + [0.01])
@@ -242,17 +250,17 @@ def heatmap(rows, title, desc="", synthetic=False, link=None, scale_max=None):
                 + (" (a chosen condition)" if chosen else "")
             stroke = (f' stroke="{palette.GREY[900]}" stroke-width="2.5"' if chosen else f' stroke="{palette.GREY[200]}"')
             cell = _rect(x, y, cw, ch, fill, tip, extra=stroke) + "".join([
-                _text(x + cw / 2, y + 11, label, "middle", fill=ink, font_size=9.5, pointer_events="none"),
-                _text(x + cw / 2, y + 24, f"{100 * share:.1f}%", "middle", fill=ink, font_weight=600, pointer_events="none"),
-                _text(x + cw / 2, y + 35, f"{fold:.1f}×" if fold else "", "middle", fill=ink, font_size=9.5, pointer_events="none")])
+                _text(x + cw / 2, y + 12, label, "middle", fill=ink, font_size=11, pointer_events="none"),
+                _text(x + cw / 2, y + 26.5, f"{100 * share:.1f}%", "middle", fill=ink, font_weight=600, pointer_events="none"),
+                _text(x + cw / 2, y + 39, f"{fold:.1f}×" if fold else "", "middle", fill=ink, font_size=11, pointer_events="none")])
             parts.append(_a(link and link(condition), cell))
     y = top + len(rows) * (ch + pad) + 4
     steps = [i / 4 for i in range(5)]
     for k, t in enumerate(steps):
         parts.append(f'<rect x="{left + k * 22}" y="{y}" width="22" height="10" fill="{mix(palette.GREY[50], palette.TIERS[1][0], t)}"/>')
-    parts.append(_text(left - 4, y + 9, "0%", "end", font_size=10) + _text(left + 5 * 22 + 4, y + 9, f"{100 * top_share:.1f}%", font_size=10)
-                 + _text(left, y + 26, "Outlined: the chosen conditions. ×: fold over the public background.", font_size=10, fill=palette.GREY[700]))
-    return svg(width, y + 32, title, desc, "".join(parts), synthetic)
+    parts.append(_text(left - 4, y + 9.5, "0%", "end", font_size=11) + _text(left + 5 * 22 + 4, y + 9.5, f"{100 * top_share:.1f}%", font_size=11)
+                 + _text(left, y + 27, "×: fold over the public background", font_size=11, fill=palette.GREY[700]))
+    return svg(width, y + 33, title, desc, "".join(parts), synthetic)
 
 
 def hbars(rows, title, desc="", synthetic=False, legend=None, unit="SNPs"):
@@ -299,14 +307,14 @@ def histogram(bars, title, desc="", synthetic=False, axis=None):
     for v in (0, top_value // 2, top_value) if top_value >= 2 else (0, top_value):  # integer counts on a 1-2-5 grid
         y = top + height - height * v / top_value
         parts.append(f'<line x1="{left - 4}" x2="{left}" y1="{y:.1f}" y2="{y:.1f}" stroke="{palette.GREY[500]}"/>'
-                     + _text(left - 8, y + 3.5, f"{v:,}", "end", font_size=10, fill=palette.GREY[700]))
+                     + _text(left - 8, y + 3.5, f"{v:,}", "end", font_size=11, fill=palette.GREY[700]))
     x = left
     for label, value, fill, tip, href, tick in bars:
         if label == "none":
             x += 14
         h = height * value / top_value
         parts.append(_rect(x, top + height - h, bw, max(h, 0.5), fill, tip, href)
-                     + _text(x + bw / 2, top + height + 14, label, "middle", font_size=10))
+                     + _text(x + bw / 2, top + height + 14, label, "middle", font_size=11))
         if tick is not None:
             ty = top + height - height * tick / top_value
             parts.append(f'<line x1="{x - 2:.1f}" x2="{x + bw + 2:.1f}" y1="{ty:.1f}" y2="{ty:.1f}" stroke="{palette.GREY[900]}" '

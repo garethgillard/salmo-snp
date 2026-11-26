@@ -299,7 +299,7 @@ def results(request, key):
         else:
             context.update(tools.exports(request, key, job))
         context["table_query"] = result_views.selection(d) or urlencode(settings)  # the Table tab returns to the selection
-        context["actions"] = [{"label": "Report", "url": f"{reverse('snpportal:report', args=[key])}?{context['table_query']}"},
+        context["actions"] = [{"label": "Print report", "url": f"{reverse('snpportal:report', args=[key])}?{context['table_query']}"},
                               {"label": "Score another list", "url": reverse("snpportal:upload")}]
     context.setdefault("actions", []).append(
         {"label": "Delete", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",

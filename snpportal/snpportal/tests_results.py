@@ -96,14 +96,14 @@ class ResultsTest(SimpleTestCase):
     def test_selector_column(self):
         page = self.client.get(self.url + "?tab=table").content.decode()
         rows = re.findall(r'href="\?[^"]*exclude=(\d+)"', page)  # every row starts +
-        self.assertEqual(page.count('class="sp-pick"'), page.count("<tr data-card"))
+        self.assertEqual(page.count('class="sp-tick"'), page.count("<tr data-card"))  # a Keep box on every row
         self.assertNotIn('id="dd-pick"', page)  # nothing taken out: no options yet
         out = self.client.get(self.url + f"?tab=table&exclude={rows[0]}&exclude={rows[1]}").content.decode()  # the last wins
         self.client.get(self.url + f"?tab=table&exclude={rows[0]}")
         page = self.client.get(self.url + "?tab=table").content.decode()
         n = self.summary["n_rows"]
-        self.assertIn(f"2 unselected (&minus;)", page)
-        self.assertIn(f"Add to panel ({n - 2:,})", page)  # the selection leaves the − rows out
+        self.assertIn("2 left out", page)
+        self.assertIn(f"Add to Design panel ({n - 2:,})", page)  # the selection leaves the unticked rows out
         self.assertEqual(page.count('class=" sp-out"'), 0)  # out of the table too, unless asked
         self.assertEqual(self.client.get(self.url + "?tab=table&picked=all").content.decode().count('class=" sp-out"'), 2)  # all: dimmed
         self.assertIn('id="dd-pick"', page)
@@ -114,9 +114,9 @@ class ResultsTest(SimpleTestCase):
         tsv = b"".join(got.streaming_content) if got.streaming else got.content
         self.assertEqual(len(tsv.decode().splitlines()) - 1, n - 2)  # downloads take the + rows
         self.client.get(self.url + f"?tab=table&include={rows[0]}")
-        self.assertIn("1 unselected", self.client.get(self.url + "?tab=table").content.decode())
+        self.assertIn("1 left out", self.client.get(self.url + "?tab=table").content.decode())
         reset = self.client.get(self.url + "?tab=table&include_all=1").content.decode()
-        self.assertNotIn("unselected", reset)
+        self.assertNotIn("left out", reset)
         self.assertFalse(results.unselected(self.d))
 
     def test_summary_holds_every_panel(self):
@@ -138,14 +138,16 @@ class ResultsTest(SimpleTestCase):
         expected = ["summary", "ideogram", "conditions", "regions", "terms", "maf"]
         for name in expected:
             self.assertIn(f'id="fig-{name}"', page)
-        more = page[page.index("More charts (4)"):]  # analyst charts closed, after the two open ones side by side
+        more = page[page.index('<span class="sp-fold-title">More charts</span>'):]  # analyst charts closed, after the two open ones
+        self.assertIn("Evidence behind the tiers", more[:400])  # the fold names what it holds
         self.assertTrue(all(f'id="fig-{name}"' in more for name in ("conditions", "regions", "terms", "maf")))
         self.assertNotIn('id="top-h"', page)  # an overview of the whole list: the SNPs themselves are on the Table tab
         summary = page[page.index('id="fig-summary"'):page.index('id="fig-ideogram"')]  # key numbers and how the SNPs split
-        self.assertIn(f'font-size="28" font-weight="700">{self.summary["n_rows"]:,}</text><text x="0.0" y="46.0" text-anchor="start" '
-                      'font-size="12.5">SNPs scored', summary)
-        rows = re.findall(r'font-size="12.5" font-weight="600">([^<]*)</text>', summary)
-        self.assertEqual(rows, ["Tier for all conditions", "Gene region", "Near a known locus"] + ["Assay check"] * ("assay_status" in self.columns))
+        self.assertIn(f'font-size="28" font-weight="600">{self.summary["n_rows"]:,}</text><text x="0.0" y="50.0" text-anchor="start" '
+                      'font-size="13" class="sp-ph">SNPs scored', summary)
+        rows = re.findall(r'font-size="13" font-weight="600" class="sp-ph">([^<]*)</text>', summary)
+        self.assertEqual(rows, ["Tier", "Gene region", "Near a known locus"] + ["Assay check"] * ("assay_status" in self.columns))
+        self.assertNotIn("for all conditions", summary)  # tiers always count them all: no qualifier
         self.assertIn('href="?tab=table&amp;trait=all&amp;tier=1-2"', summary)  # every part lists its SNPs, Active in reset
         self.assertNotIn("PROVISIONAL", re.sub(r"<svg .*?</svg>", "", page, flags=re.S))  # no badges
         self.assertNotIn('class="sp-caveat', page)  # no prototype line on the pages
@@ -296,7 +298,7 @@ class ResultsTest(SimpleTestCase):
         self.assertEqual(barcode.count("<i "), 27)
         self.assertNotIn(' in"', barcode)  # tiers count all conditions: none is underlined
         headers = re.findall(r'<th scope="col"[^>]*><span class="sp-th">(?:<a [^>]*>|<span [^>]*>)([^<&]+)', page)
-        self.assertEqual([h.strip() for h in headers], ["+/"] + [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS
+        self.assertEqual([h.strip() for h in headers], ["Keep"] + [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS
                                                                 if k != "size"])  # the selector, then 9 (Size: SV jobs only)
         self.assertIn('aria-sort="ascending"', page)  # tier, the default
         head = page[page.index("<thead"):page.index("</thead>")]  # each filter on its column; the others above the table
@@ -315,9 +317,9 @@ class ResultsTest(SimpleTestCase):
         self.assertIn("Tier ", drawer[drawer.index('id="drawer"'):])
         self.assertIn('aria-current="true">100</a>', page)  # rows per page, under the table
         region = page[page.index('id="dd-region"'):]
-        self.assertIn('<summary class="sp-colf" title="Filter Consequence"', region[:200])  # no region filter: a plain funnel
+        self.assertIn('<summary class="sp-colf" title="Filter Gene region"', region[:200])  # no region filter: a plain funnel
         both = self.client.get(self.url + "?tab=table&region=coding&region=UTR").content.decode()  # ticked: any of them
-        self.assertIn('<summary class="sp-colf on" title="Filter Consequence: protein-changing, synonymous, coding (effect unknown), splice site or region, 5′ UTR, 3′ UTR"', both)
+        self.assertIn('<summary class="sp-colf on" title="Filter Gene region: protein-changing, synonymous, coding (effect unknown), splice site or region, 5′ UTR, 3′ UTR"', both)
         self.assertEqual(int(re.search(r"of ([\d,]+) shown", both).group(1).replace(",", "")),
                          self.direct("region_class IN ('CDS', 'splice_region') OR region_class LIKE '%UTR'"))
         tiers = re.findall(r'<span class="sp-badge sp-tier-(\d)" title="[^"]*">Tier \d: ([\d,]+)', both)  # the shown rows' tiers
@@ -346,8 +348,8 @@ class ResultsTest(SimpleTestCase):
     def test_empty_state_names_the_most_restrictive_filter(self):
         page = self.client.get(self.url + "?tab=table&region=coding&tier=4").content.decode()  # coding is never tier 4
         self.assertIn("No SNPs match these filters", page)
-        self.assertIn("most restrictive one is <strong>Consequence: protein-changing, synonymous, coding (effect unknown), splice site or region</strong>", page)
-        self.assertIn("Remove &ldquo;Consequence: protein-changing, synonymous, coding (effect unknown), splice site or region&rdquo;", page)
+        self.assertIn("most restrictive one is <strong>Gene region: protein-changing, synonymous, coding (effect unknown), splice site or region</strong>", page)
+        self.assertIn("Remove &ldquo;Gene region: protein-changing, synonymous, coding (effect unknown), splice site or region&rdquo;", page)
 
     def test_panels_and_filters_need_their_columns(self):
         """A job whose result lacks the assay, AF and known-locus columns (e.g. an older release): no KPI, panel,
@@ -394,6 +396,7 @@ class ResultsTest(SimpleTestCase):
         self.assertEqual(results.gene_label(None, "ENSSSAG1", "VGLL3,VGLL3B"), "~VGLL3")
         self.assertEqual(results.gene_label(None, "ENSSSAG00000053708", "VGLL3"), "vgll3")  # the catalogue's name, as on gene pages
         self.assertEqual(figures.share_label(161, 50_000), "<1%")  # a few hundred tier-1 SNPs never read as 0%
+        self.assertEqual(figures.share_label(49_839, 50_000), ">99%")  # nor the rest as 100%: the shares add up
         self.assertEqual(results.evidence_text("active: Brain,EarlySomitogenesis; molQTL lead: Brain",
                                                [{"term": "active", "weight": 3}, {"term": "molqtl", "weight": 0}]), "active: Brain, E somit.")
         self.assertEqual(results.reasons_text("repeat 1.0; GC 0.72"), "repeat (soft-masked) flanks (100%); GC content out of range (72%)")
