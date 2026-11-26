@@ -77,7 +77,13 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 - Few files, little code, readable. Don't add tests for every edge case.
 - No Django models or database until there's something to save (e.g. saved panels): state lives in job folders.
 - Ask before adding a dependency.
-- After changing a page the guided tour shows, retake its screenshots: `python manage.py tour_images` (a running portal).
+- The guided tour and Help are made final for 1.0 (G, 2026-11-26): until then a change does not retake the tour's
+  screenshots or rewrite Help, only corrects a statement it makes false. Then: `python manage.py tour_images` (a
+  running portal).
+- Tier rules: a job, a Design panel and a saved version each keep the weights.yaml their tiers were made with (a
+  panel's is its first source's). Read them with `jobs.weights(folder)`, `jobs.rules_sha256(folder)`; the rules in
+  use with no folder (`snpscore.score.rules_file()`, never `snpscore.score.WEIGHTS`). The public pool only with
+  `jobs.pool_file(folder)`, which gives it only when it was scored with that folder's rules.
 
 ## Design system
 - Every colour lives in `palette.py`; templates and `portal.css` use classes and `var(--sp-*)` only (tested). SVGs embed literal hex.

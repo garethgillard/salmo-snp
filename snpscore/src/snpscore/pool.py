@@ -18,7 +18,7 @@ from pathlib import Path
 from .annotate import annotate, connect
 from .assay import breakdown
 from .formats import lit, q
-from .score import WEIGHTS, load_weights, scored
+from .score import load_weights, rules_file, scored
 
 FLAGS = ("chromatin", "regbuild", "gerp", "pike", "blacklist", "lore", "public_af", "strand_ambiguous")  # boolean columns
 MAF_EDGES = tuple(i / 20 for i in range(1, 10))  # MAF histogram: [0, 0.05), [0.05, 0.1), ..., [0.45, 0.5]
@@ -33,13 +33,14 @@ CHUNK = 1_500_000  # sites per annotate run (3.4M salmon sites at once need more
 
 
 def stamp():
-    """What a pool depends on besides the release: the weights' sha256, the snpscore version and the site rule."""
+    """What a pool depends on besides the release: the sha256 of the rules in use (score.rules_file), the snpscore
+    version and the site rule."""
     from importlib.metadata import PackageNotFoundError, version
     try:
         v = version("snpscore")
     except PackageNotFoundError:
         v = "unknown"
-    return {"weights_sha256": hashlib.sha256(WEIGHTS.read_bytes()).hexdigest(), "snpscore_version": v,
+    return {"weights_sha256": hashlib.sha256(rules_file().read_bytes()).hexdigest(), "snpscore_version": v,
             "sites_rule": f"{SITES}: public MAF >= design.min_maf, at most {MAX_SITES}"}  # a new rule: every pool stale
 
 

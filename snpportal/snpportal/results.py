@@ -741,6 +741,8 @@ def table(request, key, job=None):
                         "many": f"Narrow the selection to at most {int(jobs.setting('SNPPORTAL_MAX_PANEL_SNPS', 50_000)):,} SNPs to add it to the panel.",
                         "release": "Your Design panel holds SNPs scored with another release: clear it, or save it as a project "
                                    "version, before adding these.",
+                        "rules": "Your Design panel holds SNPs scored with other tier rules, so their tiers would not rank "
+                                 "together: clear it, or save it as a project version, before adding these.",
                         "sv": "Panels hold SNP markers: structural variants can't be added.",
                         }.get(get("panel_error", "")),
         "dds": dds, "pick": pick, "n_selected": n_every - n_out, "n_out": n_out, "sv": is_sv(types),  # SVs: no panels
@@ -1074,9 +1076,11 @@ def summary_of(d):
     return s
 
 
-def background():
-    """The release's public background (pool/background.json from `snpscore pool`), or {} when it has no pool."""
-    return jobs.read_json(jobs.release() / "pool" / "background.json")
+def background(d=None):
+    """The release's public background (pool/background.json from `snpscore pool`) when it was scored with the same
+    rules as the job in folder `d` (else the rules in use); {} when the release has no pool or it was made with other
+    rules (jobs.pool_background), so the Overview never compares tiers made by different rules."""
+    return jobs.pool_background(d)
 
 
 def _shares(values):
@@ -1269,7 +1273,7 @@ OPEN = ("summary", "ideogram")  # side by side on the Overview (GWAS jobs: condi
 
 def _figure_context(key, job, trait, summary, d):
     return {"key": key, "job": job, "trait": trait, "preset": jobs.trait_label(trait), "s": summary, "weights": jobs.weights(d),
-            "manifest": jobs.manifest(d), "background": {} if job.get("input_kind") == "sv" else background(),  # public SNPs: not SVs' peers
+            "manifest": jobs.manifest(d), "background": {} if job.get("input_kind") == "sv" else background(d),  # public SNPs: not SVs' peers
             "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers")),
             "chip": jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}}
 
@@ -1354,6 +1358,7 @@ def overview(request, key, job):
         "qc_items": qc_items, "qc_warning": qc_warning, "qc_alias": validation.get("alias_warnings") or [],
         "qc_line": qc_line(validation), "qc_open": qc_problem(validation),
         "rejects": (d / "rejects.tsv").exists() and bool(rejected), "trait": trait, "trait_label": jobs.trait_label(trait),
+        "background_note": "" if job.get("input_kind") == "sv" else jobs.pool_note(d),  # left out: made with other rules
     }
 
 

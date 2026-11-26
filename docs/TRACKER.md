@@ -174,11 +174,15 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
 - [ ] S6 Evidence at the base: the ChromBPNet scores and allelic imbalance in the 12 fish (both from the Orion
       repository, docs/CHROMBPNET.md), tested for what they add among SNPs inside peaks; then a bonus G sets (#53)
 - [ ] S7 Customisation: a supported own-weights file, named profiles, the rules stated in every export, and an
-      enrichment-per-tier report from the user's own GWAS. First the gaps the audit demonstrated (SCORING.md section
-      6): no check of an edited weights.yaml (three of seven mistakes changed tiers silently), a running portal that
-      keeps the old public background after an edit, the Design panel and saved projects stating the wrong rules hash
-      (a saved version's download was re-tiered silently), the README's update command overwriting an edited file,
-      and snpscore outputs that do not name their rules
+      enrichment-per-tier report from the user's own GWAS. Still to do: named profiles in the portal and the
+      enrichment report
+  - [x] The gaps the audit demonstrated (SCORING.md section 6; fixed 2026-11-26, G: "Fix the gaps now first"): an
+        edited weights.yaml is checked first (`snpscore rules`, `salmo-snp rules`, the portal's system check), each
+        mistake named by its key; the portal leaves out a public background scored with other rules and says so;
+        a Design panel keeps its first source's rules, refuses a list scored with others, and saved versions keep
+        theirs (a download is no longer tiered again); an own copy (`salmo-snp rules --copy`, the data folder's
+        weights.yaml, or SNPSCORE_WEIGHTS) outlives an update; annotate, sv, pool, benchmark and gwas name their
+        rules (validation.json `rules`, Parquet metadata, the pool's stamp, the benchmark's head, gwas.json)
 - [ ] S8 What the pages tell users about the score (SCORING.md section 5). Done from it: the AQUA-FAANG citation is
       the published paper in both layer registries and on the Data page (G, 2026-11-24: Baudement et al., Nat Ecol
       Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6); releases carry it from the next build

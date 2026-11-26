@@ -4,7 +4,7 @@ import logging
 import shutil
 import tempfile
 from pathlib import Path
-from unittest import skipUnless
+from unittest import mock, skipUnless
 
 from django.core.management import call_command
 from django.core.management.base import SystemCheckError
@@ -12,6 +12,9 @@ from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 
 import snpdata
+import snpscore
+
+from . import health
 
 DATA = Path(__file__).resolve().parents[2] / "snpdata"
 FIXTURE = DATA / "tests" / "fixture"
@@ -65,3 +68,24 @@ class HealthTest(SimpleTestCase):
                 self.assertIn("gene.parquet differs from SHA256SUMS", str(e.exception))
                 shutil.rmtree(tmp / "release")
                 self.assertEqual(self.client.get(reverse("snpportal:health")).status_code, 503)
+
+    def test_rules_with_a_mistake_stop_the_portal(self):
+        """S7: tier rules with a mistake (snpscore's blocks or the portal's) stop the portal starting (a system check
+        error, as `manage.py check`, runserver and server.sh run) and are named on the Score page if made while it runs."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            bad = tmp / "weights.yaml"
+            bad.write_text(snpscore.score.WEIGHTS.read_text().replace("  splice: 3", "  splice: three")
+                           .replace("  n_target: 384", "  n_targt: 384"))
+            with mock.patch.object(snpscore.score, "WEIGHTS", bad), \
+                    override_settings(SNPPORTAL_RESULTS_DIR=str(tmp / "results"), SNPPORTAL_WORKERS=0):
+                (tmp / "results").mkdir()
+                errors = [e for e in health.release_check() if e.id == "snpportal.E004"]
+                self.assertEqual(len(errors), 1)
+                for said in ("'splice' is 'three'", "design: unknown key 'n_targt'", str(bad)):
+                    self.assertIn(said, errors[0].msg)
+                page = self.client.post(reverse("snpportal:upload"), {"paste": CANARY})
+                self.assertEqual(page.status_code, 400)
+                self.assertContains(page, "tier rules are corrected", status_code=400)
+                self.assertEqual(list((tmp / "results").iterdir()), [])  # no job made
+            self.assertEqual([e for e in health.release_check() if e.id == "snpportal.E004"], [])  # the shipped rules pass

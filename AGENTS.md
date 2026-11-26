@@ -285,6 +285,11 @@ Decided:
   Navigation between salmobase's pages and the portal is left for later (G, 2026-11-25: "Don't worry about
   navigation to and from salmobase for now"): the portal is an address.
 
+- Usage documents wait for 1.0 (G, 2026-11-26: "don't update usage document yet, like the tour. Let's wait till a
+  first official release to make the tour and help docs final for version 1.0"): no new tour screenshots or Help and
+  README user-guide rewrites for each change until the first official release; a statement a change makes false
+  (how long results are kept, say) is still corrected where it stands.
+
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
 - Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
   the ImmunoMap's bivalent or mixed active/polycomb (G, 2026-11-20) and the trout ImmunoMap's weak accessible
@@ -357,6 +362,15 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     uploads get a badge only near the four gene-region rows. The Locus browser opens at greb1l and rock1.
   - The public pool: since 2026-11-21 the salmon rule (Decided), so an even sample of at most 4,000,000 (MAX_SITES) of
     the public sites with MAF >= 0.05: 3.37M of 13.5M (before: 2,000,000 of all 18.8M).
+- The tier rules in use (2026-11-26, TRACKER S7: G asked for the audit's gaps to be fixed first): the shipped
+  weights.yaml, or an own copy that SNPSCORE_WEIGHTS names (`salmo-snp` sets it to the data folder's weights.yaml,
+  which `salmo-snp rules --copy` makes and a package update leaves alone; snpscore's commands also take
+  `--weights`). A file with a mistake is refused, each one named by its key (snpscore.check_weights; the portal's
+  design and priors blocks in lib/export.check_rules): the portal does not start (system check E004) and makes no
+  job. Results compare only with a public pool scored with their own rules (jobs.pool_file; otherwise the Overview
+  says why it leaves the background out). A Design panel takes the rules of its first source and refuses a list
+  scored with others; saved versions keep them and download with their stored tiers. Outputs name the rules
+  (validation.json `rules`, Parquet key-value metadata, the pool's stamp, the benchmark's head, gwas.json).
 - Structural variants (2026-11-24, DECISIONS #55-#57): each evidence term counts once however many elements an SV
   overlaps (a 1-bp SV scores as a SNP at that base); per condition the strongest state of the peaks it overlaps; the
   most severe gene region; Ensembl regulatory only without an AQUA-FAANG peak; insertions and breakends are their

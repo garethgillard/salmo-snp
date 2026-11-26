@@ -18,7 +18,6 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import mark_safe
 
-import snpscore
 from snpscore import formats
 
 from . import explore, figures, jobs, palette, search, serve
@@ -487,13 +486,12 @@ def run_locally(request):
     # A release built locally has its own manifest.json (build date, local genome path), so it is checked by its layers:
     # one sha256 over the sorted 'name sha256' lines of the manifest's layers (each a parquet that builds byte-identically)
     lines = sorted(f"{x['name']} {x.get('sha256')}\n" for x in info["layers"])
-    weights = snpscore.score.WEIGHTS
     return render(request, "snpportal/run_locally.html", {
         "nav": "about", "title": "Run it locally", "release": info, "folder": folder,
         "cli": [(jobs.stored_preset(v, jobs.weights()["presets"]), label) for v, label in presets
                 if v != "all" and jobs.stored_preset(v, jobs.weights()["presets"])],
         "layers_sha256": hashlib.sha256("".join(lines).encode()).hexdigest() if lines else None,
-        "weights_sha256": jobs.sha256(weights) if weights.exists() else None,
+        "weights_sha256": jobs.rules_sha256(),  # the rules in use: the shipped file, or this install's own
         "layers_check": (f"python3 -c \"import hashlib, json; m = json.load(open('{folder}/manifest.json')); print(hashlib.sha256(''.join("
                          "sorted(x['name'] + ' ' + str(x.get('sha256')) + chr(10) for x in m['layers'])).encode()).hexdigest())\""),
         "command": f"snpscore annotate my_snps.vcf.gz --release {folder} --trait all -o my_snps.tsv",

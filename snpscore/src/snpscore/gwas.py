@@ -513,6 +513,8 @@ def run(sumstats, release_dir, out_dir, trait="all", threads=2, memory_limit="2G
     report = attach(out, threads, memory_limit)
     cfg = settings(load_weights(), report, **changes)
     report["finemap"] = {k: cfg[k] for k in [*DEFAULTS, "trait_sd_source"]}
+    from .score import describe_rules
+    report["rules"] = describe_rules()  # the finemap block and the tiers of the prior come from these rules
     report["warnings"] = [w for w in [trait_sd_warning(report, cfg)] if w]
     (out / "gwas.json").write_text(json.dumps(report, indent=1))
     con = connect([out], out, threads, memory_limit)

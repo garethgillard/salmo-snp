@@ -401,6 +401,13 @@ From an audit of the code and demonstrations on a copy of the release (2026-11-2
   - of seven deliberate mistakes in the file, three changed tiers with no message and four gave a Python error;
   - the README's update command puts the shipped file back;
   - snpscore's own output files do not say which rules made them.
+
+  Fixed on 2026-11-26 (TRACKER S7): the rules in use are the shipped file or an own copy that SNPSCORE_WEIGHTS
+  names (`salmo-snp` uses the data folder's weights.yaml, which `salmo-snp rules --copy` makes and an update leaves
+  alone; snpscore's commands take `--weights`). They are checked before use, every mistake named by its key (the
+  seven of the audit included). The portal's Overview leaves out a public background scored with other rules and
+  says why; panels and saved versions keep the rules their tiers were made with; snpscore's outputs name the file
+  and its sha256.
 - **Effort to each level** (estimates): an own-weights file as a supported option, a day to a few days; named
   profiles in the portal, a few days plus a public background per profile; editing rules for one job with immediate
   re-tiering, a week or more; a profile saved with a design project and stated in every export, a few days; learning

@@ -15,6 +15,7 @@ from django.core import checks
 from django.http import JsonResponse
 
 from . import jobs
+from .lib import export as snp_export
 from .lib import predict
 
 _TRACKS = {}  # host -> (checked, reachable): track hosts asked at most every 5 minutes
@@ -25,10 +26,10 @@ def release_check(app_configs=None, **kwargs):
     """Errors for a damaged release (snpscore verify), a results folder that can't be written and a DuckDB older than 2;
     a warning when no release is set up (as in the test suite, whose tests set their own)."""
     from snpscore.release import verify
-    out, release = [], jobs.release()
+    out, release = rules_check(), jobs.release()
     if not (release / "manifest.json").exists():
-        return [checks.Warning(f"No release at {release}", hint="Set SNPSCORE_RELEASE, or run `salmo-snp download`.",
-                               id="snpportal.W001")]
+        return out + [checks.Warning(f"No release at {release}", hint="Set SNPSCORE_RELEASE, or run `salmo-snp download`.",
+                                     id="snpportal.W001")]
     for problem in verify(release):
         cls = checks.Warning if problem.startswith("no SHA256SUMS") else checks.Error
         out.append(cls(f"Release {release.name}: {problem}", id="snpportal.W002" if cls is checks.Warning else "snpportal.E001"))
@@ -40,6 +41,30 @@ def release_check(app_configs=None, **kwargs):
     if int(duckdb.__version__.split(".")[0]) < 2:
         out.append(checks.Error(f"DuckDB {duckdb.__version__}: the portal needs DuckDB 2", id="snpportal.E003"))
     return out
+
+
+def rules(path=None):
+    """The rules in use (or the file `path`), checked by snpscore and for the portal's own blocks: RulesError names
+    each mistake and the file."""
+    import snpscore
+    w = snpscore.load_weights(path, check=False)  # a YAML mistake, or an own file that is gone, raises here
+    problems = snpscore.check_weights(w) + snp_export.check_rules(w) if w is not None else []  # every mistake at once
+    if problems:
+        raise snpscore.RulesError(f"The tier rules in {path or snpscore.score.rules_file()} can't be used:\n  "
+                                  + "\n  ".join(problems))
+    return w
+
+
+def rules_check():
+    """An error (the portal won't start) for tier rules with a mistake: the shipped weights.yaml, or the own copy
+    SNPSCORE_WEIGHTS names (a local install's in its data folder, salmo-snp rules)."""
+    import snpscore
+    try:
+        rules()
+    except snpscore.RulesError as e:
+        return [checks.Error(str(e), hint="Correct the file (`salmo-snp rules` checks it again), or remove your own copy to "
+                             "use the shipped rules.", id="snpportal.E004")]
+    return []
 
 
 def _reachable(url):

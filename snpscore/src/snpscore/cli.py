@@ -1,11 +1,16 @@
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from .annotate import annotate, rsid
 from .benchmark import benchmark_sets
 from .formats import InputError
+
+
+RULES_HELP = ("your own copy of weights.yaml, the tier rules (default: SNPSCORE_WEIGHTS, else the shipped file); it is "
+              "checked first, and the outputs name it with its sha256")
 
 
 def main():
@@ -23,6 +28,7 @@ def main():
     a.add_argument("--max-snps", type=int, help="refuse files with more SNPs than this")
     a.add_argument("--from-assembly", help="the positions are on another assembly (ICSASG_v2, fSalSal1, as the release "
                    "has them): convert them to the release's (its liftover tables)")
+    a.add_argument("--weights", help=RULES_HELP)
     a.add_argument("--place-by-flank", action="store_true", help="the positions are on another assembly (e.g. an ICSASG_v2 "
                    "chip manifest): place the SNPs by their flank sequences (Flank, SourceSeq or TopGenomicSeq column)")
 
@@ -36,6 +42,7 @@ def main():
     s.add_argument("--threads", type=int, default=4)
     s.add_argument("--memory", default="4GB", help="DuckDB memory limit")
     s.add_argument("--max-svs", type=int, help="refuse files with more SVs than this")
+    s.add_argument("--weights", help=RULES_HELP)
 
     m = sub.add_parser("benchmark", help="positives vs controls matched on gene distance and public MAF, per layer, "
                                          "evidence term, region class, consequence and tier, with 95%% intervals")
@@ -49,6 +56,10 @@ def main():
     m.add_argument("--controls", type=int, default=10, help="controls per positive")
     m.add_argument("--trait", default="all")
     m.add_argument("-o", "--out", help="also write the table as TSV (one file for all sets)")
+    m.add_argument("--weights", help=RULES_HELP)
+
+    w = sub.add_parser("rules", help="check a tier rules file (default: the rules in use) and say which file that is")
+    w.add_argument("file", nargs="?", help="a copy of weights.yaml (default: SNPSCORE_WEIGHTS, else the shipped file)")
 
     r = sub.add_parser("rsid", help="where rs IDs are on Ssal_v3.1 and ICSASG_v2 (EVA release 9), as JSON lines")
     r.add_argument("rs", nargs="+")
@@ -74,12 +85,27 @@ def main():
                    help="also run the sequence and assay checks (needs --memory 8GB: 4GB is too little)")
     o.add_argument("--threads", type=int, default=4)
     o.add_argument("--memory", default="4GB", help="DuckDB memory limit")
+    o.add_argument("--weights", help=RULES_HELP)
 
     args, rest = p.parse_known_args()
     if args.cmd == "gwas":
         from .gwas import main as gwas_main
         return gwas_main(rest)
     args = p.parse_args()
+    if getattr(args, "weights", None):  # every step of the run (annotate, the pool's stamp) reads the rules in use
+        os.environ["SNPSCORE_WEIGHTS"] = str(Path(args.weights).resolve())
+    if args.cmd == "rules":
+        from .score import describe_rules, load_weights, rules_file, RulesError
+        path = Path(args.file) if args.file else rules_file()
+        try:
+            if not path.is_file():
+                raise RulesError(f"No tier rules at {path}")
+            load_weights(path)
+        except RulesError as e:
+            sys.exit(f"snpscore: {e}")
+        d = describe_rules(path)
+        print(f"{d['file']}: ok ({'the shipped rules' if d['shipped'] else 'your own rules'}; sha256 {d['sha256']})")
+        return
     if args.cmd == "verify":
         from .release import verify
         problems = verify(args.release)

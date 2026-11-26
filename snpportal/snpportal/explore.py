@@ -291,10 +291,10 @@ def candidates(windows, trait="all", sort="pos"):
     names, source). Reads the pool's rows when the release has pool/pool.parquet, else annotates the sites of
     public_af.parquet now (sequence checks off)."""
     release, w = jobs.release(), jobs.weights()
-    pool = release / "pool" / "pool.parquet"
+    pool = jobs.pool_file()  # its tiers only when the rules in use made them; else the sites are scored now
     with tempfile.TemporaryDirectory(prefix="snpportal-explore-") as tmp:  # public sites only, never user data
         tmp = Path(tmp).resolve()
-        if pool.exists():
+        if pool:
             con, source, path = jobs.connect([release]), "pool", pool
         else:
             rows = public_rows(windows)
@@ -328,10 +328,10 @@ def _tsv(header_lines, names, rows):
 
 def provenance(what, trait=None):
     """'#' lines for public downloads: what it is, the release and its hashes, the preset, PROVISIONAL and SYNTHETIC."""
-    info, weights = jobs.release_info(), snpscore.score.WEIGHTS
+    info = jobs.release_info()
     lines = [f"salmobase functional SNP portal: {what}; exported {jobs.utc()}",
              f"release {info['version']} ({info['assembly']}); manifest sha256 {info['sha256']}; "
-             f"weights sha256 {jobs.sha256(weights) if weights.exists() else None}"]
+             f"weights sha256 {jobs.rules_sha256()}"]  # the rules in use, which the pool's tiers fit (jobs.pool_file)
     if trait:
         lines.append(f"preset {trait}; tier rules PROVISIONAL (prototype weights, under review)")
     if info["synthetic"]:

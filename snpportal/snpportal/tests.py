@@ -45,6 +45,10 @@ class PaletteTest(SimpleTestCase):
         self.assertGreaterEqual(palette.contrast(palette.ACCENT, palette.WHITE), 4.5)
         self.assertGreaterEqual(palette.contrast(palette.SYNTHETIC[1], palette.SYNTHETIC[2]), 4.5)
 
+    def test_states_are_snpscores(self):  # one list of chromatin state names: a rules file is checked against it
+        for scheme, colours in palette.STATE_PALETTES.items():
+            self.assertEqual(set(colours), set(snpscore.score.STATES), scheme)
+
     def test_state_palette_switch(self):
         from . import locus_svg
         try:

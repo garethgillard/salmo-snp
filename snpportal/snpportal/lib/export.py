@@ -453,7 +453,7 @@ def export(source, fmt, out, release_dir, preset="all", meta=None, include_faile
             raise InputError(f"Unknown {fmt} template '{template}'. Choose from: {', '.join(TEMPLATES[fmt])}")
     release, out = Path(release_dir).resolve(), Path(out).resolve()
     manifest = manifest or release / "manifest.json"
-    weights = weights or snp_score.WEIGHTS
+    weights = weights or snp_score.rules_file()
     meta = {"preset": preset, **(meta or {}), **({"vendor": fmt} if fmt in VENDORS else {})}
     header = [] if plain else provenance(manifest, weights, meta)
     m, w = _load(manifest, weights)[:2]
@@ -531,7 +531,7 @@ def bundle_zip(out, source, release_dir, preset="all", meta=None, formats=("tsv"
     synthetic data contributes. Returns the zip path."""
     release, out = Path(release_dir).resolve(), Path(out).resolve()
     manifest = manifest or release / "manifest.json"
-    weights = weights or snp_score.WEIGHTS
+    weights = weights or snp_score.rules_file()
     m, w, _, _ = _load(manifest, weights)
     header = provenance(manifest, weights, {"preset": preset, **(meta or {})})
     synthetic = is_synthetic(m, meta)
@@ -579,6 +579,39 @@ def bundle_zip(out, source, release_dir, preset="all", meta=None, formats=("tsv"
 # ---- P6.5 genomic-prediction priors ----
 
 PRIOR_ORDER = ["tier1_2", "active", "coding", "constrained", "regulatory"]  # PROVISIONAL: weights.yaml 'priors: order'
+
+
+def check_rules(w):
+    """The mistakes in the portal's blocks of a rules file, `design` (the panel designer: panel.DEFAULTS) and `priors`,
+    as messages naming the key ([] when they can be used); snpscore.check_weights checks the rest."""
+    from .panel import DEFAULTS
+    out, design, priors = [], (w or {}).get("design"), (w or {}).get("priors")
+    if design is not None and not isinstance(design, dict):
+        out.append("design: 'key: value' lines, as in the shipped file")
+    elif design:
+        known = sorted({*DEFAULTS, "presets", "target_sizes"})
+        out += [f"design: unknown key '{k}' (mistyped? the keys are {', '.join(known)})" for k in design if k not in known]
+        purposes = design.get("presets") or {}
+        if not isinstance(purposes, dict):
+            out.append("design: presets: 'name: {label, help and design keys}' entries, as in the shipped file")
+            purposes = {}
+        for name, p in purposes.items():
+            if not isinstance(p, dict):
+                out.append(f"design: presets: '{name}' is 'key: value' lines (label, help and design keys)")
+                continue
+            out += [f"design: presets: '{name}': unknown key '{k}'" for k in p if k not in {*DEFAULTS, "label", "help", "mix"}]
+            mixed = p.get("mix") or {}
+            out += [f"design: presets: '{name}' mixes '{k}', which is not a purpose of its own" for k in
+                    (mixed if isinstance(mixed, dict) else {}) if k not in purposes or (purposes[k] or {}).get("mix")]
+        sizes = design.get("target_sizes")
+        if sizes is not None and not (isinstance(sizes, list) and all(isinstance(x, int) and not isinstance(x, bool)
+                                                                      and x > 0 for x in sizes)):
+            out.append(f"design: target_sizes is {sizes!r}; whole numbers of markers, e.g. [96, 384]")
+    order = priors.get("order") if isinstance(priors, dict) else None
+    if (priors is not None and not isinstance(priors, dict)) or (
+            order is not None and not (isinstance(order, list) and all(x in PRIOR_ORDER for x in order))):
+        out.append(f"priors: order is a list of the categories {', '.join(PRIOR_ORDER)}")
+    return out
 NONSYNONYMOUS = ("missense_variant", "stop_gained", "stop_lost", "start_lost")  # coding_consequence (P4.5) for 'coding'
 PRIOR_REFERENCES = [  # DOIs checked in PubMed, 2026-10-07
     "Edwards SM et al. (2016) Genomic prediction for quantitative traits is improved by mapping variants to gene "
@@ -640,7 +673,7 @@ def priors(source, out, release_dir, preset="all", meta=None, categories=None, t
     'classes': [(class, category, n)]}."""
     release, out = Path(release_dir).resolve(), Path(out).resolve()
     manifest = manifest or release / "manifest.json"
-    weights = weights or snp_score.WEIGHTS
+    weights = weights or snp_score.rules_file()
     m, w = _load(manifest, weights)[:2]
     synthetic = [l["name"] for l in m.get("layers", []) if l.get("synthetic")]
     con, rel, columns = _open(source, table, [release], out, preset, w, synthetic)

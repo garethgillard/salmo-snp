@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+import snpscore.pool
 from snpscore.formats import InputError
 from snpscore.score import load_weights
 
@@ -91,8 +92,11 @@ def tools(args):
         with tempfile.TemporaryDirectory() as tmp:
             chip = Path(tmp) / "chip.parquet"
             panel.read_chip(args.chip, release, chip)
-            pool = release / "pool" / "pool.parquet"
-            result = panel.compare(args.annotated, chip, args.preset, pool=pool if args.pool and pool.exists() else None,
+            fits = args.pool and not snpscore.pool.stale(release)  # a pool scored with the rules in use, for this release
+            if args.pool and not fits:
+                print("No gaps filled: the release's pool is missing or was scored with other tier rules "
+                      "(snpscore pool --release <release> --if-stale builds it)", file=sys.stderr)
+            result = panel.compare(args.annotated, chip, args.preset, pool=release / "pool" / "pool.parquet" if fits else None,
                                    weights=load_weights(), chrom_sizes=manifest.get("chrom_sizes"),
                                    synthetic=synthetic)
         print(json.dumps(result["summary"]))

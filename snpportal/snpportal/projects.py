@@ -31,11 +31,6 @@ DERIVED = ("file_row_number", "snp_key", "dropped", "sources", "on_chip", "dist_
 LIST = ("tier", "id", "chrom", "pos", "ref", "alt", "gene_name", "region_class", "assay_status", "panel_source")
 
 
-def snpscore_weights():
-    import snpscore
-    return snpscore.score.WEIGHTS
-
-
 def root():
     """The projects folder: SNPPORTAL_PROJECTS_DIR, else projects/ next to the results folder (the data folder's)."""
     return Path(jobs.setting("SNPPORTAL_PROJECTS_DIR", jobs.results_dir().parent / "projects"))
@@ -97,11 +92,13 @@ def save(panel_dir, name, note=""):
         if chip and (panel_dir / f).exists():
             shutil.copyfile(panel_dir / f, v / f)
     copy_extras(panel_dir, v)
+    if panel.rules(panel_dir):  # the rules that made its tiers, so the version states and keeps them
+        shutil.copyfile(panel.rules(panel_dir), v / "weights.yaml")
     jobs._write_json(v / "meta.json", {
         "version": n, "created_utc": jobs.utc(), "note": str(note).strip()[:500], "n": len(keys),
         "hash": hashlib.sha256("\n".join(keys).encode()).hexdigest()[:16],
         "sources": [x.get("label") for x in s.get("sources", [])], "chip": chip.get("label"),
-        "release": jobs.manifest().get("version"), "weights_sha256": jobs._file("sha256", snpscore_weights())})
+        "release": jobs.manifest().get("version"), "weights_sha256": jobs.rules_sha256(panel_dir)})  # None: not recorded
     return folder, n
 
 
@@ -132,6 +129,8 @@ def open_in_panel(d, n):
         if (v / f).exists():
             shutil.copyfile(v / f, out / f)
     copy_extras(v, out)
+    if panel.rules(v):
+        shutil.copyfile(panel.rules(v), out / "weights.yaml")
     jobs._write_json(out / "panel.json", {"sources": [{"id": 1, "project": d.name, "version": n, "label": f"{name}, version {n}",
                                                        "n": meta["n"], "selection": "", "filters": [meta.get("note") or "saved panel"],
                                                        "synthetic": False, "added_utc": jobs.utc()}],
@@ -224,8 +223,14 @@ def download(request, name, n):
     if fmt not in ("tsv", "kasp", "illumina", "axiom"):
         raise Http404("Unknown format")
     out = v / f".download-{uuid.uuid4().hex}"
-    meta = {"tool": "salmo-snp project", "filters": {"project": name, "version": n}, "panel": jobs.read_json(v / "meta.json")["hash"]}
-    snp_export.export(v / "panel.parquet", fmt, out, jobs.release(), "all", meta)
+    meta = {"tool": "salmo-snp project", "filters": {"project": name, "version": n}, "panel": jobs.read_json(v / "meta.json")["hash"],
+            "weights_sha256": jobs.rules_sha256(v) or panel.NOT_RECORDED}
+    con = jobs.connect([v, jobs.release()], v)  # the tiers as saved: a table is exported as it is, never tiered again
+    con.execute(f"CREATE VIEW saved AS SELECT * FROM read_parquet({lit(v / 'panel.parquet')})")
+    try:
+        snp_export.export(con, fmt, out, jobs.release(), "all", meta, table="saved", weights=panel.rules(v))
+    finally:
+        con.close()
     for sidecar in v.glob(f"{out.name}.*"):  # vendor files' provenance and lookup sidecars: the zip bundle has those
         sidecar.unlink()
     f = open(out, "rb")
@@ -250,7 +255,7 @@ def export_zip(request, name):
 @require_POST
 def import_zip(request):
     """POST a project zip (from Export): it becomes a new project (named '<name>-2' when the name is taken). Only the
-    files a project holds are read: project.json and v<N>/{meta.json, panel.parquet, chip.parquet, chip.json,
+    files a project holds are read: project.json and v<N>/{meta.json, panel.parquet, weights.yaml, chip.parquet, chip.json,
     populations.json, populations/*.parquet, chips.json, chips/*.parquet}."""
     stop = _need_local(request)
     if stop:
@@ -258,7 +263,7 @@ def import_zip(request):
     upload = request.FILES.get("project")
     if not upload:
         return redirect(f"{reverse('snpportal:projects')}?error=Choose a project zip to import.")
-    allowed = re.compile(r"^[^/]+/(project\.json|v\d+/(meta\.json|panel\.parquet|chip\.parquet|chip\.json|populations\.json"
+    allowed = re.compile(r"^[^/]+/(project\.json|v\d+/(meta\.json|panel\.parquet|weights\.yaml|chip\.parquet|chip\.json|populations\.json"
                          r"|populations/[a-z0-9_]+\.parquet|chips\.json|chips/[a-z0-9_]+\.parquet|uniqueness\.(parquet|json)))$")
     try:
         with zipfile.ZipFile(upload) as z:

@@ -376,17 +376,24 @@ class ResultsTest(SimpleTestCase):
         region and MAF bars get background ticks."""
         pool = self.release / "pool"
         pool.mkdir(exist_ok=True)
-        (pool / "background.json").write_text(json.dumps({  # SYNTHETIC test data written by tests_results.py: not real results
+        made = {  # SYNTHETIC test data written by tests_results.py: not real results
             "n_sites": 1000, "active_by_condition": {c: 0.01 for c in self.summary["conditions"]},
             "region_class": {"CDS": {"n": 20, "share": 0.02}, "intron": {"n": 500, "share": 0.5}, "intergenic": {"n": 480, "share": 0.48}},
-            "maf_histogram": {f"{i / 20:.2f}-{(i + 1) / 20:.2f}": {"n": 100, "share": 0.1} for i in range(10)}}))
+            "maf_histogram": {f"{i / 20:.2f}-{(i + 1) / 20:.2f}": {"n": 100, "share": 0.1} for i in range(10)},
+            "release": jobs.manifest().get("version"), "weights_sha256": jobs.rules_sha256(self.d)}  # the job's own rules
+        (pool / "background.json").write_text(json.dumps(made))
         try:
             page = self.client.get(self.url).content.decode()
             self.assertIn("× the public background", page)
             self.assertIn("Public background: 2.0% of SNPs", page)
             self.assertIn("public background 10.0%", page)
+            self.assertNotIn("The public background is left out", page)
             tsv = self.client.get(reverse("snpportal:figure", args=[self.key, "conditions"]) + "?format=tsv&plain=1").content.decode()
             self.assertIn("\t0.01000\t", tsv)
+            (pool / "background.json").write_text(json.dumps({**made, "weights_sha256": "0" * 64}))  # S7: other rules
+            page = self.client.get(self.url).content.decode()
+            self.assertIn("The public background is left out", page)  # said, and nothing compared with it
+            self.assertNotIn("× the public background", page)
         finally:
             shutil.rmtree(pool)
 

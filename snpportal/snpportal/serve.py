@@ -4,11 +4,14 @@
                        [--species rainbow_trout|all]   (a release is for one species; default: Atlantic salmon)
     salmo-snp serve [--release FOLDER] [--port N]      the portal on http://127.0.0.1:8000/snp/ (this computer only)
     salmo-snp info                                     where the data and your results are, and how big
+    salmo-snp rules [--copy]                           the tier rules in use, checked; --copy: your own copy to edit
 
 Everything lives in one data folder (SALMO_SNP_HOME, else the platform's: ~/Library/Application Support/salmo-snp,
 ~/.local/share/salmo-snp or %LOCALAPPDATA%\\salmo-snp): releases/<version>/, genome/, results/ (kept until you delete
-them) and secret_key. The published data is a folder (snpdata publish) on a web server, or a copy of it on a disk:
-releases/<version>/ with SHA256SUMS, releases/latest.json, and raw/ with the genome."""
+them), secret_key and, if you made one, weights.yaml: your own tier rules, used instead of the shipped ones and left
+alone by an update of the package (SNPSCORE_WEIGHTS names another file). The published data is a folder (snpdata
+publish) on a web server, or a copy of it on a disk: releases/<version>/ with SHA256SUMS, releases/latest.json, and
+raw/ with the genome."""
 from __future__ import annotations
 
 import argparse
@@ -197,6 +200,7 @@ def serve(release=None, port=8000):
     if problems:
         sys.exit(f"salmo-snp: {release} can't be used:\n  " + "\n  ".join(problems))
     genome = local_genome(release)
+    check_rules()  # the rules new lists (and the pool) are scored with: a mistake in an edited copy is said now, by its key
     os.environ.update({
         "DJANGO_SETTINGS_MODULE": "snpsite.settings", "DJANGO_DEBUG": "0",
         "SNPSCORE_RELEASE": str(release.resolve()), "SNPPORTAL_RESULTS_DIR": str(HOME / "results"), "SNPPORTAL_LOCAL": "1",
@@ -214,6 +218,9 @@ def serve(release=None, port=8000):
     for folder in by_species.values():
         ensure_pool(folder)
     print(f"salmo-snp: release {release.name}, results in {HOME / 'results'}")
+    from snpscore import score
+    if not score.describe_rules()["shipped"]:
+        print(f"salmo-snp: your own tier rules, {score.rules_file()}")
     if len(by_species) > 1:
         print("salmo-snp: species " + ", ".join(f"{jobs.species(f)['name']} ({f.name})" for f in by_species.values())
               + ": the species bar at the top right switches")
@@ -238,6 +245,51 @@ def secret():
     return path.read_text().strip()
 
 
+def own_rules():
+    """Your own tier rules: weights.yaml in the data folder (`salmo-snp rules --copy` makes it), else None."""
+    path = HOME / "weights.yaml"
+    return path if path.exists() else None
+
+
+def rules(copy=False):
+    """Say which tier rules are in use and check them; with copy, first copy the shipped ones into the data folder,
+    where an update of the package leaves them alone, to edit."""
+    from snpscore import score
+    if copy:
+        target = HOME / "weights.yaml"
+        if target.exists():
+            sys.exit(f"salmo-snp: {target} is there already: edit it, or delete it to use the shipped rules again")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(score.WEIGHTS, target)
+        os.environ.setdefault("SNPSCORE_WEIGHTS", str(target))
+        print(f"salmo-snp: copied the shipped tier rules to {target}. Edit it and restart `salmo-snp serve`: new lists "
+              "are scored with it, results already made keep their own rules, and the public pool is scored again. "
+              "Delete it to use the shipped rules again.")
+    check_rules()
+    print(rules_line() + ": ok")
+
+
+def check_rules():
+    """Stop with the mistakes in the tier rules in use, as the portal checks them at start: snpscore's blocks
+    (score.check_weights) and the portal's (design, priors)."""
+    from snpscore import score
+    from snpportal.lib.export import check_rules as portal_problems
+    try:
+        w = score.load_weights(check=False)  # a YAML mistake, or an own file that is gone, stops here
+    except score.RulesError as e:
+        sys.exit(f"salmo-snp: {e}")
+    problems = score.check_weights(w) + portal_problems(w) if w is not None else []  # every mistake at once
+    if problems:
+        sys.exit(f"salmo-snp: The tier rules in {score.rules_file()} can't be used:\n  " + "\n  ".join(problems))
+
+
+def rules_line():
+    from snpscore import score
+    d = score.describe_rules()
+    return (f"tier rules    {d['file']} ({'shipped with snpscore' if d['shipped'] else 'your own'}; "
+            f"sha256 {d['sha256'][:12]})")
+
+
 def size(path):
     return sum(p.stat().st_size for p in Path(path).rglob("*") if p.is_file()) if Path(path).exists() else 0
 
@@ -247,6 +299,7 @@ def info():
     gb = lambda n: f"{n / 1e9:.2f} GB" if n >= 1e9 else f"{n / 1e6:.0f} MB"  # noqa: E731
     print("versions      " + ", ".join(f"{k} {v}" for k, v in installed().items()) + f", Python {sys.version.split()[0]}")
     print(f"data folder   {HOME}")
+    print(rules_line())
     for r in releases():
         m = json.loads((r / "manifest.json").read_text())
         what = f"{(m.get('species') or {}).get('name', 'Atlantic salmon')}, {m.get('assembly', '?')}"
@@ -274,7 +327,11 @@ def main(argv=None):
     s.add_argument("--release", help="a release folder (default: this code's release, else the newest downloaded)")
     s.add_argument("--port", type=int, default=8000)
     sub.add_parser("info", help="where the data and results are, and their sizes")
+    r = sub.add_parser("rules", help="the tier rules in use (shipped, or your own weights.yaml in the data folder), checked")
+    r.add_argument("--copy", action="store_true", help="copy the shipped rules into the data folder, to edit")
     args = p.parse_args(argv)
+    if own_rules() and not os.environ.get("SNPSCORE_WEIGHTS"):  # your own rules, which an update leaves alone
+        os.environ["SNPSCORE_WEIGHTS"] = str(own_rules())
     if args.cmd == "download":
         versions = [args.version] if args.version or not args.species else (
             list(RELEASES.values()) if args.species == "all" else [RELEASES[args.species]])
@@ -282,6 +339,8 @@ def main(argv=None):
             download(version, args.source, not args.no_genome)
     elif args.cmd == "serve":
         serve(args.release, args.port)
+    elif args.cmd == "rules":
+        rules(args.copy)
     else:
         info()
 

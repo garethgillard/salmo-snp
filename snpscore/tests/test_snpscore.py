@@ -721,3 +721,53 @@ def test_alignment_conversion(release, tmp_path):  # I19: Ssal_v3.1 <-> fSalSal1
     view = positions(con, "mine", out / entries["to_fsalsal1"]["file"], "fSalSal1")
     assert con.execute(f'SELECT pos, "fSalSal1_chrom", "fSalSal1_pos" FROM {view} ORDER BY pos').fetchall() == [
         (5, None, None), (28996360, "25", 1060)]
+
+
+def test_rules_mistakes_are_named(tmp_path):
+    """An edited weights.yaml is checked before it is used (S7): each mistake that would otherwise change tiers
+    silently, or stop with a Python error, is named by its key; the shipped rules pass."""
+    from snpscore import WEIGHTS, RulesError, check_weights
+    assert check_weights(load_weights(WEIGHTS)) == []
+    text = WEIGHTS.read_text()
+    edits = {"Active_enhancer]": "Active_Enhancer]", "  splice: 3": "  splice: 1.5", "  constrained:": "  constrainted:",
+             "tiers: [5, 3, 1]": "tiers: [1, 3, 5]", "maturation: [Brain, Gonad]": "maturation: [Brian, Gonad]"}
+    for old, new in edits.items():
+        assert old in text, old
+        text = text.replace(old, new)
+    bad = tmp_path / "weights.yaml"
+    bad.write_text(text + "\npresetz: {}\n")
+    with pytest.raises(RulesError) as e:
+        load_weights(bad)
+    for said in ("'Active_Enhancer' is not a chromatin state", "'splice' is 1.5", "unknown term 'constrainted'",
+                 "'constrained' is missing", "tiers: [1, 3, 5]", "'Brian' in 'maturation' begins no condition",
+                 "unknown block 'presetz'", str(bad)):
+        assert said in str(e.value), said
+    bad.write_text("weights:\n  active: 3\n tiers: [5, 3, 1]\n")  # a YAML mistake: where it is, not a traceback
+    with pytest.raises(RulesError, match="can't be read at line 3"):
+        load_weights(bad)
+
+
+def test_own_rules_are_used_and_named(release, tmp_path, monkeypatch):
+    """SNPSCORE_WEIGHTS (or annotate's weights=) names an own copy of the rules (S7: an install's edited copy outlives
+    an update): the tiers follow it, and validation.json, the Parquet file's metadata and the pool's stamp name it."""
+    from snpscore import WEIGHTS, RulesError, pool
+    own = tmp_path / "own_weights.yaml"
+    own.write_text(WEIGHTS.read_text().replace("  active: 3", "  active: 7"))
+    sha = hashlib.sha256(own.read_bytes()).hexdigest()
+    shipped = annotate(FIXTURE / "snps.vcf", release, tmp_path / "shipped.parquet")
+    assert report(shipped)["rules"]["shipped"] and pool.stamp()["weights_sha256"] != sha
+    monkeypatch.setenv("SNPSCORE_WEIGHTS", str(own))
+    out = annotate(FIXTURE / "snps.vcf", release, tmp_path / "own.parquet")
+    assert report(out)["rules"] == {**report(out)["rules"], "file": str(own), "sha256": sha, "shipped": False}
+    meta = dict(duckdb.sql(f"SELECT decode(key), decode(value) FROM parquet_kv_metadata('{out}')").fetchall())
+    assert meta["snpscore_rules_sha256"] == sha and meta["snpscore_trait"] == "all"
+    assert pool.stamp()["weights_sha256"] == sha  # a pool scored with other rules is stale
+    before = {(r["chrom"], r["pos"]): r["tier_score"] for r in read(shipped)}
+    after = {(r["chrom"], r["pos"]): r["tier_score"] for r in read(out)}
+    assert any(after[k] > (before[k] or 0) for k in after if after[k] is not None)  # active now counts 7
+    monkeypatch.delenv("SNPSCORE_WEIGHTS")
+    again = annotate(FIXTURE / "snps.vcf", release, tmp_path / "given.parquet", weights=own)  # or named per run
+    assert report(again)["rules"]["sha256"] == sha
+    monkeypatch.setenv("SNPSCORE_WEIGHTS", str(tmp_path / "gone.yaml"))
+    with pytest.raises(RulesError, match="SNPSCORE_WEIGHTS names"):
+        load_weights()

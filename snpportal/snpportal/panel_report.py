@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import statistics
 
-import snpscore
 from django.http import Http404
 from django.shortcuts import render
 from django.urls import reverse
@@ -74,9 +73,8 @@ def build(d, title, note=None, previous=None, synthetic=False):
     chip = jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}
     res = None
     if chip:
-        pool = jobs.release() / "pool" / "pool.parquet"
-        res = snp_panel.compare(con, d / "chip.parquet", "all", weights=jobs.weights(), table="p0", pool=pool if pool.exists() else None,
-                                chrom_sizes=jobs.manifest().get("chrom_sizes"))
+        res = snp_panel.compare(con, d / "chip.parquet", "all", weights=jobs.weights(), table="p0",
+                                pool=jobs.pool_file(panel.rules_dir(d)), chrom_sizes=jobs.manifest().get("chrom_sizes"))
         on = con.execute("SELECT count(*) FILTER (WHERE on_chip), count(*) FILTER (WHERE NOT on_chip) FROM p").fetchone()
         out["chip"] = {"label": chip.get("label") or "your chip", "markers": res["summary"]["chip_snps"], "on": on[0], "new": on[1],
                        "novel": res["summary"]["novel_functional"], "window": tools._bp(res["summary"]["window_bp"]),
@@ -85,9 +83,9 @@ def build(d, title, note=None, previous=None, synthetic=False):
     out["fig"] = mark_safe(panel._figure(con, d, chip, res, synthetic))
     con.close()
     out["previous"] = previous
-    m = jobs.manifest()
-    out["provenance"] = [f"Release {m.get('version')} ({m.get('assembly', 'Ssal_v3.1')}); weights "
-                         f"{(jobs._file('sha256', snpscore.score.WEIGHTS) or 'none')[:12]} (provisional rules)",
+    m, sha = jobs.manifest(), jobs.rules_sha256(d)  # the rules that made the panel's tiers, kept with it
+    out["provenance"] = [f"Release {m.get('version')} ({m.get('assembly', 'Ssal_v3.1')}); tier rules "
+                         + (f"{sha[:12]} (provisional rules)" if sha else panel.NOT_RECORDED),
                          ", ".join(f"{k} {v}" for k, v in snp_export.installed().items()) + f"; printed {jobs.utc()}"]
     out["synthetic"] = synthetic
     return out

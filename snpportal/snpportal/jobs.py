@@ -313,8 +313,8 @@ def sha256(path):
 @lru_cache(maxsize=64)
 def _cached(kind, path, mtime):
     p = Path(path)
-    if kind == "weights":
-        w = snpscore.load_weights(p)
+    if kind == "weights":  # unchecked: a job's snapshot was checked when it was scored, the rules in use at start (health)
+        w = snpscore.load_weights(p, check=False)
         if w and "presets" in w:
             w["presets"] = Presets(w["presets"])
         return w
@@ -331,10 +331,52 @@ def manifest(where=None):
     return _file("json", Path(where or release()) / "manifest.json") or {}
 
 
+def rules_file(where=None):
+    """The tier rules of a job's (or panel's) snapshot folder, else the rules in use (snpscore.score.rules_file: the
+    shipped weights.yaml, or the own copy SNPSCORE_WEIGHTS names)."""
+    return Path(where) / "weights.yaml" if where else snpscore.score.rules_file()
+
+
 def weights(where=None):
-    """weights.yaml of a job's snapshot folder, or snpscore's current one (None if missing); its presets also take
+    """weights.yaml of a job's snapshot folder, or the rules in use (None if missing); its presets also take
     Active-in keys (Presets)."""
-    return _file("weights", Path(where) / "weights.yaml" if where else snpscore.score.WEIGHTS)
+    return _file("weights", rules_file(where))
+
+
+def rules_sha256(where=None):
+    """sha256 of the rules of a snapshot folder (None when it kept none: a panel or project from before 2026-11-26),
+    else of the rules in use."""
+    return _file("sha256", rules_file(where))
+
+
+def pool_background(where=None):
+    """The current release's public background (pool/background.json from `snpscore pool`) when its pool was scored
+    with the same rules as the snapshot folder `where` (a job's), else the rules in use: tiers are only ever compared
+    with tiers made by the same rules. {} when there is no pool, or it was made for other rules or another release."""
+    bg = read_json(release() / "pool" / "background.json")
+    if not bg or bg.get("release") != manifest().get("version") or bg.get("weights_sha256") != rules_sha256(where):
+        return {}
+    return bg
+
+
+def pool_file(where=None):
+    """pool/pool.parquet of the current release when it fits the rules of `where` (pool_background), else None."""
+    path = release() / "pool" / "pool.parquet"
+    return path if path.exists() and pool_background(where) else None
+
+
+def pool_note(where=None):
+    """Why the public background is left out ('' when it fits or the release has none): its pool was scored with
+    other rules than `where`'s, or than the rules in use."""
+    bg = read_json(release() / "pool" / "background.json")
+    if not bg or pool_background(where):
+        return ""
+    whose = "these results" if where else "the rules in use"
+    fix = ("restart the portal (salmo-snp serve builds it again for the rules in use)" if local()
+           else "rebuild the pool with the rules in use (snpscore pool --release <release> --if-stale)")
+    return (f"The public background is left out: the release's public SNPs were scored with other tier rules than "
+            f"{whose} (rules sha256 {str(bg.get('weights_sha256'))[:12]}, not {str(rules_sha256(where))[:12]}). To compare "
+            f"them, {fix}; results already made keep their own rules.")
 
 
 def score_layers(where=None):
@@ -367,9 +409,9 @@ def release_info():
 
 
 def release_changed(job):
-    """True when the current release's manifest or snpscore's weights differ from the job's snapshot."""
+    """True when the current release's manifest or the rules in use differ from the job's snapshot."""
     return (job.get("manifest_sha256"), job.get("weights_sha256")) != (
-        _file("sha256", release() / "manifest.json"), _file("sha256", snpscore.score.WEIGHTS))
+        _file("sha256", release() / "manifest.json"), rules_sha256())
 
 
 def presets(where=None):
@@ -626,12 +668,17 @@ def create(src, suffix, input_kind="snps", preset="all", label="", input_format=
     creating anything when MAX_QUEUED jobs are already waiting."""
     if executor() is not None and len(_queued) >= MAX_QUEUED:
         raise QueueFull()
+    from . import health
+    try:  # the rules in use, checked as at start: a mistake made in them while the portal runs is said before a job is made
+        health.rules()
+    except snpscore.RulesError as e:
+        raise InputError(f"Nothing can be scored until the portal's tier rules are corrected. {e}") from None
     key = uuid.uuid4()
     d = folder(key)
     d.mkdir(mode=0o700)
-    for kept in (release() / "manifest.json", snpscore.score.WEIGHTS):  # the job keeps the data and rules it was scored with
-        if kept.exists():
-            shutil.copyfile(kept, d / kept.name)
+    for kept, name in ((release() / "manifest.json", "manifest.json"), (rules_file(), "weights.yaml")):
+        if kept.exists():  # the job keeps the data and the rules it was scored with
+            shutil.copyfile(kept, d / name)
     (os.replace if move else shutil.copyfile)(src, d / f"input{suffix}")
     lock_down(d)
     now = time.time()
@@ -749,15 +796,16 @@ def _annotate(src, d, progress):
     params = inspect.signature(snpscore.annotate).parameters
     cap = int(setting("SNPPORTAL_MAX_SNPS", 3_000_000))
     job = read_json(d / "job.json")
+    rules = {"weights": d / "weights.yaml"} if (d / "weights.yaml").exists() else {}  # the job's own rules, not the file's now
     if job.get("input_kind") == "sv":  # structural variants: each scored by what it overlaps
         try:
-            snpscore.annotate_svs(src, release(), d / "result.parquet", progress=progress, max_svs=cap, **limits())
+            snpscore.annotate_svs(src, release(), d / "result.parquet", progress=progress, max_svs=cap, **limits(), **rules)
         finally:
             for name in ("validation.json", "rejects.tsv"):
                 if (d / f"result.{name}").exists():
                     os.replace(d / f"result.{name}", d / name)
         return
-    kwargs = {k: v for k, v in [("progress", progress), ("max_snps", cap), *limits().items()] if k in params}
+    kwargs = {k: v for k, v in [("progress", progress), ("max_snps", cap), *limits().items(), *rules.items()] if k in params}
     positions = job.get("positions")  # I18, I19: positions on another assembly
     if positions == "flank":
         kwargs["place_by_flank"] = True
@@ -780,7 +828,7 @@ def precompute(d):
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
     n = con.execute("SELECT count(*) FROM r").fetchone()[0]
-    w = snpscore.load_weights(d / "weights.yaml")
+    w = snpscore.load_weights(d / "weights.yaml", check=False)  # the job's snapshot, checked when it was scored
     if w and w.get("presets"):
         # A chain of projections, one per preset, each renaming its tier columns to <column>__<preset>: one streaming
         # pass with no joins, so 1.6M SNPs fit the 2 GB DuckDB limit. scored() replaces any tier columns it is given.
@@ -914,7 +962,7 @@ def refresh_summary(d):
     con = connect([d], d)
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
-    s = summarise(con, d, columns, snpscore.load_weights(d / "weights.yaml"))
+    s = summarise(con, d, columns, snpscore.load_weights(d / "weights.yaml", check=False))
     _write_json(d / "summary.json", s)
     return s
 

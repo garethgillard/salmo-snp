@@ -36,7 +36,7 @@ import duckdb
 
 from .annotate import connect, gene_sql, interval_sql, parquet_columns, user_message, write_in_order
 from .formats import DETECT_CHARS, InputError, TooMany, _delim, _dropped, _open, _split, column_names, lit, norm, q
-from .score import load_weights, scored
+from .score import output_options, scored, scoring_rules
 
 ALIASES = {  # output name -> header names read as it (lower case, other characters as _)
     "chrom": ("chrom", "chr", "chromosome", "seqnames", "seqname", "contig"),
@@ -380,19 +380,17 @@ def known_sql(con, catalog, window):
 
 
 def annotate_svs(svs_path, release_dir, out_path, trait="all", progress=None, max_svs=None, threads=2,
-                 memory_limit="2GB"):
+                 memory_limit="2GB", weights=None):
     """Write the annotated SVs to out_path (Parquet if it ends in .parquet, CSV if .csv, else TSV), and next to it
-    <stem>.validation.json and <stem>.rejects.tsv. `progress(stage)` is called with stage names. Problems with the
-    input raise InputError with a safe message."""
+    <stem>.validation.json and <stem>.rejects.tsv. `progress(stage)` is called with stage names. `weights`: the tier
+    rules file, as for annotate(). Problems with the input raise InputError with a safe message."""
     path, release, out = Path(svs_path).resolve(), Path(release_dir).resolve(), Path(out_path).resolve()
     step = progress or (lambda stage: None)
     manifest = json.loads((release / "manifest.json").read_text())
-    weights = load_weights()
-    if weights and trait not in weights["presets"]:
-        raise InputError(f"Unknown trait preset '{trait}'. Choose from: {', '.join(weights['presets'])}")
+    weights, described = scoring_rules(weights, trait)
     con = connect([path.parent, release], out.parent, threads, memory_limit)
     try:
-        report = _annotate(con, path, release, out, manifest, weights, trait, step, max_svs)
+        report = _annotate(con, path, release, out, manifest, weights, trait, step, max_svs, described)
     except duckdb.Error as e:
         if os.environ.get("SNPSCORE_DEBUG"):
             raise
@@ -404,7 +402,7 @@ def annotate_svs(svs_path, release_dir, out_path, trait="all", progress=None, ma
     return Path(out_path)
 
 
-def _annotate(con, path, release, out, manifest, weights, trait, step, max_svs):
+def _annotate(con, path, release, out, manifest, weights, trait, step, max_svs, described=None):
     step("reading")
     known = list(manifest.get("chrom_sizes") or {}) or [r[0] for r in con.execute(" UNION ".join(
         f"SELECT DISTINCT chrom FROM read_parquet({lit(release / (x['name'] + '.parquet'))})"
@@ -457,7 +455,8 @@ def _annotate(con, path, release, out, manifest, weights, trait, step, max_svs):
             synthetic = [x["name"] for x in manifest["layers"] if x.get("synthetic")]
             con.execute(f"CREATE OR REPLACE TABLE svs AS {scored('svs', weights, columns, trait, synthetic)}")
         step("writing")
-        write_in_order(con, out, table="svs")
+        write_in_order(con, out, table="svs", options=output_options(out, described))
+    report["rules"] = described  # which rules made the tiers
     con.execute(f"COPY (SELECT * FROM rejects ORDER BY row) TO {lit(str(stem) + '.rejects.tsv')} (HEADER, DELIMITER '\t')")
     Path(str(stem) + ".validation.json").write_text(json.dumps(report, indent=2))
     return report
