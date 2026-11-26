@@ -613,7 +613,7 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("RNA, ATAC and ChIP from salmobase", "#g-assays .sp-grp-h")],
      "shot": {"path": "locus/?r=25:28983861-29008860", "width": 1280, "crop": [".sp-bctl", "#g-assays .sp-grp-h"]}},
     {"slug": "panel", "title": "Build a genotyping panel",
-     "text": "Add to panel on the Table brings its selection to the Design panel. Compare the panel with your chip, "
+     "text": "Add to Design panel on the Table brings its selection to the Design panel. Compare the panel with your chip, "
              "drop SNPs by hand and download KASP, Illumina or Axiom files.",
      "alt": "The Design panel holding the known-loci example, compared with the synthetic demo chip: its source, the chip "
             "comparison, the downloads, the assay check and the panel along the genome.",

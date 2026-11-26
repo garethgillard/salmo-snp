@@ -29,7 +29,7 @@
       <p class="sp-hint" id="formats">VCF, SNP table, PLINK, chip manifest or rs IDs{% if positions|length < 2 %}, positions on {{ rel.assembly|default:"Ssal_v3.1" }}{% endif %}; up to {{ max_mb }} MB &middot; <a href="{% url 'snpportal:help' %}#formats">Format help</a></p>
       {% if positions|length > 1 %}<p class="sp-hint sp-positions"><label for="positions">Positions on</label>
         <select class="form-select form-select-sm w-auto" id="positions" name="positions">{% for value, label in positions %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
-        <span class="sp-muted">rows that can't be converted are listed in the upload report</span></p>{% endif %}
+        <span class="sp-muted">rows that can't be converted are listed in the upload check</span></p>{% endif %}
       <label class="sp-or" for="paste">Or paste SNPs, one per line</label>
       <textarea class="form-control sp-paste" id="paste" name="paste" rows="3" aria-describedby="paste-help"
                 placeholder="25 28996360 C T&#10;9 23837450&#10;rs863754587"></textarea>

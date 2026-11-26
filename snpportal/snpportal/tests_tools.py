@@ -125,7 +125,7 @@ class ToolsTest(SimpleTestCase):
 
     def test_design_panel(self):
         table = self.client.get(self.url, {"tab": "table", "tier": "1-2"}).content.decode()  # the Table keeps the selection
-        n = int(re.search(r"Add to panel \(([\d,]+)\)", table).group(1).replace(",", ""))
+        n = int(re.search(r"Add to Design panel \(([\d,]+)\)", table).group(1).replace(",", ""))
         added = self.client.post(reverse("snpportal:panel_add", args=[self.key]))  # the cart: the whole selection
         self.assertIn(f"added={n}", added.url)
         cookie = added.cookies[panel.COOKIE]
