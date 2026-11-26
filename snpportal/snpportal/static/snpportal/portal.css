@@ -766,3 +766,44 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-eq .sp-card, .sp-eq .sp-figure { margin: 0; }
 .sp button.sp-pick { padding: 0; }  /* the Design panel's +/−: a form button, as the Table's link */
 .sp-num-in { width: 7rem; }  /* small number fields (the Design panel's Upgrade form) */
+
+/* == content pages: Help, Data, Methods, Run locally, Releases, Known loci, Projects. Reading pages: an H1, a one-line
+   lead, then sections (.sp-section: an h2, a hairline between); prose at body size and about 70 characters a line,
+   reference tables at their content width with links in ink. == */
+.sp-doc, .sp-read { max-width: 70ch; }
+.sp-toc { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem 1rem; margin: -.25rem 0 2rem; font-size: var(--sp-fs-sm); }
+.sp-toc > span { color: var(--sp-muted); }
+.sp .sp-toc a { color: var(--sp-ink-2); }
+.sp .sp-toc a:hover { color: var(--sp-link); }
+.sp-section > p, .sp-section li { margin-bottom: .6rem; }
+.sp-section ol, .sp-section ul { padding-left: 1.4rem; }
+.sp-faq > p { margin-bottom: .9rem; }
+/* code and commands: a quiet grey surface that scrolls sideways rather than wrapping */
+.sp-doc pre, .sp-section pre { margin: .35rem 0 .9rem; padding: .55rem .8rem; border-radius: .375rem; background: var(--sp-grey-50);
+  font-size: var(--sp-fs-sm); line-height: 1.55; white-space: pre; overflow-x: auto; }
+/* terms: the word on the left, its definition beside it (stacked on phones) */
+.sp dl.sp-terms { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: .55rem 1.5rem; margin: 0 0 1rem; }
+.sp-terms dt { font-weight: 600; }
+.sp-terms dd { margin: 0; }
+@media (max-width: 575.98px) { .sp dl.sp-terms { display: block; } .sp-terms dd { margin: .1rem 0 .8rem; } }
+/* a plain reference table: as wide as its content, a line under the head, links in ink */
+.sp .sp-plain { width: auto; max-width: 100%; margin-bottom: .75rem; font-size: var(--sp-fs-sm); }
+.sp .sp-plain > :not(caption) > * > * { padding: .4rem 1.5rem .4rem 0; vertical-align: top; }
+.sp .sp-plain > :not(caption) > * > :last-child { padding-right: 0; }
+.sp .sp-plain thead th { color: var(--sp-ink-2); font-weight: 600; white-space: nowrap; border-bottom-color: var(--sp-line-2); }
+.sp .sp-plain td a:where(:not(.btn)), .sp .sp-plain th a:where(:not(.btn)) { color: var(--sp-ink); text-decoration-color: var(--sp-line-2); }
+.sp .sp-plain td a:where(:not(.btn)):hover, .sp .sp-plain th a:where(:not(.btn)):hover { color: var(--sp-link); text-decoration-color: currentColor; }
+.sp-plain .sp-sub { display: block; color: var(--sp-muted); }  /* a second line in a cell: an rs ID, the alleles */
+.sp .sp-examples { display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; padding: 0; list-style: none; }
+.sp-examples li { margin: 0; }
+/* chromatin states on Methods: a swatch with the state's short name, then its name in words */
+.sp-states .sp-state { display: inline-block; min-width: 2.6rem; margin-right: .5rem; padding: 0 .3rem; border: 1px solid transparent;
+  border-radius: .25rem; font-size: var(--sp-fs-xs); font-weight: 600; text-align: center; }
+.sp-states .sp-state:not([class*="st-"]) { border-color: var(--sp-line-2); }
+.sp-section > .sp-figure { margin: .5rem 0 1rem; }
+.sp-section > .sp-more { margin-top: 1rem; }
+.sp-section > .sp-more:last-child, .sp-folds > .sp-more:last-child { border-bottom: 1px solid var(--sp-line); }
+.sp-folds { margin-top: 2.5rem; }
+.sp-folds > .sp-more > :not(summary) { max-width: 70ch; }
+@media print { .sp-toc { display: none; } }
+/* end content pages */

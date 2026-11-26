@@ -404,6 +404,32 @@ def methods(request):
         "citations": citations(m)})
 
 
+def tier_rules(w):
+    """[(tier, its scores in words, a note)] from weights.yaml's cut-offs, e.g. (1, '5 or more', 'the strongest evidence'),
+    (2, '3 to 4', ''), ..., (4, 'below 1', 'no evidence found (not evidence of no effect)')."""
+    cuts = list((w or {}).get("tiers") or [])
+    out = [(i + 1, f"{c} or more" if i == 0 else f"{c} to {cuts[i - 1] - 1}" if c < cuts[i - 1] - 1 else f"{c}",
+            "the strongest evidence" if i == 0 else "") for i, c in enumerate(cuts)]
+    return out + [(len(cuts) + 1, f"below {cuts[-1]}", "no evidence found (not evidence of no effect)")] if cuts else []
+
+
+def tier_of(score, w):
+    """The tier of a score under weights.yaml's cut-offs."""
+    cuts = list((w or {}).get("tiers") or [])
+    return next((i + 1 for i, c in enumerate(cuts) if score >= c), len(cuts) + 1)
+
+
+def tier_example(w):
+    """One worked example from the current weights: 'an active chromatin state alone scores 3 (tier 2); with a conserved
+    element as well, 3 + 2 = 5 (tier 1)', or '' when either weight is 0."""
+    weights = (w or {}).get("weights") or {}
+    a, c = weights.get("active") or 0, weights.get("constrained") or 0
+    if not (a and c and (w or {}).get("tiers")):
+        return ""
+    return (f"an active chromatin state alone scores {a} (tier {tier_of(a, w)}); with a conserved element as well, "
+            f"{a} + {c} = {a + c} (tier {tier_of(a + c, w)})")
+
+
 def _flat(value):
     """A weights.yaml value as text: lists joined with commas, mappings as 'key = value; ...'."""
     if isinstance(value, dict):
@@ -460,8 +486,10 @@ def help_page(request):
         from snpscore.annotate import ASSEMBLY_WARNING
     except ImportError:
         ASSEMBLY_WARNING = 0.10
+    w = jobs.weights() or {}
     return render(request, "snpportal/help.html", {
-        "nav": "help", "title": "Help", "formats": FORMATS,
+        "nav": "help", "title": "Help", "formats": FORMATS, "tiers": tier_rules(w), "example": tier_example(w),
+        "window": (jobs.manifest().get("catalog") or {}).get("window") or 50_000,
         "aliases": [(name, ", ".join(names)) for name, names in formats.ALIASES.items()],
         "chrom_aliases": chrom_aliases("25"), "assembly_share": f"{ASSEMBLY_WARNING:.0%}",
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(), "searches": jobs.species().get("searches") or search.EXAMPLES,
