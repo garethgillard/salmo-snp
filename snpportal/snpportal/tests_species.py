@@ -43,7 +43,7 @@ class SpeciesTest(SimpleTestCase):
         self.assertEqual(self.client.post(reverse("snpportal:species"), {"species": "rainbow_trout"}).url, reverse("snpportal:upload"))
         home = self.page()
         self.assertIn('value="rainbow_trout" aria-pressed="true"', home)
-        self.assertIn("Upload rainbow trout SNPs (positions on USDA_OmykA_1.1", home)
+        self.assertIn("rainbow trout SNPs (positions on USDA_OmykA_1.1", home)
         self.assertRegex(home, r"1\d AQUA-FAANG tissues and stages")  # 17 genome-wide; the fixture's regions have fewer
         self.assertNotIn("21 AQUA-FAANG", home)
         self.assertNotIn("Ssal_v3.1", home)

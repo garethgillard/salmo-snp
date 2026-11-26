@@ -303,7 +303,8 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 
 /* == home: the Score page (score.html). The question; the inputs (the page's one primary button), then under a
    hairline the examples and the tour link; beside them 'Your results' as a plain list and where results are kept. == */
-.sp .sp-home-lead { max-width: 60rem; margin-bottom: 1.75rem; }
+.sp .sp-home-lead { max-width: 60rem; margin-bottom: .3rem; }
+.sp-home-sub { margin: 0 0 1.75rem; color: var(--sp-muted); font-size: var(--sp-fs-sm); }  /* species, assembly, release, coverage, tiers */
 @media (min-width: 992px) { .sp-home-row { --bs-gutter-x: 2.5rem; } }  /* half of it is the page's side padding: no overflow */
 /* the inputs: one underline row of tabs, scrolling sideways on a phone rather than wrapping */
 .sp-inputs .nav-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }

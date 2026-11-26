@@ -6,6 +6,7 @@
    results are kept.{% endcomment %}
 {% block main %}
 <p class="sp-lead sp-home-lead">Which of your SNPs lie in open or active chromatin, change a protein or sit in conserved sequence?</p>
+<p class="sp-home-sub">Scores Atlantic salmon SNPs (positions on {{ rel.assembly|default:"Ssal_v3.1" }}{% if rel.several %}, release {{ rel.version }}{% endif %}) against 27 AQUA-FAANG tissues and stages &middot; tier 1 (strongest) to 4 (no evidence found)</p>
 <div class="row gy-4 align-items-start sp-home-row">
 <div class="col-lg-7">
 {% if error %}<div class="sp-status sp-status-fail" role="alert"><strong>{% icon 'fail' %} {% if tab == 'gwas' %}Can't analyse these summary statistics.{% else %}Can't score this list.{% endif %}</strong> {{ error }}</div>{% endif %}
