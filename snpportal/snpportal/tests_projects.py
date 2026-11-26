@@ -4,12 +4,15 @@ import io
 import logging
 import tempfile
 from pathlib import Path
-from unittest import skipUnless
+from unittest import mock, skipUnless
 
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 
 import snpdata
+import snpscore
+
+from . import jobs
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 DATA = SNPSCORE.parent / "snpdata"
@@ -44,7 +47,7 @@ class ProjectsTest(SimpleTestCase):
         self.assertIn("MAF (Broodstock 2025)", shown)
         self.assertIn("Your population: 3 fish, call rate 0.75", shown)  # the vgll3 SNP's tooltip
         left = [p.name for p in (tmp / "results").glob("panel-*/**/*") if p.is_file() and p.suffix not in (".parquet", ".json")]
-        self.assertEqual(left, ["created"])  # the genotype file is gone: only the counts (Parquet) are kept
+        self.assertEqual(sorted(left), ["created", "weights.yaml"])  # the genotype file is gone: only the counts (Parquet)
         self.assertEqual([p.name for p in (tmp / "results").glob(".upload-*")], [])  # nor the upload handler's file
         # I10: the probe uniqueness check (the fixture genome), shown on the panel and kept with a saved version
         self.client.post(reverse("snpportal:panel_change"), {"uniqueness": "1"})
@@ -78,6 +81,7 @@ class ProjectsTest(SimpleTestCase):
         self.assertTrue(tsv.startswith("#"))  # provenance lines
         self.assertIn("28996360", tsv)
         self.assertNotIn("28998410", tsv)
+        self.rules_kept(tmp, key, tsv)
         zipped = b"".join(self.client.get(reverse("snpportal:project_export", args=["Smolt-chip-2027"])).streaming_content)
         f = io.BytesIO(zipped)
         f.name = "project.zip"
@@ -94,3 +98,30 @@ class ProjectsTest(SimpleTestCase):
         self.assertEqual(self.client.get(reverse("snpportal:projects"), {"project": "../etc"}).status_code, 200)  # ignored
         with override_settings(SNPPORTAL_LOCAL=False):
             self.assertEqual(self.client.get(reverse("snpportal:projects")).status_code, 404)  # a server keeps no projects
+
+    def rules_kept(self, tmp, key, tsv):
+        """S7: a panel and its saved versions keep the rules their tiers were made with: after the rules in use change,
+        a version downloads with its stored tiers (not tiered again) and names its own rules, and a list scored with
+        the new rules is refused by the panel that holds the old ones."""
+        sha = jobs.rules_sha256(tmp / "results" / key)
+        v2 = tmp / "projects" / "Smolt-chip-2027" / "v2"
+        self.assertEqual(jobs.read_json(v2 / "meta.json")["weights_sha256"], sha)
+        self.assertEqual(jobs.rules_sha256(v2), sha)
+        self.assertIn(f"weights sha256 {sha}", tsv)
+
+        def tiers(text):
+            rows = [line.split("\t") for line in text.splitlines() if not line.startswith("#")]
+            return [r[rows[0].index("tier")] for r in rows[1:]]
+        edited = tmp / "edited_weights.yaml"
+        edited.write_text(snpscore.score.WEIGHTS.read_text().replace("  active: 3", "  active: 0")
+                          .replace("  coding: 3", "  coding: 0").replace("  splice: 3", "  splice: 0"))
+        with mock.patch.object(snpscore.score, "WEIGHTS", edited):
+            again = b"".join(self.client.get(reverse("snpportal:project_download", args=["Smolt-chip-2027", 2])).streaming_content).decode()
+            self.assertEqual(tiers(again), tiers(tsv))  # the stored tiers, though the rules in use would tier them otherwise
+            self.assertIn(f"weights sha256 {sha}", again)
+            url = self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T\n"}).url.split("?")[0]
+            other = url.rstrip("/").split("/")[-1]
+            self.assertNotEqual(jobs.rules_sha256(tmp / "results" / other), sha)
+            self.assertIn("panel_error=rules", self.client.post(reverse("snpportal:panel_add", args=[other])).url)
+            refused = self.client.get(url, {"tab": "table", "panel_error": "rules"}).content.decode()
+            self.assertIn("scored with other tier rules", refused)

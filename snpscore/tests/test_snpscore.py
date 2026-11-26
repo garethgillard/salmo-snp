@@ -8,7 +8,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from snpscore import RESERVED, InputError, annotate, benchmark, connect, load_weights, scored
+from snpscore import RESERVED, InputError, annotate, benchmark, check_weights, connect, load_weights, scored
 from snpdata import build
 from snpscore.annotate import read_snps
 from snpscore.formats import detect, source
@@ -85,15 +85,23 @@ def test_tier_terms_and_synthetic_layers(release, tmp_path):
     weights = load_weights()
     without = dict(con.execute(f"SELECT id, tier_score FROM ({scored('t', weights, columns, 'all', ['gerp'])})").fetchall())
     assert without["gerp_element"] == gerp["tier_score"] - 2
-    # Weights are whole numbers, so tier_score and tier_terms keep one type across releases
-    with pytest.raises(ValueError, match="whole number"):
-        scored("t", {**weights, "weights": {**weights["weights"], "active": 2.5}}, columns, "all")
+    # Whole numbers keep tier_score an INTEGER, as in every release; a user's own rules may use one decimal place
+    # (G, 2026-11-26), summed in tenths so the cut-offs compare exactly, and tier_score is then a DOUBLE
+    kinds = dict(con.execute(f"SELECT column_name, column_type FROM (DESCRIBE {scored('t', weights, columns, 'all')})").fetchall())
+    assert kinds["tier_score"] == "INTEGER"
+    tenths = {**weights, "weights": {**weights["weights"], "constrained": 2.5}, "tiers": [5, 3, 0.5]}
+    scores = dict(con.execute(f"SELECT id, tier_score FROM ({scored('t', tenths, columns, 'all')})").fetchall())
+    assert scores["gerp_element"] == gerp["tier_score"] + 0.5 and isinstance(scores["gerp_element"], float)
+    with pytest.raises(ValueError, match="one decimal place"):
+        scored("t", {**weights, "weights": {**weights["weights"], "active": 2.25}}, columns, "all")
 
 
 def test_pike_and_summit(release, tmp_path):
     """The layers of 2026-11-24: sequence aligned to pike (an interval layer) and the nearest ATAC summit inside a robust
-    peak (distance, signal, rank among its condition's peaks). Both are terms with weight 0: shown, never counted,
-    until G sets them; the summit rule's cut-offs are weights.yaml's `summit` block."""
+    peak (distance, signal, rank among its condition's peaks); and of 2026-11-26, the pike CNEs. Conservation counts its
+    highest evidence, not a sum (G, 2026-11-26): a GERP element or a CNE is `constrained` (2), aligning to pike
+    (`pike`, 1) counts only where neither is. The summit is shown, not counted, until it is tested; its rule's
+    cut-offs are weights.yaml's `summit` block."""
     rows = read(annotate(FIXTURE / "snps.vcf", release, tmp_path / "out.parquet"))
     assert 0 < sum(r["pike"] for r in rows) < len(rows)
     near = [r for r in rows if r["summit_distance"] is not None]
@@ -102,20 +110,26 @@ def test_pike_and_summit(release, tmp_path):
     assert all(r["chromatin"] for r in near if r["summit_distance"] == 0)  # summits are kept inside robust peaks only
     assert {r["summit_condition"] for r in near} <= set(CHROMATIN_CONDITIONS)
     weights = load_weights()
-    assert weights["weights"]["pike"] == 0 and weights["weights"]["summit"] == 0
+    assert (weights["weights"]["pike"], weights["weights"]["constrained"], weights["weights"]["summit"]) == (1, 2, 0)
+    assert any(r["cne"] for r in rows) and any(r["cne"] and not r["gerp"] for r in rows)
     rule = weights["summit"]
     for r in rows:
         terms = {t["term"]: t["weight"] for t in r["tier_terms"]}
-        assert ("pike" in terms) == r["pike"] and terms.get("pike", 0) == 0
+        conserved = bool(r["gerp"] or r["cne"])
+        assert ("constrained" in terms) == conserved and ("pike" in terms) == (r["pike"] and not conserved)
+        if r["cne"] and not r["gerp"]:
+            assert f"constrained: CNE ({r['cne_age']})" in r["tier_evidence"] and r["cne_id"].startswith("U")
         fires = r["summit_distance"] is not None and r["summit_distance"] <= rule["max_distance"] and r["summit_rank"] >= rule["min_rank"]
-        assert ("summit" in terms) == fires
-    # with weights, the same rows score higher: the rules are in weights.yaml, not in the release
+        assert ("summit" in terms) == fires and terms.get("summit", 0) == 0
+    assert all(r["pike"] for r in rows if r["cne"])  # every CNE base aligns to pike
+    # with other weights, the same rows score otherwise: the rules are in weights.yaml, not in the release
     con = duckdb.connect()
     con.execute(f"CREATE TABLE t AS SELECT * FROM read_parquet('{tmp_path / 'out.parquet'}')")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE t)").fetchall()]
-    counted = {**weights, "weights": {**weights["weights"], "pike": 1, "summit": 2}, "summit": {"max_distance": 100, "min_rank": 0.0}}
-    more = con.execute(f"SELECT sum(tier_score), sum(pike::INT), sum((summit_distance <= 100)::INT) FROM ({scored('t', counted, columns, 'all')})").fetchone()
-    assert more[0] == sum(r["tier_score"] for r in rows) + more[1] + 2 * more[2] and more[2] > 0
+    counted = {**weights, "weights": {**weights["weights"], "pike": 2, "summit": 2}, "summit": {"max_distance": 100, "min_rank": 0.0}}
+    more = con.execute(f"""SELECT sum(tier_score), sum((pike AND NOT (coalesce(gerp, false) OR coalesce(cne, false)))::INT),
+                                  sum((summit_distance <= 100)::INT) FROM ({scored('t', counted, columns, 'all')})""").fetchone()
+    assert more[0] == sum(r["tier_score"] for r in rows) + more[1] + 2 * more[2] and more[1] > 0 and more[2] > 0
 
 
 def test_benchmark_covers_every_known_locus(release, tmp_path):
@@ -464,7 +478,10 @@ def test_read_snps_keeps_input_order(tmp_path):
 #   from retrained models, the same peaks): 26 of its 1,341 peaks change a state, no fixture SNP's tier or score.
 #   The layer chrombpnet_gill (2026-11-25: the gill ChromBPNet model's real predictions for the fixture's 697 public
 #   and Synchrosmolt SNPs inside its training peaks) adds five columns; no tier or score changes (weight 0).
-GOLDEN = "ad931a9ddf01086c53ec076bcb0f9b09f1ee6cee7f347337708393bd9d810891"
+#   G's scoring answers of 2026-11-26 change tiers and scores on purpose: the cne layer (cne, cne_id, cne_age) counts
+#   as constrained with GERP, once if both; pike 1 only where nothing is constrained; the weak states split;
+#   synonymous 1; the evidence text names the constrained evidence (GERP, CNE and its clade).
+GOLDEN = "75667ec22477dbd57b173866e28c9a4609aafb5c76b8d528e8007021d66dd44e"
 
 
 def test_long_lists_are_written_in_sorted_parts(release, tmp_path, monkeypatch):
@@ -535,17 +552,27 @@ def test_variant_score_layer(tmp_path, monkeypatch):  # I15: a SYNTHETIC per-var
     terms = {(c, p): [t["term"] for t in tt] for c, p, tt in con.execute(
         f"SELECT chrom, pos, tier_terms FROM ({scored('a', weights, columns, 'all')})").fetchall()}
     assert "synscore" in terms[sites[2][0], int(sites[2][1])] and "synscore" not in terms[sites[0][0], int(sites[0][1])]
+    for rule, counted in (({"percentile": None, "min_score": 0.4}, {1, 2}), ({"percentile": 0.9, "min_score": 0.95}, set())):
+        w = {**weights, "variant_scores": {"synscore": rule}}  # an effect size too (G, 2026-11-26: "focus on effect too")
+        assert check_weights(w) == []
+        got = {(c, p) for c, p, tt in con.execute(f"SELECT chrom, pos, tier_terms FROM ({scored('a', w, columns, 'all')})").fetchall()
+               if "synscore" in [t["term"] for t in tt]}
+        assert got == {(sites[i][0], int(sites[i][1])) for i in counted}
+    assert check_weights({**weights, "variant_scores": {"synscore": {"min_score": -1}}})
 
 
-def test_weak_accessible_chromatin_is_weak():
-    """The trout ImmunoMap's PBS label (an ATAC-only state with weak emission) is a weak state, one point, as
-    Accessible_chromatin (G, 2026-11-25); Quiescent and no peak count nothing."""
+def test_the_weak_states():
+    """G, 2026-11-26 (DECISIONS #2): primed enhancers and the flanking states are weak, one point; poised, bivalent,
+    accessible chromatin, the ImmunoMap's mixed state and trout's weak accessible chromatin (weak until then, as
+    Accessible_chromatin) count nothing, nor do Quiescent and no peak."""
     weights = load_weights()
     con = duckdb.connect()
     con.execute("""CREATE TABLE a AS SELECT * FROM (VALUES (1, 'Weak_accessible_chromatin'), (2, 'Accessible_chromatin'), (3, 'Quiescent'),
-                   (4, NULL)) t(pos, chromatin_HeadKidney_invivo_pbs)""")
+                   (4, NULL), (5, 'Primed_enhancer'), (6, 'Flanking_downstream'), (7, 'Bivalent'), (8, 'Poised_enhancer_2'),
+                   (9, 'Bivalent_or_mixed_active/polycomb'), (10, 'Active_enhancer')) t(pos, chromatin_HeadKidney_invivo_pbs)""")
     rows = dict(con.execute(f"SELECT pos, tier_score FROM ({scored('a', weights, ['pos', 'chromatin_HeadKidney_invivo_pbs'], 'all')})").fetchall())
-    assert rows == {1: weights["weights"]["weak"], 2: weights["weights"]["weak"], 3: 0, 4: 0}
+    weak, active = weights["weights"]["weak"], weights["weights"]["active"]
+    assert rows == {1: 0, 2: 0, 3: 0, 4: 0, 5: weak, 6: weak, 7: 0, 8: 0, 9: 0, 10: active}
 
 
 def test_chrombpnet_gill_layer(release, tmp_path):
@@ -721,3 +748,53 @@ def test_alignment_conversion(release, tmp_path):  # I19: Ssal_v3.1 <-> fSalSal1
     view = positions(con, "mine", out / entries["to_fsalsal1"]["file"], "fSalSal1")
     assert con.execute(f'SELECT pos, "fSalSal1_chrom", "fSalSal1_pos" FROM {view} ORDER BY pos').fetchall() == [
         (5, None, None), (28996360, "25", 1060)]
+
+
+def test_rules_mistakes_are_named(tmp_path):
+    """An edited weights.yaml is checked before it is used (S7): each mistake that would otherwise change tiers
+    silently, or stop with a Python error, is named by its key; the shipped rules pass."""
+    from snpscore import WEIGHTS, RulesError, check_weights
+    assert check_weights(load_weights(WEIGHTS)) == []
+    text = WEIGHTS.read_text()
+    edits = {"Active_enhancer]": "Active_Enhancer]", "  splice: 3": "  splice: 1.25", "  constrained:": "  constrainted:",
+             "tiers: [5, 3, 1]": "tiers: [1, 3, 5]", "maturation: [Brain, Gonad]": "maturation: [Brian, Gonad]"}
+    for old, new in edits.items():
+        assert old in text, old
+        text = text.replace(old, new)
+    bad = tmp_path / "weights.yaml"
+    bad.write_text(text + "\npresetz: {}\n")
+    with pytest.raises(RulesError) as e:
+        load_weights(bad)
+    for said in ("'Active_Enhancer' is not a chromatin state", "'splice' is 1.25", "unknown term 'constrainted'",
+                 "'constrained' is missing", "tiers: [1, 3, 5]", "'Brian' in 'maturation' begins no condition",
+                 "unknown block 'presetz'", str(bad)):
+        assert said in str(e.value), said
+    bad.write_text("weights:\n  active: 3\n tiers: [5, 3, 1]\n")  # a YAML mistake: where it is, not a traceback
+    with pytest.raises(RulesError, match="can't be read at line 3"):
+        load_weights(bad)
+
+
+def test_own_rules_are_used_and_named(release, tmp_path, monkeypatch):
+    """SNPSCORE_WEIGHTS (or annotate's weights=) names an own copy of the rules (S7: an install's edited copy outlives
+    an update): the tiers follow it, and validation.json, the Parquet file's metadata and the pool's stamp name it."""
+    from snpscore import WEIGHTS, RulesError, pool
+    own = tmp_path / "own_weights.yaml"
+    own.write_text(WEIGHTS.read_text().replace("  active: 3", "  active: 7"))
+    sha = hashlib.sha256(own.read_bytes()).hexdigest()
+    shipped = annotate(FIXTURE / "snps.vcf", release, tmp_path / "shipped.parquet")
+    assert report(shipped)["rules"]["shipped"] and pool.stamp()["weights_sha256"] != sha
+    monkeypatch.setenv("SNPSCORE_WEIGHTS", str(own))
+    out = annotate(FIXTURE / "snps.vcf", release, tmp_path / "own.parquet")
+    assert report(out)["rules"] == {**report(out)["rules"], "file": str(own), "sha256": sha, "shipped": False}
+    meta = dict(duckdb.sql(f"SELECT decode(key), decode(value) FROM parquet_kv_metadata('{out}')").fetchall())
+    assert meta["snpscore_rules_sha256"] == sha and meta["snpscore_trait"] == "all"
+    assert pool.stamp()["weights_sha256"] == sha  # a pool scored with other rules is stale
+    before = {(r["chrom"], r["pos"]): r["tier_score"] for r in read(shipped)}
+    after = {(r["chrom"], r["pos"]): r["tier_score"] for r in read(out)}
+    assert any(after[k] > (before[k] or 0) for k in after if after[k] is not None)  # active now counts 7
+    monkeypatch.delenv("SNPSCORE_WEIGHTS")
+    again = annotate(FIXTURE / "snps.vcf", release, tmp_path / "given.parquet", weights=own)  # or named per run
+    assert report(again)["rules"]["sha256"] == sha
+    monkeypatch.setenv("SNPSCORE_WEIGHTS", str(tmp_path / "gone.yaml"))
+    with pytest.raises(RulesError, match="SNPSCORE_WEIGHTS names"):
+        load_weights()

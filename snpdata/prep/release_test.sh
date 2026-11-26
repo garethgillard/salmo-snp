@@ -3,7 +3,7 @@
 # (salmo-snp serve) on these releases alone, and tools/smoke.sh against it: the health page, then every example of
 # each species scored through the job queue and its result opened. Fails on the first thing that does not work.
 # Run in snpdata/, in a job rather than on a login node (prep/orion_test.sbatch); it needs snpportal installed.
-#   bash prep/release_test.sh 2026-11-25 trout-2026-11-25      (the default species' release first)
+#   bash prep/release_test.sh atlantic_salmon-Ssal_v3.1-2026-11-26 rainbow_trout-USDA_OmykA_1.1-2026-11-26   (salmon first)
 # OUT=<dir>: where the releases are (default release). PORT=<n>: the port to try them on (default 8765).
 set -euo pipefail
 [ $# -gt 0 ] || { echo "usage: bash prep/release_test.sh <version> [version ...]" >&2; exit 1; }

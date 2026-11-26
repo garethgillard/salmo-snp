@@ -11,19 +11,23 @@
 <div class="col-lg-7 sp-stack">
 {% if error %}<div class="sp-status sp-status-fail" role="alert"><strong>&#9888; {% if tab == 'gwas' %}Can't analyse these summary statistics.{% else %}Can't score this list.{% endif %}</strong> {{ error }}</div>{% endif %}
 
-{# this browser's results (the cookie lists them); each opens or is deleted here #}
+{# this browser's results (the cookie lists them); each opens, is renamed or is deleted here #}
 {% if mine %}<section class="sp-mine-box" aria-labelledby="mine-h">
   <h2 id="mine-h">Your results</h2>
   <ul class="sp-mine">{% for r in mine %}<li{% if r.current %} class="sp-mine-current"{% endif %}>
     <a class="sp-mine-name" href="{{ r.url }}">{{ r.name }}</a>
     <span class="sp-small sp-muted text-nowrap">{% if r.state == 'done' %}{{ r.n|thousands }} {{ r.unit }}{% elif r.state == 'failed' %}failed{% else %}scoring&hellip;{% endif %} &middot; {{ r.when }}</span>
+    <details class="sp-mine-ren"><summary class="btn btn-sm btn-link" title="Rename these results">Rename</summary>
+      <form method="post" action="{% url 'snpportal:rename' r.key %}">{% csrf_token %}
+        <input class="form-control form-control-sm" type="text" name="name" value="{{ r.name }}" maxlength="80" required aria-label="New name for {{ r.name }}">
+        <button class="btn btn-sm btn-primary" type="submit">Save</button></form></details>
     <form method="post" action="{% url 'snpportal:delete' r.key %}" data-confirm="Delete {{ r.name }}? This can't be undone." data-confirm-ok="Delete">{% csrf_token %}<input type="hidden" name="next" value="score">
       <button class="btn btn-sm btn-link sp-mine-del" type="submit" title="Delete these results" aria-label="Delete {{ r.name }}">Delete</button></form>
   </li>{% endfor %}</ul>
 </section>{% endif %}
 
 {% if tries %}<div class="sp-try" id="try-it"><span class="sp-try-h">Examples</span>
-  {% for ex in tries %}<form method="post" action="{% if ex.gwas %}{% url 'snpportal:gwas_score' %}{% else %}{% url 'snpportal:upload' %}{% endif %}">{% csrf_token %}
+  {% for ex in tries %}<form method="post" action="{% if ex.gwas %}{% url 'snpportal:gwas_score' %}{% else %}{% url 'snpportal:upload' %}{% endif %}" data-sp-rules>{% csrf_token %}
     {% if ex.gwas %}<input type="hidden" name="trait" value="all">{% endif %}{% if ex.sv %}<input type="hidden" name="kind" value="sv">{% endif %}
     <button class="btn btn-sm btn-outline-primary" type="submit" name="example" value="{{ ex.name }}" title="{{ ex.title }}: {{ ex.what }}">{{ ex.title }}{% if ex.synthetic %} <small>synthetic</small>{% endif %}</button>
   </form>{% endfor %}
@@ -31,13 +35,15 @@
 
 {# one tab per input (?input= without JavaScript); each form posts to its own view, whose errors re-show its tab #}
 <section class="sp-inputs" aria-label="Your data">
+  <p class="sp-rules-line sp-small">Tier rules: <span data-sp-rules-state>standard</span>
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#sp-mixer">Adjust or upload your own</button></p>
   <ul class="nav nav-tabs" role="tablist">
     {% for value, label in tabs %}<li class="nav-item" role="presentation">
       <a class="nav-link{% if tab == value %} active{% endif %}" id="tab-{{ value }}" href="{% url 'snpportal:upload' %}?input={{ value }}" data-bs-toggle="tab"
          data-bs-target="#pane-{{ value }}" role="tab" aria-controls="pane-{{ value }}" aria-selected="{% if tab == value %}true{% else %}false{% endif %}">{{ label }}</a></li>{% endfor %}
   </ul>
   <div class="tab-content">
-    <form class="tab-pane{% if tab == 'file' %} active{% endif %}" id="pane-file" role="tabpanel" aria-labelledby="tab-file" method="post" action="{% url 'snpportal:upload' %}" enctype="multipart/form-data">
+    <form class="tab-pane{% if tab == 'file' %} active{% endif %}" id="pane-file" role="tabpanel" aria-labelledby="tab-file" method="post" action="{% url 'snpportal:upload' %}" enctype="multipart/form-data" data-sp-rules>
       {% csrf_token %}
       <div class="sp-drop" data-drop-for="snps-file">
         <svg class="sp-drop-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -49,29 +55,32 @@
       {% if positions|length > 1 %}<p class="sp-hint d-flex flex-wrap gap-2 align-items-center"><label for="positions">Positions on</label>
         <select class="form-select form-select-sm w-auto" id="positions" name="positions">{% for value, label in positions %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
         <span class="sp-muted">rows that can't be converted are listed in the upload report</span></p>{% endif %}
+      {% include 'snpportal/_job_name.html' with id='name-file' file='snps-file' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
-    <form class="tab-pane{% if tab == 'paste' %} active{% endif %}" id="pane-paste" role="tabpanel" aria-labelledby="tab-paste" method="post" action="{% url 'snpportal:upload' %}">
+    <form class="tab-pane{% if tab == 'paste' %} active{% endif %}" id="pane-paste" role="tabpanel" aria-labelledby="tab-paste" method="post" action="{% url 'snpportal:upload' %}" data-sp-rules>
       {% csrf_token %}
       <label class="visually-hidden" for="paste">SNPs, one per line</label>
       <textarea class="form-control sp-paste" id="paste" name="paste" rows="4" required aria-describedby="paste-help"
                 placeholder="25 28996360 C T&#10;9 23837450&#10;rs863754587"></textarea>
       <p class="sp-hint" id="paste-help">One per line: chromosome and position (optionally ref and alt), or an rs ID; up to {{ paste_lines|thousands }} lines &middot; <a href="{% url 'snpportal:help' %}#format-plain">Format help</a></p>
+      {% include 'snpportal/_job_name.html' with id='name-paste' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
-    <form class="tab-pane{% if tab == 'regions' %} active{% endif %}" id="pane-regions" role="tabpanel" aria-labelledby="tab-regions" method="post" action="{% url 'snpportal:candidates' %}">
+    <form class="tab-pane{% if tab == 'regions' %} active{% endif %}" id="pane-regions" role="tabpanel" aria-labelledby="tab-regions" method="post" action="{% url 'snpportal:candidates' %}" data-sp-rules>
       {% csrf_token %}
       <label class="visually-hidden" for="targets">Genes, positions or intervals, one per line</label>
       <textarea class="form-control sp-paste" id="targets" name="targets" rows="4" required aria-describedby="targets-help"
                 placeholder="vgll3&#10;ENSSSAG00000053708&#10;26:14.5-15Mb">{{ targets }}</textarea>
       <p class="sp-hint" id="targets-help">Genes, positions or intervals, one per line: scores the public variants in them &middot; <a href="{% url 'snpportal:help' %}#search">Format help</a></p>
+      {% include 'snpportal/_job_name.html' with id='name-regions' blank=True placeholder='Public variants in the genes or regions' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}
         <label class="sp-small d-flex align-items-center gap-2">Flank
           <select class="form-select form-select-sm w-auto" name="flank">
             {% for f in flanks %}<option value="{{ f }}"{% if f == flank %} selected{% endif %}>&plusmn; {{ f|thousands }} bp</option>{% endfor %}
           </select></label></div>
     </form>
-    <form class="tab-pane{% if tab == 'sv' %} active{% endif %}" id="pane-sv" role="tabpanel" aria-labelledby="tab-sv" method="post" action="{% url 'snpportal:upload' %}" enctype="multipart/form-data">
+    <form class="tab-pane{% if tab == 'sv' %} active{% endif %}" id="pane-sv" role="tabpanel" aria-labelledby="tab-sv" method="post" action="{% url 'snpportal:upload' %}" enctype="multipart/form-data" data-sp-rules>
       {% csrf_token %}<input type="hidden" name="kind" value="sv">
       <div class="sp-drop" data-drop-for="sv-file">
         <svg class="sp-drop-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -85,9 +94,10 @@
       <p class="sp-hint" id="sv-help">Deletions, duplications, inversions, insertions or any regions: an SV VCF (END, SVLEN, SVTYPE), BED or a
         chrom, start, end table; each is scored by the functional evidence it overlaps; up to {{ max_mb }} MB or {{ sv_lines|thousands }} lines &middot;
         <a href="{% url 'snpportal:help' %}#format-sv">Format help</a></p>
+      {% include 'snpportal/_job_name.html' with id='name-sv' file='sv-file' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
-    <form class="tab-pane{% if tab == 'gwas' %} active{% endif %}" id="pane-gwas" role="tabpanel" aria-labelledby="tab-gwas" method="post" action="{% url 'snpportal:gwas_score' %}" enctype="multipart/form-data">
+    <form class="tab-pane{% if tab == 'gwas' %} active{% endif %}" id="pane-gwas" role="tabpanel" aria-labelledby="tab-gwas" method="post" action="{% url 'snpportal:gwas_score' %}" enctype="multipart/form-data" data-sp-rules>
       {% csrf_token %}
       <div class="sp-drop" data-drop-for="gwas-file">
         <svg class="sp-drop-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -97,14 +107,16 @@
                  accept=".gz,.tsv,.txt,.csv,.tab,.fastGWA,.linear,.logistic,.hybrid,.regenie,.stats,.mlma,.assoc"></div>
       </div>
       <p class="sp-hint" id="gwas-help">fastGWA, PLINK2, regenie, BOLT-LMM or GEMMA output, or chrom, pos and p; up to {{ max_mb }} MB &middot; <a href="{% url 'snpportal:help' %}#format-gwas">Format help</a></p>
+      {% include 'snpportal/_job_name.html' with id='name-gwas' file='gwas-file' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
   </div>
 </section>
 {% if local %}<p class="sp-small sp-muted mb-0" id="privacy">Running on this computer: your lists and results stay here, in
   {{ results_dir }}, until you delete them.</p>
-{% else %}<p class="sp-small sp-muted mb-0" id="privacy">Results are kept for {{ keep_hours }} h; anyone with their link can open them.
+{% else %}<p class="sp-small sp-muted mb-0" id="privacy">Results are kept for {{ keep_hours }}; anyone with their link can open them.
   Confidential? <a href="{% url 'snpportal:run_locally' %}">Run it locally</a>.</p>{% endif %}
+{% include 'snpportal/_mixer.html' %}
 </div>
 
 <aside class="col-lg-5">

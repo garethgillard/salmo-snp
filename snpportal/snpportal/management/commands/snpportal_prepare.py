@@ -36,11 +36,12 @@ class Command(BaseCommand):
                 said.append("no track registry")
             if not stale(folder):
                 said.append("public pool fits")
-            elif os.access(folder, os.W_OK):
+            elif os.access(folder, os.W_OK) and os.environ.get("SNPPORTAL_POOL_BUILD") != "0":  # 0: never here (NREC)
                 self.stdout.write(f"release {m.get('version')}: building its public pool (a minute or two)")
                 build_pool(folder, memory_limit=os.environ.get("SNPPORTAL_POOL_MEMORY", "4GB"))
                 said.append("public pool built")
             else:
-                said.append("PUBLIC POOL MISSING OR BUILT FOR OTHER WEIGHTS, and the folder is read only: the Overview "
-                            "leaves out the public comparison until the pool is published again (docs/SALMOBASE.md)")
+                said.append("PUBLIC POOL MISSING OR BUILT FOR OTHER WEIGHTS, and none is built here (a read-only folder, or "
+                            "SNPPORTAL_POOL_BUILD=0): the Overview leaves out the public comparison until a pool that fits "
+                            "is published or sent (docs/SALMOBASE.md)")
             self.stdout.write(f"release {m.get('version')} ({jobs.species(folder)['name']}): " + "; ".join(said))

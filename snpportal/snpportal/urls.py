@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import about, association, browser, explore, health, locus, mytracks, panel, panel_report, predict, projects, report, search, tools, views
+from . import about, association, browser, explore, health, locus, mytracks, panel, panel_report, predict, projects, report, rules, search, tools, views
 
 app_name = "snpportal"
 urlpatterns = [
@@ -51,6 +51,12 @@ urlpatterns = [
     path("results/<uuid:key>/chip/", tools.chip, name="chip"),
     path("results/<uuid:key>/panel/", tools.design, name="panel_design"),
     path("results/<uuid:key>/delete/", views.delete, name="delete"),
+    path("results/<uuid:key>/rename/", views.rename, name="rename"),
+    path("results/<uuid:key>/rules/", rules.apply, name="rules_apply"),
+    path("results/<uuid:key>/rules/preview/", rules.preview, name="rules_preview"),
+    path("rules/weights.yaml", rules.standard_file, name="rules_standard"),
+    path("rules/check/", rules.check, name="rules_check"),
+    path("rules/download/", rules.download, name="rules_download"),
     # the known-loci catalogue page; POST genes or intervals -> a candidate job
     path("known-loci/", explore.known_loci, name="known_loci"),
     path("candidates/", explore.candidate_job, name="candidates"),

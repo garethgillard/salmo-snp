@@ -18,7 +18,6 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import mark_safe
 
-import snpscore
 from snpscore import formats
 
 from . import explore, figures, jobs, palette, search, serve
@@ -109,6 +108,8 @@ LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall
     "regbuild": ("Regulatory build: promoters, enhancers, open chromatin", "Ensembl"),
     "gerp": ("Constrained elements in a 65-fish alignment (GERP)", "Ensembl Compara"),
     "pike": ("Sequence that aligns to northern pike (salmon-trout-pike alignment)", "AQUA-FAANG"),
+    "cne": ("Conserved non-coding elements of northern pike, projected through the salmon-trout-pike alignment",
+            "Baudement et al. 2026 (AQUA-FAANG)"),
     "summit": ("ATAC-seq summits inside robust peaks: distance and signal strength", "AQUA-FAANG"),
     "blacklist": ("Regions where ATAC peaks can't be called", "AQUA-FAANG"),
     "lore": ("Late-rediploidized (LORe) regions", "AQUA-FAANG"),
@@ -434,6 +435,8 @@ def methods_text(m, w):
             + (", the Ensembl regulatory build" if "regbuild" in layers else "")
             + (", GERP constrained elements from the Ensembl Compara 65-fish alignment" if "gerp" in layers else "")
             + (", sequence aligned to northern pike in the AQUA-FAANG salmon-trout-pike alignment" if "pike" in layers else "")
+            + (", the conserved non-coding elements of pike (Baudement et al. 2026) projected through that alignment"
+               if "cne" in layers else "")
             + (", the nearest ATAC-seq summit and its signal" if "summit" in layers else "")
             + (" and allele frequencies of the 504-fish reference panel" if "public_af" in layers else "")
             + ". Each SNP's tier_score is the sum of the weights of its evidence over all conditions, and tiers "
@@ -464,7 +467,7 @@ def help_page(request):
         "nav": "help", "title": "Help", "formats": FORMATS,
         "aliases": [(name, ", ".join(names)) for name, names in formats.ALIASES.items()],
         "chrom_aliases": chrom_aliases("25"), "assembly_share": f"{ASSEMBLY_WARNING:.0%}",
-        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(), "searches": jobs.species().get("searches") or search.EXAMPLES,
+        "keep_hours": jobs.keep_text(), "local": jobs.local(), "searches": jobs.species().get("searches") or search.EXAMPLES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}", "max_snps": int(jobs.setting("SNPPORTAL_MAX_SNPS", 3_000_000)),
         "vendor_cap": int(jobs.setting("SNPPORTAL_MAX_VENDOR_SNPS", 50_000)), "locus_name": export.locus_name("25", 28996360, {"25"}),
         "bins": (panel.INFINIUM_I_MIN, panel.INFINIUM_I_POLYPLOID, panel.INFINIUM_II_MIN), "close_bp": panel.CLOSE_BP})
@@ -487,17 +490,16 @@ def run_locally(request):
     # A release built locally has its own manifest.json (build date, local genome path), so it is checked by its layers:
     # one sha256 over the sorted 'name sha256' lines of the manifest's layers (each a parquet that builds byte-identically)
     lines = sorted(f"{x['name']} {x.get('sha256')}\n" for x in info["layers"])
-    weights = snpscore.score.WEIGHTS
     return render(request, "snpportal/run_locally.html", {
         "nav": "about", "title": "Run it locally", "release": info, "folder": folder,
         "cli": [(jobs.stored_preset(v, jobs.weights()["presets"]), label) for v, label in presets
                 if v != "all" and jobs.stored_preset(v, jobs.weights()["presets"])],
         "layers_sha256": hashlib.sha256("".join(lines).encode()).hexdigest() if lines else None,
-        "weights_sha256": jobs.sha256(weights) if weights.exists() else None,
+        "weights_sha256": jobs.rules_sha256(),  # the rules in use: the shipped file, or this install's own
         "layers_check": (f"python3 -c \"import hashlib, json; m = json.load(open('{folder}/manifest.json')); print(hashlib.sha256(''.join("
                          "sorted(x['name'] + ' ' + str(x.get('sha256')) + chr(10) for x in m['layers'])).encode()).hexdigest())\""),
         "command": f"snpscore annotate my_snps.vcf.gz --release {folder} --trait all -o my_snps.tsv",
-        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(),
+        "keep_hours": jobs.keep_text(), "local": jobs.local(),
         "data_url": serve.DATA_URL})
 
 
@@ -510,7 +512,8 @@ def state_palette(request):
     response = redirect(back)
     name = request.GET.get("name")
     if name in palette.STATE_PALETTES:
-        response.set_cookie(palette.COOKIE, name, max_age=365 * 86400, samesite="Lax", httponly=True, secure=request.is_secure())
+        response.set_cookie(palette.COOKIE, name, max_age=365 * 86400, samesite="Lax", httponly=True, secure=request.is_secure(),
+                            path=jobs.cookie_path())
     return response
 
 
@@ -520,7 +523,7 @@ def choose_species(request):
     key = request.POST.get("species") if request.method == "POST" else None
     response = redirect(reverse("snpportal:upload"))
     if key in jobs.species_releases():
-        response.set_cookie(jobs.SPECIES_COOKIE, key, max_age=365 * 86400, samesite="Lax", httponly=True)
+        response.set_cookie(jobs.SPECIES_COOKIE, key, max_age=365 * 86400, samesite="Lax", httponly=True, path=jobs.cookie_path())
     return response
 
 

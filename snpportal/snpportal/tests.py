@@ -45,6 +45,10 @@ class PaletteTest(SimpleTestCase):
         self.assertGreaterEqual(palette.contrast(palette.ACCENT, palette.WHITE), 4.5)
         self.assertGreaterEqual(palette.contrast(palette.SYNTHETIC[1], palette.SYNTHETIC[2]), 4.5)
 
+    def test_states_are_snpscores(self):  # one list of chromatin state names: a rules file is checked against it
+        for scheme, colours in palette.STATE_PALETTES.items():
+            self.assertEqual(set(colours), set(snpscore.score.STATES), scheme)
+
     def test_state_palette_switch(self):
         from . import locus_svg
         try:
@@ -333,7 +337,19 @@ class PortalTest(SimpleTestCase):
             os.utime(self.results / key / "job.json", (old, old))
             self.assertEqual(jobs.cleanup(), 0)
             self.assertTrue((self.results / key).exists())
-        self.assertIsNotNone(jobs.expires(key))  # the public site still deletes after 24 h
+        self.assertIsNotNone(jobs.expires(key))  # a server still deletes, after 30 days (KEEP_HOURS)
+
+    def test_a_month_on_a_server(self):
+        """Results stay 30 days on a server (G, 2026-11-26) and the pages say so from the setting; a server short of
+        disk space makes no new job, and says why."""
+        self.assertEqual(jobs.keep_text(), "30 days")
+        self.assertContains(self.client.get(reverse("snpportal:upload")), "Results are kept for 30 days")
+        key = jobs.create_from_rows([("25", 28996360, "vgll3", "C", "T")], "Kept")
+        self.assertAlmostEqual(jobs.expires(key) - time.time(), 30 * 86400, delta=60)
+        with override_settings(SNPPORTAL_KEEP_HOURS=24):
+            self.assertEqual(jobs.keep_text(), "24 hours")
+        with mock.patch.object(jobs.shutil, "disk_usage", return_value=mock.Mock(free=10 ** 9)):
+            self.assertContains(self.paste("25 28996360 C T"), "short of disk space", status_code=400)
 
     def test_release_edit_keeps_job_tiers_and_shows_banner(self):
         key = self.key(self.upload())
@@ -346,6 +362,98 @@ class PortalTest(SimpleTestCase):
             tiers = dict((t, n) for t, n in results.open_result(mock.Mock(GET=QueryDict()), key)[0].execute(
                 "SELECT tier, count(*) FROM v GROUP BY 1").fetchall())
             self.assertEqual({str(t): n for t, n in tiers.items()}, before["all"])
+
+    def test_own_tier_rules(self):
+        """Your own tier rules (G, 2026-11-26): the standard file to download, a file or the mixer's values checked
+        (each mistake named), a list scored with them, its tiers previewed and applied again on the fly."""
+        import yaml
+        page = self.client.get(reverse("snpportal:upload")).content.decode()
+        for part in ('id="sp-mixer"', 'id="sp-rules-standard"', 'data-term="active"', "data-sp-rules", "Adjust or upload your own"):
+            self.assertIn(part, page)
+        standard = snpscore.score.WEIGHTS.read_text()
+        got = self.client.get(reverse("snpportal:rules_standard"))
+        self.assertEqual(got.content.decode(), standard)
+        self.assertIn("attachment", got["Content-Disposition"])
+        check = lambda **post: self.client.post(reverse("snpportal:rules_check"), post).json()  # noqa: E731
+        ok = check(text=standard.replace("  active: 3", "  active: 5"))
+        self.assertEqual((ok["ok"], ok["rules"]["weights"]["active"], ok["changes"]), (True, 5, ["Active state 3 → 5"]))
+        self.assertIn("assay", ok["unused"])  # a whole weights.yaml: only its scoring blocks (and the focus) are used
+        self.assertNotIn("presets", ok["unused"])  # its presets.all is the focus; the others are the standard's
+        for text, said in ((standard.replace("  splice: 3", "  splice: three"), "'splice' is 'three'"),
+                           ("weights: &w {active: 3}\ntiers: *w\n", "anchors"), ("presetz: {}\n", "unknown block 'presetz'"),
+                           (standard.replace("  active: 3", "  active: 1000"), "at most 99"),  # G, 2026-11-26: below 100
+                           (standard.replace("  active: 3", "  active: 2.25"), "one decimal place")):
+            bad = check(text=text)
+            self.assertFalse(bad["ok"], said)
+            self.assertIn(said, " ".join(bad["problems"]))
+        tenth = check(text=standard.replace("  active: 3", "  active: 2.5").replace("tiers: [5, 3, 1]", "tiers: [5, 3, 0.5]"))
+        self.assertEqual((tenth["ok"], tenth["rules"]["weights"]["active"], tenth["rules"]["tiers"]), (True, 2.5, [5, 3, 0.5]))
+        mine = {**yaml.safe_load(standard), "weights": {**yaml.safe_load(standard)["weights"], "coding": 7}}
+        mine = {k: mine[k] for k in ("weights", "tiers", "active_states", "weak_states", "summit", "variant_scores")}
+        refused = self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T", "rules": json.dumps({**mine, "tiers": [1, 3, 5]})})
+        self.assertContains(refused, "Your tier rules can&#x27;t be used: tiers: [1, 3, 5]", status_code=400)
+        key = self.key(self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T\n26 19138923 A G",
+                                                                       "rules": json.dumps(mine)}))
+        d, job = self.results / key, jobs.read(key)
+        own = (d / "weights.yaml").read_text()
+        self.assertIn("  coding: 7            # CDS change to the protein", own)  # the standard file's comments kept
+        self.assertEqual(yaml.safe_load(own)["weights"]["coding"], 7)
+        self.assertTrue(job["custom_rules"])
+        page = self.client.get(reverse("snpportal:results", args=[key])).content.decode()
+        self.assertIn("Tiers from your own tier rules (Coding 3 → 7)", page)
+        self.assertNotIn("The release has changed since", page)  # own rules are not a changed release
+        self.assertIn('data-preview="', page)
+        preview = self.client.post(reverse("snpportal:rules_preview", args=[key]), {"rules": json.dumps(
+            {**mine, "weights": {**mine["weights"], "coding": 3}})}).json()
+        self.assertTrue(preview["ok"])
+        self.assertEqual(sum(preview["new"].values()), sum(preview["now"].values()))
+        before = jobs.read_json(d / "summary.json")["tiers"]["all"]
+        self.assertEqual(self.client.post(reverse("snpportal:rules_apply", args=[key]), {"rules": ""}).status_code, 302)  # the standard
+        self.assertEqual((d / "weights.yaml").read_text(), standard)
+        self.assertFalse(jobs.read(key)["custom_rules"])
+        after = jobs.read_json(d / "summary.json")["tiers"]["all"]
+        self.assertEqual({str(t): n for t, n in after.items() if n}, {t: n for t, n in preview["new"].items() if n})
+        self.assertNotEqual(before, after)  # coding 7 made a tier 1 of the vgll3 missense SNP
+        self.assertEqual(preview["moved"], 1)
+        focused = {**mine, "focus": ["Brain"], "weights": {**mine["weights"], "active_elsewhere": 0}}  # one tissue only
+        got = check(rules=json.dumps(focused))
+        self.assertEqual((got["ok"], got["rules"]["focus"]), (True, ["Brain"]))
+        self.assertEqual(got["changes"][0], "focus: brain")
+        self.assertIn("Brian", " ".join(check(rules=json.dumps({**focused, "focus": ["Brian"]}))["problems"]))
+        key = self.key(self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T", "rules": json.dumps(focused)}))
+        self.assertEqual(yaml.safe_load((self.results / key / "weights.yaml").read_text())["presets"]["all"], ["Brain"])
+        self.assertEqual(jobs.read(key)["focus"], ["Brain"])
+        page = self.client.get(reverse("snpportal:results", args=[key])).content.decode()
+        self.assertIn("Tier for your focus: brain", page)
+        self.assertIn("focus: brain", page)  # the header's own rules
+        self.assertIn('data-focus="Brain"', page)  # the mixer's Focus
+        download = self.client.post(reverse("snpportal:rules_download"), {"rules": json.dumps(mine)})
+        self.assertEqual(yaml.safe_load(download.content)["weights"]["coding"], 7)
+        self.assertTrue(download.content.decode().startswith("# Your own tier rules"))
+
+    def test_names_and_renaming(self):
+        """The Score page's forms name the results: the date and time, or the file's name (G, 2026-11-26); and the list
+        of this browser's results renames them."""
+        page = self.client.get(reverse("snpportal:upload")).content.decode()
+        self.assertIn(f'value="{jobs.default_name()[:13]}', page)  # the date and the hour, preset
+        self.assertIn('data-name-from="snps-file"', page)  # a chosen file's name replaces it (portal.js)
+        key = self.key(self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T", "name": "  Smolt   chip  "}))
+        self.assertEqual(jobs.read(key)["label"], "Smolt chip")
+        blank = self.key(self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T", "name": ""}))
+        self.assertTrue(jobs.read(blank)["label"].startswith("Pasted "))  # no name given: as before
+        with open(FIXTURE / "snps.vcf", "rb") as f:
+            named = self.key(self.client.post(reverse("snpportal:upload"), {"snps": f, "name": "x" * 200}))
+        self.assertEqual(jobs.read(named)["label"], "x" * 80)
+        listed = self.client.get(reverse("snpportal:results", args=[key]))  # opening results lists them
+        self.assertEqual(self.client.post(reverse("snpportal:rename", args=[key]), {"name": "Smolt chip v2"}).url,
+                         reverse("snpportal:upload"))
+        self.assertEqual(jobs.read(key)["label"], "Smolt chip v2")
+        self.assertContains(self.client.get(reverse("snpportal:upload")), "Smolt chip v2")
+        self.client.post(reverse("snpportal:rename", args=[key]), {"name": "   "})  # a blank name changes nothing
+        self.assertEqual(jobs.read(key)["label"], "Smolt chip v2")
+        self.assertEqual(self.client.get(reverse("snpportal:rename", args=[key])).status_code, 405)
+        self.assertEqual(self.client.post(reverse("snpportal:rename", args=[uuid.uuid4()]), {"name": "x"}).status_code, 404)
+        self.assertEqual(listed.status_code, 200)
 
     def test_score_page_lists_this_browsers_results(self):
         a = jobs.create_from_rows([("25", 28996360, "vgll3", "C", "T")], "First list")

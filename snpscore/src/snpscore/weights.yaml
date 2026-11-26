@@ -1,38 +1,38 @@
-# Tier rules. PROVISIONAL: chosen by Claude so the prototype works; G decides the real ones (see AGENTS.md at the repository root).
+# Tier rules. G's (2026-11-26: the scoring decisions, docs/DECISIONS.md), except the blocks listed under `provisional`.
 # Ships with snpscore (snpscore.WEIGHTS), not in the release; `snpscore annotate --trait <preset>` applies it.
 # Each SNP gets tier_score = sum of the weights of the evidence it has, then a tier from the cut-offs.
 # Layers marked synthetic: true in the release manifest never count.
 
-# The blocks below that G still has to confirm; build lists them in the release manifest.
-provisional: [active_states, weak_states, weights, summit, tiers, presets, assay, design, finemap, priors]
+# The blocks below that G still has to confirm; build lists them in the release manifest. In finemap only
+# functional_lambda is G's (0.3, 2026-11-26); the rest of that block is still provisional.
+provisional: [summit, variant_scores, assay, design, finemap, priors]
 
-active_states: [Active_TSS, Active_enhancer]
-# Counted as weak evidence. Not counted at all: Repressed_polycomb, Quiescent, ZNF_genes_and_repeats, Unknown_1 (the
-# published models') and Unknown_2 (the first gill model's; gone from the unified peaks since their v4 of 2026-11-23).
-# Bivalent_or_mixed_active/polycomb: the ImmunoMap's head kidney label (H3K27me3 with ATAC-seq and/or H3K27ac), weak like
-# Bivalent (G, 2026-11-20). Weak_accessible_chromatin: the trout ImmunoMap's PBS label (an ATAC-only state with weak
-# emission), weak like Accessible_chromatin (G, 2026-11-25).
-weak_states: [Primed_enhancer, Poised_enhancer_1, Poised_enhancer_2, Bivalent, Flanking_upstream, Flanking_downstream,
-              Accessible_chromatin, Bivalent_or_mixed_active/polycomb, Weak_accessible_chromatin]
+active_states: [Active_TSS, Active_enhancer]  # G, 2026-11-26 (DECISIONS #1), at equal weight (#49)
+# Counted as weak evidence: primed enhancers and the flanking states (G, 2026-11-26, DECISIONS #2: eQTL leads show no
+# enrichment in the weak states as they were, 1.07). Not counted at all: Poised_enhancer_1, Poised_enhancer_2, Bivalent,
+# Accessible_chromatin, the ImmunoMap's Bivalent_or_mixed_active/polycomb and the trout ImmunoMap's
+# Weak_accessible_chromatin (weak until G, 2026-11-26: "I want the weak states set to 0"); Repressed_polycomb,
+# Quiescent, ZNF_genes_and_repeats, Unknown_1 (the published models') and Unknown_2 (the first gill model's).
+weak_states: [Primed_enhancer, Flanking_upstream, Flanking_downstream]
 
-weights:  # whole numbers (tier_score is an integer)
+weights:  # G, 2026-11-26. Whole numbers here; a user's own rules may use one decimal place (tier_score is then too)
   active: 3            # active state in at least one condition of the preset
   active_elsewhere: 1  # active only in conditions outside the preset
   weak: 1              # weak state in a preset condition, and not active there
   coding: 3            # CDS change to the protein (missense, stop gained or lost, start lost) or of unknown effect
-  synonymous: 3        # PROVISIONAL: synonymous CDS change (or stop retained); as coding until G decides if it scores lower
+  synonymous: 1        # synonymous CDS change (or stop retained), counted like a UTR (G, 2026-11-26, DECISIONS #5)
   splice: 3            # splice region
   utr: 1               # 5' or 3' UTR
-  constrained: 2       # GERP constrained element (65 fish)
+  constrained: 2       # a GERP constrained element (65 fish) or a pike CNE (layers.yaml `cne`); once, if both
   regbuild: 1          # Ensembl regulatory feature with no AQUA-FAANG peak (68-86% of them overlap a peak)
   molqtl: 0            # nf-RASQUAL caQTL/eQTL lead SNP (12 fish, lead SNPs only): shown in tier_terms, not scored
   motif: 1             # G (2026-10-19): inside a robust ATAC peak, one allele matches a JASPAR 2024 motif at p < 1e-5 and
                        # the other doesn't, with at least 4 bits between them (layers.yaml `motif`; about 15% of in-peak SNPs)
-  pike: 0              # sequence that aligns to northern pike (layers.yaml `pike`): shown in tier_terms, not scored
-                       # until G sets it (docs/DECISIONS.md #54; eQTL lead SNPs are in it 1.6 to 1.9 times as often
-                       # as matched SNPs, docs/SCORING.md section 6)
-  summit: 0            # near a strong ATAC summit (the `summit` rule below): shown in tier_terms, not scored until G
-                       # sets it (docs/DECISIONS.md #58; no measurable gain at eQTL leads so far)
+  pike: 1              # sequence that aligns to northern pike (layers.yaml `pike`), counted only where `constrained`
+                       # is not: conservation is the highest of its evidence, not a sum (G, 2026-11-26: "pike aligned
+                       # only is 1, but a CNE or a GERP alignment is 2"; DECISIONS #54)
+  summit: 0            # near a strong ATAC summit (the `summit` rule below): shown in tier_terms, not counted until
+                       # allelic imbalance and the ChromBPNet effects have tested it; then 1 (G, 2026-11-26, DECISIONS #58)
 
 # The ATAC summit rule (weights.summit; layers.yaml `summit`): a SNP has it when the nearest summit inside a robust peak
 # is at most max_distance bp away and that summit's rank (the share of its condition's peaks with a lower signal) is at
@@ -42,9 +42,10 @@ summit:
   min_rank: 0.75       # the strongest quarter of a condition's peaks
 
 # Per-variant score layers (layers.yaml format variant_scores: the gill ChromBPNet scores, later a CADD-like score): a
-# SNP counts when its percentile (in the layer's reference set, else among the scored variants) is at least the value
-# here, with the weight of the same name under `weights:`. Both are G's to set; until then a score layer is shown but
-# never counted (DECISIONS #53). e.g. chrombpnet_gill: 0.99
+# SNP counts when its percentile (in the layer's reference set, else among the scored variants) is at least
+# `percentile` and its score at least `min_score`, with the weight of the same name under `weights:`. None counts yet:
+# G (2026-11-26, DECISIONS #53) set the rule for when a model has passed a test of what it adds among SNPs inside
+# peaks: 1 point from a least change, `chrombpnet_gill: {min_score: 0.2}` (|log2 fold change| 0.2, about 15%).
 variant_scores: {}
 
 # Minimum tier_score for tiers 1, 2 and 3; anything lower is tier 4.
@@ -137,7 +138,8 @@ design:
 # prototype works; G to confirm. Users can change them per view; the ROADMAP's 'Open questions for G' lists them.
 finemap:
   prior_sd: 0.2             # W = prior_sd^2 = 0.04: prior variance of the effect on the standardised scale (Wakefield ABF)
-  functional_lambda: 0.5    # functional prior pi_i ~ exp(lambda * tier_score_i) (up to about 90x between SNPs)
+  functional_lambda: 0.3    # functional prior pi_i ~ exp(lambda * tier_score_i) (G, 2026-11-26, DECISIONS #51; the
+                            # Association page shows a flat prior beside it)
   coverage: 0.95            # credible set: SNPs in descending PIP until their PIPs sum to this
   significant: 5.0e-8       # genome-wide significance (a convention from human GWAS)
   suggestive: 1.0e-5        # loci down to this p are listed as suggestive

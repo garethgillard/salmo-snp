@@ -44,9 +44,9 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
    - NREC (demo and staging until salmobase): git checkout, updated only when G says so (the manual `deploy`
      workflow, a batch of tested changes at a time; G, 2026-11-06), never by a merge;
    - salmobase (the live installation, being prepared: G, 2026-11-25): the portal behind salmobase's Apache at
-     /snp/, linked from salmobase with a button (not merged into its Django), as a container or from a virtual
-     environment, reading the published data where it is on the server (`SNPSCORE_SALMOBASE`: its datafiles
-     folder); installed and updated by the chat on Orion (docs/SALMOBASE.md);
+     /snp/ (not merged into its Django), as a container of its own on salmobase's Docker network, reading the
+     published data where it is on the server (`SNPSCORE_SALMOBASE`: its datafiles folder); installed and updated
+     by the chat on Orion (docs/SALMOBASE.md);
    - breeding companies and everyone else: the local install.
    Docker and bioconda only wrap the package. Nothing depends on Docker-only features.
 5. The data is hosted online (salmobase or any static web server) as one folder: releases/<version>/ (the snapshot
@@ -62,8 +62,11 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
    (CODEOWNERS); a merge to main deploys nothing: the NREC demo is updated when G asks (the `deploy` workflow);
    a vX.Y.Z tag builds the wheels (and later the image) as a GitHub Release.
 
-7. Species (G, 2026-11-12): a release is for one species and assembly. Salmon releases are named by their date
-   (2026-11-05), another species' with the species first (trout-2026-11-13), and the manifest's `species` block
+7. Species (G, 2026-11-12): a release is for one species and assembly. From the builds of 2026-11-26 every release
+   is named <species>-<assembly>-<date> (G, 2026-11-26: "add salmon genome name to the salmon one ... the genome
+   version ... consistant between salmon and trout ... atlantic and rainbow in the name"): atlantic_salmon-Ssal_v3.1-
+   2026-11-26 and rainbow_trout-USDA_OmykA_1.1-2026-11-26 (`snpdata name`); the earlier releases keep their names
+   (2026-11-25, trout-2026-11-25). Code never reads the species from a name: the manifest's `species` block
    (layers.yaml: key, name, latin, prefix, the browser's example locus, the pages' wording, samples, searches) says
    which. The portal's species bar (top right; a cookie, so it works on a server too) picks the species: new lists are
    scored against that species' release (serve.py RELEASES names one per species), while results, panels and saved
@@ -272,18 +275,89 @@ Decided:
   Claude's choices, PROVISIONAL (DECISIONS #65): the portal shows the releases its version names, not a newer one
   in the folder; the server builds no pool (they come from Orion with the release). The NREC demo stays until G
   says otherwise.
+  How salmobase itself runs (its repository, https://gitlab.com/elixir-nmbu/salmobase, public; G pointed to it,
+  2026-11-25; docs/SALMOBASE.md has it): a Docker Compose project (app, db, docs) with Apache inside the `app`
+  container, its configuration copied into the image, `/docs` sent to the docs container by name, and `/snp` free.
+  So the portal is a container of its own in a compose project of its own (`deploy/compose.salmobase.yml`) on
+  salmobase's network, named `snp`, and one block in salmobase's Apache file sends `/snp` to it: the one change in
+  salmobase's repository, kept here as `deploy/salmobase-snp.patch` for a merge request there, which G accepts (G,
+  2026-11-25: "I have access to the repo and can accept the pull"; a cloud session has no GitLab login, so the
+  branch is pushed from a clone that has: G's, or Orion's). Being a second Django on one host name, its cookies have names of their own and the path
+  `/snp/`. Tried with salmobase's real Apache file and a stand-in for its Django. The server itself cannot be
+  reached from a cloud session: what is still unknown is a table in docs/SALMOBASE.md, filled in by the survey.
+  Navigation between salmobase's pages and the portal is left for later (G, 2026-11-25: "Don't worry about
+  navigation to and from salmobase for now"): the portal is an address.
+
+- Your own tier rules (G, 2026-11-26: "the option to upload a custom weights yaml (with a link to download the latest
+  one to modify), and also a large pop-up box in the middle of the screen that has all the scoring factors listed with
+  sliders and a text box ... to adjust like a sound mixer. Then this custom weights will be in their browser to score
+  the snps or change the scored results on the fly"): the Tier rules mixer on the Score page and on every finished
+  result (snpportal/snpportal/rules.py, `_mixer.html`, portal.js): a fader and a number box per evidence term, the
+  tier cut-offs and the chromatin states; upload a weights.yaml, download the standard one or these. A user's rules
+  live in the browser (localStorage) and go with each new list; on a results page the mixer shows the tiers the faders
+  would give and Apply tiers the job again (jobs.retier). Claude's choices: DECISIONS #69-#72 (Provisional below).
+  Then (G, 2026-11-26): "Make the sliders horizontal, and grouped logically" (chromatin and regulatory elements,
+  genes and proteins, conservation, allele effects, tier cut-offs); and "make it able to focus the type of elements,
+  like choosing certain tissues extra or to just focus on elements from a give tissue, we need that option": the
+  mixer's Focus (the tissues ticked are the job's presets.all; active and weak states count there, activity only
+  elsewhere as 'Active, other tissues', active_elsewhere). This amends 'All conditions' (2026-10-11) for a user's own
+  rules only: the standard rules, and so the portal's default tiers, still count every condition, and a focused
+  result says its focus (its header, the Overview's 'Tier for your focus: ...', its downloads).
+- ChromBPNet liver, and effects first (G, 2026-11-26: "We have now a chrombpnet model for liver online, add that to
+  the prediction. Reduce the prediction test, and give the result for gill and liver when the button is pressed";
+  then "The ChromBPNet needs to focus on effect too, make it obvious the size difference in the atac peak, not just
+  p-value significance of it"): lib/models.yaml has the liver model (salmobase datafiles chrombpnet/AtlanticSalmon/
+  v1/Liver/); the card's one Predict button runs every model of the assembly, a row each: the predicted ATAC signal
+  with each allele as bars on one scale, the change in percent and log2, then the rank and how peak-like the place
+  is; the text is shorter. Everywhere a ChromBPNet score shows, the size of the change comes first: the Table's
+  Scores column and the card ('↓ 14% · top 1%'), and the Locus browser's ticks, whose height is now the size of the
+  change (|log2 fold change|, square-root scaled, full at 0.5: browser.EFFECT_FULL), not the rank. Own rules can
+  count a score layer from a least change as well as a rank (variant_scores {percentile, min_score}).
+- Deployed as a Docker image (G, 2026-11-26: "soon, we'll only be deploying as a docker image. We should have the
+  docker uploaded into the same salmobase datafiles, then salmobase can use this docker to set it up on it's server.
+  That'll let users also be able to choose between a local docker installation, or the python package"): one image
+  per version (snpportal/deploy/Dockerfile), saved as one file, salmo-snp-<version>.docker.tar.gz with its sha256
+  (deploy/image.sh build; the release workflow attaches it to each vX.Y.Z GitHub Release), published by the Orion
+  chat in datafiles/datasets/salmo-snp/docker/ with compose.yml, smoke.sh, SHA256SUMS and latest.json
+  (deploy/publish_image.sh). salmobase's server loads it from there and runs it with that compose.yml: no clone, no
+  build, no registry (docs/SALMOBASE.md). The same image runs on a user's own computer: `salmo-snp-server local`
+  downloads and checks the data into its volume at the first start and serves on the host's 127.0.0.1 only, keeping
+  results until deleted, as the Python package does (snpportal/README.md "A Docker install").
+- Usage documents wait for 1.0 (G, 2026-11-26: "don't update usage document yet, like the tour. Let's wait till a
+  first official release to make the tour and help docs final for version 1.0"): no new tour screenshots or Help and
+  README user-guide rewrites for each change until the first official release; a statement a change makes false
+  (how long results are kept, say) is still corrected where it stands.
+
+- The scoring decisions (G, 2026-11-26: the questionnaire, https://claude.ai/artifact/LuWBehDLFAb8yXQzdjEnQ3, and the
+  scoring chat's hand-off; docs/DECISIONS.md has each row): active = Active_TSS and Active_enhancer at equal weight
+  (3); weak (1) = primed enhancers and the flanking states, while poised, bivalent, accessible chromatin, the ImmunoMap's
+  bivalent or mixed active/polycomb and the trout ImmunoMap's weak accessible chromatin count 0 (G: "I want the weak
+  states set to 0", read as these and not primed and flanking; correct it if G says otherwise). Not counted either:
+  repressed polycomb, quiescent, ZNF genes and repeats, Unknown_1 and Unknown_2. Synonymous 1, like a UTR, and the
+  public pools carry coding consequences so that it applies to them as to uploads ("Add it": `snpscore pool` runs the
+  sequence step whenever the genome is on the disk). Conservation is the highest of its evidence, not a sum ("pike
+  aligned only is 1, but a CNE or a GERP alignment is 2"): `constrained` 2 = a GERP element or a pike CNE (the `cne`
+  layer, both species; trout untested), once if both, and `pike` 1 only where neither (gaps closed up to 50 bp). The
+  other weights (coding and splice 3; UTR, Ensembl regulatory where AQUA-FAANG has no peak, motif and active elsewhere
+  1) and the tier cut-offs 5 / 3 / 1 stay; the presets stay (disease_resistance = HeadKidney + Gill + Liver, G
+  2026-11-20; development = the 5 DevMap stages; one per tissue and `all`); molQTL 0; summit 0 until allelic imbalance
+  and the ChromBPNet effects have tested it, then 1 for the rule; ChromBPNet and allelic imbalance 0 until each passes
+  a test among SNPs inside peaks, then 1 point from a least change of |log2 FC| 0.2 ("If there's so few snps, we can
+  lower to 0.2"). Distance to the gene start stays a matching variable. SNPs with one tier and score: known locus,
+  constrained, assay pass, MAF (results.tie_break). The eQTL benchmark is a check, not a calibration; v0.1 needs the
+  lower 95% bound of tiers 1-2 at eQTL leads above 1 (`snpscore benchmark` prints the line; the release build stops on
+  a fail); a one-tissue molQTL set is scored with that tissue's preset. The GWAS prior's slope is 0.3, the uniform
+  prior shown beside it. The missense plan as written, and when it counts: damaging 3, other missense 2, synonymous 1.
+  The mixer: a weight and a cut-off each up to 99 ("Cap the score at <100 is fine"), one decimal place, the user's
+  cut-offs in view. The pool of release 2026-11-25 goes from tiers 1-4 0.38 / 6.16 / 8.49 / 84.98% to 1.09 / 5.75 /
+  18.42 / 74.74% (423,043 SNPs up a tier, 36,729 down; before synonymous). The salmon-centred conservation alignment
+  waits: G takes it up here, with no score until its layers exist.
+- The demo from the Docker image (G, 2026-11-26: "set up the deploy to NREC to copy now the docker image to set up
+  there, and to copy the release from salmobase"): `update.sh image [version]`, the deploy workflow's `image` input
+  (DECISIONS #76). The checkout's deploy stays the default and the fallback until the first image deploy passes its
+  smoke test; it needs Docker on the VM (`DOCKER=1 bash deploy/nrec.sh`, once, from G's Mac) and a published image.
 
 Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm or replace, then move to Decided):
-- Active = Active_TSS, Active_enhancer. Weak = primed, poised 1/2, bivalent, flanking up/downstream, accessible chromatin,
-  the ImmunoMap's bivalent or mixed active/polycomb (G, 2026-11-20) and the trout ImmunoMap's weak accessible
-  chromatin (G, 2026-11-25). Not counted: repressed polycomb, quiescent, ZNF
-  genes and repeats, Unknown_1 (the published models') and Unknown_2 (the first gill model's; gone from the unified
-  peaks since their v4 of 2026-11-23).
-- Trait presets (condition prefixes): maturation = Brain + Gonad; growth_and_fillet = Muscle + Liver;
-  disease_resistance = HeadKidney + Gill + Liver (G, 2026-11-20; Liver alone before the ImmunoMap); development = the
-  5 DevMap stages; plus one preset per tissue (gill and head_kidney too) and `all`.
-- Weights and tier cut-offs: see weights.yaml (active 3, CDS/splice 3, constrained 2, weak/UTR/active elsewhere/Ensembl
-  regulatory 1; tiers at 5, 3, 1). Ensembl regulatory features count only where AQUA-FAANG has no peak (68-86% overlap).
 - Benchmark controls matched on distance to the nearest gene and public MAF (0.05 bins), not LD.
 - Known loci set includes GWAS lead SNPs (six6, bco1l), not only likely-causal missense SNPs (vgll3).
 - Portal roadmap v2, stage 1 (2026-10-06):
@@ -293,8 +367,9 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   - Locus browser default tracks (tracks.yaml defaults): ATAC, replicate R1, at most 8 rows; preset `all` = first condition
     per tissue incl. Gill and one embryo stage.
   - Palette: tier 2 #2171B5 (AA contrast), ChromHMM colours in one dict (palette.STATES) until G picks AQUA-FAANG itemRgb.
-  - Portal limits: 3M SNPs, 300 MB upload, 10,000 pasted lines, 24 h retention on a server (a local install keeps
-    results until deleted, G 2026-11-03); privacy statement and citation text need G.
+  - Portal limits: 3M SNPs, 300 MB upload, 10,000 pasted lines; results kept 30 days on a server (G, 2026-11-26: "for
+    now, for a month"; 24 h before), until deleted on a local install (G, 2026-11-03); privacy statement and
+    citation text need G.
 - Portal roadmap v2, stages 2-3 (all in weights.yaml blocks, labelled PROVISIONAL in the UI):
   - Assay QC `assay`: 35 bp flanks, GC 0.30-0.70, repeat share <= 0.5, homopolymer <= 6, no public variant in the flanks (warn);
     LORe/blacklist/A/T-C/G warn; fail on ref mismatch, non-SNP or N. Only ~15% of public SNPs pass (salmon is ~60% repeat): revisit.
@@ -325,7 +400,10 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     reported beyond 500 bp (`max_distance`); strength is the rank among the condition's own peaks, because fold
     enrichment differs between conditions (median 3.1 to 6.5).
   - The summit rule (weights.yaml `summit`): within 50 bp of a summit in the strongest quarter of its condition.
-    Weights: pike 0, summit 0. Recommended to G: pike 1; summit 0 until allelic imbalance or ChromBPNet can test it.
+    Weights: pike 1 and summit 0 (Decided, 2026-11-26).
+- The `cne` layer (2026-11-26, DECISIONS #74): where two CNEs reach one base (two pike rows in an alignment block, or
+  a trout block in two files) the older clade keeps it; neighbouring runs of one CNE in two alignment blocks are not
+  joined, so the counts compare with the scoring chat's (salmon: 1,438,398 runs, 33,649,069 bp, 403,884 CNEs).
 - Rainbow trout release (2026-11-12, DECISIONS #38-#45; the tier rules are salmon's weights.yaml, unchanged):
   - Layers: AQUA-FAANG unified peaks and ChromHMM states (17 conditions: brain, liver, muscle by maturity and sex, five
     embryo stages; no gonad states; from the release after trout-2026-11-24 also the ImmunoMap's head kidney after
@@ -345,6 +423,21 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
     uploads get a badge only near the four gene-region rows. The Locus browser opens at greb1l and rock1.
   - The public pool: since 2026-11-21 the salmon rule (Decided), so an even sample of at most 4,000,000 (MAX_SITES) of
     the public sites with MAF >= 0.05: 3.37M of 13.5M (before: 2,000,000 of all 18.8M).
+- The tier rules in use (2026-11-26, TRACKER S7: G asked for the audit's gaps to be fixed first): the shipped
+  weights.yaml, or an own copy that SNPSCORE_WEIGHTS names (`salmo-snp` sets it to the data folder's weights.yaml,
+  which `salmo-snp rules --copy` makes and a package update leaves alone; snpscore's commands also take
+  `--weights`). A file with a mistake is refused, each one named by its key (snpscore.check_weights; the portal's
+  design and priors blocks in lib/export.check_rules): the portal does not start (system check E004) and makes no
+  job. Results compare only with a public pool scored with their own rules (jobs.pool_file; otherwise the Overview
+  says why it leaves the background out). A Design panel takes the rules of its first source and refuses a list
+  scored with others; saved versions keep them and download with their stored tiers. Outputs name the rules
+  (validation.json `rules`, Parquet key-value metadata, the pool's stamp, the benchmark's head, gwas.json).
+- A user's own tier rules (2026-11-26, DECISIONS #69-#71; the bounds and decimals G's, 2026-11-26): only the scoring
+  blocks (weights, tiers, the state lists, summit, variant_scores) are theirs, the other blocks stay the portal's; a
+  weight and a cut-off each at most 99 with one decimal place, a file at most 100 KB without YAML anchors; faders 0-10
+  and 1-20 in steps of 0.5 (rules.py). Kept in the browser only; a job
+  keeps the rules it was scored with, and Apply re-tiers it through the job queue. Results with own rules compare
+  with the public pool tiered again with their rules (jobs.own_background, cached in the results folder).
 - Structural variants (2026-11-24, DECISIONS #55-#57): each evidence term counts once however many elements an SV
   overlaps (a 1-bp SV scores as a SNP at that base); per condition the strongest state of the peaks it overlaps; the
   most severe gene region; Ensembl regulatory only without an AQUA-FAANG peak; insertions and breakends are their
@@ -353,8 +446,8 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   (Stenløkk 2022 chr18 and chr9 inversions, `local_adaptation`; Bertolotti 2020 farmed-vs-wild outliers,
   `domestication`), trout 2 (Omy05, `anadromy`; Omy17, `fillet_yield`). Examples: Known SVs, and 300 SYNTHETIC SVs
   that build makes (layers.yaml `demo_svs`).
-- Coding consequences, molQTL benchmark, priors (2026-10-07): weights.synonymous = coding (3) until G decides (stop_retained
-  counts as synonymous; splice donor/acceptor keep the splice weight); molQTL benchmark positives = leads with BF < 0.1;
+- Coding consequences, molQTL benchmark, priors (2026-10-07): stop_retained counts as synonymous (synonymous 1: Decided,
+  2026-11-26); splice donor/acceptor keep the splice weight; molQTL benchmark positives = leads with BF < 0.1;
   priors category order tier1_2, active, coding, constrained, regulatory (weights.yaml `priors`).
 - Ss4R duplicates (2026-10-07): `ss4r` layer from the AQUA-FAANG SalmonTroutOrthologs.tsv on salmobase: the other
   salmon genes of a gene's clade on the paired chromosome of its syntenic quartet (any other chromosome when the quartet

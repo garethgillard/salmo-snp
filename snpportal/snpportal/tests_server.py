@@ -74,6 +74,20 @@ class ServerTest(SimpleTestCase):
                     with override_settings(SNPSCORE_RELEASE=str(releases / "2026-03-03")), \
                             self.assertRaisesRegex(CommandError, "no release at .*2026-03-03: this version expects release 2026-01-01"):
                         call_command("snpportal_prepare", stdout=io.StringIO())
+                    self.beside_another_site(url)
             finally:
                 logging.disable(logging.NOTSET)
             self.assertEqual(listing(served), before)  # nothing was written where the data is published
+
+    def beside_another_site(self, result):
+        """At /snp/ beside salmobase's own Django on one host: the portal's cookies have names of their own and go to
+        its own pages only, and a result's page is not indexed and not framed by other sites."""
+        with override_settings(SNPPORTAL_COOKIE_PATH="/snp/", CSRF_COOKIE_PATH="/snp/"):
+            page = self.client.get(reverse("snpportal:upload"))
+            self.assertEqual(page.cookies["snpportal_csrftoken"]["path"], "/snp/")
+            self.assertNotIn("csrftoken", page.cookies)  # the name salmobase's own forms would use
+            switched = self.client.post(reverse("snpportal:species"), {"species": "rainbow_trout"})
+            self.assertEqual(switched.cookies["snp_species"]["path"], "/snp/")
+            shown = self.client.get(result)
+            self.assertEqual((shown["X-Robots-Tag"], shown["X-Frame-Options"], shown["X-Content-Type-Options"]),
+                             ("noindex", "SAMEORIGIN", "nosniff"))

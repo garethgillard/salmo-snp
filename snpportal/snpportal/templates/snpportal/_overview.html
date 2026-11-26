@@ -5,6 +5,7 @@
    tab with its filter.{% endcomment %}
 <div class="sp-stack">
   {% if warnings %}<a class="sp-status sp-status-warn" href="#qc">&#9888; Upload warnings: {{ warnings|join:"; " }}</a>{% endif %}
+  {% if background_note %}<p class="sp-status sp-status-warn" role="status">&#9888; {{ background_note }}</p>{% endif %}
   <div class="row g-3 sp-pair">
     {% if figs.summary %}<div class="col-xl-6">{% include 'snpportal/_figure.html' with fig=figs.summary %}</div>{% endif %}
     {% if figs.ideogram %}<div class="col-xl-6">{% include 'snpportal/_figure.html' with fig=figs.ideogram %}</div>

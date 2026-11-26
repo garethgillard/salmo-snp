@@ -60,7 +60,8 @@ class PrivateReports(SafeExceptionReporterFilter):
 
 
 def private(view):
-    """no-store caching, same-origin referrers and content-free error reports for a view that shows a user's SNPs."""
+    """no-store caching, same-origin referrers, no indexing and content-free error reports for a view that shows a
+    user's SNPs."""
     @wraps(view)
     def wrapped(request, *args, **kwargs):
         request.exception_reporter_filter = PrivateReports()
@@ -72,6 +73,7 @@ def private(view):
             raise RuntimeError(f"{type(e).__name__} in a portal query (message withheld)").with_traceback(e.__traceback__) from None
         response["Cache-Control"] = "no-store, private"
         response["Referrer-Policy"] = "same-origin"
+        response["X-Robots-Tag"] = "noindex"  # a result's address is a secret; if one leaks, no search engine lists it
         return response
     return wrapped
 
@@ -143,6 +145,7 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
     """The Score page, also the home page: one card with the tabs Upload SNPs | Paste positions | Genes or regions |
     GWAS (?input=, or `tab` after an error, so each form's errors come back on its own tab) and the examples (TRY) under
     them; beside it this browser's results and the tour."""
+    from . import rules as own_rules
     from .explore import FLANK, FLANKS  # the gene/region flank choices (explore.candidate_job reads them)
     tab = tab if tab in INPUTS else request.GET.get("input") if request.GET.get("input") in INPUTS else "file"
     found, listed = examples(), mine(request)
@@ -153,7 +156,7 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
         "sv_lines": SV_PASTE_LINES,
         "targets": targets, "flanks": FLANKS, "flank": FLANK, "paste_lines": PASTE_LINES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}",
-        "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(),
+        "keep_hours": jobs.keep_text(), "local": jobs.local(), "default_name": jobs.default_name(), "mixer": own_rules.mixer(),
         "positions": jobs.position_choices(),
         "results_dir": jobs.results_dir(),
     }, status=status))
@@ -203,16 +206,18 @@ def _score(request):
 
 def start_job(request):
     """Create the job for a POSTed example, file or paste. Returns (key, preset)."""
+    from . import rules as own_rules
     preset = "all"  # tiers always count all 27 conditions
     example, upload, paste = request.POST.get("example"), request.FILES.get("snps"), request.POST.get("paste", "").strip()
+    rules = own_rules.for_job(request)  # this browser's own tier rules (the mixer), else None: the rules in use
     if example:
         found = examples().get(example)
         if found is None:
             raise jobs.InputError("That example is not part of this release.")
         return jobs.create(found["path"], found["suffix"], "sv" if found["sv"] else "snps", preset, f"Example: {found['label']}",
-                           synthetic=found["synthetic"], move=False), preset
+                           synthetic=found["synthetic"], move=False, rules=rules), preset
     if request.POST.get("kind") == "sv":
-        return start_sv_job(request, preset), preset
+        return start_sv_job(request, preset, rules), preset
     if upload:
         suffix = accepted_suffix(upload.name)
         if suffix is None:
@@ -220,16 +225,17 @@ def start_job(request):
                                   ".txt, optionally gzipped) or a PLINK .bim/.map file: see Format help.")
         if not upload.size:
             raise jobs.InputError("The uploaded file is empty.")
-        name = Path(upload.name or "").name[:80] or "Uploaded list"  # the file's name names the results
+        name = jobs.job_name(request.POST.get("name"), Path(upload.name or "").name[:80] or "Uploaded list")  # else the file's
         positions = request.POST.get("positions") if request.POST.get("positions") in dict(jobs.position_choices()) else None
-        return jobs.create(Path(upload.path), suffix, "snps", preset, name, positions=positions or None), preset
+        return jobs.create(Path(upload.path), suffix, "snps", preset, name, positions=positions or None, rules=rules), preset
     if paste:
         rows = jobs.parse_paste(paste, PASTE_LINES)
-        return jobs.create_from_rows(rows, f"Pasted {jobs.utc()}", preset, kind="snps", input_format="paste"), preset
+        return jobs.create_from_rows(rows, jobs.job_name(request.POST.get("name"), f"Pasted {jobs.utc()}"), preset, kind="snps",
+                                     input_format="paste", rules=rules), preset
     raise jobs.InputError("Choose a file, paste some positions or pick an example.")
 
 
-def start_sv_job(request, preset):
+def start_sv_job(request, preset, rules=None):
     """Create the job for POSTed structural variants: a file (svs) or pasted regions (sv_paste). Returns the key."""
     upload, paste = request.FILES.get("svs"), request.POST.get("sv_paste", "").strip()
     if upload:
@@ -239,11 +245,11 @@ def start_sv_job(request, preset):
                                   "BED file or a table (.tsv, .csv or .txt, optionally gzipped): see Format help.")
         if not upload.size:
             raise jobs.InputError("The uploaded file is empty.")
-        name = Path(upload.name or "").name[:80] or "Uploaded SVs"
-        return jobs.create(Path(upload.path), suffix, "sv", preset, name)
+        name = jobs.job_name(request.POST.get("name"), Path(upload.name or "").name[:80] or "Uploaded SVs")
+        return jobs.create(Path(upload.path), suffix, "sv", preset, name, rules=rules)
     if paste:
         rows = jobs.parse_sv_paste(paste, SV_PASTE_LINES)
-        return jobs.create_from_sv_rows(rows, f"Pasted SVs {jobs.utc()}", preset)
+        return jobs.create_from_sv_rows(rows, jobs.job_name(request.POST.get("name"), f"Pasted SVs {jobs.utc()}"), preset, rules=rules)
     raise jobs.InputError("Choose a file of structural variants, or paste some regions.")
 
 
@@ -300,12 +306,17 @@ def results(request, key):
             context.update(tools.exports(request, key, job))
         context["table_query"] = result_views.selection(d) or urlencode(settings)  # the Table tab returns to the selection
         context["actions"] = [{"label": "Report", "url": f"{reverse('snpportal:report', args=[key])}?{context['table_query']}"},
+                              {"label": "Tier rules", "modal": "sp-mixer", "title": "See or change the rules that make these tiers"},
                               {"label": "Score another list", "url": reverse("snpportal:upload")}]
+        from . import rules as own_rules
+        context["mixer"] = own_rules.mixer(d, key)
+        said = own_rules.summary(d, job)
+        context["meta"] = context["meta"] + (f" · Tiers from {said}" if said else "")
     context.setdefault("actions", []).append(
         {"label": "Delete", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",
          "confirm": "Delete these results now? This can't be undone."})
     response = render(request, "snpportal/results.html", context)
-    response.set_cookie(CURRENT, str(key), max_age=24 * 3600, httponly=True, samesite="Lax")
+    response.set_cookie(CURRENT, str(key), max_age=24 * 3600, httponly=True, samesite="Lax", path=jobs.cookie_path())
     keep_mine(response, [str(key)] + [k for k in _mine_keys(request) if k != str(key)])  # the Score page lists it
     return response
 
@@ -334,11 +345,14 @@ def download(request, key):
         return FileResponse(open(d / "rejects.tsv", "rb"), as_attachment=True, filename="rejected_rows.tsv")
     if fmt != "tsv" or request.GET.get("scope"):  # the Export tab's formats and scopes (all, filtered, a panel)
         return tools.export(request, key, job, fmt)
-    con, _, where, chosen = result_views.open_result(request, key, write=True)
+    con, types, where, chosen = result_views.open_result(request, key, write=True)
     fd, tmp = tempfile.mkstemp(dir=d, prefix=".export-", suffix=".tsv")
     os.close(fd)
+    from .lib.export import front
+    first = ", ".join(jobs.ident(c) for c in front(types))  # the variant, then its tier and score (G, 2026-11-26)
     try:
-        con.execute(f"COPY (SELECT * EXCLUDE (file_row_number) FROM v {where} ORDER BY file_row_number) TO '{tmp}' (HEADER, DELIMITER '\t')")
+        con.execute(f"COPY (SELECT {first + ', ' if first else ''}* EXCLUDE (file_row_number{', ' + first if first else ''}) "
+                    f"FROM v {where} ORDER BY file_row_number) TO '{tmp}' (HEADER, DELIMITER '\t')")
         f = open(tmp, "rb")
     finally:
         os.unlink(tmp)  # an open handle keeps the data until the response is closed; nothing is left behind
@@ -370,13 +384,25 @@ def delete(request, key):
     return keep_mine(redirect("snpportal:upload"), [k for k in _mine_keys(request) if k != str(key)])
 
 
+@require_POST
+@private
+def rename(request, key):
+    """Rename results from the Score page's list: the name (job.json label) every page and the list show."""
+    job = jobs.read(key)
+    if job is None:
+        raise Http404("Result not found or expired")
+    jobs.update(key, label=jobs.job_name(request.POST.get("name"), job.get("label") or "Results"))
+    jobs.log.info("job_renamed job_ref=%s", jobs.job_ref(key))  # never the name: it can be a file's
+    return redirect("snpportal:upload")
+
+
 def _mine_keys(request):
     return [k for k in request.COOKIES.get(MINE, "").split(",") if k][:MAX_MINE]
 
 
 def keep_mine(response, keys):
     response.set_cookie(MINE, ",".join(keys[:MAX_MINE]), max_age=int(jobs.keep_seconds() or jobs.FOREVER),
-                        httponly=True, samesite="Lax")
+                        httponly=True, samesite="Lax", path=jobs.cookie_path())
     return response
 
 

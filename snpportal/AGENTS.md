@@ -10,22 +10,32 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 ## Where it runs
 - On users' own computers, the main product (G, 2026-11-03): `salmo-snp serve` (serve.py) sets `SNPPORTAL_LOCAL`, so
   results stay until deleted and the Score, Help, Design panel and Run locally pages say they are on this computer.
-- The public demo (no password) on an NREC VM, https://158.39.75.9/snp/ (G, 2026-10-12): gunicorn behind Caddy, 24 h
-  retention. Code goes there only when G says so (G, 2026-11-06; ../AGENTS.md "Deploying the NREC demo"): the
+- The public demo (no password) on an NREC VM, https://158.39.75.9/snp/ (G, 2026-10-12): gunicorn behind Caddy, results
+  kept 30 days (G, 2026-11-26). Code goes there only when G says so (G, 2026-11-06; ../AGENTS.md "Deploying the NREC demo"): the
   manual `deploy` workflow runs the tests, then `deploy/update.sh` on the VM, and sends a public pool built on GitHub's
   runner when the VM's is stale (README "Deploying the demo"); merging to main deploys nothing. A new data release goes up with `bash deploy/nrec.sh nrec
   158.39.75.9 158-39-75-9.sslip.io`, which needs G's Mac (the VM's SSH key and the release folder); always pass the IP
   address, as the script rewrites the Caddy sites and allowed hosts from the names it is given.
 - salmobase, being prepared (G, 2026-11-25; ../docs/SALMOBASE.md is the brief for the chat on Orion, which installs
-  and updates it): `deploy/server.sh` in a container (`deploy/Dockerfile`) or from a virtual environment, behind
-  Apache at /snp/ (it serves its own static files under /snp/static/). `SNPSCORE_SALMOBASE` names the server's
-  datafiles folder: settings.py finds the releases folder and the default release there, and snpscore reads tracks,
-  genomes and model files from it (`bbi.local`). Nothing may write under it (tests_server.py). In a cloud session
-  `dockerd &` starts Docker; build with `--secret id=ca,src=/root/.ccr/ca-bundle.crt --network host` and the proxy
-  as build args (HTTPS_PROXY), so pip trusts the session's proxy.
+  and updates it). salmobase runs under Docker Compose with Apache inside its `app` container (its repository:
+  gitlab.com/elixir-nmbu/salmobase), so the portal is a container of its own on salmobase's network
+  (`deploy/compose.salmobase.yml`; `deploy/server.sh` in the image of `deploy/Dockerfile`), reached by the name
+  `snp` from one block in salmobase's Apache file. It serves everything under /snp/ (its static files under
+  /snp/static/). `SNPSCORE_SALMOBASE` names the server's datafiles folder: settings.py finds the releases folder
+  and the default release there, and snpscore reads tracks, genomes and model files from it (`bbi.local`). Nothing
+  may write under it (tests_server.py). Being a second Django on salmobase's host name, its cookies have names of
+  their own (settings.py) and, on a server, the path /snp/ (`jobs.cookie_path()`: pass it to every cookie set).
+- Trying a deployment in a cloud session: `dockerd &` starts Docker; build with `--secret
+  id=ca,src=/root/.ccr/ca-bundle.crt --network host` and the proxy as build args (HTTPS_PROXY), so pip trusts the
+  session's proxy. Apache is the `httpd:2.4` image (apt has no apache2 here); a mock of the server's datafiles
+  folder is hard links (`cp -al`) of the releases, genome and model in ~/.local/share/salmo-snp.
 - Run `python -m django ...` from snpportal/ or from outside the repository, never from its root: there the
   `snpportal/` folder hides the installed package, and Django finds no management command (server.sh changes to its
   data folder for this).
+- The demo from its Docker image (G, 2026-11-26): `deploy/update.sh image [version]` (the deploy workflow's `image`
+  input) runs the image published on salmobase in the place of the checkout's gunicorn, with the VM's folders and
+  settings, and never builds a pool there (`SNPPORTAL_POOL_BUILD=0`, read by snpportal_prepare); the checkout's deploy
+  is the default and the fallback (README "Deploying the demo"; tests/test_deploy.py).
 - The demo's deploy scripts (2026-11-25): `deploy/update.sh` checks the commit out and then runs that commit's own
   steps (so a change to them needs one deploy, not two), and `deploy/species.sh` fetches only the files of a new
   release that no release on the VM holds with the same sha256, and no genome it has. Both are tried on a mock of
@@ -40,7 +50,8 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   accessible, down and blue where less, `palette.EFFECTS`; height = rank) and the Table's Scores column and the
   card's chip, with an arrow (results.score_text). The words come from the layer's `direction` and `reference` in
   layers.yaml (jobs.score_words); nothing is counted until weights.yaml says so.
-- Predictions on demand (G, 2026-11-25): the card's 'Predict' button runs a sequence model for one SNP in this
+- Predictions on demand (G, 2026-11-25; one button for gill and liver, effects first: G, 2026-11-26): the card's
+  'Predict' button runs every sequence model of the assembly (name 'all'; one model by its name) for one SNP in this
   process (predict.py; lib/predict.py holds the model's rules, lib/models.yaml the models by assembly). numpy and
   onnxruntime are imported only then and are an optional extra: nothing else may import them, and the pages must
   work without them (the card then says how to get them). A job's SNP is named by job and row in the address,
@@ -71,7 +82,21 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 - Few files, little code, readable. Don't add tests for every edge case.
 - No Django models or database until there's something to save (e.g. saved panels): state lives in job folders.
 - Ask before adding a dependency.
-- After changing a page the guided tour shows, retake its screenshots: `python manage.py tour_images` (a running portal).
+- The guided tour and Help are made final for 1.0 (G, 2026-11-26): until then a change does not retake the tour's
+  screenshots or rewrite Help, only corrects a statement it makes false. Then: `python manage.py tour_images` (a
+  running portal).
+- Your own tier rules (G, 2026-11-26; rules.py): the Tier rules mixer (`_mixer.html`, included by score.html and
+  results.html; portal.js) keeps a user's rules in the browser (localStorage "snpportal.rules": the scoring blocks as
+  JSON). Forms that start a job carry `data-sp-rules`, so they send them (`rules=`); `rules.for_job` checks them and
+  `jobs.create(rules=...)` writes them as the job's weights.yaml (`custom_rules` in job.json). On a results page the
+  mixer previews tiers (rules_preview) and Apply re-tiers the job in the queue (`jobs.retier`: tiers.parquet,
+  summary.json, the own background; panels/ and loci/ removed). A new job-starting form needs `data-sp-rules`.
+  Its Focus (G, 2026-11-26) is the job's presets.all (`jobs.focus(folder)`); name the conditions tiers count with
+  `jobs.trait_label(trait, folder)`, which says 'your focus: gill' for such a job.
+- Tier rules: a job, a Design panel and a saved version each keep the weights.yaml their tiers were made with (a
+  panel's is its first source's). Read them with `jobs.weights(folder)`, `jobs.rules_sha256(folder)`; the rules in
+  use with no folder (`snpscore.score.rules_file()`, never `snpscore.score.WEIGHTS`). The public pool only with
+  `jobs.pool_file(folder)`, which gives it only when it was scored with that folder's rules.
 
 ## Design system
 - Every colour lives in `palette.py`; templates and `portal.css` use classes and `var(--sp-*)` only (tested). SVGs embed literal hex.
@@ -93,7 +118,7 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 ## Provisional (G to confirm)
 Thresholds and defaults live in snpscore's weights.yaml (`assay`, `design`, `finemap` blocks, copied into each job),
 in tracks.yaml `defaults`, or in a named constant; Methods, the report and every download say they are provisional. Portal-side ones:
-`SNPPORTAL_MAX_VENDOR_SNPS` (50,000 per vendor file), `SNPPORTAL_MAX_CHIP_SNPS` (1,000,000 chip markers), the panel gap highlight (3x the mean spacing, rounded), the
+`SNPPORTAL_MAX_VENDOR_SNPS` (50,000 per vendor file), `SNPPORTAL_MIN_FREE_GB` (2: a server makes no new job with less disk free, as results stay a month), `SNPPORTAL_MAX_CHIP_SNPS` (1,000,000 chip markers), the panel gap highlight (3x the mean spacing, rounded), the
 candidate flank (50 kb around a gene), the Manhattan thinning (p > 0.01 thinned to the top SNP per 50 kb),
 the regional plot window (lead +- credible set + 20 kb, 50-250 kb), the GWAS loci cap (`association.MAX_LOCI`: the 200
 strongest loci are listed and fine-mapped) and the settings form's suggestive-p ceiling (0.01); Push 3: the probe
@@ -104,7 +129,7 @@ unpacked for a gzipped file (`SNPPORTAL_MAX_TRACK_UNPACKED_MB`), 20 tracks a use
 
 ## Data safety
 - Uploaded files are deleted right after scoring; results are deleted on 'Delete now', and on a server after
-  `SNPPORTAL_KEEP_HOURS` (24 h). Locally (`SNPPORTAL_LOCAL`) nothing expires.
+  `SNPPORTAL_KEEP_HOURS` (30 days: G, 2026-11-26, "for now, for a month"). Locally (`SNPPORTAL_LOCAL`) nothing expires.
 - A user's own BED tracks (mytracks.py) follow the same rules: the upload is deleted once converted, a track is
   private to the browser that added it on a server (a signed cookie), filters only the results its owner used it on,
   expires with the results, and its names are never logged.

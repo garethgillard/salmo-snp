@@ -1,0 +1,74 @@
+{% comment %}The Tier rules mixer (rules.py; portal.js keeps the rules in this browser): a slider and a number box per
+   evidence term, grouped by the kind of evidence, the tier cut-offs and the chromatin states; upload a rules file,
+   download the standard one or these. On the Score page it sets this browser's own rules for new lists; on a results
+   page (mixer.key) it starts from the rules that made these tiers, shows what the sliders would change and applies
+   them. Context: mixer (rules.mixer).{% endcomment %}
+{{ mixer.standard|json_script:"sp-rules-standard" }}{{ mixer.current|json_script:"sp-rules-current" }}
+<div class="modal fade sp-mixer" id="sp-mixer" tabindex="-1" aria-labelledby="sp-mixer-h" aria-hidden="true"
+     data-check="{% url 'snpportal:rules_check' %}"{% if mixer.key %} data-preview="{% url 'snpportal:rules_preview' mixer.key %}"{% endif %}>
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="sp-mixer-h">Tier rules</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="sp-small mb-2">A SNP's score is the sum of the weights of the evidence it has, and its tier comes from the
+          cut-offs. {% if mixer.key %}The sliders start at the rules that made these tiers: move them to see what would
+          change, then apply them here, or keep them for the lists you score next.{% else %}Rules of your own stay in this
+          browser and score the lists you start here.{% endif %} &#9656; marks the standard value (provisional).</p>
+        {% csrf_token %}
+        {% if mixer.key %}<div class="sp-mix-preview" id="sp-mix-preview" aria-live="polite"></div>{% endif %}
+        <div class="sp-mix">
+          {% if mixer.tissues %}<fieldset class="sp-mix-group sp-mix-focus">
+            <legend>Focus <span class="sp-muted">the tissues whose chromatin evidence counts as an active or weak state</span></legend>
+            <div class="sp-mix-tissues">{% for label, prefixes in mixer.tissues %}<label><input class="form-check-input" type="checkbox" data-focus="{{ prefixes }}" checked> {{ label }}</label>{% endfor %}</div>
+            <p class="sp-small sp-muted mb-0">All ticked: every condition counts (the standard). To look at one tissue only, tick it and
+              set <em>Active, other tissues</em> to 0; to favour some tissues, tick them and set it below <em>Active state</em>.</p>
+          </fieldset>{% endif %}
+          {% for title, sliders in mixer.groups %}<fieldset class="sp-mix-group">
+            <legend>{{ title }}</legend>
+            {% for term, label, why, score in sliders %}<div class="sp-ch{% if score %} sp-ch-score{% endif %}" data-term="{{ term }}"{% if score %} data-score="{{ term }}"{% endif %} title="{{ why }}">
+              <label class="sp-ch-name" for="sp-mix-{{ term }}">{{ label }}</label>
+              <input class="sp-fader" id="sp-mix-{{ term }}" type="range" min="0" max="{{ mixer.faders.weight }}" step="0.5">
+              <input class="form-control form-control-sm sp-ch-box" type="number" min="0" max="{{ mixer.max_weight }}" step="0.1" aria-label="{{ label }}: weight">
+              <span class="sp-ch-std" title="The standard value">&#9656; <span data-std></span></span>
+              {% if score %}<span class="sp-ch-pct"><label>counts with a change of at least <input class="form-control form-control-sm" type="number" min="0" step="0.05" data-min-score placeholder="any"> log2</label>
+                <label>and a rank from <input class="form-control form-control-sm" type="number" min="0" max="1" step="0.01" data-percentile placeholder="any"></label></span>{% endif %}
+            </div>{% endfor %}
+          </fieldset>{% endfor %}
+          <fieldset class="sp-mix-group">
+            <legend>Tier cut-offs <span class="sp-muted">the least score of each tier; lower is tier 4</span></legend>
+            {% for n in "123" %}<div class="sp-ch sp-ch-cut" data-cut="{{ forloop.counter0 }}">
+              <label class="sp-ch-name" for="sp-mix-tier{{ n }}"><span class="sp-badge sp-tier-{{ n }}">Tier {{ n }}</span></label>
+              <input class="sp-fader" id="sp-mix-tier{{ n }}" type="range" min="1" max="{{ mixer.faders.cutoff }}" step="0.5">
+              <input class="form-control form-control-sm sp-ch-box" type="number" min="0.1" max="{{ mixer.max_cutoff }}" step="0.1" aria-label="Tier {{ n }}: the least score">
+              <span class="sp-ch-std" title="The standard value">&#9656; <span data-std></span></span>
+            </div>{% endfor %}
+          </fieldset>
+        </div>
+        {% if mixer.states %}<details class="sp-mix-states"><summary>Chromatin states: which count as active or weak</summary>
+          <div class="sp-mix-state-list">{% for state in mixer.states %}<label><span>{{ state }}</span>
+            <select class="form-select form-select-sm" data-state="{{ state }}"><option value="active">active</option><option value="weak">weak</option><option value="">not counted</option></select></label>{% endfor %}</div>
+        </details>{% endif %}
+        <div class="sp-status sp-status-fail mt-2" role="alert" data-mix-problems hidden></div>
+        <div class="sp-mix-files sp-small mt-2">
+          <label>Upload a rules file <input class="form-control form-control-sm" type="file" accept=".yaml,.yml,.txt" data-mix-upload></label>
+          <span><a href="{% url 'snpportal:rules_standard' %}">Download the standard rules</a> (weights.yaml, with notes) to edit and upload,
+            or <button class="btn btn-link btn-sm p-0 align-baseline" type="submit" form="sp-mix-download">download these</button>
+            (for snpscore <code>--weights</code> too)</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-mix="standard">Standard values</button>
+        {% if mixer.key %}<button type="button" class="btn btn-sm btn-outline-secondary" data-mix="mine" hidden>My saved rules</button>{% endif %}
+        <span class="sp-mix-say sp-small sp-muted" data-mix-state></span>
+        <button type="button" class="btn btn-sm {% if mixer.key %}btn-outline-primary{% else %}btn-primary{% endif %}" data-mix="save">Use for my new lists</button>
+        {% if mixer.key %}<form method="post" action="{% url 'snpportal:rules_apply' mixer.key %}" data-mix-apply>{% csrf_token %}
+          <input type="hidden" name="rules"><input type="hidden" name="tab" value="{{ tab }}">
+          <button class="btn btn-sm btn-primary" type="submit">Apply to these results</button></form>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+<form id="sp-mix-download" method="post" action="{% url 'snpportal:rules_download' %}" hidden>{% csrf_token %}<input type="hidden" name="rules"></form>

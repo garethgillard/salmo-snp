@@ -205,9 +205,10 @@ def test_pool(release, annotated):
         assert sum(v["share"] for v in category.values()) == pytest.approx(1, abs=1e-5)
         assert sum(v["n"] for v in category.values()) == b["n_sites"]
     assert set(b["active_by_condition"]) == {c[len("chromatin_"):] for c in pool[0] if c.startswith("chromatin_")} - {"id", "summary"}
-    # With assay columns (pool --assay), background.json also has the warn and fail reasons as shares of all sites
+    # With assay columns, background.json also has the warn and fail reasons as shares of all sites: a pool has them
+    # whenever the genome is on the disk (the sequence step gives the coding consequences; G, 2026-11-26)
     s = background_summary(duckdb.connect(), f"read_parquet('{annotated['snps.vcf']}')", {**weights, "presets": {}})
-    assert s["assay_reasons"]["N in flank"] == s["assay_status"]["fail"] and "assay_reasons" not in b
+    assert s["assay_reasons"]["N in flank"] == s["assay_status"]["fail"] and "assay_reasons" in b and b["assay_checked"]
 
 
 # P6.3 panel designer

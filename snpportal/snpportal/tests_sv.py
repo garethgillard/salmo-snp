@@ -72,6 +72,8 @@ class SVTest(SimpleTestCase):
         self.assertNotIn('form="add-panel"', table)  # panels are SNP markers
         self.assertNotIn(">MAF<", table)  # nothing at single bases: no frequencies, no assay check
         self.assertNotIn(">Assay<", table)
+        self.assertIn("SV id, else its span", table)  # SV words, not 'SNP id ... alleles' (G, 2026-11-26)
+        self.assertNotIn("SNP id", table)
 
     def test_card_and_browser(self):
         row = next(i for i, r in enumerate(self._rows()) if r[0] == "del_vgll3")
@@ -83,6 +85,9 @@ class SVTest(SimpleTestCase):
         browser = self.client.get(reverse("snpportal:locus_svg"), {"key": self.key, "row": row})
         self.assertEqual(browser.status_code, 200)
         self.assertIn("<rect", browser.content.decode())
+        page = self.client.get(reverse("snpportal:locus"), {"key": self.key, "row": row}).content.decode()
+        self.assertIn("Your SVs", page)  # the browser's lane of the job's SVs, drawn as bars over their spans
+        self.assertNotIn("Your SNPs", page)
 
     def test_exports(self):
         tsv = b"".join(self.client.get(reverse("snpportal:download", args=[self.key])).streaming_content).decode()

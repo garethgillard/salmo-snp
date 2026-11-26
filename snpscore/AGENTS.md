@@ -5,7 +5,10 @@ evidence and a tier. Read ../AGENTS.md first (plan, rules, biology decisions); R
 the annotate output, tiers, the pool, GWAS fine-mapping and the benchmark.
 
 - The tier rules live in `src/snpscore/weights.yaml` (shipped with the package; `snpscore.WEIGHTS`). Every value in
-  it is G's to decide; the PROVISIONAL ones say so.
+  it is G's to decide; the PROVISIONAL ones say so. The rules in use are `score.rules_file()`: the file
+  SNPSCORE_WEIGHTS names, else the shipped one; read them with `load_weights()` (checked: `check_weights` names each
+  mistake; a new block, term or state goes into BLOCKS, TERMS or STATES there), never by opening WEIGHTS. Every
+  output names its rules (`scoring_rules`, `describe_rules`).
 - Output columns: `<layer>` (bool hit, or a number for count layers) and `<layer>_<column>`; then `strand_ambiguous`,
   `tier`, `tier_score`, `tier_evidence`.
 - Structural variants (`sv.py`, `snpscore sv`): the same columns, computed by overlap, so `score.scored` tiers them

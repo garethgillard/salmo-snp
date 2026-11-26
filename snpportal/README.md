@@ -88,10 +88,22 @@ that key, stores it as the repository secret `NREC_DEPLOY_KEY` with the host key
 rerun it to replace the key). Releases are not in git: they are built on Orion and published on salmobase (docs/ORION.md), and after a deploy `deploy/species.sh` installs a release that serve.py names and the VM lacks from there, with the pool published beside it (a salmon release becomes /srv/snpportal/release). The same script then removes from /srv/snpportal/releases/ a release the code no longer names, once no job, Design panel or saved project kept on the server was made with it (G, 2026-11-25; `deploy/species.sh cleanup` runs only that). The `species-data` workflow (a build on GitHub's runner, sent to the VM) and `nrec.sh` still work. The public pool
 after a change to weights.yaml or snpscore is the workflow's: the VM (2 GB RAM) can't build it (it swapped for 17
 minutes until the SSH session dropped, 2026-11-06), so update.sh says it is stale, and the job then builds it on
-GitHub's runner (the release from salmobase through `tools/get_data.sh --no-genome`, whose `salmo-snp download` builds
-it, about 3 minutes) and sends it with the same key (`update.sh pool [version]`, a .tar.gz on stdin), which installs it
+GitHub's runner (the release and its genome from salmobase through `tools/get_data.sh`, whose `salmo-snp download`
+builds it with the sequence step, so it carries coding consequences) and sends it with the same key (`update.sh pool [version]`, a .tar.gz on stdin), which installs it
 only if it fits the deployed release, weights and snpscore. This covers every species' release on the VM: update.sh
 names each release whose pool is stale, and the job builds each from its release on salmobase.
+
+From the Docker image (G, 2026-11-26: "set up the deploy to NREC to copy now the docker image to set up there, and
+to copy the release from salmobase"): run the workflow with the input `image` set to `latest` or a version. update.sh
+then loads the image published in salmobase's datafiles (`docker/latest.json`, checked against its sha256), moves the
+checkout to the tag `v<version>` so that species.sh fetches that version's releases from salmobase, and runs the
+container in the place of the checkout's gunicorn on 127.0.0.1:8000, with the VM's folders and settings (Caddy is
+unchanged; results stay). The container never builds a pool there (`SNPPORTAL_POOL_BUILD=0`); stale ones come from the
+workflow as before, now built with the genome so that they carry coding consequences. If it does not answer, the
+checkout's portal takes the port back and the job fails; a run without the input (a commit) goes back to the checkout's
+portal. It needs Docker on the VM, once: `DOCKER=1 bash deploy/nrec.sh nrec 158.39.75.9 158-39-75-9.sslip.io` from G's
+Mac, and a published image (a vX.Y.Z tag; then `deploy/publish_image.sh` on Orion). Until the first image deploy passes
+its smoke test, the checkout's deploy stays the default.
 
 update.sh runs the steps of the commit it has just checked out (packages, releases, static files, restart), so a
 change to them takes effect in the deploy that brings it (tests/test_deploy.py). Until 2026-11-25 a deploy ran the
@@ -102,30 +114,44 @@ genome file with the manifest's sha256 is kept.
 
 ## On the salmobase server
 
-The live installation (being prepared: G, 2026-11-25) runs behind salmobase's Apache at `/snp/`, linked from
-salmobase with a button, not merged into its Django. [../docs/SALMOBASE.md](../docs/SALMOBASE.md) is the brief for
-installing and updating it there, with the commands; in short:
+The live installation (being prepared: G, 2026-11-25) is an address of salmobase, `/snp/`, not merged into its
+Django. [../docs/SALMOBASE.md](../docs/SALMOBASE.md) is the brief for installing and updating it there, with the
+commands; in short:
 
-- `deploy/server.sh` starts it, in the container (`deploy/Dockerfile`) or from a virtual environment: the secret
-  key, a look at each species' release (`manage.py snpportal_prepare`), Django's checks, an hourly cleanup, gunicorn.
-  gunicorn serves everything under `/snp/`, static files included (`DJANGO_STATIC_URL=/snp/static/`,
-  `SNPPORTAL_SERVE_STATIC=1`), so Apache needs one proxy rule; results are kept 24 h (`SNPPORTAL_KEEP_HOURS`).
-- `SNPSCORE_SALMOBASE` names the server's datafiles folder (what `https://salmobase.org/datafiles/` serves), mounted
-  read only. The portal then reads where they are published: the releases (`datasets/salmo-snp/releases/`; the
-  default is the release this version names, and each species' named one for new work), the genomes, the
-  AQUA-FAANG tracks and the models' files (`snpscore.bbi.local` maps an address under salmobase's datafiles to the
-  file). A file that is not there is read from its address. Without the setting, `SNPSCORE_RELEASE` and
-  `SNPSCORE_GENOME_DIR` name a release folder and the genomes, as on the NREC demo.
+- salmobase runs as a Docker Compose project with Apache inside its `app` container (its repository:
+  https://gitlab.com/elixir-nmbu/salmobase). The portal is a container of its own in a compose project of its own
+  (`deploy/compose.salmobase.yml`) on salmobase's network, named `snp`; one block in salmobase's Apache file sends
+  `/snp` to it, as that file already sends `/docs` to salmobase's docs container (`deploy/salmobase-snp.patch` is
+  that change, for a merge request to salmobase's repository).
+- `deploy/server.sh` starts it (in the image of `deploy/Dockerfile`, or from a virtual environment on a server
+  without Docker): the secret key, a look at each species' release (`manage.py snpportal_prepare`), Django's checks,
+  an hourly cleanup, gunicorn. gunicorn serves everything under `/snp/`, static files included
+  (`DJANGO_STATIC_URL=/snp/static/`, `SNPPORTAL_SERVE_STATIC=1`); results are kept 30 days (`SNPPORTAL_KEEP_HOURS`, 720).
+- `SNPSCORE_SALMOBASE` names the server's datafiles folder (what `https://salmobase.org/datafiles/` serves; the
+  image sets it to `/datafiles`, where the compose file mounts that folder read only). The portal then reads where
+  they are published: the releases (`datasets/salmo-snp/releases/`; the default is the release this version names,
+  and each species' named one for new work), the genomes, the AQUA-FAANG tracks and the models' files
+  (`snpscore.bbi.local` maps an address under salmobase's datafiles to the file). A file that is not there is read
+  from its address. Without the setting, `SNPSCORE_RELEASE` and `SNPSCORE_GENOME_DIR` name a release folder and the
+  genomes, as on the NREC demo.
 - `SNPPORTAL_DATA` (`/data` in the container) holds results, the secret key and, outside a container, the static
-  files. Nothing else is written.
+  files. Nothing else is written. The container runs as any user (`user:` in the compose file), so the data folder
+  needs no special owner.
+- Beside salmobase's own Django on the same host name: the portal's cookies have names of their own
+  (`snpportal_csrftoken`, not Django's usual `csrftoken`) and, with `SNPPORTAL_COOKIE_PATH=/snp/` (server.sh sets
+  it), are sent to its own pages only; its pages may be framed by its own pages alone (the Table's drawer frames the
+  Locus browser), and a result's page says `noindex`.
 - The public pool is read from the release's `pool/`. A release folder the portal may write to gets its pool built
   at the start; a published folder is read only, and its pools are built on Orion and published with the release.
 - `deploy/survey.sh` reads what a server offers (it changes nothing); `../tools/smoke.sh <address>` tests a running
   portal: its health page, and every example of each species scored through the job queue.
 
-Tried in a cloud session on 2026-11-25 against a mock of the server's folders made from releases 2026-11-25 and
-trout-2026-11-25 (the datafiles folder read only): as a plain process and as the container, the smoke test passed,
-a prediction ran from the model files in place, and nothing in the datafiles folder changed.
+Tried in a cloud session on 2026-11-25, nothing on the server itself: the container on a mock of the server's
+datafiles folder made from releases 2026-11-25 and trout-2026-11-25 (read only), in its own compose project on the
+network of a stand-in for salmobase's (salmobase's real Apache file with the block, a Django with a form of its
+own). The smoke test and an upload passed through that Apache, each site's forms worked with the other's cookies in
+the same browser, a prediction ran from the model files in place, the portal's container was replaced without a
+restart of Apache, and nothing in the datafiles folder changed.
 
 ## How it works
 
@@ -222,7 +248,7 @@ Pages (under `/snp/`; view state lives in whitelisted URL parameters, so every v
 - A curated panel of whole Table selections from any results ('Add to panel', the cart), compared with an existing
   chip, its assay readiness and vendor files (all, or the SNPs not on the chip).
 - One browser's only: an HttpOnly cookie names its folder `results/panel-<uuid>`, never a URL. On a server it is
-  deleted 24 hours after it was started (its `created` marker); locally (`SNPPORTAL_LOCAL`) it is kept until cleared.
+  deleted `SNPPORTAL_KEEP_HOURS` (30 days) after it was started (its `created` marker); locally (`SNPPORTAL_LOCAL`) it is kept until cleared.
   Its TSV, scored again, brings it back.
 - Two equal columns (sources, chip and downloads; at a glance and the genome figure), then the SNP list: 50 rows
   (`show=all`: up to 2,000), problems first (assay fail/warn, MAF below the designer's minimum, LORe, a kept neighbour
@@ -360,6 +386,26 @@ in the job folder that is removed as soon as it is opened. Every export carries 
 weights sha256, preset, filters, panel hash, PROVISIONAL rules, SYNTHETIC inputs or chip, the equivalent `snpscore`
 command): `#` lines in text files (`?plain=1` drops them), Parquet key-value metadata, `provenance.txt` in the bundle.
 Vendor files say 'layout to confirm against the vendor's current template'.
+
+## A Docker install (instead of the Python package)
+
+The portal is also one Docker image per version (G, 2026-11-26), published beside the data releases:
+`https://salmobase.org/datafiles/datasets/salmo-snp/docker/` holds `salmo-snp-<version>.docker.tar.gz`, its
+`.sha256` and `latest.json`. salmobase's server runs it from there (../docs/SALMOBASE.md); on your own computer:
+
+```bash
+sh image.sh load https://salmobase.org/datafiles/datasets/salmo-snp/docker/salmo-snp-<version>.docker.tar.gz
+docker run -d --name salmo-snp -p 127.0.0.1:8000:8000 -v salmo-snp:/data salmo-snp:<version> salmo-snp-server local
+```
+
+(`image.sh` is `deploy/image.sh`: it checks the file against its sha256, then `docker load`.) The first start
+downloads the data release and the genome into the volume, every file checked, and scores the public sites for
+comparison (`docker logs -f salmo-snp` shows it; a few minutes); later starts need no network until a new image names
+a new release. Then open http://127.0.0.1:8000/snp/. As with `salmo-snp serve`, only this computer can reach it, your
+lists never leave it, and results stay in the volume until you delete them. `-e SALMO_SNP_SPECIES=all` also gets
+rainbow trout; `-e SALMO_SNP_DATA_URL=/copy -v <a copy of the published folder>:/copy:ro` works without internet. A
+newer version: load its image, then `docker rm -f salmo-snp` and the same `docker run` with the new version (the
+volume keeps the data and your results).
 
 ## Predictions on demand
 

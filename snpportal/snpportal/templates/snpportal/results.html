@@ -32,5 +32,6 @@
     {% elif tab == 'export' %}{% include 'snpportal/_exports.html' %}
     {% else %}{% include 'snpportal/_overview.html' %}{% endif %}
   </div>
+  {% if mixer %}{% include 'snpportal/_mixer.html' %}{% endif %}
 {% endif %}
 {% endblock main %}

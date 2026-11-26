@@ -92,8 +92,11 @@ class LocusTest(SimpleTestCase):
 
     def test_locus_page_groups(self):
         page = self.get(f"{reverse('snpportal:locus')}?{VGLL3}")
-        for group in ("genes", "public", "motifs", "peaks", "hmm", "assays", "other"):  # track groups, closed by default
+        order = ("genes", "public", "peaks", "hmm", "assays", "motifs", "other")  # TF motifs second to last (G, 2026-11-26)
+        for group in order:  # track groups, closed by default
             self.assertIn(f'class="sp-grp" id="g-{group}"' if group != "assays" else 'class="sp-grp sp-sec" id="g-assays"', page)
+        places = [page.index(f'id="g-{group}"') for group in order]
+        self.assertEqual(places, sorted(places))
         self.assertIn(palette.CENTRE, page)  # the centre position on the ruler
         self.assertIn("ENSSSAG00000053708", page)  # the vgll3 gene model, black, with its Ss4R duplicate linked
         self.assertRegex(page, r">(← )?vgll3( →)?</text>")
@@ -204,7 +207,7 @@ class LocusTest(SimpleTestCase):
                                      ("25", 28964518, "mq", None, None)], "Card rows")
         page = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&trait=brain&snp=0")  # the card, in the drawer (trait: ignored)
         self.assertNotIn("sp-caveat", page)  # no prototype line on the pages (Methods, the report and downloads keep it)
-        card = page[page.index('id="drawer"'):]
+        card = page[page.index('id="drawer"'):].split('id="sp-rules-standard"')[0]  # the drawer, not the Tier rules mixer after it
         d = jobs.folder(key)
         scores = dict(jobs.connect([d]).execute(f"SELECT file_row_number, tier_score__all FROM read_parquet('{d / 'tiers.parquet'}')").fetchall())
         blocks = svg_of(card[card.index('id="card-body"'):])  # the score, first: blocks and = score

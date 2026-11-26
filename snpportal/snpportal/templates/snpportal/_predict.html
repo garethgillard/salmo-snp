@@ -1,14 +1,20 @@
-{% comment %}One model's prediction for one SNP (predict.fragment): it replaces the card's button. Context: model
-   (lib/models.yaml), local; then either problem (why there is no prediction) or predict.result's fields.{% endcomment %}
-{% if problem %}<p class="mb-1 sp-muted">{{ model.label }}: {{ problem }}</p>
-{% else %}<p class="mb-1"><strong>{{ model.label }}</strong> &middot; {% if arrow %}{{ arrow }} {% endif %}the alt allele {{ p.alt }} is predicted
-    <strong>{{ way }}</strong>{% if arrow %} than {{ p.ref }}{% else %} as {{ p.ref }}{% endif %}: log2 fold change {{ effect }}
-    ({{ ref_counts }} &rarr; {{ alt_counts }} predicted Tn5 cuts in the {{ window }} bp around the SNP), a larger change than at
-    {{ percentile }}% of {{ reference }}{% if top %} (top {{ top }}%){% endif %}.{% if other_strand %} Your alleles {{ other_strand }} were read on the genome's strand, as {{ p.ref }}&gt;{{ p.alt }}.{% endif %}</p>
-  <div class="sp-figure mb-1">{{ figure }}</div>
-  <p class="mb-1">The shape of the profile changes more than at {{ jsd_percentile }}% of them (Jensen-Shannon distance {{ jsd }}).
-    Where the more accessible allele ranks among the model's predictions over its own peaks: {{ quantile }} (near 0: nothing
-    peak-like here; near 1: like its strongest peaks). A large change in an accessible place is the strongest prediction.</p>
-  <p class="sp-muted mb-1">A model's prediction of {{ model.what }}, not a measurement, and not counted in the tier. {{ model.label }} {{ p.version }}, the
-    fold {{ p.fold }} model, which never saw chromosome {{ p.chrom }} in training; run {% if local %}on this computer{% else %}on this server{% endif %} for this SNP alone.
-    {{ model.citation }}. Licence: {{ model.licence }}.</p>{% endif %}
+{% comment %}The sequence models' predictions for one SNP (predict.fragment): they replace the card's button. A row per
+   model, the effect first (G, 2026-11-26): the predicted ATAC signal with each allele as two bars on one scale, the
+   change, then its rank; each model's profiles under them. Context: rows [{model, short, problem | predict.result's
+   fields}], family, p (the first prediction), sources, methods, licences, local.{% endcomment %}
+<table class="sp-predict">
+  <thead><tr><th scope="col">{{ family }}</th><th scope="col">Predicted ATAC signal, each allele</th><th scope="col">Change</th></tr></thead>
+  <tbody>{% for r in rows %}<tr>
+    <th scope="row">{{ r.short }}</th>
+    {% if r.problem %}<td colspan="2" class="sp-muted">{{ r.problem }}</td>
+    {% else %}<td>{{ r.bars }}</td>
+    <td><strong class="sp-effect-{% if r.up %}up{% else %}down{% endif %}-text">{{ r.arrow }} {{ r.change }}</strong> {{ r.way }}
+      <span class="sp-muted d-block">log2 {{ r.effect }}; {% if r.top %}top {{ r.top }}%{% else %}larger than {{ r.percentile }}%{% endif %} of random SNPs; {{ r.peak }}</span></td>{% endif %}
+  </tr>{% endfor %}</tbody>
+</table>
+{% for r in rows %}{% if r.figure %}<p class="sp-small mb-0 mt-1"><strong>{{ r.short }}</strong>: the predicted signal per base, each allele</p>
+<div class="sp-figure mb-1">{{ r.figure }}</div>{% endif %}{% endfor %}
+<p class="sp-muted sp-small mb-1">Predicted Tn5 cuts in the {{ rows.0.window|default:"1,000" }} bp around the SNP, by the fold model that
+  never saw its chromosome; run {% if local %}on this computer{% else %}on this server{% endif %} for this SNP alone. A model's
+  prediction, not a measurement, and not counted in the tier.{% if p.other_strand %} Your alleles were read on the genome's strand,
+  as {{ p.ref }}&gt;{{ p.alt }}.{% endif %} {{ sources|join:"; " }}. {{ methods|join:"; " }}. Licence: {{ licences|join:"; " }}.</p>

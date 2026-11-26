@@ -64,7 +64,8 @@ def test_manifest(release):
     assert list(m["chrom_sizes"]) == ["1", "9", "21", "25", "26"]
     assert all(len(l["sha256"]) == 64 and l["synthetic"] is False for l in m["layers"])
     assert {"catalog.window", "molqtl.max_bf"} <= set(m["provisional"])
-    assert {"active_states", "weights", "presets"} <= set(load_weights()["provisional"])  # the rules live in snpscore
+    # the rules live in snpscore; G settled the scoring blocks on 2026-11-26
+    assert set(load_weights()["provisional"]) == {"summit", "variant_scores", "assay", "design", "finemap", "priors"}
     layers = {l["name"]: l for l in m["layers"]}
     assert "Bertolotti" in layers["public_af"]["population"] and "European farmed" not in json.dumps(m)
     assert layers["molqtl"]["licence"].startswith("redistribution agreed") and len(layers["molqtl"]["urls"]) == 9
@@ -372,3 +373,32 @@ def test_rainbow_trout_release(tmp_path, capsys, monkeypatch):
     aliases = dict(con.execute(f"SELECT alias, chrom FROM read_parquet('{out / 'alias.parquet'}')").fetchall())
     assert (aliases["omy28"], aliases["nc_048592.1"], aliases["chry"]) == ("28", "28", "Y")
     assert con.execute(f"SELECT ohnolog_chrom FROM read_parquet('{out / 'ss4r.parquet'}') WHERE gene_id = 'ENSOMYG00000036625'").fetchone() == ("8",)
+
+
+def test_release_names():  # G, 2026-11-26: the species and the assembly in every release's name, alike for both
+    from snpdata.build import release_name
+    assert release_name(DATA / "layers.yaml", "2026-11-26") == "atlantic_salmon-Ssal_v3.1-2026-11-26"
+    assert release_name(DATA / "rainbow_trout" / "layers.yaml") == "rainbow_trout-USDA_OmykA_1.1"
+
+
+def test_cne_projection(tmp_path):  # G, 2026-11-26: the pike CNEs on the salmon genome, through the alignment
+    from snpdata import cne
+    (tmp_path / "cnes.txt").write_text("chromosome start end cne_id age\n"
+                                       "LG01 52 57 U1 Teleostei\nLG01 60 70 U2 Neopterygii\nLG02 86 89 U3 Teleostei\n"
+                                       "LG01 200 204 U4 Protacanthopterygii\nLG03 2 4 U5 Euteleostomi\n")
+    maf = ["##maf version=1",
+           "a", "s\tSsal_A.1\t100\t10\t+\t1000\tACGTACGTAC", "s\tEluc.LG01\t50\t10\t+\t500\tACGTACGTAC",  # plain
+           "a", "s\tSsal_A.1\t110\t8\t+\t1000\tACGTAC--GT", "s\tEluc.LG01\t60\t8\t+\t500\tAC--ACGTGT",  # gaps either side
+           "a", "s\tSsal_A.2\t0\t5\t+\t1000\tAAAAA", "s\tEluc.LG02\t10\t5\t-\t100\tAAAAA",  # pike on its minus strand
+           "a", "s\tSsal_A.3\t0\t4\t+\t1000\tCCCC", "s\tEluc.LG01\t200\t4\t+\t500\tCCCC",  # two CNEs on one base: the older
+           "s\tEluc.LG03\t0\t4\t+\t100\tCCCC",
+           "a", "s\tOmyk_A.5\t0\t4\t+\t1000\tCCCC", "s\tEluc.LG01\t200\t4\t+\t500\tCCCC"]  # another reference: none
+    with gzip.open(tmp_path / "ssa01_AB.maf.gz", "wt") as f:
+        f.write("\n".join(maf) + "\n")
+    made = cne.project(tmp_path / "cnes.txt", [str(tmp_path / "ssa01_AB.maf.gz")], tmp_path / "out.bed", "Ssal_A", workers=1)
+    rows = [line.split("\t") for line in (tmp_path / "out.bed").read_text().splitlines()]
+    assert rows == [["1", "102", "107", "U1", "Teleostei"], ["1", "110", "112", "U2", "Neopterygii"],
+                    ["1", "114", "118", "U2", "Neopterygii"], ["2", "1", "4", "U3", "Teleostei"],
+                    ["3", "0", "2", "U4", "Protacanthopterygii"], ["3", "2", "4", "U5", "Euteleostomi"]]
+    assert made == {"runs": 6, "bases": 18, "ids": 5, "files": 1}
+    assert cne.maf_locations({"maf": "x/ssa{n:02d}_AB.maf.gz", "files": 2}) == ["x/ssa01_AB.maf.gz", "x/ssa02_AB.maf.gz"]

@@ -22,7 +22,7 @@
     <p class="sp-small sp-muted mt-2 mb-0">Up to {{ max_mb|floatformat:"-1" }} MB ({{ max_unpacked|floatformat:"-1" }} MB unpacked) and {{ max_rows|thousands }} intervals; .bed, .bed.gz or .txt. Chromosomes as 25, ssa25, chr25 or an
       accession. Colours come from the file where it has them; other intervals share one colour.
       {% if local %}Tracks are kept on this computer until you delete them; the uploaded file itself is not kept.{% else %}Tracks are
-      private to this browser and deleted after {{ keep_hours|floatformat:"-1" }} hours; the uploaded file itself is not kept.{% endif %}</p>
+      private to this browser and deleted after {{ keep_hours }}; the uploaded file itself is not kept.{% endif %}</p>
   </section>
   {% if tracks %}
   <section class="sp-card" aria-labelledby="list-h">

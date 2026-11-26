@@ -23,6 +23,7 @@ from django.views.decorators.http import require_POST
 
 import snpscore
 from snpscore.formats import lit, q
+from snpscore.pool import local_genome
 
 from . import figures, jobs, palette, results, search, views
 from .lib.locus import MAX_WINDOW
@@ -289,12 +290,13 @@ def public_rows(windows, limit=MAX_CANDIDATES):
 def candidates(windows, trait="all", sort="pos"):
     """Public sites in the windows, annotated and tiered for `trait`, ordered by ?sort (SORTS): (rows as dicts, column
     names, source). Reads the pool's rows when the release has pool/pool.parquet, else annotates the sites of
-    public_af.parquet now (sequence checks off)."""
+    public_af.parquet now: with the sequence step when the genome is on the disk, as the pool is built, so that a
+    synonymous change counts as such on both ways (G, 2026-11-26)."""
     release, w = jobs.release(), jobs.weights()
-    pool = release / "pool" / "pool.parquet"
+    pool = jobs.pool_file()  # its tiers only when the rules in use made them; else the sites are scored now
     with tempfile.TemporaryDirectory(prefix="snpportal-explore-") as tmp:  # public sites only, never user data
         tmp = Path(tmp).resolve()
-        if pool.exists():
+        if pool:
             con, source, path = jobs.connect([release]), "pool", pool
         else:
             rows = public_rows(windows)
@@ -302,7 +304,7 @@ def candidates(windows, trait="all", sort="pos"):
                 return [], [], "public_af"
             with open(tmp / "sites.tsv", "w") as f:
                 f.write("chrom\tpos\tid\tref\talt\n" + "".join("\t".join("" if v is None else str(v) for v in r) + "\n" for r in rows))
-            snpscore.annotate(tmp / "sites.tsv", release, tmp / "sites.parquet", sequence=False)
+            snpscore.annotate(tmp / "sites.tsv", release, tmp / "sites.parquet", sequence=local_genome(release))
             con, source, path = jobs.connect([release, tmp]), "annotated now", tmp / "sites.parquet"
         cols = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet({lit(path)}))").fetchall()]
         keep = [c for c in cols if not c.startswith("tier")]  # the pool's stored tiers; recomputed for `trait` below
@@ -328,10 +330,10 @@ def _tsv(header_lines, names, rows):
 
 def provenance(what, trait=None):
     """'#' lines for public downloads: what it is, the release and its hashes, the preset, PROVISIONAL and SYNTHETIC."""
-    info, weights = jobs.release_info(), snpscore.score.WEIGHTS
+    info = jobs.release_info()
     lines = [f"salmobase functional SNP portal: {what}; exported {jobs.utc()}",
              f"release {info['version']} ({info['assembly']}); manifest sha256 {info['sha256']}; "
-             f"weights sha256 {jobs.sha256(weights) if weights.exists() else None}"]
+             f"weights sha256 {jobs.rules_sha256()}"]  # the rules in use, which the pool's tiers fit (jobs.pool_file)
     if trait:
         lines.append(f"preset {trait}; tier rules PROVISIONAL (prototype weights, under review)")
     if info["synthetic"]:
@@ -541,7 +543,9 @@ def candidate_job(request):
         if len(rows) > MAX_CANDIDATES:
             raise jobs.InputError(f"These windows hold more than {MAX_CANDIDATES:,} public variants. Use fewer or shorter intervals.")
         label = "Public variants in " + ", ".join(labels)
-        key = jobs.create_from_rows(rows, label if len(label) <= 120 else label[:117] + "...", trait)
+        label = jobs.job_name(request.POST.get("name"), label if len(label) <= 120 else label[:117] + "...")
+        from . import rules as own_rules
+        key = jobs.create_from_rows(rows, label, trait, rules=own_rules.for_job(request))  # the browser's own tier rules
     except jobs.InputError as e:
         return score_page(request, str(e), 400, tab="regions", targets=text)
     except jobs.QueueFull:
@@ -573,7 +577,7 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
      "shot": {"path": "results/{snps}/", "width": 1200, "crop": [".nav-tabs", "#fig-summary", "#fig-ideogram"]}},
     {"slug": "score", "title": "Score your list",
      "text": "Upload a VCF, SNP table, PLINK or chip file, paste positions, name genes or regions, or upload GWAS "
-             "results. Without a list, try an example; your results stay listed above the forms for 24 hours.",
+             "results. Without a list, try an example; your results stay listed above the forms.",
      "alt": "The Score page, also the home page: Your results, the examples, and the Upload SNPs, Paste positions, Genes "
             "or regions and GWAS tabs, beside the tour.",
      "callouts": [("Your results: open or delete", ".sp-mine-box"),
@@ -613,7 +617,7 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("RNA, ATAC and ChIP from salmobase", "#g-assays .sp-grp-h")],
      "shot": {"path": "locus/?r=25:28983861-29008860", "width": 1280, "crop": [".sp-bctl", "#g-assays .sp-grp-h"]}},
     {"slug": "panel", "title": "Design a genotyping panel",
-     "text": "Add to panel on the Table brings its selection here, for this browser only and for 24 hours. Compare the "
+     "text": "Add to panel on the Table brings its selection here, for this browser only. Compare the "
              "panel with your chip, drop SNPs by hand and download KASP, Illumina or Axiom files.",
      "alt": "The Design panel holding the known-loci example, compared with the synthetic demo chip: its source, the chip "
             "comparison, the downloads, the assay check and the panel along the genome.",

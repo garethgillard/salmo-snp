@@ -11,6 +11,10 @@ id; hostname -f 2>/dev/null || hostname; uname -srm
 
 say "cores, memory, disk"
 nproc; try free -g; try df -h "$HOME" /data /srv /var
+ls -ld "$HOME" 2>&1
+for d in /mnt/project/ELIXIR /net/fs-2/scale/OrionStore/Projects/ELIXIR; do  # Orion's project storage, if it is mounted here too
+  [ -d "$d" ] && echo "Orion's storage is here: $d ($(ls "$d" 2> /dev/null | head -5 | tr '\n' ' '))"
+done
 
 say "the datafiles folder (what https://salmobase.org/datafiles/ serves)"
 for d in "$HOME/datafiles" /data/datafiles /srv/datafiles; do
@@ -20,10 +24,21 @@ done
 say "python (the portal needs 3.11 or newer)"
 for p in python3 python3.11 python3.12 python3.13 python3.14 uv conda mamba; do command -v "$p" > /dev/null && echo "$p: $($p --version 2>&1 | head -1) ($(command -v "$p"))"; done
 
-say "containers"
+say "containers (salmobase runs as a Docker Compose project: its services app, db and docs)"
 for c in docker podman apptainer singularity; do command -v "$c" > /dev/null && echo "$c: $($c --version 2>&1 | head -1)"; done
-command -v docker > /dev/null && { docker ps --format '{{.Names}}\t{{.Image}}\t{{.Ports}}' 2>&1 | head -20; }
+if command -v docker > /dev/null; then
+  docker compose version 2>&1 | head -1
+  docker ps --format '{{.Names}}\t{{.Image}}\t{{.Ports}}' 2>&1 | head -20
+  docker compose ls 2>&1 | head -8
+  docker network ls --format '{{.Name}}\t{{.Driver}}' 2>&1 | head -12
+  for c in $(docker ps --format '{{.Names}}' 2> /dev/null | head -8); do  # where each project lives, what it mounts, its network
+    docker inspect -f '{{.Name}}: project folder {{index .Config.Labels "com.docker.compose.project.working_dir"}}; networks {{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}; mounts {{range .Mounts}}{{.Source}} -> {{.Destination}} ({{if .RW}}rw{{else}}ro{{end}}); {{end}}' "$c" 2>&1 | cut -c1-400
+  done
+  app=$(docker ps --format '{{.Names}}' 2> /dev/null | grep -E '(^|[-_])app([-_]|$)' | head -1)  # salmobase's Apache is inside this one
+  [ -n "$app" ] && docker exec "$app" sh -c 'apachectl -v | head -1; grep -nE "Location|ProxyPass|ServerName" /etc/apache2/sites-enabled/*.conf' 2>&1 | head -20
+fi
 command -v podman > /dev/null && { podman ps --format '{{.Names}}\t{{.Image}}\t{{.Ports}}' 2>&1 | head -20; }
+id -nG 2>&1 | tr ' ' '\n' | grep -x docker > /dev/null && echo "this user is in the docker group" || echo "this user is not in the docker group"
 
 say "services this user may run"
 sudo -n true 2> /dev/null && echo "sudo: yes, without a password" || echo "sudo: not without a password"
@@ -33,12 +48,16 @@ try crontab -l
 
 say "the web server and what runs salmobase"
 ps -eo user:12,pid,args --no-headers 2> /dev/null | grep -E 'httpd|apache2|nginx|caddy|gunicorn|uwsgi|daphne|manage\.py|node |java ' | grep -v grep | cut -c1-160 | head -25
-for f in /etc/httpd/conf.d /etc/httpd/conf /etc/apache2/sites-enabled /etc/nginx/conf.d /etc/nginx/sites-enabled; do
-  [ -d "$f" ] && echo "$f: $(ls "$f" 2>&1 | tr '\n' ' ')" && grep -rhE '^\s*(ProxyPass|proxy_pass|ServerName|server_name|Alias|DocumentRoot)\b' "$f" 2> /dev/null | sort -u | head -30
+for pid in $(pgrep -f 'manage\.py' 2> /dev/null | head -3); do  # where salmobase's own application runs from, if this user may see it
+  echo "pid $pid runs in $(readlink "/proc/$pid/cwd" 2>&1)"
 done
+for f in /etc/httpd/conf.d /etc/httpd/conf /etc/apache2/sites-enabled /etc/nginx/conf.d /etc/nginx/sites-enabled; do
+  [ -d "$f" ] && echo "$f: $(ls "$f" 2>&1 | tr '\n' ' ')" && grep -rhE '^\s*(<VirtualHost|<Location|ProxyPass|ProxyPreserveHost|RequestHeader|proxy_pass|ServerName|ServerAlias|server_name|Alias|DocumentRoot|LimitRequestBody|ProxyTimeout|Header)\b' "$f" 2> /dev/null | head -40
+done
+[ -d /etc/apache2/mods-enabled ] && echo "Apache modules on: $(ls /etc/apache2/mods-enabled | grep -E '^(proxy|proxy_http|headers|ssl|rewrite)\.load' | tr '\n' ' ')"
 
-say "ports in use"
-(ss -ltn 2> /dev/null || netstat -ltn 2> /dev/null) | head -30
+say "ports in use (what answers 443, in front of salmobase's port 80?)"
+(ss -ltnp 2> /dev/null || ss -ltn 2> /dev/null || netstat -ltn 2> /dev/null) | head -30
 
 say "what it reaches"
 for u in https://github.com https://pypi.org/simple/ https://salmobase.org/datafiles/datasets/salmo-snp/releases/latest.json https://registry-1.docker.io/v2/; do

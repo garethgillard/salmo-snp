@@ -205,10 +205,10 @@ def molqtl_rows(chrom, start, end):
 
 
 def score_rows(chrom, start, end, limit=20000):
-    """{label: {sites: [(pos, ref, alt, score, percentile, effect)], up, down, reference}} of the release's per-variant
-    score layers (I15) in a window. effect is the signed effect of the alt allele, None in a layer without one; up,
-    down and reference are the layer's words for it (jobs.score_words)."""
-    out, words = {}, jobs.score_words()
+    """{label: {sites: [(pos, ref, alt, score, percentile, effect)], up, down, reference, log2}} of the release's
+    per-variant score layers (I15) in a window. effect is the signed effect of the alt allele, None in a layer without
+    one; up, down and reference are the layer's words for it (jobs.score_words); log2: its effect is a log2 fold change."""
+    out, words, log2 = {}, jobs.score_words(), jobs.score_log2()
     for name, label in jobs.score_layers():
         path = jobs.release() / f"{name}.parquet"
         if path.exists():
@@ -217,7 +217,7 @@ def score_rows(chrom, start, end, limit=20000):
             sites = con.execute(
                 f"SELECT \"end\", ref, alt, score, percentile, {'effect' if has else 'NULL'} FROM read_parquet({lit(path)}) "
                 f"WHERE chrom = ? AND \"end\" > ? AND \"end\" <= ? ORDER BY \"end\" LIMIT {int(limit)}", [chrom, start, end]).fetchall()
-            out[label] = dict(zip(("up", "down", "reference"), words[name]), sites=sites)
+            out[label] = dict(zip(("up", "down", "reference"), words[name]), sites=sites, log2=name in log2)
     return out
 
 
@@ -537,9 +537,13 @@ def facts(snp, ev, states, chosen, active_states):
     if summit and "summit" not in fired:  # the nearest ATAC summit: how far, and how strong among its condition's peaks
         out.append(chip("ATAC summit " + summit[0] if g("summit_distance") else "at an ATAC summit" + summit[0][len("at the summit"):],
                         "", summit[1], "summit"))
+    if g("cne") and "constrained" not in fired:  # a pike CNE that the rules in use don't count
+        out.append(chip(f"CNE, {g('cne_age')}" if g("cne_age") else "CNE", "", f"In conserved non-coding element {g('cne_id') or ''} of "
+                        "northern pike (Baudement et al. 2026), shared back to this clade; not counted by the rules in use", "pike"))
     if g("pike") and "pike" not in fired:
         out.append(chip("aligns to pike", "", "Sequence that aligns to northern pike, the closest relative without the salmonid genome "
-                        "duplication (AQUA-FAANG salmon-trout-pike alignment): display only, not counted in tiers", "pike"))
+                        "duplication (AQUA-FAANG salmon-trout-pike alignment): counted only where nothing is constrained "
+                        "(GERP or a CNE)", "pike"))
     if ev.get("known"):
         k = ev["known"]
         out.append(chip(f"★ {k['id']}" if not g("known_locus_dist") and ev.get("sv") else "★ published SNP" if not g("known_locus_dist")

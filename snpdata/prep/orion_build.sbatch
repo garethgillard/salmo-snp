@@ -1,8 +1,8 @@
 #!/bin/bash
 # One release as a SLURM job on NMBU's Orion (docs/ORION.md): prep/build_release.sh with the paths, the Python
 # environment (prep/orion_env.sbatch) and the limits used there. First run 2026-11-25: 18 minutes (salmon), 15 (trout).
-#   sbatch --job-name=salmon-<date> prep/orion_build.sbatch salmon <date>
-#   sbatch --job-name=trout-<date> prep/orion_build.sbatch trout trout-<date>
+#   sbatch --job-name=salmon-<date> prep/orion_build.sbatch salmon <date>    -> atlantic_salmon-Ssal_v3.1-<date>
+#   sbatch --job-name=trout-<date> prep/orion_build.sbatch trout <date>      -> rainbow_trout-USDA_OmykA_1.1-<date>
 # The release before is the newest of the species in release/ (the project folder's): the layers that did not change
 # are copied from it, and `snpscore diff` lists what did. A third argument names another one: a release in release/,
 # else a folder in /mnt/project/ELIXIR/salmo-snp/previous/ with its manifest (the diff alone).

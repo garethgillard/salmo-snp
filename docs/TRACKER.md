@@ -167,24 +167,42 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
         GPU-hours); other tissues' models as they are released
 - [ ] S3e Still to ask or get: allelic imbalance in the 12 fish from the Orion repository (the truth set the summit
       rule and the ChromBPNet scores need); the large gill eQTL set, if its authors share it
-- [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52, #54, #58), then weights.yaml and
-      the pools. Before #5 changes anything: the pool needs coding consequences (it is built without the genome, so
-      the synonymous weight would apply to uploads but not to the public background)
-- [ ] S5 The GWAS prior calibrated per tier, its range shown, with a flat prior and a cap (#51)
+- [x] S4 G's decisions on the order of the evidence (2026-11-26: the questionnaire and the scoring chat's hand-off;
+      DECISIONS, AGENTS.md "Decided"): weights.yaml (weak states split, pike 1 only where nothing is constrained,
+      synonymous 1, constrained = GERP or a pike CNE), the `cne` layer for both species (snpdata/cne.py; DECISIONS
+      #74), pools built with the genome so that they carry coding consequences (#75), the tie-break (#7), the
+      benchmark's v0.1 check (4b) in its output and the release build, the mixer's bounds 0-99 with one decimal place
+      (#69), and the NREC demo from the Docker image (#76). The next build (docs/ORION.md) brings the layer and the
+      pools; on release 2026-11-25's pool the rules give tiers 1-4 of 1.09 / 5.75 / 18.42 / 74.74%.
+- [ ] S5 The GWAS prior calibrated per tier, its range shown, with a flat prior and a cap (#51). The slope is G's 0.3
+      (2026-11-26), and the uniform prior is shown beside it; the calibration per tier and the cap wait for S6.
 - [ ] S6 Evidence at the base: the ChromBPNet scores and allelic imbalance in the 12 fish (both from the Orion
       repository, docs/CHROMBPNET.md), tested for what they add among SNPs inside peaks; then a bonus G sets (#53)
 - [ ] S7 Customisation: a supported own-weights file, named profiles, the rules stated in every export, and an
-      enrichment-per-tier report from the user's own GWAS. First the gaps the audit demonstrated (SCORING.md section
-      6): no check of an edited weights.yaml (three of seven mistakes changed tiers silently), a running portal that
-      keeps the old public background after an edit, the Design panel and saved projects stating the wrong rules hash
-      (a saved version's download was re-tiered silently), the README's update command overwriting an edited file,
-      and snpscore outputs that do not name their rules
+      enrichment-per-tier report from the user's own GWAS. Still to do: named profiles in the portal and the
+      enrichment report
+  - [x] Your own tier rules in the browser (G, 2026-11-26; DECISIONS #69-#71): the Tier rules mixer on the Score page
+        and every result (a fader and a number box per term, the cut-offs, the chromatin states; upload a weights.yaml,
+        download the standard one), kept in the browser, sent with new lists; on results it previews the tiers and
+        applies them (the job tiered again from its evidence)
+  - [x] The gaps the audit demonstrated (SCORING.md section 6; fixed 2026-11-26, G: "Fix the gaps now first"): an
+        edited weights.yaml is checked first (`snpscore rules`, `salmo-snp rules`, the portal's system check), each
+        mistake named by its key; the portal leaves out a public background scored with other rules and says so;
+        a Design panel keeps its first source's rules, refuses a list scored with others, and saved versions keep
+        theirs (a download is no longer tiered again); an own copy (`salmo-snp rules --copy`, the data folder's
+        weights.yaml, or SNPSCORE_WEIGHTS) outlives an update; annotate, sv, pool, benchmark and gwas name their
+        rules (validation.json `rules`, Parquet metadata, the pool's stamp, the benchmark's head, gwas.json)
 - [ ] S8 What the pages tell users about the score (SCORING.md section 5). Done from it: the AQUA-FAANG citation is
       the published paper in both layer registries and on the Data page (G, 2026-11-24: Baudement et al., Nat Ecol
       Evol 2026;10:1959-1981, doi:10.1038/s41559-026-03171-6); releases carry it from the next build
 Queued behind it, to run only when G says (cut off twice by the usage limit): a survey of other work (stale texts and
 the guided tour, the live demo for both species, speed with the larger pool, handover, unused public data, bugs in
 the week's changes).
+
+The Docker image as the deployed unit (G, 2026-11-26): built for each vX.Y.Z tag (release workflow), published in
+salmobase's datafiles beside the releases (deploy/publish_image.sh, from Orion), loaded by salmobase's server and by
+users' own Docker installs (`salmo-snp-server local`). Still to do: the first tag, then the first publish and install
+on the test server (the Orion chat, when G says); the README's user guide gets the Docker install at 1.0.
 
 Builds, tests and deploys (G, 2026-11-25: faster and simpler for the next releases; builds in the Orion chat from the
 plan in [ORION.md](ORION.md), the data synced to salmobase, the app to move there from NREC):
@@ -202,8 +220,19 @@ plan in [ORION.md](ORION.md), the data synced to salmobase, the app to move ther
       plain process and as the container with the data mounted read only
 - [x] One scripted test (#66): `tools/smoke.sh` for a running portal, `prep/release_test.sh` for built releases
       before they are published, and at the end of the NREC deploy workflow
-- [ ] On the salmobase server, by the Orion chat when G says: the survey, the install on the test server, Apache's
-      lines, the smoke test, then the live server (SALMOBASE.md)
+- [x] The portal beside salmobase's own site on one host name (2026-11-25): what the live site shows from outside
+      (Apache on Debian in front of salmobase's Django; `/snp/` free), its own cookie names and path, frame and
+      no-index headers, and a trial behind Apache with a stand-in for salmobase's site (SALMOBASE.md)
+- [x] The install fitted to how salmobase really runs (its GitLab repository, 2026-11-25): Docker Compose with
+      Apache inside its `app` container, so the portal is a container of its own on salmobase's network
+      (`deploy/compose.salmobase.yml`) and one block in salmobase's Apache file sends `/snp` to it; tried with
+      salmobase's real Apache file
+- [ ] The merge request to salmobase's repository with the block for `/snp` (`deploy/salmobase-snp.patch`; pushed
+      from a clone with a GitLab login, accepted by G)
+- [ ] On the salmobase server, by the Orion chat when G says: the survey, the portal's container on the test
+      server, salmobase's `app` container replaced once the merge request is in, the smoke test, then the live
+      server (SALMOBASE.md)
+- [ ] Later (G, 2026-11-25): navigation between salmobase's pages and the portal
 - [ ] Which release is current said by the publisher (`latest.json`, one version per species) for the live app (#67)
 - [ ] The build chat's hand-back (#68)
 

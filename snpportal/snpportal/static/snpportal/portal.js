@@ -80,9 +80,20 @@
     });
     zone.addEventListener("drop", function (e) {
       e.preventDefault();
-      if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; show(); }
+      if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; input.dispatchEvent(new Event("change")); }
     });
     input.addEventListener("change", show);
+  });
+
+  // The name of the results (the Score page's forms): the chosen file's name replaces the date and time, until the
+  // user types a name of their own.
+  document.querySelectorAll("[data-name-from]").forEach(function (name) {
+    var input = document.getElementById(name.getAttribute("data-name-from"));
+    if (!input) return;
+    name.addEventListener("input", function () { name.setAttribute("data-typed", "1"); });
+    input.addEventListener("change", function () {
+      if (!name.hasAttribute("data-typed") && input.files.length) name.value = input.files[0].name.slice(0, 80);
+    });
   });
 
   // j/k move between table rows that open a card (rows with [data-card]); Enter opens it. With a card open they step
@@ -627,4 +638,237 @@
     stay(url);
   });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") tell({sp: "back"}); });
+})();
+
+/* tier rules (rules.py, _mixer.html): this browser's own rules are their scoring blocks as JSON in localStorage
+   ("snpportal.rules"); every form with data-sp-rules sends them (a hidden 'rules' field), so a new list is scored with
+   them. The mixer sets them with a fader and a number box per evidence term and tier cut-off; on a results page it
+   starts from the rules that made those tiers, shows what the faders would change, and applies them there. */
+(function () {
+  "use strict";
+  var KEY = "snpportal.rules";
+  function saved() {
+    try { var r = JSON.parse(localStorage.getItem(KEY) || "null"); return r && typeof r === "object" ? r : null; } catch (e) { return null; }
+  }
+  function keep(r) { try { if (r) localStorage.setItem(KEY, JSON.stringify(r)); else localStorage.removeItem(KEY); } catch (e) { /* private mode */ } }
+  function json(id) { var el = document.getElementById(id); try { return el ? JSON.parse(el.textContent) : null; } catch (e) { return null; } }
+  function copy(r) { return JSON.parse(JSON.stringify(r)); }
+  var standard = json("sp-rules-standard"), box = document.getElementById("sp-mixer");
+
+  function names() {
+    var out = {};
+    if (box) box.querySelectorAll("[data-term]").forEach(function (ch) { out[ch.getAttribute("data-term")] = ch.querySelector(".sp-ch-name").textContent; });
+    return out;
+  }
+  function changes(r) {  // how r differs from the standard, in words (as rules.changes says it)
+    if (!r || !standard) return [];
+    var out = [], sw = standard.weights || {}, rw = r.weights || {}, label = names();
+    if (String(standard.focus || []) !== String(r.focus || [])) out.push("focus: " + focusNames(r.focus));
+    Object.keys(Object.assign({}, sw, rw)).forEach(function (t) {
+      if ((sw[t] || 0) !== (rw[t] || 0)) out.push((label[t] || t.replace(/_/g, " ")) + " " + (sw[t] || 0) + " → " + (rw[t] || 0));
+    });
+    if (String(standard.tiers) !== String(r.tiers)) out.push("tier cut-offs " + (r.tiers || []).join("/"));
+    ["active_states", "weak_states"].some(function (k) {
+      var differ = String((standard[k] || []).slice().sort()) !== String((r[k] || []).slice().sort());
+      if (differ) out.push("chromatin states");
+      return differ;
+    });
+    return out;
+  }
+  function focusNames(prefixes) {  // the tissues a focus ticks, by their labels
+    if (!prefixes || !prefixes.length) return "every condition";
+    var out = [];
+    if (box) box.querySelectorAll("[data-focus]").forEach(function (cb) {
+      var mine = cb.getAttribute("data-focus").split(",");
+      if (mine.some(function (p) { return prefixes.indexOf(p) >= 0; })) out.push(cb.parentNode.textContent.trim());
+    });
+    return out.length ? out.join(", ") : prefixes.join(", ");
+  }
+  function showState() {
+    var own = saved(), said = changes(own);
+    document.querySelectorAll("[data-sp-rules-state]").forEach(function (el) {
+      el.textContent = own && said.length ? "your own (" + said.slice(0, 3).join("; ") + (said.length > 3 ? "; …" : "") + ")" : "standard";
+    });
+    var mine = box && box.querySelector('[data-mix="mine"]');
+    if (mine) mine.hidden = !own;
+  }
+  document.addEventListener("submit", function (e) {  // a new list goes with this browser's own rules
+    var form = e.target, own = saved();
+    if (!form.hasAttribute || !form.hasAttribute("data-sp-rules")) return;
+    var input = form.querySelector('input[name="rules"]');
+    if (!own) { if (input) input.remove(); return; }
+    if (!input) { input = document.createElement("input"); input.type = "hidden"; input.name = "rules"; form.appendChild(input); }
+    input.value = JSON.stringify(own);
+  }, true);
+  showState();
+  if (!box || !standard) return;
+
+  var current = json("sp-rules-current"), base = null, timer = null, asking = null;
+  var token = box.querySelector('input[name="csrfmiddlewaretoken"]');
+  var shown = box.querySelector("#sp-mix-preview"), problems = box.querySelector("[data-mix-problems]");
+  function post(url, fields) {
+    var body = new FormData();
+    Object.keys(fields).forEach(function (k) { body.append(k, fields[k]); });
+    if (token) body.append("csrfmiddlewaretoken", token.value);
+    return fetch(url, {method: "POST", body: body, credentials: "same-origin", signal: fields.signal}).then(function (r) { return r.json(); });
+  }
+  function say(list, note) {  // the mistakes the server named (or a note), or nothing
+    problems.className = "sp-status mt-2 " + (note ? "sp-status-warn" : "sp-status-fail");
+    problems.hidden = !list || !list.length;
+    problems.textContent = "";
+    (list || []).forEach(function (p) { var li = document.createElement("div"); li.textContent = p; problems.appendChild(li); });
+  }
+  function tenth(text) {  // a weight or cut-off: one decimal place at most (G, 2026-11-26)
+    var x = parseFloat(text);
+    return isNaN(x) ? NaN : Math.round(x * 10) / 10;
+  }
+  function set(ch, value) {
+    var fader = ch.querySelector(".sp-fader"), number = ch.querySelector(".sp-ch-box");
+    number.value = value;
+    fader.value = Math.min(+fader.max, Math.max(+fader.min, value));
+  }
+  function fill(r) {  // the faders and boxes from a set of rules
+    base = copy(r);
+    box.querySelectorAll("[data-term]").forEach(function (ch) {
+      var t = ch.getAttribute("data-term"), pct = ch.querySelector("[data-percentile]"), std = ch.querySelector("[data-std]");
+      set(ch, (r.weights || {})[t] || 0);
+      if (std) std.textContent = (standard.weights || {})[t] || 0;
+      var rule = (r.variant_scores || {})[t], least = ch.querySelector("[data-min-score]");
+      rule = rule == null ? {percentile: 0.99} : typeof rule === "object" ? rule : {percentile: rule};
+      if (pct) pct.value = rule.percentile == null ? "" : rule.percentile;
+      if (least) least.value = rule.min_score == null ? "" : rule.min_score;
+    });
+    box.querySelectorAll("[data-cut]").forEach(function (ch) {
+      var i = +ch.getAttribute("data-cut");
+      set(ch, (r.tiers || [])[i] || 1);
+      ch.querySelector("[data-std]").textContent = (standard.tiers || [])[i];
+    });
+    box.querySelectorAll("[data-state]").forEach(function (sel) {
+      var s = sel.getAttribute("data-state");
+      sel.value = (r.active_states || []).indexOf(s) >= 0 ? "active" : (r.weak_states || []).indexOf(s) >= 0 ? "weak" : "";
+    });
+    box.querySelectorAll("[data-focus]").forEach(function (cb) {
+      var mine = cb.getAttribute("data-focus").split(",");
+      cb.checked = !r.focus || !r.focus.length || mine.some(function (p) { return r.focus.indexOf(p) >= 0; });
+    });
+    say(null);
+    changed();
+  }
+  function read() {  // the rules the faders say, over the blocks they don't show (the summit rule, states not listed)
+    var r = copy(base || standard);
+    r.weights = Object.assign({}, r.weights);
+    box.querySelectorAll("[data-term]").forEach(function (ch) {
+      var t = ch.getAttribute("data-term"), v = Math.max(0, tenth(ch.querySelector(".sp-ch-box").value) || 0);
+      var pct = ch.querySelector("[data-percentile]");
+      if (!pct) { r.weights[t] = v; return; }
+      r.variant_scores = Object.assign({}, r.variant_scores);  // a score layer counts only with a weight, from a rank and/or a size
+      var least = ch.querySelector("[data-min-score]"), p = parseFloat(pct.value), e = least ? parseFloat(least.value) : NaN;
+      if (v > 0) {
+        r.weights[t] = v;
+        r.variant_scores[t] = isNaN(e) ? (isNaN(p) ? 0 : p) : {percentile: isNaN(p) ? null : p, min_score: e};
+      } else { delete r.weights[t]; delete r.variant_scores[t]; }
+    });
+    r.tiers = [0, 1, 2].map(function (i) { return tenth(box.querySelector('[data-cut="' + i + '"] .sp-ch-box').value) || 1; });
+    var ticks = box.querySelectorAll("[data-focus]"), focus = [];
+    ticks.forEach(function (cb) { if (cb.checked) focus = focus.concat(cb.getAttribute("data-focus").split(",")); });
+    if (focus.length && box.querySelectorAll("[data-focus]:checked").length < ticks.length) r.focus = focus; else delete r.focus;
+    var states = box.querySelectorAll("[data-state]");
+    if (states.length) {
+      var listed = [], active = [], weak = [];
+      states.forEach(function (sel) {
+        var s = sel.getAttribute("data-state");
+        listed.push(s);
+        if (sel.value === "active") active.push(s); else if (sel.value === "weak") weak.push(s);
+      });
+      var keepOthers = function (list) { return (list || []).filter(function (s) { return listed.indexOf(s) < 0; }); };
+      r.active_states = keepOthers(r.active_states).concat(active);
+      r.weak_states = keepOthers(r.weak_states).concat(weak);
+    }
+    return r;
+  }
+  function changed() {  // mark the channels off the standard, say how many, and ask what the faders would do
+    var r = read(), sw = standard.weights || {};
+    box.querySelectorAll("[data-term]").forEach(function (ch) {
+      var t = ch.getAttribute("data-term");
+      ch.classList.toggle("sp-ch-changed", (r.weights[t] || 0) !== (sw[t] || 0));
+    });
+    box.querySelectorAll("[data-cut]").forEach(function (ch) {
+      var i = +ch.getAttribute("data-cut");
+      ch.classList.toggle("sp-ch-changed", r.tiers[i] !== (standard.tiers || [])[i]);
+    });
+    var other = box.querySelector('[data-term="active_elsewhere"]');
+    if (other) other.classList.toggle("sp-ch-idle", !r.focus);
+    var focusBox = box.querySelector(".sp-mix-focus");
+    if (focusBox) focusBox.classList.toggle("sp-ch-changed", !!r.focus);
+    var n = changes(r).length;
+    box.querySelector("[data-mix-state]").textContent = n ? n + (n === 1 ? " change" : " changes") + " from the standard" : "the standard rules";
+    if (!box.hasAttribute("data-preview")) return;
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      if (asking) asking.abort();
+      asking = new AbortController();
+      shown.setAttribute("aria-busy", "true");
+      post(box.getAttribute("data-preview"), {rules: JSON.stringify(read()), signal: asking.signal}).then(function (res) {
+        shown.removeAttribute("aria-busy");
+        if (!res.ok) { say(res.problems); shown.textContent = ""; return; }
+        say(null);
+        shown.innerHTML = '<span class="sp-muted">These results, now &rarr; with these rules:</span>' + [1, 2, 3, 4].map(function (t) {
+          var now = res.now ? res.now[t] : null, next = res.new[t];
+          return '<span><span class="sp-badge sp-tier-' + t + '">Tier ' + t + "</span> " + (now == null ? "" : now.toLocaleString() + " &rarr; ") +
+            (now != null && now !== next ? "<b>" + next.toLocaleString() + "</b>" : next.toLocaleString()) + "</span>";
+        }).join("") + (res.now ? '<span class="sp-muted">' + res.moved.toLocaleString() + (res.moved === 1 ? " SNP changes" : " SNPs change") + " tier</span>" : "");
+      }).catch(function (e) { if (e.name !== "AbortError") shown.textContent = "Could not count the tiers just now."; });
+    }, 300);
+  }
+  box.addEventListener("input", function (e) {
+    var ch = e.target.closest(".sp-ch");
+    if (ch && e.target.classList.contains("sp-fader")) ch.querySelector(".sp-ch-box").value = e.target.value;
+    if (ch && e.target.classList.contains("sp-ch-box")) {  // the fader follows; the box keeps what is typed ("2." on the way to 2.5)
+      var f = ch.querySelector(".sp-fader"), v = tenth(e.target.value);
+      if (!isNaN(v)) f.value = Math.min(+f.max, Math.max(+f.min, v));
+    }
+    if (ch || e.target.matches("[data-percentile], [data-min-score]")) changed();
+  });
+  box.addEventListener("change", function (e) {
+    var ch = e.target.closest(".sp-ch");
+    if (ch && e.target.classList.contains("sp-ch-box")) set(ch, Math.max(+e.target.min || 0, tenth(e.target.value) || 0));  // typed: tidied
+    if (e.target.matches("[data-state], [data-focus], .sp-ch-box")) changed();
+  });
+  box.addEventListener("show.bs.modal", function () { fill(current || saved() || standard); showState(); });
+  box.querySelector('[data-mix="standard"]').addEventListener("click", function () { fill(standard); });
+  var mine = box.querySelector('[data-mix="mine"]');
+  if (mine) mine.addEventListener("click", function () { if (saved()) fill(saved()); });
+  box.querySelector('[data-mix="save"]').addEventListener("click", function () {  // checked first, then kept here
+    post(box.getAttribute("data-check"), {rules: JSON.stringify(read())}).then(function (res) {
+      if (!res.ok) { say(res.problems); return; }
+      keep(res.changes.length ? res.rules : null);
+      showState();
+      box.querySelector('[data-bs-dismiss="modal"]').click();
+    });
+  });
+  var apply = box.querySelector("[data-mix-apply]");
+  if (apply) apply.addEventListener("submit", function (e) {  // checked first; the server tiers the results again
+    if (apply.hasAttribute("data-checked")) return;
+    e.preventDefault();
+    post(box.getAttribute("data-check"), {rules: JSON.stringify(read())}).then(function (res) {
+      if (!res.ok) { say(res.problems); return; }
+      apply.querySelector('input[name="rules"]').value = res.changes.length ? JSON.stringify(res.rules) : "";
+      apply.setAttribute("data-checked", "");
+      apply.querySelector("button").disabled = true;
+      apply.querySelector("button").textContent = "Applying…";
+      apply.submit();
+    });
+  });
+  var download = document.getElementById("sp-mix-download");
+  download.addEventListener("submit", function () { download.querySelector('input[name="rules"]').value = JSON.stringify(read()); });
+  box.querySelector("[data-mix-upload]").addEventListener("change", function (e) {  // a rules file into the faders
+    var file = e.target.files[0];
+    if (!file) return;
+    file.text().then(function (text) { return post(box.getAttribute("data-check"), {text: text}); }).then(function (res) {
+      e.target.value = "";
+      if (!res.ok) { say(res.problems); return; }
+      fill(res.rules);
+      if (res.unused && res.unused.length) say(["Used from the file: its scoring blocks. Left to the portal: " + res.unused.join(", ") + "."], true);
+    });
+  });
 })();

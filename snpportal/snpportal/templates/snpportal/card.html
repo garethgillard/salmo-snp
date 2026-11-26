@@ -43,7 +43,7 @@
       <span class="sp-as sp-as-plain" title="A sequence model, run for this SNP when you ask: what it predicts with each allele. Not counted in the tier">on demand</span></summary>
     {% for m in predict %}<div id="predict-{{ m.name }}" class="mb-2">{% if m.missing %}<p class="sp-muted mb-1">{{ m.label }} ({{ m.what }}) {{ m.missing }}</p>
       {% else %}<button type="button" class="btn btn-sm btn-outline-primary" hx-get="{{ m.url }}" hx-target="#predict-{{ m.name }}" hx-swap="innerHTML"
-              hx-select="unset" hx-select-oob="unset" hx-push-url="false" hx-indicator="#predict-busy-{{ m.name }}" hx-disabled-elt="this">Predict with {{ m.label }}</button>
+              hx-select="unset" hx-select-oob="unset" hx-push-url="false" hx-indicator="#predict-busy-{{ m.name }}" hx-disabled-elt="this">Predict with {{ m.label }}{% if m.what %} ({{ m.what }}){% endif %}</button>
       <span class="sp-muted ms-1">{{ m.what }}, with each allele: a second or two (longer the first time, when the model's files are fetched)</span>
       <span class="spinner-border sp-spin htmx-indicator" id="predict-busy-{{ m.name }}" role="status" aria-label="Predicting"></span>{% endif %}</div>{% endfor %}
   </details>{% endif %}

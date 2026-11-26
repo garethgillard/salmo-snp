@@ -374,7 +374,7 @@ def _chip_tag(d, trait):
 
 
 def _context(key, job, d, trait, con):
-    return {"key": key, "job": job, "d": d, "trait": trait, "preset": jobs.trait_label(trait), "con": con,
+    return {"key": key, "job": job, "d": d, "trait": trait, "preset": jobs.trait_label(trait, d), "con": con,
             "synthetic": _synthetic(job)}
 
 
@@ -708,9 +708,8 @@ def _compared(con, d, trait, weights, chip):
     tag = _chip_tag(d, trait)
     if tag in chip.get("results", {}):
         return chip
-    pool = jobs.release() / "pool" / "pool.parquet"
     res = snp_panel.compare(con, d / "chip.parquet", trait, weights=weights, chrom_sizes=jobs.manifest(d).get("chrom_sizes"),
-                            pool=pool if pool.exists() else None, table="v")
+                            pool=jobs.pool_file(d), table="v")  # the pool's SNPs only when scored with the job's rules
     listed = [g["filler"] for g in res["gaps"] if g["filler"] and g["filler"]["source"] == "list"]
     if listed:  # card links for the fillers from the list
         values = ", ".join(f"({lit(f['chrom'])}, {int(f['pos'])})" for f in listed)

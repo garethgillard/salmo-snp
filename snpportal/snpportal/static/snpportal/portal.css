@@ -581,13 +581,19 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-mine-box { padding: .7rem .9rem .5rem; border: 1px solid var(--sp-ok-border); border-radius: .5rem; background: var(--sp-ok-bg); }
 .sp-mine-box h2 { margin-bottom: .35rem; font-size: 1rem; color: var(--sp-ok-text); }
 .sp-mine { list-style: none; margin: 0; padding: 0; max-height: 9.5rem; overflow-y: auto; }
-.sp-mine li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; column-gap: .75rem;
+.sp-mine li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: baseline; column-gap: .75rem;
   padding: .3rem .5rem; border-top: 1px solid var(--sp-ok-border); }
 .sp-mine li:first-child { border-top: 0; }
 .sp-mine-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-mine-current { box-shadow: inset 3px 0 0 var(--sp-ok-text); }
 .sp .sp-mine-del { padding: 0; }
-@media (max-width: 575.98px) { .sp-mine li { grid-template-columns: minmax(0, 1fr) auto; } .sp-mine li > span { grid-row: 2; } }
+.sp-mine-ren summary { padding: 0; list-style: none; }
+.sp-mine-ren summary::-webkit-details-marker { display: none; }
+.sp-mine-ren[open] { grid-column: 1 / -1; }
+.sp-mine-ren form { display: flex; gap: .5rem; margin: .2rem 0 .35rem; }
+.sp-name-row { display: flex; align-items: center; gap: .5rem; }
+.sp-name-row input { max-width: 22rem; }
+@media (max-width: 575.98px) { .sp-mine li { grid-template-columns: minmax(0, 1fr) auto auto; } .sp-mine li > span { grid-row: 2; } }
 .sp .sp-mine-del { color: var(--sp-fail-text); }
 
 /* the Design panel page: two columns as tall as each other; each one's last card takes up the slack */
@@ -595,3 +601,41 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-eq .sp-card, .sp-eq .sp-figure { margin: 0; }
 .sp button.sp-pick { padding: 0; }  /* the Design panel's +/−: a form button, as the Table's link */
 .sp-num-in { width: 7rem; }  /* small number fields (the Design panel's Upgrade form) */
+
+/* the Tier rules mixer (_mixer.html): the sliders in groups by the kind of evidence, then the tier cut-offs */
+.sp-rules-line { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; margin: 0 0 .6rem; }
+.sp-rules-line [data-sp-rules-state] { font-weight: 600; }
+.sp-mixer .modal-title { font-size: 1.15rem; }
+.sp-mix { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr)); gap: .6rem .8rem; align-items: start; }
+.sp-mix-group { min-width: 0; margin: 0; padding: .4rem .6rem .5rem; border: 1px solid var(--sp-grey-300); border-radius: .45rem; background: var(--sp-grey-50); }
+.sp-mix-group legend { float: none; width: auto; margin: 0 0 .15rem; padding: 0; font-size: .85rem; font-weight: 700; }
+.sp-mix-group legend span { font-weight: 400; font-size: .75rem; }
+.sp-mix-focus { grid-column: 1 / -1; }
+.sp-mix-tissues { display: flex; flex-wrap: wrap; gap: .25rem 1.1rem; margin: .15rem 0 .3rem; font-size: .85rem; font-weight: 600; }
+.sp-mix-tissues label { display: flex; align-items: center; gap: .35rem; cursor: pointer; }
+.sp-mix-tissues input { margin: 0; }
+.sp-ch-idle { opacity: .55; }
+.sp-ch { display: grid; grid-template-columns: 7.6rem minmax(4rem, 1fr) 3.4rem 2.2rem; align-items: center; gap: .45rem;
+  padding: .12rem .3rem; border-radius: .3rem; }
+.sp-ch-changed { background: var(--sp-white); box-shadow: inset 3px 0 0 var(--sp-accent); }
+.sp-ch-name { margin: 0; font-size: .82rem; font-weight: 600; line-height: 1.15; }
+.sp-fader { width: 100%; accent-color: var(--sp-accent); cursor: pointer; }
+.sp-ch-box { text-align: center; padding: .1rem .2rem; }
+.sp-ch-std { font-size: .75rem; color: var(--sp-grey-700); white-space: nowrap; }
+.sp-ch-pct { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .8rem; margin: 0; font-size: .75rem; color: var(--sp-grey-700); }
+.sp-ch-pct label { display: flex; align-items: center; gap: .3rem; margin: 0; }
+.sp-ch-pct input { width: 4rem; padding: .05rem .2rem; }
+.sp-mix-preview { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .9rem; min-height: 2.2rem; margin-bottom: .6rem;
+  padding: .35rem .7rem; border: 1px solid var(--sp-grey-300); border-radius: .4rem; background: var(--sp-white);
+  font-size: .85rem; font-variant-numeric: tabular-nums; }
+.sp-mix-preview[aria-busy] { opacity: .6; }
+.sp-mix-states { margin-top: .9rem; }
+.sp-mix-states summary { font-size: .9rem; font-weight: 600; cursor: pointer; }
+.sp-mix-state-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: .25rem .9rem; margin-top: .45rem; }
+.sp-mix-state-list label { display: flex; justify-content: space-between; align-items: center; gap: .5rem; font-size: .8rem; }
+.sp-mix-state-list select { width: 8.5rem; }
+.sp-mix-files { display: flex; flex-wrap: wrap; gap: .5rem 1.2rem; align-items: center; }
+.sp-mix-files label { display: flex; align-items: center; gap: .4rem; }
+.sp-mix-files input[type="file"] { max-width: 16rem; }
+.sp-mixer .modal-footer { gap: .4rem; }
+.sp-mix-say { margin-right: auto; }

@@ -3,7 +3,7 @@ Table copies its whole selection: the cart), compared with an existing chip (the
 checked and exported as vendor files.
 
 It belongs to one browser: its folder (results/panel-<uuid>) is named by an HttpOnly cookie, never by a URL, and
-jobs.cleanup removes it 24 hours after it was started (its 'created' marker). To keep it longer, download its TSV
+jobs.cleanup removes it SNPPORTAL_KEEP_HOURS (30 days) after it was started (its 'created' marker). To keep it longer, download its TSV
 and score that list again later. Its SNPs carry their tiers for all 27 conditions, so SNPs from lists scored for
 other conditions compare."""
 from __future__ import annotations
@@ -59,10 +59,25 @@ def _folder(request):
     return d if fresh and (d / "panel.json").exists() else None
 
 
+NOT_RECORDED = "not recorded (a panel made before 2026-11-26)"
+
+
+def rules(d):
+    """The tier rules a panel or saved version was scored with (its weights.yaml: the first source's), or None when it
+    kept none (made before 2026-11-26)."""
+    return d / "weights.yaml" if (d / "weights.yaml").exists() else None
+
+
+def rules_dir(d):
+    """The folder whose rules the public pool must fit to stand beside a panel's tiers (jobs.pool_file): the panel's
+    own, or None (the rules in use, as before) for a panel from before 2026-11-26 that kept none."""
+    return d if rules(d) else None
+
+
 def _new():
     d = jobs.results_dir() / f"panel-{uuid.uuid4()}"
     d.mkdir(mode=0o700)
-    (d / "created").touch(mode=0o600)  # never changes: cleanup counts the 24 hours from it
+    (d / "created").touch(mode=0o600)  # never changes: cleanup counts SNPPORTAL_KEEP_HOURS from it
     jobs._write_json(d / "panel.json", {"sources": [], "next": 1, "created_utc": jobs.utc(),
                                         "release": jobs.manifest().get("version")})  # its sources' release (I17)
     return d
@@ -71,7 +86,7 @@ def _new():
 def _cookie(response, d):
     keep = jobs.keep_seconds()
     left = jobs.FOREVER if keep is None else max(0, int(keep - _age(d)))
-    response.set_cookie(COOKIE, d.name[len("panel-"):], max_age=left, httponly=True, samesite="Lax")
+    response.set_cookie(COOKIE, d.name[len("panel-"):], max_age=left, httponly=True, samesite="Lax", path=jobs.cookie_path())
     return response
 
 
@@ -125,19 +140,28 @@ def add(request, key):
     back = f"{reverse('snpportal:results', args=[key])}?{query + '&' if query else ''}tab=table"
     if job.get("input_kind") == "sv":  # panels are SNP markers; SVs have no probe flanks
         return redirect(f"{back}&panel_error=sv")
+    d = _folder(request)
+    s = jobs.read_json(d / "panel.json") if d is not None else {}
+    if s.get("release") not in (None, job.get("release")):
+        return redirect(f"{back}&panel_error=release")  # I17: a panel holds SNPs of one release
+    if s.get("sources") and rules(d) and jobs.rules_sha256(d) != jobs.rules_sha256(jd):
+        return redirect(f"{back}&panel_error=rules")  # and tiers of one set of rules, so that they rank together
     con, types, where, _ = results.open_result(req, key, write=True)
     n = con.execute(f"SELECT count(*) FROM v {where}").fetchone()[0]
     cap = int(jobs.setting("SNPPORTAL_MAX_PANEL_SNPS", 50_000))
     if not n or n > cap:
+        con.close()
         return redirect(f"{back}&panel_error={'empty' if not n else 'many'}")
     rows = jd / f".panel-rows-{uuid.uuid4().hex}.parquet"
     con.execute(f"COPY (SELECT file_row_number FROM v {where}) TO '{rows}' (FORMAT parquet)")
     con.close()
-    d = _folder(request)
-    if d is not None and jobs.read_json(d / "panel.json").get("release") not in (None, job.get("release")):
-        return redirect(f"{back}&panel_error=release")  # I17: a panel holds SNPs of one release
     d = d or _new()
     s = jobs.read_json(d / "panel.json")
+    if not s["sources"]:  # the first source's rules are the panel's, as a copy (the job may go); none before 2026-11-26
+        (d / "weights.yaml").unlink(missing_ok=True)
+        if rules(jd):
+            shutil.copyfile(rules(jd), d / "weights.yaml")
+            (d / "weights.yaml").chmod(0o600)
     i = s["next"]
     try:
         _copy(jd, rows, d / f"source_{i}.parquet", i)
@@ -256,7 +280,8 @@ def page(request):
     """/snp/panel/: the sources, the panel at a glance, the chip comparison, the assay check, the SNP list and the
     downloads; an empty panel says how to fill it."""
     d = _folder(request)
-    ctx = {"nav": "panel", "title": "Design panel", "error": request.GET.get("error"), "local": jobs.local()}
+    ctx = {"nav": "panel", "title": "Design panel", "error": request.GET.get("error"), "local": jobs.local(),
+           "keep_hours": jobs.keep_text()}
     if jobs.local():  # saved projects (I7): the save form offers their names
         from . import projects
         ctx["projects"] = projects.everything()
@@ -285,9 +310,8 @@ def page(request):
     tiers = dict(con.execute("SELECT tier, count(*) FROM p GROUP BY 1").fetchall()) if "tier" in types else {}
     res = None
     if chip:
-        pool = jobs.release() / "pool" / "pool.parquet"
-        res = snp_panel.compare(con, d / "chip.parquet", "all", weights=jobs.weights(), table="p0", pool=pool if pool.exists() else None,
-                                chrom_sizes=jobs.manifest().get("chrom_sizes"))
+        res = snp_panel.compare(con, d / "chip.parquet", "all", weights=jobs.weights(), table="p0",
+                                pool=jobs.pool_file(rules_dir(d)), chrom_sizes=jobs.manifest().get("chrom_sizes"))
         cs = res["summary"]
         on = con.execute("SELECT count(*) FILTER (WHERE on_chip), count(*) FILTER (WHERE NOT on_chip) FROM p").fetchone()
         ctx["compare"] = [(f"{cs['chip_snps']:,}", "chip markers"), (f"{on[0]:,}", "already on the chip"),
@@ -431,7 +455,7 @@ def _change(request):
         return back
     if request.POST.get("clear"):
         shutil.rmtree(d, ignore_errors=True)
-        back.delete_cookie(COOKIE)
+        back.delete_cookie(COOKIE, path=jobs.cookie_path())
         return back
     if request.POST.get("remove"):
         s = jobs.read_json(d / "panel.json")
@@ -638,18 +662,18 @@ def _matrix(con, d, chip):
     """The chips side by side (snp_panel.chip_matrix): the panel's chip, the other chips and the panel itself."""
     tmp = d / f".matrix-{uuid.uuid4().hex}.parquet"
     con.execute(f"COPY (SELECT chrom, pos, NULL::VARCHAR AS id FROM p) TO {lit(tmp)} (FORMAT parquet)")
-    pool = jobs.release() / "pool" / "pool.parquet"
+    pool = jobs.pool_file(rules_dir(d))  # the public sites' tiers only when scored with the panel's own rules
     others = [(c["label"], d / "chips" / f"{c['slug']}.parquet") for c in chips(d)]
     try:
         m = snp_panel.chip_matrix([(chip.get("label") or "Your chip", d / "chip.parquet")]
                                   + [x for x in others if x[1].exists()] + [("This panel", tmp)],
-                                  pool=pool if pool.exists() else None, chrom_sizes=jobs.manifest().get("chrom_sizes"),
+                                  pool=pool, chrom_sizes=jobs.manifest().get("chrom_sizes"),
                                   window_bp=snp_panel.settings(jobs.weights())["chip_window"],
                                   gap_bp=snp_panel.settings(jobs.weights())["chip_gap"])
     finally:
         tmp.unlink(missing_ok=True)
     return {"rows": [{**r, "near": near} for r, (_, near) in zip(m["rows"], m["overlap"])], "labels": [x for x, _ in m["overlap"]],
-            "pool": pool.exists(), "window": tools._bp(snp_panel.settings(jobs.weights())["chip_window"])}
+            "pool": pool is not None, "window": tools._bp(snp_panel.settings(jobs.weights())["chip_window"])}
 
 
 def _upgrade_params(get, chip):
@@ -746,13 +770,14 @@ def download(request):
     table = "out"
     s = jobs.read_json(d / "panel.json")
     meta = {"tool": "salmobase functional SNP portal: Design panel", "preset": "all", "panel": f"{len(s['sources'])} sources",
-            "filters": {"scope": SCOPES[scope]}, "synthetic": any(x.get("synthetic") for x in s["sources"]), "created_utc": s.get("created_utc")}
+            "filters": {"scope": SCOPES[scope]}, "synthetic": any(x.get("synthetic") for x in s["sources"]), "created_utc": s.get("created_utc"),
+            "weights_sha256": jobs.rules_sha256(d) or NOT_RECORDED}  # the rules that made the panel's tiers
     name = f"panel_{scope}_{fmt}.{'tsv' if fmt == 'tsv' else snp_export.filename(fmt, 'release', 'all', None).rsplit('.', 1)[1]}"
     fd, tmp = tempfile.mkstemp(dir=d, prefix=".export-", suffix="." + name.rsplit(".", 1)[1])
     os.close(fd)
     try:
         snp_export.export(con, fmt, tmp, jobs.release(), "all", meta, request.GET.get("include_failed") == "1",
-                          request.GET.get("plain") == "1", table=table, sidecars=False)
+                          request.GET.get("plain") == "1", table=table, sidecars=False, weights=rules(d))
         f = open(tmp, "rb")
     except snpscore.InputError as e:
         return render(request, "snpportal/stub.html", {"nav": "panel", "title": "Export not possible", "message": str(e)}, status=400)

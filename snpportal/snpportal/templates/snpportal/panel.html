@@ -2,7 +2,7 @@
 {% load snpportal_tags %}
 {% comment %}Design panel (panel.py): the sources (Table selections added with 'Add to panel'), the comparison with an
    existing chip, the panel at a glance, its SNPs along the genome, the downloads and the SNP list. One browser's only
-   (a cookie), deleted 24 hours after it was started. Every change is a POST to panel/change/.{% endcomment %}
+   (a cookie), deleted SNPPORTAL_KEEP_HOURS after it was started. Every change is a POST to panel/change/.{% endcomment %}
 {% block main %}
 <div class="sp-stack">
   {% if error %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ error }}</div>{% endif %}
@@ -15,7 +15,7 @@
       <li>Click <strong>Add to panel</strong>: the whole selection comes here. Repeat with other selections or results.</li>
       <li>Here, compare the panel with the chip you use, check the assays and download the vendor files.</li>
     </ol>
-    <p class="sp-small sp-muted mb-0">{% if local %}The panel is kept in this browser only, until you clear it.{% else %}The panel is kept in this browser only and is deleted 24 hours after you start it. To keep
+    <p class="sp-small sp-muted mb-0">{% if local %}The panel is kept in this browser only, until you clear it.{% else %}The panel is kept in this browser only and is deleted {{ keep_hours }} after you start it. To keep
       it longer, download its TSV and score that file again later.{% endif %}</p>
     <p class="mt-2 mb-0"><a class="btn btn-sm btn-primary" href="{% url 'snpportal:current' %}">Go to your results</a></p>
   </section>
@@ -95,7 +95,7 @@
       {% for value, label in downloads.formats %}<button class="btn btn-sm btn-outline-primary" type="submit" name="format" value="{{ value }}">{{ label }}</button>{% endfor %}
     </form>
     <p class="sp-small mt-2 mb-0"><a href="{% url 'snpportal:panel_report' %}">Design report</a> (printable) &middot; <a href="{{ downloads.tsv }}">Download the panel (TSV)</a>{% if not local %} &middot; score that file again to keep the
-      panel beyond 24 hours{% endif %}. Vendor files leave out SNPs that fail the assay check.</p>
+      panel beyond {{ keep_hours }}{% endif %}. Vendor files leave out SNPs that fail the assay check.</p>
     {% if local %}<form class="d-flex flex-wrap gap-2 align-items-center sp-small mt-2" method="post" action="{% url 'snpportal:panel_save' %}">{% csrf_token %}
       <label for="save-name">Save as version of</label>
       <input class="form-control form-control-sm w-auto" id="save-name" name="name" required maxlength="60" placeholder="project name" list="save-projects">

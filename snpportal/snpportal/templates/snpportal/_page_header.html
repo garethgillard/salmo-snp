@@ -1,5 +1,5 @@
 {% comment %}Breadcrumb, H1, meta line and actions. Context: title, crumbs [(label, url or None)], meta,
-   actions [{label, url, post, style, confirm, download}]. No badges in the H1: a synthetic job's title says
+   actions [{label, url, post, style, confirm, download, modal (the id of a dialog the button opens), title}]. No badges in the H1: a synthetic job's title says
    so (views.results).{% endcomment %}
 {% if crumbs %}{% include 'snpportal/_crumbs.html' %}{% endif %}
 <header class="sp-page-header">
@@ -12,6 +12,7 @@
     <form method="post" action="{{ a.url }}"{% if a.confirm %} data-confirm="{{ a.confirm }}" data-confirm-ok="{{ a.label }}"{% endif %}>{% csrf_token %}
       <button class="btn btn-sm {{ a.style|default:'btn-outline-secondary' }}" type="submit">{{ a.label }}</button>
     </form>
+    {% elif a.modal %}<button class="btn btn-sm {{ a.style|default:'btn-outline-secondary' }}" type="button" data-bs-toggle="modal" data-bs-target="#{{ a.modal }}"{% if a.title %} title="{{ a.title }}"{% endif %}>{{ a.label }}</button>
     {% else %}<a class="btn btn-sm {{ a.style|default:'btn-outline-secondary' }}" href="{{ a.url }}"{% if a.download %} download{% endif %}>{{ a.label }}</a>{% endif %}{% endfor %}
   </div>{% endif %}
 </header>

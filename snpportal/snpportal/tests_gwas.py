@@ -98,7 +98,7 @@ class GwasTest(SimpleTestCase):
         self.assertEqual(re.findall(r'name="example" value="(\w+)"', box), ["known_loci", "chip_demo_SYNTHETIC", STEM, "known_svs",
                                                                           "svs_demo_SYNTHETIC"])
         form = box[box.rindex("<form", 0, box.index(f'value="{STEM}"')):]  # the GWAS example's form
-        self.assertTrue(form.startswith(f'<form method="post" action="{reverse("snpportal:gwas_score")}">'))
+        self.assertTrue(form.startswith(f'<form method="post" action="{reverse("snpportal:gwas_score")}" data-sp-rules>'))  # with own rules
         self.assertIn('name="trait" value="all"', form)  # the example opens with all conditions
         self.assertIn("synthetic, maturation", form)
         self.assertEqual(html.count(f'value="{STEM}"'), 1)  # not offered as a SNP-list example too

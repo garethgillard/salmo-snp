@@ -71,6 +71,12 @@ def setting(name, default):
     return getattr(settings, name, default)
 
 
+def cookie_path():
+    """The path the portal's cookies are sent to: '/', or '/snp/' on a server that shares its host with another site
+    (SNPPORTAL_COOKIE_PATH; deploy/server.sh sets it), so that salmobase's own pages never receive them."""
+    return setting("SNPPORTAL_COOKIE_PATH", "/")
+
+
 _current = contextvars.ContextVar("snpportal_release", default=None)  # I17: the release of this request or job
 
 
@@ -278,6 +284,18 @@ def utc(t=None):
     return datetime.fromtimestamp(time.time() if t is None else t, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
+def job_name(given, fallback):
+    """A job's name (job.json label): the one its user gave, spaces collapsed and at most 80 characters, else
+    `fallback`. Never logged: it can be a file's name."""
+    return " ".join(str(given or "").split())[:80] or fallback
+
+
+def default_name():
+    """The Score page's name for a new list: the date and time where the portal runs (the user's computer, on a local
+    install); choosing a file puts its name there instead (portal.js)."""
+    return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
+
+
 def limits():
     return {"threads": int(setting("SNPPORTAL_DUCKDB_THREADS", 2)), "memory_limit": str(setting("SNPPORTAL_DUCKDB_MEMORY", "2GB"))}
 
@@ -307,8 +325,8 @@ def sha256(path):
 @lru_cache(maxsize=64)
 def _cached(kind, path, mtime):
     p = Path(path)
-    if kind == "weights":
-        w = snpscore.load_weights(p)
+    if kind == "weights":  # unchecked: a job's snapshot was checked when it was scored, the rules in use at start (health)
+        w = snpscore.load_weights(p, check=False)
         if w and "presets" in w:
             w["presets"] = Presets(w["presets"])
         return w
@@ -325,10 +343,154 @@ def manifest(where=None):
     return _file("json", Path(where or release()) / "manifest.json") or {}
 
 
+def rules_file(where=None):
+    """The tier rules of a job's (or panel's) snapshot folder, else the rules in use (snpscore.score.rules_file: the
+    shipped weights.yaml, or the own copy SNPSCORE_WEIGHTS names)."""
+    return Path(where) / "weights.yaml" if where else snpscore.score.rules_file()
+
+
 def weights(where=None):
-    """weights.yaml of a job's snapshot folder, or snpscore's current one (None if missing); its presets also take
+    """weights.yaml of a job's snapshot folder, or the rules in use (None if missing); its presets also take
     Active-in keys (Presets)."""
-    return _file("weights", Path(where) / "weights.yaml" if where else snpscore.score.WEIGHTS)
+    return _file("weights", rules_file(where))
+
+
+def rules_sha256(where=None):
+    """sha256 of the rules of a snapshot folder (None when it kept none: a panel or project from before 2026-11-26),
+    else of the rules in use."""
+    return _file("sha256", rules_file(where))
+
+
+def pool_background(where=None):
+    """The current release's public background (pool/background.json from `snpscore pool`) when its pool was scored
+    with the same rules as the snapshot folder `where` (a job's), else the rules in use: tiers are only ever compared
+    with tiers made by the same rules. {} when there is no pool, or it was made for other rules or another release."""
+    bg = read_json(release() / "pool" / "background.json")
+    if not bg or bg.get("release") != manifest().get("version"):
+        return {}
+    if bg.get("weights_sha256") == rules_sha256(where):
+        return bg
+    own = read_json(own_background_file(rules_sha256(where))) if where else {}  # a job's own rules (rules.py)
+    return own if own.get("release") == bg["release"] and own.get("weights_sha256") == rules_sha256(where) else {}
+
+
+def own_background_file(sha):
+    """Where the public background tiered with the rules of hash `sha` is kept (own_background): in the results
+    folder, shared by every job with those rules."""
+    return results_dir() / ".backgrounds" / f"{manifest().get('version')}-{str(sha)[:16]}.json"
+
+
+def own_background(d, w):
+    """The release's public background with the job's own tiers (its rules are not those the pool was scored with:
+    the Tier rules mixer), so its Overview still compares with public SNPs: the pool's tiers and active states for
+    the job's rules, the rest (gene regions, MAF, flags) as the release's background.json has them. Two passes over
+    the pool, a few seconds; once per release and rules."""
+    pool, bg, sha = release() / "pool" / "pool.parquet", read_json(release() / "pool" / "background.json"), rules_sha256(d)
+    out = own_background_file(sha)
+    if not w or not pool.exists() or not bg or bg.get("release") != manifest().get("version") or bg.get("weights_sha256") == sha \
+            or out.exists():
+        return
+    from snpscore.pool import shares
+    con = connect([pool.parent])
+    try:
+        columns = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet({lit(pool)}))").fetchall()]
+        base = [c for c in columns if not c.startswith(("tier__", "tier_score__"))]
+        con.execute(f"CREATE VIEW p AS SELECT {', '.join(map(ident, base))} FROM read_parquet({lit(pool)})")
+        tiers = con.execute(f"SELECT tier, count(*) FROM ({scored_sql('p', w, base, 'all', d)}) GROUP BY 1 ORDER BY 1").fetchall()
+        conditions = [c for c in base if c.startswith("chromatin_") and c not in ("chromatin_id", "chromatin_summary")]
+        states = ", ".join(lit(s) for s in w.get("active_states") or [])
+        active = con.execute("SELECT " + ", ".join(f"avg(coalesce({ident(c)} IN ({states}), false)::INT)" for c in conditions)
+                             + " FROM p").fetchone() if conditions and states else ()
+    finally:
+        con.close()
+    made = {**bg, "tiers": {"all": shares(tiers)}, "weights_sha256": sha, "tiered_for": "own rules (rules.py)"}
+    made["active_by_condition"] = {c[len("chromatin_"):]: round(v, 6) for c, v in zip(conditions, active)} if active else {}
+    out.parent.mkdir(mode=0o700, exist_ok=True)
+    _write_json(out, made)
+
+
+@lru_cache(maxsize=8)
+def _states(path, mtime):
+    con = connect([Path(path).parent])
+    try:
+        columns = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet({lit(path)}))").fetchall()]
+        conditions = [c for c in columns if c not in ("chrom", "start", "end", "id", "summary")]
+        found = {s for c in conditions for s, in con.execute(f"SELECT DISTINCT {ident(c)} FROM read_parquet({lit(path)})").fetchall()
+                 if isinstance(s, str) and s}
+    finally:
+        con.close()
+    return [s for s in snpscore.score.STATES if s in found] + sorted(found - set(snpscore.score.STATES))
+
+
+@lru_cache(maxsize=8)
+def _conditions(path, mtime):
+    con = connect([Path(path).parent])
+    try:
+        columns = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet({lit(path)}))").fetchall()]
+    finally:
+        con.close()
+    return [c for c in columns if c not in ("chrom", "start", "end", "id", "summary")]
+
+
+def release_tissues(where=None):
+    """[(label, [condition prefixes])] of the tissues the release's chromatin layer has, in the portal's order; the
+    DevMap stages are one, 'Embryo stages'. The Tier rules mixer's Focus offers them."""
+    path = Path(where or release()) / "chromatin.parquet"
+    if not path.exists() and where:
+        path = release() / "chromatin.parquet"
+    try:
+        conditions = _conditions(str(path), path.stat().st_mtime) if path.exists() else []
+    except duckdb.Error:
+        return []
+    found = {c.split("_")[0] for c in conditions if c not in STAGES}
+    out = [(figures.tissue_name(t), [t]) for t in [*TISSUES, *sorted(found)] if t in found]
+    stages = [s for s in STAGES if s in conditions]
+    return list(dict(out).items()) + ([("Embryo stages", stages)] if stages else [])
+
+
+def focus(where=None):
+    """The condition prefixes a job's own rules focus on (its presets.all, the tissues the mixer's Focus ticked), []
+    for every condition (the standard)."""
+    w = weights(where) if where else None
+    return list(((w or {}).get("presets") or {}).get("all") or [])
+
+
+def focus_text(prefixes):
+    """How a focus reads: 'gill, head kidney', 'embryo stages'."""
+    stages = [p for p in prefixes if p in STAGES]
+    names = [figures.tissue_name(p).lower() for p in prefixes if p not in STAGES]
+    return ", ".join(names + (["embryo stages" if len(stages) == len(STAGES) else ", ".join(stages)] if stages else []))
+
+
+def release_states(where=None):
+    """The chromatin state labels the release's chromatin layer uses, in snpscore's order ([] without the layer)."""
+    path = Path(where or release()) / "chromatin.parquet"
+    if not path.exists() and where:
+        path = release() / "chromatin.parquet"
+    try:
+        return _states(str(path), path.stat().st_mtime) if path.exists() else []
+    except duckdb.Error:
+        return []
+
+
+def pool_file(where=None):
+    """pool/pool.parquet of the current release when it fits the rules of `where` (pool_background), else None."""
+    path = release() / "pool" / "pool.parquet"
+    return path if path.exists() and pool_background(where) else None
+
+
+def pool_note(where=None):
+    """Why the public background is left out ('' when it fits or the release has none): its pool was scored with
+    other rules than `where`'s, or than the rules in use."""
+    bg = read_json(release() / "pool" / "background.json")
+    if not bg or pool_background(where):
+        return ""
+    whose = "these results" if where else "the rules in use"
+    fix = ("restart the portal (salmo-snp serve builds it again for the rules in use)" if local()
+           else "rebuild the pool with the rules in use (snpscore pool --release <release> --if-stale)")
+    return (f"The public background is left out: the release's public SNPs were scored with other tier rules than "
+            f"{whose} (rules sha256 {str(bg.get('weights_sha256'))[:12]}, not {str(rules_sha256(where))[:12]}). To compare "
+            f"them, {fix}; results already made keep their own rules.")
 
 
 def score_layers(where=None):
@@ -336,6 +498,13 @@ def score_layers(where=None):
     snapshot or the current release; the label is the layer's `label`, else its name."""
     return [(layer["name"], layer.get("label") or layer["name"]) for layer in manifest(where).get("layers", [])
             if layer.get("format") == "variant_scores"]
+
+
+def score_log2(where=None):
+    """The score layers whose signed effect is a log2 fold change (ChromBPNet's: their description says so), so the
+    pages can say it as a percent change."""
+    return {layer["name"] for layer in manifest(where).get("layers", [])
+            if layer.get("format") == "variant_scores" and "log2" in (layer.get("description") or "")}
 
 
 def score_words(where=None):
@@ -361,9 +530,10 @@ def release_info():
 
 
 def release_changed(job):
-    """True when the current release's manifest or snpscore's weights differ from the job's snapshot."""
-    return (job.get("manifest_sha256"), job.get("weights_sha256")) != (
-        _file("sha256", release() / "manifest.json"), _file("sha256", snpscore.score.WEIGHTS))
+    """True when the current release's manifest, or the rules in use, differ from those when the job was made (a job
+    with its own rules: the rules in use then, standard_sha256)."""
+    return (job.get("manifest_sha256"), job.get("standard_sha256") or job.get("weights_sha256")) != (
+        _file("sha256", release() / "manifest.json"), rules_sha256())
 
 
 def presets(where=None):
@@ -372,9 +542,12 @@ def presets(where=None):
     return [("all", trait_label("all"))] + [(t, trait_label(t)) for t in TISSUES] if weights(where) else []
 
 
-def trait_label(trait):
-    """The conditions tiers count, as people read them: 'all conditions', 'brain + gonad (mature females)'. A
-    weights.yaml preset name (older links, job.json) reads as its tissues."""
+def trait_label(trait, where=None):
+    """The conditions tiers count, as people read them: 'all conditions', 'brain + gonad (mature females)', or for a
+    job (`where`) whose own rules focus on some tissues, 'your focus: gill'. A weights.yaml preset name (older links,
+    job.json) reads as its tissues."""
+    if trait == "all" and where and focus(where):
+        return "your focus: " + focus_text(focus(where))
     sel = selection(trait if trait == "all" or selection(trait) else _as_key(trait))
     if sel and trait != "all":
         tissues, maturity, sex = sel
@@ -565,9 +738,20 @@ def local():
     return bool(setting("SNPPORTAL_LOCAL", False))
 
 
+KEEP_HOURS = 24 * 30  # results, Design panels and own tracks on a server (G, 2026-11-26: "for now, for a month")
+MIN_FREE_GB = 2  # PROVISIONAL: a server makes no new job with less disk free (SNPPORTAL_MIN_FREE_GB), as results stay a month
+
+
 def keep_seconds():
-    """How long results and Design panels are kept: SNPPORTAL_KEEP_HOURS (24), or None (until deleted) when local()."""
-    return None if local() else 3600 * float(setting("SNPPORTAL_KEEP_HOURS", 24))
+    """How long results and Design panels are kept: SNPPORTAL_KEEP_HOURS (KEEP_HOURS, 30 days), or None (until
+    deleted) when local()."""
+    return None if local() else 3600 * float(setting("SNPPORTAL_KEEP_HOURS", KEEP_HOURS))
+
+
+def keep_text():
+    """How long a server keeps results, in words for the pages: '30 days', '24 hours'."""
+    hours = float(setting("SNPPORTAL_KEEP_HOURS", KEEP_HOURS))
+    return f"{hours / 24:g} days" if hours >= 48 and hours % 24 == 0 else f"{hours:g} hours"
 
 
 def expires(key):
@@ -614,18 +798,30 @@ def position_choices():
 
 
 def create(src, suffix, input_kind="snps", preset="all", label="", input_format=None, synthetic=False, move=True,
-           positions=None):
+           positions=None, rules=None):
     """Make a job from the input file `src` (moved into the job folder, or copied if move=False) and queue it.
-    `positions` (a position_choices value): the input's positions are on another assembly. Returns the key. Raises QueueFull before
+    `positions` (a position_choices value): the input's positions are on another assembly. `rules`: the text of the
+    browser's own tier rules (rules.for_job), else the rules in use. Returns the key. Raises QueueFull before
     creating anything when MAX_QUEUED jobs are already waiting."""
     if executor() is not None and len(_queued) >= MAX_QUEUED:
         raise QueueFull()
+    if not local() and shutil.disk_usage(results_dir()).free < float(setting("SNPPORTAL_MIN_FREE_GB", MIN_FREE_GB)) * 1e9:
+        log.warning("job_refused reason=disk_space")  # results are kept a month, so a full disk would fail jobs halfway
+        raise InputError("The server is short of disk space for new results just now. Please try again later, or run "
+                         "the portal on your own computer (Run locally).")
+    from . import health
+    try:  # the rules in use, checked as at start: a mistake made in them while the portal runs is said before a job is made
+        health.rules()
+    except snpscore.RulesError as e:
+        raise InputError(f"Nothing can be scored until the portal's tier rules are corrected. {e}") from None
     key = uuid.uuid4()
     d = folder(key)
     d.mkdir(mode=0o700)
-    for kept in (release() / "manifest.json", snpscore.score.WEIGHTS):  # the job keeps the data and rules it was scored with
-        if kept.exists():
-            shutil.copyfile(kept, d / kept.name)
+    for kept, name in ((release() / "manifest.json", "manifest.json"), (rules_file(), "weights.yaml")):
+        if kept.exists():  # the job keeps the data and the rules it was scored with
+            shutil.copyfile(kept, d / name)
+    if rules:  # the browser's own rules (rules.py), checked
+        (d / "weights.yaml").write_text(rules)
     (os.replace if move else shutil.copyfile)(src, d / f"input{suffix}")
     lock_down(d)
     now = time.time()
@@ -638,6 +834,8 @@ def create(src, suffix, input_kind="snps", preset="all", label="", input_format=
         "release": snapshot.get("version"), "assembly": snapshot.get("assembly", "Ssal_v3.1"),
         "manifest_sha256": sha256(d / "manifest.json") if (d / "manifest.json").exists() else None,
         "weights_sha256": sha256(d / "weights.yaml") if (d / "weights.yaml").exists() else None,
+        "standard_sha256": rules_sha256(), "custom_rules": bool(rules),  # the rules in use now; the job's own or those
+        "focus": focus(d),  # the tissues its own rules focus on ([]: every condition)
         "snpscore_version": _version("snpscore"), "duckdb_version": duckdb.__version__,
         "created": now, "created_utc": utc(now), "started": None, "heartbeat": now, "timings": {},
         "error_code": None, "error": None, **({"positions": positions} if positions and positions in dict(position_choices()) else {}),
@@ -657,19 +855,76 @@ def submit(key):
         pool.submit(run, key)
 
 
-def run(key):
-    """Annotate a job's input, precompute tiers for every preset and write summary.json. Runs on the pool (or
-    inline), reading the release the job was created with (I17); never raises: failures end in state 'failed' with
-    an error_code and a message for the user."""
+def run(key, retier=False):
+    """Annotate a job's input, precompute tiers for every preset and write summary.json (with retier: only the
+    tiers, from the result it holds). Runs on the pool (or inline), reading the release the job was created with
+    (I17); never raises: failures end in state 'failed' with an error_code and a message for the user."""
     try:
         own = release_for(read_json(folder(key) / "job.json").get("release"))
     except ValueError:
         own = None
     token = _current.set(own or _current.get())
     try:
-        _run(key)
+        (_retier if retier else _run)(key)
     finally:
         _current.reset(token)
+
+
+def retier(key, text):
+    """Tier finished results again with other rules (the Tier rules mixer's Apply, rules.py): `text` becomes the
+    job's weights.yaml, and its tiers, Overview summary and own background are made again from the evidence its
+    result holds, in the job queue (its pages show the progress meanwhile). Files the old tiers made go (panels/,
+    loci/). QueueFull when the queue is full; InputError when the job is not finished."""
+    key = str(key)
+    d = folder(key)
+    if executor() is not None and len(_queued) >= MAX_QUEUED:
+        raise QueueFull()
+    with _lock:
+        job = read(key)
+        if not job or job.get("state") != "done":
+            raise InputError("These results are not finished yet.")
+        tmp = d / f".weights-{uuid.uuid4().hex}.yaml"
+        tmp.write_text(text)
+        tmp.chmod(0o600)
+        os.replace(tmp, d / "weights.yaml")
+        for cache in ("panels", "loci"):  # the Panel tab's designs, GWAS fine-mapping: made from the old tiers
+            shutil.rmtree(d / cache, ignore_errors=True)
+        now, own = time.time(), sha256(d / "weights.yaml")
+        update(key, state="queued", stage="tiers", heartbeat=now, weights_sha256=own, custom_rules=own != rules_sha256(),
+               standard_sha256=rules_sha256(), retiered_utc=utc(now), focus=focus(d))
+    log.info("job_retier job_ref=%s", job_ref(key))
+    pool = executor()
+    if pool is None:
+        run(key, retier=True)
+    else:
+        _queued.add(key)
+        pool.submit(run, key, True)
+
+
+def _retier(key):
+    key = str(key)
+    with _lock:
+        _queued.discard(key)
+        _running.add(key)
+    d, t0 = folder(key), time.time()
+    try:
+        if update(key, state="running", stage="tiers", heartbeat=t0) is None:
+            return
+        precompute(d)
+        update(key, state="done", stage="done", heartbeat=time.time())
+        log.info("job_retiered job_ref=%s seconds=%.1f", job_ref(key), time.time() - t0)
+    except Exception as e:  # noqa: BLE001 - as _run: a worker never dies, and only the exception's type is logged
+        update(key, state="failed", error_code="internal",
+               error="Something went wrong while tiering these results again. Please score the list again.")
+        log.error("job_retier_failed job_ref=%s exception=%s", job_ref(key), type(e).__name__)
+    finally:
+        with _lock:
+            _running.discard(key)
+            deleted = key in _deleted
+            _deleted.discard(key)
+        if deleted:
+            gc.collect()
+            shutil.rmtree(d, ignore_errors=True)
 
 
 def _run(key):
@@ -743,15 +998,16 @@ def _annotate(src, d, progress):
     params = inspect.signature(snpscore.annotate).parameters
     cap = int(setting("SNPPORTAL_MAX_SNPS", 3_000_000))
     job = read_json(d / "job.json")
+    rules = {"weights": d / "weights.yaml"} if (d / "weights.yaml").exists() else {}  # the job's own rules, not the file's now
     if job.get("input_kind") == "sv":  # structural variants: each scored by what it overlaps
         try:
-            snpscore.annotate_svs(src, release(), d / "result.parquet", progress=progress, max_svs=cap, **limits())
+            snpscore.annotate_svs(src, release(), d / "result.parquet", progress=progress, max_svs=cap, **limits(), **rules)
         finally:
             for name in ("validation.json", "rejects.tsv"):
                 if (d / f"result.{name}").exists():
                     os.replace(d / f"result.{name}", d / name)
         return
-    kwargs = {k: v for k, v in [("progress", progress), ("max_snps", cap), *limits().items()] if k in params}
+    kwargs = {k: v for k, v in [("progress", progress), ("max_snps", cap), *limits().items(), *rules.items()] if k in params}
     positions = job.get("positions")  # I18, I19: positions on another assembly
     if positions == "flank":
         kwargs["place_by_flank"] = True
@@ -774,7 +1030,7 @@ def precompute(d):
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
     n = con.execute("SELECT count(*) FROM r").fetchone()[0]
-    w = snpscore.load_weights(d / "weights.yaml")
+    w = snpscore.load_weights(d / "weights.yaml", check=False)  # the job's snapshot, checked when it was scored
     if w and w.get("presets"):
         # A chain of projections, one per preset, each renaming its tier columns to <column>__<preset>: one streaming
         # pass with no joins, so 1.6M SNPs fit the 2 GB DuckDB limit. scored() replaces any tier columns it is given.
@@ -787,9 +1043,15 @@ def precompute(d):
             con.execute(f"CREATE VIEW c{i} AS SELECT * EXCLUDE ({', '.join(picked)}), "
                         + ", ".join(f"{c} AS {ident(r)}" for c, r in zip(picked, renamed)) + f" FROM ({sql})")
             view, cols, stored = f"c{i}", [c for c in cols if c not in TIER_COLUMNS] + renamed, stored + renamed
-        con.execute(f"COPY (SELECT file_row_number, {', '.join(map(ident, stored))} FROM {view}) "
-                    f"TO '{d / 'tiers.parquet'}' (FORMAT parquet)")
+        tmp = d / f".tiers-{uuid.uuid4().hex}.parquet"  # whole or not at all: a page may read the old one meanwhile
+        con.execute(f"COPY (SELECT file_row_number, {', '.join(map(ident, stored))} FROM {view}) TO '{tmp}' (FORMAT parquet)")
+        os.replace(tmp, d / "tiers.parquet")
     _write_json(d / "summary.json", summarise(con, d, columns, w))
+    con.close()
+    try:  # the job's own rules (the mixer): the public background with its tiers; the job never fails for it
+        own_background(d, w)
+    except (duckdb.Error, OSError, KeyError, TypeError) as e:
+        log.warning("own_background_failed job_ref=%s exception=%s", job_ref(d.name), type(e).__name__)
     return n
 
 
@@ -908,7 +1170,7 @@ def refresh_summary(d):
     con = connect([d], d)
     con.execute(f"CREATE VIEW r AS SELECT * FROM read_parquet('{d / 'result.parquet'}', file_row_number=true)")
     columns = [c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()]
-    s = summarise(con, d, columns, snpscore.load_weights(d / "weights.yaml"))
+    s = summarise(con, d, columns, snpscore.load_weights(d / "weights.yaml", check=False))
     _write_json(d / "summary.json", s)
     return s
 
@@ -963,7 +1225,7 @@ def _version(package):
         return None
 
 
-def create_from_rows(rows, label, preset="all", kind="from_rows", input_format="rows", synthetic=False):
+def create_from_rows(rows, label, preset="all", kind="from_rows", input_format="rows", synthetic=False, rules=None):
     """Make a job from rows of (chrom, pos, id, ref, alt), e.g. a gene or interval candidate list. Returns the key."""
     fd, tmp = tempfile.mkstemp(dir=results_dir(), prefix=".rows-", suffix=".tsv")
     try:
@@ -971,7 +1233,7 @@ def create_from_rows(rows, label, preset="all", kind="from_rows", input_format="
             f.write("chrom\tpos\tid\tref\talt\n")
             for row in rows:
                 f.write("\t".join("" if v is None else str(v).replace("\t", " ") for v in row) + "\n")
-        return create(Path(tmp), ".tsv", kind, preset, label, input_format, synthetic)
+        return create(Path(tmp), ".tsv", kind, preset, label, input_format, synthetic, rules=rules)
     finally:
         Path(tmp).unlink(missing_ok=True)
 
@@ -1037,7 +1299,7 @@ def parse_sv_paste(text, limit):
     return rows
 
 
-def create_from_sv_rows(rows, label, preset="all", input_format="paste"):
+def create_from_sv_rows(rows, label, preset="all", input_format="paste", rules=None):
     """Make an SV job from rows of (chrom, start, end, svtype, id), 1-based and inclusive. Returns the key."""
     fd, tmp = tempfile.mkstemp(dir=results_dir(), prefix=".rows-", suffix=".tsv")
     try:
@@ -1045,7 +1307,7 @@ def create_from_sv_rows(rows, label, preset="all", input_format="paste"):
             f.write("chrom\tstart\tend\tsvtype\tid\n")
             for row in rows:
                 f.write("\t".join("" if v is None else str(v).replace("\t", " ") for v in row) + "\n")
-        return create(Path(tmp), ".tsv", "sv", preset, label, input_format)
+        return create(Path(tmp), ".tsv", "sv", preset, label, input_format, rules=rules)
     finally:
         Path(tmp).unlink(missing_ok=True)
 
@@ -1069,7 +1331,7 @@ def delete(key):
 
 
 def cleanup():
-    """Delete job folders whose job.json is older than SNPPORTAL_KEEP_HOURS (default 24), Design panel folders whose
+    """Delete job folders whose job.json is older than SNPPORTAL_KEEP_HOURS (default 30 days), Design panel folders whose
     'created' marker is, and stray upload files; nothing on a local install. Safe to run concurrently: anything already
     gone is skipped. Returns the number of entries removed."""
     if keep_seconds() is None:
@@ -1101,9 +1363,9 @@ def provenance(job, trait=None, filters=None):
     lines = [
         f"salmobase functional SNP portal, exported {utc()}",
         f"release {job.get('release')} ({job.get('assembly', 'Ssal_v3.1')}); manifest sha256 {job.get('manifest_sha256')}; "
-        f"weights sha256 {job.get('weights_sha256')}",
+        f"weights sha256 {job.get('weights_sha256')}" + (" (your own tier rules, set in the portal)" if job.get("custom_rules") else ""),
         f"snpscore {job.get('snpscore_version')}; duckdb {job.get('duckdb_version')}; job created {job.get('created_utc')}",
-        f"conditions {trait_label(trait)}; filters: {', '.join(f'{k}={v}' for k, v in (filters or {}).items()) or 'none'}",
+        f"conditions {('your focus: ' + focus_text(job['focus'])) if trait == 'all' and job.get('focus') else trait_label(trait)}; filters: {', '.join(f'{k}={v}' for k, v in (filters or {}).items()) or 'none'}",
         "tier rules PROVISIONAL (prototype weights, under review)",
     ]
     if job.get("synthetic_input") or job.get("synthetic_layers"):

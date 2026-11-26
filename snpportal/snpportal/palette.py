@@ -182,5 +182,6 @@ def _css(active):
         rules.append(f".sp-set-{name}{{background:{colour}}}")
     for name, colour in EFFECTS.items():
         rules.append(f".sp-effect-{name}{{background:{colour}}}")
+        rules.append(f".sp-effect-{name}-text{{color:{colour}}}")
     root = ":root{" + ";".join(f"--sp-{k}:{v}" for k, v in props.items()) + "}"
     return "\n".join([root] + rules)

@@ -103,6 +103,7 @@ STAGES = ["LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomit
 STAGE_LABELS = figures.STAGE_LABELS
 SAMPLES = ("brain, gonad, liver, muscle and gill of 12 AquaGen fish (BodyMap); head kidney of juvenile fish after PBS, "
            "poly I:C or Vibrio (ImmunoMap); 5 embryo stages from embryo pools (DevMap)")
+SV_ID_TIP = "SV id, else its span (Ssal_v3.1, 1-based, start to end): click for its card"
 NO_PEAK = f"No AQUA-FAANG peak in the 27 conditions sampled ({SAMPLES}). No skin or intestine."
 CARD_SQL = "SELECT * FROM v WHERE file_row_number = ?"  # the card reads one row, never the whole result
 
@@ -137,6 +138,8 @@ COLUMNS = {
     "gerp": ("GERP", "GERP constrained-element score (65 fish)", ("gerp_score",), [("gerp_score", True)]),
     "pike": ("Pike", "Sequence that aligns to northern pike, the closest relative without the salmonid genome duplication "
              "(AQUA-FAANG salmon-trout-pike alignment, gaps of up to 50 bp closed)", ("pike",), [("pike", False)]),
+    "cne": ("CNE", "In a conserved non-coding element of northern pike (Baudement et al. 2026), projected through the "
+            "salmon-trout-pike alignment, with the oldest clade that shares it", ("cne",), [("cne", False)]),
     "summit": ("ATAC summit", "The nearest ATAC-seq summit inside a robust peak, within 500 bp: how far, and how its signal ranks "
                "among that condition's peaks (top 5% = stronger than 95% of them); hover for the signal and the condition",
                ("summit_distance",), [("summit_distance", True), ("summit_rank", False)]),
@@ -217,7 +220,7 @@ def _open(request, key, write=False, chip=False):
     else:
         con.execute("CREATE VIEW v0 AS SELECT * FROM r")
     scores = variant_scores_sql([(n, label) for n, label in jobs.score_layers(d) if n + "_percentile" in columns],
-                                columns, jobs.score_words(d))
+                                columns, jobs.score_words(d), jobs.score_log2(d))
     extra = f", {scores} AS variant_scores" if scores else ""
     if (d / "gwas.parquet").exists():  # GWAS jobs: the association statistics for the Table's p and beta columns
         con.execute(f"CREATE VIEW v1 AS SELECT v0.*, s.neglog10p, s.beta, s.se{extra} FROM v0 "
@@ -597,6 +600,7 @@ def table(request, key, job=None):
     selection_conds, conds = conds, shown_conds  # the selection leaves the − rows out; the table shows what the selector asks
     where = _where(conds)
     order = [f"{sql.format(maf=maf)} {'ASC' if asc != desc else 'DESC'} NULLS LAST" for sql, asc in (COLUMNS[sort][3] if sort else [])]
+    order += tie_break(types, maf) if sort == "tier" else []  # one tier and score: DECISIONS #7
     # Count and page on the raw result r (no tiers join) unless the filters or the sort use a column only v has right
     only_v = (set(types) - {c for c, in con.execute("SELECT column_name FROM (DESCRIBE r)").fetchall()}) | set(jobs.TIER_COLUMNS)
     uses_v = any(re.search(rf"\b{re.escape(c)}\b", sql) for c in only_v for sql in [where] + order)
@@ -726,6 +730,8 @@ def table(request, key, job=None):
         label, tip, _, sorts = COLUMNS[k]
         if k == "maf" and maf_source == "yours":
             tip = "Minor allele frequency from your maf or af column"
+        if k == "id" and is_sv(types):
+            tip = SV_ID_TIP
         on = k == sort
         href = link(sort=k, desc="1" if on and not desc else "", page=None) if sorts else None
         headers.append((k, label, tip, href, ("descending" if desc else "ascending") if on else "", on_column.get(k),
@@ -741,6 +747,8 @@ def table(request, key, job=None):
                         "many": f"Narrow the selection to at most {int(jobs.setting('SNPPORTAL_MAX_PANEL_SNPS', 50_000)):,} SNPs to add it to the panel.",
                         "release": "Your Design panel holds SNPs scored with another release: clear it, or save it as a project "
                                    "version, before adding these.",
+                        "rules": "Your Design panel holds SNPs scored with other tier rules, so their tiers would not rank "
+                                 "together: clear it, or save it as a project version, before adding these.",
                         "sv": "Panels hold SNP markers: structural variants can't be added.",
                         }.get(get("panel_error", "")),
         "dds": dds, "pick": pick, "n_selected": n_every - n_out, "n_out": n_out, "sv": is_sv(types),  # SVs: no panels
@@ -810,11 +818,12 @@ def locus_note(g):
     return " · ".join(x for x in (where, alleles) if x)
 
 
-def variant_scores_sql(layers, columns=(), words=None):
+def variant_scores_sql(layers, columns=(), words=None, log2=()):
     """The view's variant_scores column for the release's score layers [(name, label)] (I15): a list of {label, score,
-    percentile, effect, up, down, reference}. score, percentile and effect are NULL where the SNP is outside a model's
-    scored set, effect also in a layer without one (it is the signed effect of this row's alt allele); up, down and
-    reference are the layer's words (jobs.score_words). None without score layers."""
+    percentile, effect, up, down, reference, log2}. score, percentile and effect are NULL where the SNP is outside a
+    model's scored set, effect also in a layer without one (it is the signed effect of this row's alt allele); up, down
+    and reference are the layer's words (jobs.score_words); log2: its effect is a log2 fold change (jobs.score_log2).
+    None without score layers."""
     if not layers:
         return None
     def item(n, label):
@@ -822,7 +831,7 @@ def variant_scores_sql(layers, columns=(), words=None):
         effect = f"CASE WHEN {ident(n)} THEN {ident(n + '_effect')} END" if n + "_effect" in columns else "NULL::DOUBLE"
         return (f"{{'label': {lit(label)}, 'score': CASE WHEN {ident(n)} THEN {ident(n + '_score')} END, "
                 f"'percentile': CASE WHEN {ident(n)} THEN {ident(n + '_percentile')} END, 'effect': {effect}, "
-                f"'up': {lit(up)}, 'down': {lit(down)}, 'reference': {lit(reference)}}}")
+                f"'up': {lit(up)}, 'down': {lit(down)}, 'reference': {lit(reference)}, 'log2': {'true' if n in log2 else 'false'}}}")
     return f"[{', '.join(item(n, label) for n, label in layers)}]"
 
 
@@ -831,8 +840,8 @@ def row_scores(snp):
     on the fly) built from the release's score layers' own columns."""
     if "variant_scores" in snp:
         return snp["variant_scores"] or []
-    words = jobs.score_words()
-    return [dict(zip(("up", "down", "reference"), words[n]), label=label, score=snp.get(n + "_score") if snp.get(n) else None,
+    words, log2 = jobs.score_words(), jobs.score_log2()
+    return [dict(zip(("up", "down", "reference"), words[n]), label=label, log2=n in log2, score=snp.get(n + "_score") if snp.get(n) else None,
                  percentile=snp.get(n + "_percentile") if snp.get(n) else None,
                  effect=snp.get(n + "_effect") if snp.get(n) else None)
             for n, label in jobs.score_layers() if n + "_percentile" in snp]
@@ -846,8 +855,10 @@ def score_number(x, sign=False):
 
 
 def score_text(s):
-    """(label, text, tooltip) of one variant score: '0.82 · top 5%', with an arrow first where the model gives the
-    direction of the alt allele's effect ('↑ 0.82 · top 5%'), or 'not scored'."""
+    """(label, text, tooltip) of one variant score, the size of the effect first (G, 2026-11-26: "make it obvious the
+    size difference in the atac peak, not just p-value significance of it"): '↓ 14% · top 1%' for a log2 fold change
+    (the predicted change of the signal), '↑ 0.82 · top 5%' for another signed score, '0.82 · top 5%' without a
+    direction, or 'not scored'."""
     if s["score"] is None:
         return s["label"], "not scored", "Outside the variants this model scored: no score, not a low one"
     top = max(1, round(100 * (1 - s["percentile"])))
@@ -856,7 +867,15 @@ def score_text(s):
     if not effect:  # no signed effect in this layer (or exactly none)
         return s["label"], f"{score_number(s['score'])} · top {top}%", tip
     way = s.get("up") or "higher" if effect > 0 else s.get("down") or "lower"
-    return (s["label"], f"{'↑' if effect > 0 else '↓'} {score_number(s['score'])} · top {top}%",
+    arrow = "↑" if effect > 0 else "↓"
+    if s.get("log2"):  # the predicted signal with the alt allele over the ref's: a percent change says its size
+        change = abs(100 * (2 ** effect - 1))
+        size = f"{change:.0f}%" if change >= 1 else f"{change:.1f}%"
+        return (s["label"], f"{arrow} {size} · top {top}%",
+                f"The alt allele is predicted {way}: {size} {'more' if effect > 0 else 'less'} signal (log2 fold change "
+                f"{score_number(effect, sign=True)}). A larger change than at {100 * s['percentile']:.1f}% of "
+                f"{s.get('reference') or 'the variants scored'}")
+    return (s["label"], f"{arrow} {score_number(s['score'])} · top {top}%",
             f"The alt allele is predicted {way} (effect {score_number(effect, sign=True)}). {tip}")
 
 
@@ -889,7 +908,7 @@ def _row(r, groups, in_preset, active_states, caveats):
            "region": region_text(g), "region_tip": coding_tip(g),
            "distance": _dist(distance) if distance else "",  # outside the gene only
            "gerp": "" if g("gerp_score") is None else f"{g('gerp_score'):.1f}", "regbuild": g("regbuild_type") or "",
-           "pike": "yes" if g("pike") else "", "summit": summit_text(g),
+           "pike": "yes" if g("pike") else "", "cne": (g("cne_age") or "yes") if g("cne") else "", "summit": summit_text(g),
            "maf": "" if g("_maf") is None else f"{g('_maf'):.2f}", "ref_check": g("ref_check") or "",
            "cm": "" if g("cm_female") is None else f"{g('cm_female'):.1f} / {g('cm_male'):.1f}" if g("cm_male") is not None else f"{g('cm_female'):.1f}",
            "p": p_text(g("neglog10p")), "beta": "" if g("beta") is None else f"{g('beta'):.3f}" + (f" ({g('se'):.3f})" if g("se") is not None else ""),
@@ -1017,9 +1036,19 @@ def _drawer(request, key, job, row, link, here, out, steps):
 
 # ---- the top SNPs (the report) ----
 
+def tie_break(types, maf):
+    """The order of SNPs that share a tier and a score (G, 2026-11-26, DECISIONS #7): a known locus first, then a
+    constrained one (a GERP element or a pike CNE), then an assay pass, then the higher MAF; list order after that."""
+    conserved = [f"coalesce({c}, false)" for c in ("gerp", "cne") if c in types]
+    return ((["known_locus IS NOT NULL DESC"] if "known_locus" in types else [])
+            + ([f"({' OR '.join(conserved)}) DESC"] if conserved else [])
+            + (["assay_status = 'pass' DESC NULLS LAST"] if "assay_status" in types else [])
+            + ([f"{maf} DESC NULLS LAST"] if maf else []))
+
+
 def top(request, key, job, n):
     """{rows, matching, ties, gwas} for the first `n` SNPs with the request's trait and table filters, ordered as the
-    Table: tier, then score (highest first), then list order; GWAS jobs by p. `ties` says how many SNPs share the
+    Table: tier, then score (highest first), then tie_break(); GWAS jobs by p. `ties` says how many SNPs share the
     tier and score at the cut, when the cut splits them."""
     con, types, where, chosen = open_result(request, key)
     gwas = job.get("input_kind") == "gwas" and "neglog10p" in types
@@ -1028,7 +1057,8 @@ def top(request, key, job, n):
                         "gene_ortholog_human", "known_locus", "known_locus_dist", "assay_status",
                         "assay_reasons", "neglog10p", "lore", "blacklist", "strand_ambiguous", "flank_variants") if c in types]
     order = "neglog10p DESC NULLS LAST, " if gwas else \
-        "tier ASC NULLS LAST, tier_score DESC NULLS LAST, " if {"tier", "tier_score"} <= set(types) else ""
+        ", ".join(["tier ASC NULLS LAST", "tier_score DESC NULLS LAST"] + tie_break(types, maf)) + ", " \
+        if {"tier", "tier_score"} <= set(types) else ""
     cur = con.execute(f"SELECT file_row_number, {', '.join(map(ident, cols))}{f', {maf} AS _maf' if maf else ''} "
                       f"FROM v {where} ORDER BY {order}file_row_number LIMIT {int(n)}")
     names = [d[0] for d in cur.description]
@@ -1055,12 +1085,13 @@ def top(request, key, job, n):
     ties = None
     if rows and not gwas and len(rows) < matching and rows[-1]["tier"] is not None:
         t, s = rows[-1]["tier"], rows[-1]["score"]
-        cut = f"tier = {int(t)} AND tier_score = {int(s)}" if s is not None else f"tier = {int(t)} AND tier_score IS NULL"
+        cut = f"tier = {int(t)} AND tier_score = {s}" if s is not None else f"tier = {int(t)} AND tier_score IS NULL"
         tied = con.execute(f"SELECT count(*) FROM v {where} {'AND' if where else 'WHERE'} {cut}").fetchone()[0]
         shown = sum(r["tier"] == t and r["score"] == s for r in rows)
         if tied > shown:
             at = "the top score" if (rows[0]["tier"], rows[0]["score"]) == (t, s) else f"tier {t}, score {s}"
-            ties = f"{shown} of {tied:,} SNPs tied at {at} are shown; ties in list order."
+            ties = (f"{shown} of {tied:,} SNPs tied at {at} are shown: known loci first, then constrained ones, "
+                    "then assay pass, then the higher MAF.")
     return {"rows": rows, "matching": matching, "ties": ties, "gwas": gwas, "chosen": chosen, "columns": set(types)}
 
 
@@ -1074,9 +1105,11 @@ def summary_of(d):
     return s
 
 
-def background():
-    """The release's public background (pool/background.json from `snpscore pool`), or {} when it has no pool."""
-    return jobs.read_json(jobs.release() / "pool" / "background.json")
+def background(d=None):
+    """The release's public background (pool/background.json from `snpscore pool`) when it was scored with the same
+    rules as the job in folder `d` (else the rules in use); {} when the release has no pool or it was made with other
+    rules (jobs.pool_background), so the Overview never compares tiers made by different rules."""
+    return jobs.pool_background(d)
 
 
 def _shares(values):
@@ -1245,7 +1278,7 @@ def _fig_maf(c, link, desc):
 
 
 FIGURES = {  # name -> (card title, (i) definition, builder(context, link or None, desc) -> (svg, header, rows) or None)
-    "summary": ("Summary", "How the SNPs scored for all 27 conditions (tier 1 = strongest functional evidence, tier 4 = no "
+    "summary": ("Summary", "How the SNPs scored, for the conditions under the heading (tier 1 = strongest functional evidence, tier 4 = no "
                 "evidence found, not evidence of no effect), where they fall relative to genes, how many are near a "
                 "published locus and how they did in the assay design check. Thin bars: the same split for the release's "
                 "public sites, for comparison. Click a number, a part of a bar or its legend entry to list those SNPs.",
@@ -1268,8 +1301,8 @@ OPEN = ("summary", "ideogram")  # side by side on the Overview (GWAS jobs: condi
 
 
 def _figure_context(key, job, trait, summary, d):
-    return {"key": key, "job": job, "trait": trait, "preset": jobs.trait_label(trait), "s": summary, "weights": jobs.weights(d),
-            "manifest": jobs.manifest(d), "background": {} if job.get("input_kind") == "sv" else background(),  # public SNPs: not SVs' peers
+    return {"key": key, "job": job, "trait": trait, "preset": jobs.trait_label(trait, d), "s": summary, "weights": jobs.weights(d),
+            "manifest": jobs.manifest(d), "background": {} if job.get("input_kind") == "sv" else background(d),  # public SNPs: not SVs' peers
             "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers")),
             "chip": jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}}
 
@@ -1353,7 +1386,8 @@ def overview(request, key, job):
         "warnings": warnings_of(validation) if validation else [],
         "qc_items": qc_items, "qc_warning": qc_warning, "qc_alias": validation.get("alias_warnings") or [],
         "qc_line": qc_line(validation), "qc_open": qc_problem(validation),
-        "rejects": (d / "rejects.tsv").exists() and bool(rejected), "trait": trait, "trait_label": jobs.trait_label(trait),
+        "rejects": (d / "rejects.tsv").exists() and bool(rejected), "trait": trait, "trait_label": jobs.trait_label(trait, d),
+        "background_note": "" if job.get("input_kind") == "sv" else jobs.pool_note(d),  # left out: made with other rules
     }
 
 

@@ -18,7 +18,8 @@ python prep/make_synthetic.py chip --scale fixture  # SYNTHETIC demo chip for th
 python -m pytest -q                              # tests run on the small regions in tests/fixture
 ```
 
-`bash prep/build_release.sh salmon <date>` (or `trout trout-<date>`) runs a whole release in one go: fetch,
+`bash prep/build_release.sh salmon <date>` (or `trout <date>`) runs a whole release in one go, named
+`<species>-<assembly>-<date>` (`snpdata name`; G, 2026-11-26), e.g. atlantic_salmon-Ssal_v3.1-2026-11-26: fetch,
 make_demo.sh, build, the public pool, `snpscore verify`, `snpscore diff` against the release before, and a summary
 to check; it publishes nothing. It saves what it can between releases (G, 2026-11-25): a layer whose settings and
 inputs did not change is copied from the release before (the newest of the species in `release/`, or `PREVIOUS=`),
@@ -61,7 +62,8 @@ snpdata build --layers rainbow_trout/layers.yaml --data data/rainbow_trout/raw -
 python prep/make_fixture_trout.py       # re-cut tests/fixture/rainbow_trout (chromosome 28 12.00-12.22 Mb, Y 5.95-6.05 Mb)
 ```
 
-Its version carries the species (`trout-<date>`), so two species' releases never share a version. What layers.yaml
+Its version carries the species and the assembly (`rainbow_trout-USDA_OmykA_1.1-<date>`; `trout-<date>` before
+2026-11-26), so two species' releases never share a version. What layers.yaml
 adds for a species other than salmon: `species` (key, name, latin, the chromosome `prefix` users may write, the Locus
 browser's `example`, the pages' `wording`, `samples` and `searches`: the manifest carries it and the portal reads it),
 `chromosome_names` (when the chromosomes are not all numbers), `rsid.older` (the older assembly of EVA's second file)
@@ -210,7 +212,10 @@ again from the same input has the same bytes and sha256.
 | `gene` | one row per `gene_id` (`build` checks) | `<layer>_<column>` for the SNP's nearest gene |
 | `features` | overlapping features for the viewers | nothing (never annotated) |
 
-Layers today: `chromatin` (interval with `chromatin_id`), `region`, `regbuild`, `gerp`, `pike` (interval: the sequence
+Layers today: `chromatin` (interval with `chromatin_id`), `region`, `regbuild`, `gerp`, `cne` (interval with `cne_id`
+and `cne_age`: the AQUA-FAANG paper's pike CNEs, Supplementary Data 4 on Zenodo, projected by `fetch` through the
+salmon-trout-pike MAF files referenced to the release's genome, snpdata/cne.py; where two meet one base the older
+clade keeps it; G, 2026-11-26), `pike` (interval: the sequence
 aligned to northern pike in the AQUA-FAANG salmon-trout-pike alignment, gaps of up to `max_gap` 50 bp closed; `fetch`
 converts the depth bigWig to these stretches), `blacklist`, `lore` (interval), `summit` (nearest, within 500 bp: signal,
 rank, condition; the summits of the conditions' MACS2 peaks that lie inside a robust peak, each with the values of the

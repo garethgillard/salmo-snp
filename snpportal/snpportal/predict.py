@@ -32,16 +32,25 @@ def models_dir():
 
 
 def buttons(snp, url):
-    """The card's buttons for one row: [{name, label, what, url, missing}] for a single-base SNP of an assembly with
-    models, else []. `url(name)` gives the address of a model's prediction; `missing` says how to get the packages
-    when this install lacks them (then there is no button)."""
+    """The card's one button for a single-base SNP of an assembly with models, which runs them all (G, 2026-11-26:
+    "give the result for gill and liver when the button is pressed"): [{name: 'all', label, what, url, missing}], else
+    []. `url(name)` gives the address of the predictions; `missing` says how to get the packages when this install
+    lacks them (then there is no button)."""
     ref, alt = str(snp.get("ref") or ""), str(snp.get("alt") or "")
-    if results.is_sv(snp) or len(ref) != 1 or len(alt) != 1:
+    found = lp.models(jobs.manifest().get("assembly", ""))
+    if results.is_sv(snp) or len(ref) != 1 or len(alt) != 1 or not found:
         return []
     absent = lp.missing_packages()
     missing = f"needs {' and '.join(absent)} in this install: {lp.INSTALL}" if absent else ""
-    return [{"name": m["name"], "label": m["label"], "what": m["what"], "url": url(m["name"]), "missing": missing}
-            for m in lp.models(jobs.manifest().get("assembly", ""))]
+    family, tissues = label_parts(found)
+    return [{"name": "all", "label": family, "what": tissues, "url": url("all"), "missing": missing}]
+
+
+def label_parts(found):
+    """('ChromBPNet', 'gill, liver'): the models' common name and what tells them apart."""
+    labels = [m["label"] for m in found]
+    family = labels[0].split()[0] if all(x.split()[0] == labels[0].split()[0] for x in labels) else ""
+    return family or "the sequence models", ", ".join(x[len(family):].strip().lower() or x for x in labels)
 
 
 def share(x):
@@ -49,44 +58,66 @@ def share(x):
     return ">99.9" if x >= 0.9995 else f"{100 * x:.1f}"
 
 
-def result(model, p, ref, alt):
-    """What the result fragment shows of one prediction `p` (lib.predict.predict) for the row's alleles ref>alt."""
+def result(model, p, ref, alt, scale):
+    """What the result shows of one prediction `p` (lib.predict.predict) for the row's alleles ref>alt, the effect
+    first (G, 2026-11-26: "make it obvious the size difference in the atac peak, not just p-value significance of
+    it"): the predicted signal with each allele as bars on `scale`, the change in percent and log2, then its rank."""
     up = p["effect"] > 0
     words = model.get("direction") or ["higher", "lower"]
     colour = palette.EFFECTS["up" if up else "down"]
+    change = 100 * (2 ** p["effect"] - 1)
     title = f"{model['label']}: predicted signal with each allele at {p['chrom']}:{p['pos']:,}"
     desc = (f"{model['label']} {p['version']} (fold {p['fold']} model): predicted Tn5 cuts per base with the ref allele {p['ref']} "
             f"and the alt allele {p['alt']}. A model's prediction, not a measurement.")
     return {"p": p, "up": up, "way": words[0 if up else 1] if p["effect"] else "the same", "arrow": "↑" if up else "↓" if p["effect"] else "",
-            "effect": results.score_number(p["effect"], sign=True), "ref_counts": f"{p['ref_counts']:.1f}", "alt_counts": f"{p['alt_counts']:.1f}",
+            "change": f"{abs(change):.0f}%" if abs(change) >= 1 else f"{abs(change):.1f}%",  # the arrow and the words say which way
+            "effect": results.score_number(p["effect"], sign=True), "window": f"{len(p['ref_profile']):,}",
             "top": max(1, round(100 * (1 - p["percentile"]))) if p["percentile"] >= 0.5 else None, "percentile": share(p["percentile"]),
-            "jsd": results.score_number(p["jsd"]), "jsd_percentile": share(p["jsd_percentile"]), "window": f"{len(p['ref_profile']):,}",
-            "quantile": results.score_number(p["active_allele_quantile"]), "reference": model.get("reference") or "the model's reference SNPs",
+            "peak": (f"a peak like the model's top {max(1, round(100 * (1 - p['active_allele_quantile'])))}%"
+                     if p["active_allele_quantile"] >= 0.05 else "little predicted signal here"),  # the more accessible allele's
             "other_strand": f"{ref}>{alt}" if p["other_strand"] else "",
+            "bars": mark_safe(figures.allele_bars(p["ref_counts"], p["alt_counts"], p["ref"], p["alt"], colour, scale,
+                                                  f"{model['label']}: {p['ref_counts']:,.0f} predicted cuts with {p['ref']}, "
+                                                  f"{p['alt_counts']:,.0f} with {p['alt']}")),
             "figure": mark_safe(figures.profiles(p["ref_profile"], p["alt_profile"], p["ref"], p["alt"], colour, title, desc))}
 
 
-def fragment(request, name, chrom, pos, ref, alt):
-    """The result of one model for one SNP, as the HTML that replaces the card's button."""
-    model = next((m for m in lp.models(jobs.manifest().get("assembly", "")) if m["name"] == name), None)
-    if model is None:
-        raise Http404("No such model for this assembly")
+def run(model, chrom, pos, ref, alt):
+    """One model's prediction for one SNP (lib.predict.predict), kept in this process's memory."""
     from . import locus  # imported here: locus imports this module for the card
-    ctx = {"model": model, "local": bool(jobs.setting("SNPPORTAL_LOCAL", False))}
-    key = (name, model.get("version"), str(chrom), int(pos), str(ref).upper(), str(alt).upper())
-    try:
-        p = _CACHE.get(key)
-        if p is None:
-            threads = 2 if (os.cpu_count() or 1) > 1 else 1
-            p = lp.predict(model, models_dir() / name / str(model.get("version", "")), locus.reference, chrom, int(pos), ref, alt, threads)
-            _CACHE[key] = p
-            while len(_CACHE) > CACHE_SIZE:
-                _CACHE.popitem(last=False)
-        _CACHE.move_to_end(key)
-        ctx.update(result(model, p, ref, alt))
-    except (lp.NotScored, lp.Unavailable) as e:
-        ctx["problem"] = str(e)
-    return render(request, "snpportal/_predict.html", ctx)
+    key = (model["name"], model.get("version"), str(chrom), int(pos), str(ref).upper(), str(alt).upper())
+    p = _CACHE.get(key)
+    if p is None:
+        threads = 2 if (os.cpu_count() or 1) > 1 else 1
+        p = lp.predict(model, models_dir() / model["name"] / str(model.get("version", "")), locus.reference, chrom, int(pos),
+                       ref, alt, threads)
+        _CACHE[key] = p
+        while len(_CACHE) > CACHE_SIZE:
+            _CACHE.popitem(last=False)
+    _CACHE.move_to_end(key)
+    return p
+
+
+def fragment(request, name, chrom, pos, ref, alt):
+    """The predictions of every model of the assembly (name 'all'), or of one, for one SNP: the HTML that replaces the
+    card's button. A row per model, the bars on one scale so that the tissues compare."""
+    found = [m for m in lp.models(jobs.manifest().get("assembly", "")) if name in ("all", m["name"])]
+    if not found:
+        raise Http404("No such model for this assembly")
+    done = []
+    for model in found:
+        try:
+            done.append((model, run(model, chrom, pos, ref, alt), None))
+        except (lp.NotScored, lp.Unavailable) as e:
+            done.append((model, None, str(e)))
+    scale = max([max(p["ref_counts"], p["alt_counts"]) for _, p, _ in done if p] or [0])
+    family, _ = label_parts(found)
+    rows = [{"model": m, "short": m["label"][len(family):].strip() or m["label"], "problem": problem,
+             **(result(m, p, ref, alt, scale) if p else {})} for m, p, problem in done]
+    return render(request, "snpportal/_predict.html", {
+        "rows": rows, "family": family, "local": bool(jobs.setting("SNPPORTAL_LOCAL", False)), "p": next((p for _, p, _ in done if p), None),
+        "sources": [m.get("source") or m["label"] for m in found], "methods": list(dict.fromkeys(m["method"] for m in found if m.get("method"))),
+        "licences": list(dict.fromkeys(m["licence"] for m in found if m.get("licence")))})
 
 
 @private

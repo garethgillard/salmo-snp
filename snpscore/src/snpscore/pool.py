@@ -15,10 +15,10 @@ import time
 import uuid
 from pathlib import Path
 
-from .annotate import annotate, connect
+from .annotate import annotate, connect, genome_location
 from .assay import breakdown
 from .formats import lit, q
-from .score import WEIGHTS, load_weights, scored
+from .score import load_weights, rules_file, scored
 
 FLAGS = ("chromatin", "regbuild", "gerp", "pike", "blacklist", "lore", "public_af", "strand_ambiguous")  # boolean columns
 MAF_EDGES = tuple(i / 20 for i in range(1, 10))  # MAF histogram: [0, 0.05), [0.05, 0.1), ..., [0.45, 0.5]
@@ -33,13 +33,14 @@ CHUNK = 1_500_000  # sites per annotate run (3.4M salmon sites at once need more
 
 
 def stamp():
-    """What a pool depends on besides the release: the weights' sha256, the snpscore version and the site rule."""
+    """What a pool depends on besides the release: the sha256 of the rules in use (score.rules_file), the snpscore
+    version and the site rule."""
     from importlib.metadata import PackageNotFoundError, version
     try:
         v = version("snpscore")
     except PackageNotFoundError:
         v = "unknown"
-    return {"weights_sha256": hashlib.sha256(WEIGHTS.read_bytes()).hexdigest(), "snpscore_version": v,
+    return {"weights_sha256": hashlib.sha256(rules_file().read_bytes()).hexdigest(), "snpscore_version": v,
             "sites_rule": f"{SITES}: public MAF >= design.min_maf, at most {MAX_SITES}"}  # a new rule: every pool stale
 
 
@@ -95,12 +96,23 @@ def maf_bin_sql(maf):
     return "(" + " + ".join(f"({maf} >= {e:g})::INTEGER" for e in MAF_EDGES) + ")"
 
 
-def build_pool(release_dir, background=None, assay=False, threads=4, memory_limit="4GB", progress=None, sites=SITES):
+def local_genome(release_dir):
+    """Whether the release's genome is on this computer (annotate.genome_location), so the sequence step can read all
+    of it: a remote genome gives a sample of reference checks and no coding consequences."""
+    location = genome_location(json.loads((Path(release_dir) / "manifest.json").read_text()))
+    return bool(location) and "://" not in location
+
+
+def build_pool(release_dir, background=None, assay=None, threads=4, memory_limit="4GB", progress=None, sites=SITES):
     """Annotate the public sites in `background` (a VCF; None: the release's own public_af sites, `sites`) against
-    the release, without sequence checks unless `assay`, and write pool/pool.parquet (annotate columns, tier columns
-    for the 'all' preset, then tier__<preset> and tier_score__<preset> for every preset) and pool/background.json.
-    Returns the pool folder."""
+    the release and write pool/pool.parquet (annotate columns, tier columns for the 'all' preset, then tier__<preset>
+    and tier_score__<preset> for every preset) and pool/background.json. Returns the pool folder. `assay`: the sequence
+    step (reference check, assay QC, coding consequences): True, False, or None for whenever the genome is on this
+    computer (local_genome), so that a pool has coding consequences and the synonymous weight applies to it as to
+    uploads (G, 2026-11-26)."""
     release = Path(release_dir).resolve()
+    if assay is None:
+        assay = local_genome(release)
     out = release / "pool"
     out.mkdir(exist_ok=True)
     t0, step = time.time(), progress or (lambda stage: None)

@@ -91,3 +91,39 @@ def test_check_names_the_problem(site, tmp_path):
     del m["layers"][0]["columns"]  # as a hand-edited manifest once lacked it
     (release / "manifest.json").write_text(json.dumps(m))
     assert check(release) == [f"layer {m['layers'][0]['name']}: manifest.json lacks columns"]
+
+
+def test_own_rules_outlive_an_update(tmp_path, monkeypatch, capsys):
+    """S7: `salmo-snp rules --copy` puts the tier rules in the data folder, which an update of the package leaves
+    alone; every salmo-snp command then uses them (SNPSCORE_WEIGHTS), and a mistake in them is named by its key."""
+    from snpscore import score
+    monkeypatch.setattr(serve, "HOME", tmp_path)
+    monkeypatch.setenv("SNPSCORE_WEIGHTS", "")  # recorded, so the value main() sets is undone after the test
+    serve.main(["rules"])
+    assert "shipped with snpscore" in capsys.readouterr().out
+    serve.main(["rules", "--copy"])
+    own = tmp_path / "weights.yaml"
+    assert own.read_text() == score.WEIGHTS.read_text()
+    monkeypatch.setenv("SNPSCORE_WEIGHTS", "")  # as a new start of salmo-snp
+    serve.main(["info"])
+    assert f"tier rules    {own} (your own;" in capsys.readouterr().out
+    assert score.rules_file() == own
+    own.write_text(own.read_text().replace("  utr: 1", "  utr: -1"))
+    with pytest.raises(SystemExit, match="'utr' is -1"):
+        serve.main(["rules"])
+    with pytest.raises(SystemExit, match="is there already"):
+        serve.main(["rules", "--copy"])
+
+
+def test_the_newest_salmon_release_without_this_versions(tmp_path, monkeypatch):
+    """Without the release this version names, `serve` takes the newest Atlantic salmon release by its build date:
+    names alone sort the species together (rainbow_trout-... after atlantic_salmon-..., trout-... after 2026-...)."""
+    for name, created, species in (("2026-11-25", "2026-11-25", None), ("trout-2026-11-25", "2026-11-25", "rainbow_trout"),
+                                   ("atlantic_salmon-Ssal_v3.1-2026-11-26", "2026-11-26", None),
+                                   ("rainbow_trout-USDA_OmykA_1.1-2026-11-27", "2026-11-27", "rainbow_trout")):
+        (tmp_path / "releases" / name).mkdir(parents=True)
+        (tmp_path / "releases" / name / "manifest.json").write_text(json.dumps(
+            {"version": name, "created": created, **({"species": {"key": species}} if species else {})}))
+    monkeypatch.setattr(serve, "HOME", tmp_path)
+    monkeypatch.setattr(serve, "RELEASE", "atlantic_salmon-Ssal_v3.1-2099-01-01")
+    assert serve.pick_release().name == "atlantic_salmon-Ssal_v3.1-2026-11-26"

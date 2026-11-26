@@ -1,8 +1,9 @@
 # The portal as a container for salmobase (AGENTS.md plan 4): a tagged salmo-snp version, served by gunicorn under
 # /snp/ (static files too), behind salmobase's Apache. Two volumes: salmobase's datafiles folder, read only (the
 # published releases, the genomes, the AQUA-FAANG tracks and the models' files are read where they are), and the
-# portal's own data folder (results, the secret key). docs/SALMOBASE.md has the Apache lines and the way without
-# Docker. Build it from the repository root, checked out at a tag or a commit of main:
+# portal's own data folder (results, the secret key). On the salmobase server it runs from
+# deploy/compose.salmobase.yml, on salmobase's Docker network (docs/SALMOBASE.md, which also has the block for
+# salmobase's Apache file). By hand, from the repository root, checked out at a tag or a commit of main:
 #   docker build -f snpportal/deploy/Dockerfile -t salmo-snp:<version> .
 # Run it (the data folder belongs to uid 1000, the container's user, which must also be able to read datafiles):
 #   docker run -d --name salmo-snp --restart unless-stopped -p 127.0.0.1:8090:8000 \
@@ -10,6 +11,11 @@
 #     -e DJANGO_ALLOWED_HOSTS=salmobase.org salmo-snp:<version>
 # One release in a folder of its own instead (as before 2026-11-25): -v <release>:/release -e SNPSCORE_RELEASE=/release
 # -v <genomes>:/genome:ro -e SNPSCORE_GENOME_DIR=/genome.
+# On a user's own computer instead of the Python package (G, 2026-11-26; deploy/server.sh local): the data downloaded
+# into a volume at the first start, the portal for this computer only:
+#   docker run -d --name salmo-snp -p 127.0.0.1:8000:8000 -v salmo-snp:/data salmo-snp:<version> salmo-snp-server local
+# Published as one file, salmo-snp-<version>.docker.tar.gz, beside the data releases in salmobase's datafiles
+# (deploy/image.sh builds it and loads it; deploy/publish_image.sh publishes it).
 # Behind a proxy that re-signs TLS, give pip its certificate: --secret id=ca,src=<bundle.crt>.
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \

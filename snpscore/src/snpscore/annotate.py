@@ -14,7 +14,7 @@ from . import assay, coding, motif
 from .bbi import local
 from .fasta import Fasta
 from .formats import ACCEPTED, InputError, TooMany, detect, lit, q, source
-from .score import load_weights, scored
+from .score import output_options, scored, scoring_rules
 
 FLANK = 35  # probe flank either side of the SNP (Axiom); also used for GC and repeat content
 REMOTE_SAMPLE = 200  # with a remote genome (HTTP ranges) only this many SNPs get the sequence checks
@@ -456,24 +456,24 @@ def add_sequence_checks(con, location, write_dir, weights=None, public_af=None):
 
 
 def annotate(snps_path, release_dir, out_path, trait="all", sequence=True, progress=None, max_snps=None,
-             threads=2, memory_limit="2GB", place_by_flank=False, lift_from=None):
+             threads=2, memory_limit="2GB", place_by_flank=False, lift_from=None, weights=None):
     """Write the annotated SNPs to out_path: Parquet if it ends in .parquet, CSV if .csv, otherwise TSV, and next to it
     <stem>.validation.json and <stem>.rejects.tsv. Adds the release's layers, the known-loci catalogue, the sequence
     checks and assay QC (if the release knows where the genome is and `sequence`) and the tier columns for the preset.
     `progress(stage)` is called with stage names. `place_by_flank` (I18): the input's positions are on another assembly,
     so its SNPs are placed by their flank sequences (read_snps). `lift_from` (I19: 'icsasg_v2', 'fsalsal1', a name in
     the manifest's liftover entries converting to this release): the positions are on that assembly, converted through
-    the release's liftover_<name>.parquet. Problems with the input raise
-    InputError with a safe message."""
+    the release's liftover_<name>.parquet. `weights`: the tier rules file (default: the rules in use,
+    score.rules_file()), checked first; the validation report and a Parquet output's metadata name it with its sha256.
+    Problems with the input raise InputError with a safe message."""
     path, release, out = Path(snps_path).resolve(), Path(release_dir).resolve(), Path(out_path).resolve()
     step = progress or (lambda stage: None)
     manifest = json.loads((release / "manifest.json").read_text())
-    weights = load_weights()
-    if weights and trait not in weights["presets"]:
-        raise InputError(f"Unknown trait preset '{trait}'. Choose from: {', '.join(weights['presets'])}")
+    weights, described = scoring_rules(weights, trait)
     con = connect([path.parent, release], out.parent, threads, memory_limit)
     try:
-        report = _annotate(con, path, release, out, manifest, weights, trait, sequence, step, max_snps, place_by_flank, lift_from)
+        report = _annotate(con, path, release, out, manifest, weights, trait, sequence, step, max_snps, place_by_flank, lift_from,
+                           described)
     except duckdb.Error as e:
         if os.environ.get("SNPSCORE_DEBUG"):
             raise
@@ -486,7 +486,7 @@ def annotate(snps_path, release_dir, out_path, trait="all", sequence=True, progr
 
 
 def _annotate(con, path, release, out, manifest, weights, trait, sequence, step, max_snps, place_by_flank=False,
-              lift_from=None):
+              lift_from=None, described=None):
     step("reading")
     known = manifest.get("chrom_sizes") or [r[0] for r in con.execute(" UNION ".join(
         f"SELECT DISTINCT chrom FROM read_parquet({lit(release / (l['name'] + '.parquet'))})"
@@ -576,7 +576,8 @@ def _annotate(con, path, release, out, manifest, weights, trait, sequence, step,
             con.execute(f"CREATE OR REPLACE TABLE snps AS {scored('snps', weights, columns, trait, synthetic)}")
 
         step("writing")
-        write_in_order(con, out)
+        write_in_order(con, out, options=output_options(out, described))
+    report["rules"] = described  # which rules made the tiers: their file, sha256 and the preset
     con.execute(f"COPY (SELECT * FROM rejects ORDER BY row) TO {lit(str(stem) + '.rejects.tsv')} (HEADER, DELIMITER '\t')")
     Path(str(stem) + ".validation.json").write_text(json.dumps(report, indent=2))
     return report

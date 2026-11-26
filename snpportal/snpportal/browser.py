@@ -286,9 +286,11 @@ def genes_group(request, s, ax, data, open_=()):
             fill = palette.TIERS.get(p.get("tier") or 4, palette.TIERS[4])[0]
             x, h = ax.x(p["pos"] - 0.5), 8 + 26 * (p.get("tier_score") or 0) / top
             dot = (f'<line x1="{x:.1f}" x2="{x:.1f}" y1="40" y2="{40 - h:.1f}" stroke="{G[500]}"/>'
-                   f'<circle cx="{x:.1f}" cy="{40 - h:.1f}" r="4" fill="{fill}" stroke="{G[900]}" stroke-width="0.6"><title>{escape(p["title"])}</title></circle>')
+                   f'<circle cx="{x:.1f}" cy="{40 - h:.1f}" r="4" fill="{fill}" stroke="{G[900]}" stroke-width="0.6"><title>{escape(p["title"])}</title></circle>'
+                   ) if p.get("end") is None else locus_svg.sv_bar(ax, p, 40, h, fill, 7)  # an SV: a bar over its span
             body.append(f'<a href="{escape(p["url"])}">{dot}</a>' if p.get("url") else dot)
-        rows.append(row("Your SNPs", trk(44, "".join(body)), f"tiers: {s['trait'].replace('_', ' ')}"))
+        sv = any(p.get("end") is not None for p in snps)
+        rows.append(row("Your SVs" if sv else "Your SNPs", trk(44, "".join(body)), f"tiers: {s['trait'].replace('_', ' ')}"))
     if data.get("known"):
         body = []
         h = locus_svg._published(body, ax, data["known"], 0, noop, {})
@@ -668,6 +670,15 @@ def assay_group(s, assay, open_):
 
 # ---- other annotation ----
 
+CNE_AGES = ("Euteleostomi", "Actinopteri", "Neopterygii", "Teleostei", "Clupeocephala", "Euteleosteomorpha",
+            "Protacanthopterygii")  # the clades of the pike CNEs' ages, oldest first (Baudement et al. 2026)
+
+
+def cne_opacity(age):
+    """A CNE's shade on the Locus browser: full for the oldest clade, lighter for younger ones."""
+    return 1 - 0.1 * CNE_AGES.index(age) if age in CNE_AGES else 0.4
+
+
 def other_group(s, ax, data):
     body = []
     for r in data.get("regbuild", []):
@@ -691,30 +702,43 @@ def other_group(s, ax, data):
                        f'fill="{G[700]}"><title>Aligns to northern pike: {p["end"] - p["start"]:,} bp</title></rect>' for p in data["pike"])
         rows.append(row("Aligns to pike", trk(13, pike or locus_svg._t(4, 10, "none in this window", 9.5, G[700])),
                         "salmon-trout-pike alignment"))
+    if "cne" in data:  # pike CNEs projected onto this genome (G, 2026-11-26): darker the older the clade that shares them
+        cne = "".join(f'<rect x="{ax.x(c["start"]):.1f}" y="2" width="{max(1, ax.x(c["end"]) - ax.x(c["start"])):.1f}" height="9" '
+                      f'fill="{G[700]}" fill-opacity="{cne_opacity(c.get("age")):.2f}"><title>Pike CNE {escape(str(c.get("id") or ""))}, '
+                      f'shared back to {escape(str(c.get("age") or "?"))}: {c["end"] - c["start"]:,} bp</title></rect>' for c in data["cne"])
+        rows.append(row("Pike CNEs", trk(13, cne or locus_svg._t(4, 10, "none in this window", 9.5, G[700])),
+                        "Baudement et al. 2026"))
     return group("other", "Other annotation", "", rows)
+
+
+EFFECT_FULL = 0.5  # |log2 fold change| at which an effect tick is full height (41% more or less signal), PROVISIONAL
 
 
 def scores_group(s, ax, data):
     """Predicted allele effects: one row per score layer of the release (layers.yaml format variant_scores, such as
-    a ChromBPNet model), one tick per scored variant in the window, its height the score's rank. Where the layer has
-    the signed effect of the alt allele, the tick points up in red when the model's prediction rises with it
-    (ChromBPNet: more accessible) and down in blue when it falls, as the scorer's own browser track colours them;
-    without one it is a grey tick up. None in a release without score layers."""
+    a ChromBPNet model), one tick per scored variant in the window. Where the layer has the signed effect of the alt
+    allele, the tick points up in red when the model's prediction rises with it (ChromBPNet: more accessible) and down
+    in blue when it falls, as the scorer's own browser track colours them, and its height is the effect's size (G,
+    2026-11-26: "make it obvious the size difference in the atac peak, not just p-value significance of it"):
+    square-root scaled, full from EFFECT_FULL. Without a signed effect it is a grey tick up, its height the score's
+    rank. None in a release without score layers."""
     rows, legend, mid, reach = [], [], 17, 15
     for label, layer in (data.get("scores") or {}).items():
         signed = any(e is not None for *_, e in layer["sites"])
         ticks = [f'<line x1="{-W}" x2="{2 * W}" y1="{mid}" y2="{mid}" stroke="{G[300]}" stroke-width="0.6"/>'] if signed else []
         base = mid if signed else 2 * mid - 1
         for pos, ref, alt, score, p, effect in layer["sites"]:
-            h = max(2, reach * p * (1 if signed else 2))
+            h = max(2, reach * min(1, (abs(effect or 0) / EFFECT_FULL) ** 0.5)) if signed else max(2, reach * p * 2)
             down = signed and (effect or 0) < 0
             colour = G[700] if not effect else palette.EFFECTS["down" if down else "up"]
             x, w = ax.x(pos - 1), max(2.2, ax.x(pos) - ax.x(pos - 1))
+            change = abs(100 * (2 ** effect - 1)) if effect and layer.get("log2") else None
             tip = f"{label} {results.score_number(score)} ({ref}>{alt})" + (
-                f": the alt allele is predicted {layer['down'] if down else layer['up']} "
-                f"(effect {results.score_number(effect, sign=True)})" if effect else "")
+                f": the alt allele is predicted {layer['down'] if down else layer['up']}"
+                + (f", {change:.0f}% {'less' if down else 'more'} signal" if change is not None else "")
+                + f" (effect {results.score_number(effect, sign=True)})" if effect else "")
             ticks.append(f'<rect x="{x:.1f}" y="{base if down else base - h:.1f}" width="{w:.1f}" height="{h:.1f}" fill="{colour}">'
-                         f'<title>{escape(tip)}; higher than {100 * p:.1f}% of {escape(layer["reference"])}</title></rect>')
+                         f'<title>{escape(tip)}; larger than at {100 * p:.1f}% of {escape(layer["reference"])}</title></rect>')
         if not layer["sites"]:
             ticks.append(locus_svg._t(4, mid - 4, "no scored variants in this window", 9.5, G[700]))
         n = len(layer["sites"])
@@ -723,8 +747,8 @@ def scores_group(s, ax, data):
             legend = [("sp-effect-up", f"up: alt allele {layer['up']}"), ("sp-effect-down", f"down: alt allele {layer['down']}")]
     if not rows:
         return None
-    return group("scores", "Predicted allele effects", "model predictions for the variants each model scored &middot; height = rank",
-                 rows, legend=legend)
+    return group("scores", "Predicted allele effects", "model predictions for the variants each model scored &middot; "
+                 + ("height = the size of the predicted change" if legend else "height = rank"), rows, legend=legend)
 
 
 # ---- the page ----
@@ -751,7 +775,7 @@ def context(request, s, layout):
     prefix = f"snpportal:{(info.get('sha256') or 'release')[:12]}"
     deadline = float(jobs.setting("SNPPORTAL_SIGNAL_DEADLINE", 4.0))
     notes = []
-    groups = [tracks_group(request, v, ax), genes_group(request, v, ax, data, open_), public_group(v, ax, data, open_), motifs_group(v, ax, data),
+    groups = [tracks_group(request, v, ax), genes_group(request, v, ax, data, open_), public_group(v, ax, data, open_),
               scores_group(v, ax, data),
               peaks_group(v, ax, data, cfg, prefix, deadline, open_, notes),
               hmm_group(v, ax, data, cfg, prefix, deadline, open_, notes)]
@@ -761,7 +785,8 @@ def context(request, s, layout):
         synthetic = synthetic or bool(job.get("synthetic_input") or job.get("synthetic_layers"))
     a, b = s["start"] + 1, s["end"]
     ctx.update(
-        chromosome=chromosome(s), ruler=ruler(ax, v), groups=[g for g in groups if g], other=other_group(v, ax, data), notes=notes,
+        chromosome=chromosome(s), ruler=ruler(ax, v), groups=[g for g in groups if g], notes=notes,
+        motifs=motifs_group(v, ax, data), other=other_group(v, ax, data),  # TF motifs second to last (G, 2026-11-26)
         synthetic=synthetic, moves=moves(s, open_), query=query(s, open_), limits=(sl.MIN_WINDOW, sl.MAX_WINDOW), assays=[(k, v[0]) for k, v in ASSAYS.items()],
         assays_open="assays" in open_, tissue_legend=tissue_legend(), size_text=locus_svg.fmt_bp(s.get("size") or 0),
         width_text=locus_svg.fmt_bp(s["end"] - s["start"]), truncated=data.get("truncated"),

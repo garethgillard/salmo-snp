@@ -225,15 +225,35 @@ def compare(con, weights, trait, synthetic, molqtl=False):
     return rows
 
 
+def v01_check(results):
+    """The test the tiers must pass for v0.1 (G, 2026-11-26, DECISIONS 4b): the eQTL lead SNPs (the set molqtl:e)
+    are enriched in tiers 1-2 with the lower 95% bound above 1. (passed, line), or None without that set."""
+    trait_rows = results.get("molqtl:e")
+    row = next((r for r in (trait_rows or (None, []))[1] if r[0] == "tier <= 2"), None)
+    if row is None:
+        return None
+    ratio, low, high = row[5], row[12], row[13]
+    passed = low is not None and low > 1
+    shown = "none" if ratio is None else f"{ratio:.2f} (95% {low:.2f}-{high:.2f})"
+    return passed, (f"v0.1 check (DECISIONS 4b): tiers 1-2 at {row[1]:,} eQTL lead SNPs, enrichment {shown}: "
+                    + ("pass" if passed else "FAIL (the lower bound must be above 1)"))
+
+
 def write(out_path, results, manifest, background, controls, seed, layer):
-    """One TSV for all sets, with '#' lines saying how it was made."""
+    """One TSV for all sets, with '#' lines saying how it was made (the rules among them)."""
+    from .score import describe_rules
+    rules = describe_rules()
     sets = "; ".join(f"{name} n = {rows[0][1] if rows else 0}" for name, (_, rows) in results.items())
     head = [f"snpscore benchmark; release {manifest.get('version')}; {datetime.date.today().isoformat()}",
             f"positive sets: {sets}",
             f"controls: {controls} per positive from {background.name}, matched on distance to the nearest gene (in gene, "
             "<=5kb, <=20kb, <=100kb, <=1Mb, >1Mb) and public MAF bin (0.05; no public MAF: distance only); seed "
             f"{seed}; tiers and evidence recomputed for each set's trait (PROVISIONAL weights)",
+            f"rules: {rules['file']}, sha256 {rules['sha256']}" + (" (shipped with snpscore)" if rules["shipped"] else ""),
             "95% intervals: Wilson (shares), Katz log (enrichment; 0.5 added to each count when one is 0); approximate"]
+    check = v01_check(results)
+    if check:
+        head.append(check[1])
     if any(name.startswith("molqtl") for name in results):
         head.append(f"molqtl: nf-RASQUAL lead SNPs in 12 fish with BF < {layer.get('max_bf')} (PROVISIONAL; winner's curse); "
                     "caQTLs are called on the same AQUA-FAANG ATAC data as the chromatin layer, so chromatin enrichment "

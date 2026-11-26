@@ -192,7 +192,10 @@ until G sets them (2026-11-24): `pike`, sequence that aligns to northern pike, a
 the output whatever the rule). `tier_evidence` names the coding consequence
 ('missense p.Thr46Met', 'synonymous p.Thr46=', 'splice donor'), or 'CDS' / 'splice region' when it was not computed.
 Tiers are score cut-offs. A preset is a list of condition
-prefixes (e.g. `maturation: [Brain, Gonad]`). Weights are whole numbers, so `tier_score` is always an integer. Layers
+prefixes (e.g. `maturation: [Brain, Gonad]`). The shipped weights are whole numbers, so `tier_score` is an integer; a user's own rules may use one decimal place
+(G, 2026-11-26), summed in tenths so the cut-offs compare exactly, and `tier_score` is then a number with one decimal.
+Conservation counts its highest evidence, not a sum (G, 2026-11-26): `constrained` is a GERP element or a pike CNE
+(the `cne` layer), once if both, and `pike` counts only where neither is. Layers
 marked `synthetic: true` never count. All of this is provisional:
 see "Biology decisions" in ../AGENTS.md and `provisional` in the manifest.
 
@@ -251,8 +254,10 @@ salmon the 3,436,671 such sites of the 504-fish panel's 7.6M, on all 29 chromoso
 even sample, the same sites every time (rainbow trout: 3.37M of its 13.5M). `--sites aquafaang12` takes the 1.6M
 sites of the 12 AQUA-FAANG fish's VCF instead, the pool until 2026-11-21 (only 70 on chromosome 10, none past 105 Mb
 on chromosome 1). Annotation runs in parts of whole chromosomes of at most `CHUNK` (1.5M) sites, so 4 GB is enough:
-release 2026-11-20 takes about 80 s with 4 threads (85 MB). Sequence and assay checks run only with `--assay`, which
-needs `--memory 8GB`. It writes, under `R/pool/`:
+release 2026-11-20 takes about 80 s with 4 threads (85 MB). The sequence step (reference check, assay QC and coding
+consequences) runs whenever the release's genome is on this computer (G, 2026-11-26: the pool needs coding
+consequences so that the synonymous weight applies to it as to uploads); `--no-sequence` leaves it out, `--assay`
+runs it even with a remote genome. It writes, under `R/pool/`:
 - `pool.parquet`: the annotate columns (tiers for the `all` preset), then `tier__<preset>` and `tier_score__<preset>`
   for every preset in weights.yaml (wide, one row per site, in genome order).
 - `background.json`: `n_sites`, `rows_read`, `rejected`, `release`, `created`, `source`, `assay_checked`, `seconds`,
@@ -313,6 +318,9 @@ Katz log for the enrichment; approximate, as controls are stratified). Columns: 
 controls, share_pos, share_ctrl, enrichment, hits_pos, hits_ctrl, share_pos_low/high, share_ctrl_low/high,
 enrichment_low/high, after '#' provenance lines. caQTLs share the AQUA-FAANG ATAC data with the chromatin layer, so
 their chromatin enrichment is partly circular; eQTLs are the fairer test; leads come from 12 fish (winner's curse).
+With the eQTL set (`molqtl:e`) the output ends, and the TSV's head says, `v0.1 check (DECISIONS 4b): tiers 1-2 at ...
+eQTL lead SNPs, enrichment X (95% low-high): pass` when the lower bound is above 1 (G, 2026-11-26), else `FAIL`;
+snpdata/prep/build_release.sh stops on a fail.
 
 Positive sets:
 - `../snpdata/catalog/known_loci.tsv` (the release catalogue): 40 rows (39 published SNPs and the sdY gene region) across 8 traits, from

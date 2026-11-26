@@ -341,6 +341,15 @@ def read_variant_scores(path, layer):
 
 SALMON = {"key": "atlantic_salmon", "name": "Atlantic salmon", "latin": "Salmo salar", "prefix": "ssa"}  # layers.yaml `species`
 
+
+def release_name(layers_path, date=None):
+    """A release's name (G, 2026-11-26: the species, Atlantic or rainbow, and the genome assembly in it, the same for
+    salmon and trout): '<species key>-<assembly>-<date>', e.g. atlantic_salmon-Ssal_v3.1-2026-11-26 and
+    rainbow_trout-USDA_OmykA_1.1-2026-11-26; without a date, the part before it."""
+    cfg = load_yaml(layers_path)
+    prefix = f"{(cfg.get('species') or SALMON)['key']}-{cfg['assembly']}"
+    return f"{prefix}-{date}" if date else prefix
+
 READERS = {"bed": read_bed, "tsv": read_tsv, "aquafaang_peaks": read_aquafaang_peaks, "gff3": read_gff3,
            "gff3_regions": read_gff3_regions, "vcf": read_vcf, "rna_counts": read_rna_counts,
            "gff3_transcripts": read_gff3_transcripts, "gff3_ncbi_transcripts": read_gff3_ncbi_transcripts, "vcf_info": read_vcf_info, "gene_tsv": read_gene_tsv,
@@ -428,7 +437,8 @@ def fetch(layers_yaml, data_dir, mirror=None):
     """Download every `url` in layers.yaml (layers, genome, aliases, rsid, synteny, bgee) that isn't in data_dir yet. A
     bigBed url with a .bed `file` is converted to BED, a bigWig url with a .bed `file` to the stretches it covers
     (covered()); a `query` is sent as ?query=... (Ensembl BioMart); a source with
-    `sites_only` is streamed through sites_only(). With `mirror` (a URL or folder made by `snpdata publish --raw`), every
+    `sites_only` is streamed through sites_only(); one with `cnes` (the paper's pike CNEs at `url`) is projected onto
+    the genome through the alignments that block names (cne.project()). With `mirror` (a URL or folder made by `snpdata publish --raw`), every
     file comes from <mirror>/raw/ instead, as published (already processed), checked against its SHA256SUMS. A source
     with `local` instead of `url` (an input that isn't online) is read from that path under data_dir, processed the same
     way; when it isn't there, fetch says so and goes on. So it does for a per-variant score file (format
@@ -475,6 +485,14 @@ def fetch(layers_yaml, data_dir, mirror=None):
             if layer.get("sites_only"):  # its header names the source: the local name, else the url (also when read from disk)
                 sites_only(url, part, layer["sites_only"], layer.get("count_gt", False), layer.get("snps_only", False),
                            layer.get("local") or layer["url"])
+            elif layer.get("cnes"):  # pike CNEs projected through the salmon-trout-pike alignment (cne.py)
+                from . import cne
+                with tempfile.NamedTemporaryFile(suffix=".txt") as source:
+                    download(url, Path(source.name))
+                    spec = layer["cnes"]
+                    made = cne.project(source.name, [on_disk(m) for m in cne.maf_locations(spec)], part,
+                                       spec.get("reference", "Ssal_A"))
+                print(f"snpdata: {target.name}: {made['runs']:,} runs, {made['bases']:,} bp, {made['ids']:,} CNEs", flush=True)
             elif url.endswith(".bb") and target.suffix == ".bed":
                 with tempfile.NamedTemporaryFile(suffix=".bb") as bb:
                     download(url, Path(bb.name))

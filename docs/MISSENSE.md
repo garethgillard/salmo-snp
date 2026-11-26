@@ -51,8 +51,10 @@ either is trusted.
    (`snpdata/prep/`, like the assembly alignment script), run from a clone on Orion; the alternative is a folder in
    salmo-chrombpnet. A separate repository is more than it needs.
 4. **Rainbow trout too?** The same script with the trout proteins. Proposed: yes, in the same run.
-5. **How will it count?** A decision for later, with the data in hand (DECISIONS #59). Until then it is shown and
-   counts nothing, like every variant score (weights.yaml `variant_scores: {}`).
+5. **How will it count?** G, 2026-11-26 (DECISIONS #59): the plan as written, and when the score counts, damaging
+   missense 3, other missense 2, synonymous 1 (synonymous is 1 already). Until G has seen whether predicted damage
+   goes with rarity in the 504 fish it is shown and counts nothing, like every variant score (weights.yaml
+   `variant_scores: {}`).
 
 ## What to run
 
