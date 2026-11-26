@@ -108,7 +108,8 @@ class ExploreTest(SimpleTestCase):
         counts = explore.catalogue_counts()  # the one count helper: Known loci header and intro agree
         self.assertContains(landing, 'aria-label="Your data"')
         self.assertNotContains(landing, "published entries")  # known loci: top nav and Score's example
-        self.assertContains(landing, f'class="sp-card sp-hero" href="{reverse("snpportal:tour")}"')  # the tour, with a screenshot
+        self.assertContains(landing, f'New here? <a href="{reverse("snpportal:tour")}">Take the guided tour</a>')  # a quiet link
+        self.assertNotContains(landing, "<img")  # no screenshot of the interface on the home page
         score = self.client.get(reverse("snpportal:upload"), {"input": "regions"})  # genes or regions: a tab on Score
         self.assertContains(score, f'action="{reverse("snpportal:candidates")}"')
         self.assertContains(score, 'class="tab-pane active" id="pane-regions"')

@@ -34,7 +34,7 @@ TABS = ("overview", "table", "panel", "export")  # panel: the automatic designer
 CURRENT = "snpportal_current"  # cookie: the results this browser last opened
 MINE = "snpportal_results"  # cookie: the results this browser opened, newest first: the Score page lists them
 MAX_MINE = 30
-EXAMPLES = {  # the release's demo/ files (name without extension) -> (title, what it is; {n}: its rows)
+EXAMPLES = {  # the release's demo/ files (name without extension) -> (title, what it is; {n}: its rows); the title names the job
     "known_loci": ("Known loci", "{n:,} from published studies"),
     "chip_demo_SYNTHETIC": ("SNP chip", "synthetic, {n:,} SNPs"),
     "gwas_maturation_SYNTHETIC": ("GWAS", "synthetic, maturation"),  # posted to association.score with trait=maturation
@@ -42,10 +42,18 @@ EXAMPLES = {  # the release's demo/ files (name without extension) -> (title, wh
     "known_svs": ("Known SVs", "{n:,} published structural variants"),  # SV examples: scored as SVs (sv=True below)
     "svs_demo_SYNTHETIC": ("SVs", "synthetic, {n:,} structural variants"),
 }
+CHIPS = {  # the Score page's 'Try' buttons: what you get (name, detail; {n}: its rows); a synthetic file's detail says so
+    "known_loci": ("Known loci", "{n:,} SNPs"),
+    "chip_demo_SYNTHETIC": ("SNP chip", "{n:,} SNPs, synthetic"),
+    "gwas_maturation_SYNTHETIC": ("Maturation GWAS", "{n:,} SNPs, synthetic"),
+    "public_50k": ("Public SNPs", "{n:,} SNPs"),
+    "known_svs": ("Known SVs", "{n:,} SVs"),
+    "svs_demo_SYNTHETIC": ("SV calls", "{n:,} SVs, synthetic"),
+}
 TRY = ("known_loci", "chip_demo_SYNTHETIC", "gwas_maturation_SYNTHETIC", "known_svs", "svs_demo_SYNTHETIC")  # the Score page's examples
 SV_EXAMPLES = ("known_svs", "svs_demo_SYNTHETIC")
-INPUTS = {"file": "Upload SNPs", "paste": "Paste positions", "regions": "Genes or regions", "sv": "Structural variants",
-          "gwas": "GWAS"}  # Score tabs
+INPUTS = {"file": "SNPs", "regions": "Genes or regions", "sv": "Structural variants", "gwas": "GWAS results"}  # Score tabs
+# (SNPs: a file or pasted lines, so ?input=paste and a pasted list's errors show that tab)
 
 
 class PrivateReports(SafeExceptionReporterFilter):
@@ -114,8 +122,8 @@ def accepted_suffix(name, suffixes=SUFFIXES):
 
 
 def examples():
-    """{name: {title, what, label (the job's), path, suffix, synthetic}} for the release's example inputs (demo/ and
-    catalog/known_loci.tsv)."""
+    """{name: {title, what, label (the job's), chip and detail (the Score page's), path, suffix, synthetic}} for the
+    release's example inputs (demo/ and catalog/known_loci.tsv)."""
     release = jobs.release()
     files = sorted((release / "demo").iterdir()) if (release / "demo").is_dir() else []
     found = {}
@@ -124,10 +132,13 @@ def examples():
         name = suffix and p.name[:-len(suffix)]
         if name and name not in found and p.is_file():
             title, what = EXAMPLES.get(name, (name.replace("_", " "), ""))
-            if "{n" in what:
-                what = what.format(n=_rows(p, p.stat().st_mtime_ns))
             synthetic = "SYNTHETIC" in p.name
+            chip, detail = CHIPS.get(name, (title, "synthetic" if synthetic else ""))
+            if "{n" in what + detail:
+                n = _rows(p, p.stat().st_mtime_ns)
+                what, detail = what.format(n=n), detail.format(n=n)
             found[name] = {"title": title, "what": what, "label": f"{title} (synthetic)" if synthetic else title,
+                           "chip": chip, "detail": detail,
                            "path": p, "suffix": suffix, "synthetic": synthetic, "sv": name in SV_EXAMPLES}
     return found
 
@@ -140,9 +151,9 @@ def _rows(path, mtime_ns):
 
 
 def score_page(request, error=None, status=200, tab=None, targets=""):
-    """The Score page, also the home page: one card with the tabs Upload SNPs | Paste positions | Genes or regions |
-    GWAS (?input=, or `tab` after an error, so each form's errors come back on its own tab) and the examples (TRY) under
-    them; beside it this browser's results and the tour."""
+    """The Score page, also the home page: the tabs SNPs (a file or pasted lines) | Genes or regions | Structural
+    variants | GWAS results (?input=, or `tab` after an error, so each form's errors come back on its own tab), the
+    examples (TRY) and the tour link under them; beside them this browser's results."""
     from .explore import FLANK, FLANKS  # the gene/region flank choices (explore.candidate_job reads them)
     tab = tab if tab in INPUTS else request.GET.get("input") if request.GET.get("input") in INPUTS else "file"
     found, listed = examples(), mine(request)

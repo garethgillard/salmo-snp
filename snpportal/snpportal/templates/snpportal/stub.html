@@ -1,8 +1,8 @@
 {% extends 'snpportal/base_portal.html' %}
-{# Placeholder page for features that arrive in later steps. #}
+{# A page that can only say why it can't help (an export that isn't possible, projects on a server): the reason, and the way back. #}
 {% block main %}
-<div class="sp-card sp-narrow">
+<div class="sp-prose">
   <p>{{ message }}</p>
-  <p class="mb-0"><a href="{% url 'snpportal:upload' %}">Score SNPs</a></p>
+  <p><a href="{% url 'snpportal:upload' %}">Back to Score</a></p>
 </div>
 {% endblock main %}
