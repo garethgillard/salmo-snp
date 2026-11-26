@@ -6,8 +6,8 @@
 <div class="sp-report sp-stack">
   <p class="sp-noprint sp-small sp-muted mb-0"><button type="button" class="btn btn-sm btn-primary" onclick="window.print()">Print or save as PDF</button>
     Choose &lsquo;Save as PDF&rsquo; in the print dialog for a PDF.</p>
-  <div class="sp-status sp-status-not_checked" role="note">Prototype scoring: tiers rank annotated evidence, not proven effects;
-    rules and design thresholds are provisional.{% if r.synthetic %} Made from SYNTHETIC test data.{% endif %}</div>
+  <p class="sp-caveat" role="note">Prototype scoring: tiers rank annotated evidence, not proven effects;
+    rules and design thresholds are provisional.{% if r.synthetic %} Made from SYNTHETIC test data.{% endif %}</p>
 
   <section class="sp-card" aria-labelledby="what-h">
     <h2 id="what-h">{{ r.title }}</h2>

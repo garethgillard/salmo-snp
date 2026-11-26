@@ -6,10 +6,10 @@
 <div class="sp-report sp-stack">
   <p class="sp-noprint sp-small sp-muted mb-0"><button type="button" class="btn btn-sm btn-primary" onclick="window.print()">Print or save as PDF</button>
     Two A4 pages; choose &lsquo;Save as PDF&rsquo; in the print dialog for a PDF.</p>
-  <div class="sp-status sp-status-not_checked" role="note">Prototype scoring:
-    tiers rank annotated evidence, not proven effects; rules are provisional.</div>
+  <p class="sp-caveat" role="note">Prototype scoring:
+    tiers rank annotated evidence, not proven effects; rules are provisional.</p>
 
-  {% if warnings %}<div class="sp-status sp-status-warn" role="note">&#9888; Upload warnings: {{ warnings|join:"; " }}</div>{% endif %}
+  {% if warnings %}<div class="sp-status sp-status-warn" role="note">{% icon 'warn' %} Upload warnings: {{ warnings|join:"; " }}</div>{% endif %}
   {% if summary %}<figure class="sp-card sp-figure" id="fig-{{ summary.name }}"><h2>{{ summary.title }}</h2>{{ summary.svg }}</figure>{% endif %}
 
   <section class="sp-card" aria-labelledby="top-h">
@@ -36,7 +36,7 @@
 
   {% if panel %}<section class="sp-card" aria-labelledby="panel-h">
     <div class="sp-card-head"><h2 id="panel-h">Panel: {{ panel.name }}</h2><a class="ms-auto sp-small sp-noprint" href="{{ panel.url }}">Panel tab</a></div>
-    {% if panel.short %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ panel.short }}</div>{% endif %}
+    {% if panel.short %}<div class="sp-status sp-status-warn" role="status">{% icon 'warn' %} {{ panel.short }}</div>{% endif %}
     <p class="sp-small mb-0">{{ panel.line }}</p>
     {% if panel.params %}<p class="sp-small sp-muted mb-0">Designed with: {{ panel.params }}.</p>{% endif %}
   </section>{% endif %}
