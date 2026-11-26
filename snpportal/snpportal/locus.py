@@ -383,10 +383,11 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
     spec = f"{chrom}-{pos}" + (f"-{ref}-{alt}" if ref and alt else "")
     ev = {"trait": trait, "title": snp.get("id") or f"{chrom}:{pos:,}", "position": f"{chrom}:{pos}",
           "alleles": f"{ref}>{alt}" if ref and alt else "", "spec": spec, "synthetic": synthetic, "tier": snp.get("tier"),
-          "score": snp.get("tier_score"), "samples": results.SAMPLES, "sv": bool(end)}
+          "score": snp.get("tier_score"), "samples": results.SAMPLES, "sv": bool(end),
+          "place": f"{chrom}:{pos:,}"}  # the card's heading: where it is, with thousands separators
     if end:
         ev.update(title=snp.get("id") or f"{chrom}:{pos:,}-{end:,}", position=f"{chrom}:{pos}-{end}", spec=f"{chrom}:{pos}-{end}",
-                  alleles=results.sv_size(snp.get)[0])
+                  alleles=results.sv_size(snp.get)[0], place=f"{chrom}:{pos:,}–{end:,}")
     ev["terms"] = results.tier_parts(snp.get) or None  # 'Missense p.Thr46Met (...)', 3; the blocks' hover text
     states = {c[len("chromatin_"):]: snp[c] for c in snp if c.startswith("chromatin_") and c not in NOT_CONDITIONS}
     data = None  # the mini browser's lanes, when there is a chromatin layer
@@ -445,6 +446,7 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
     ev["duplicates"] = duplicates(snp)
     ev["marker"] = marker_chips(snp, ev)
     ev["facts"] = facts(snp, ev, states, chosen, set((weights or {}).get("active_states", [])))
+    ev["shown_only"] = any(f[3] in SHOWN_ONLY for f in ev["facts"])
     ev["caveats"] = caveats(snp, ev)
     ev["details"] = details(snp)
     ev["yours"] = [(c[3:], v) for c, v in snp.items() if c.startswith("in_")]  # the user's own columns, original names
@@ -459,6 +461,7 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
 SCORE_LABELS = {"active_elsewhere": "active elsewhere", "synonymous": "synonymous", "splice": "splice region",
                 "constrained": "conserved", "pike": "aligns to pike", "summit": "ATAC summit"}
 CHROMATIN_TERMS = ("active", "active_elsewhere", "weak")  # their blocks say what the chromatin chip would
+GENE_TERMS = ("coding", "synonymous", "splice", "utr")  # one colour for where the SNP is in a gene: tier blues mean tiers only
 
 
 def score_parts(snp, states=None, chosen=(), weights=None):
@@ -484,7 +487,8 @@ def score_parts(snp, states=None, chosen=(), weights=None):
         state = locus_svg.strongest(found) if found else None  # its strongest state, coloured as in the tiles
         tip = (f"{k.replace('_', ' ')}" + (f" ({state.replace('_', ' ')})" if state else "") + f": {conditions_text(r.partition(': ')[2])}"
                if k in CHROMATIN_TERMS and r else text)
-        colour = palette.state(state)[0] if state else locus_svg._colour(locus_svg.TERMS.get(k, (palette.GREY[500], k))[0])
+        colour = (palette.state(state)[0] if state else palette.REGIONS["coding"] if k in GENE_TERMS  # gene structure: the
+                  else locus_svg._colour(locus_svg.TERMS.get(k, (palette.GREY[500], k))[0]))  # Overview's coding colour, not a tier's
         out.append((label, t["weight"], colour, f"{tip} +{w}"))
     return sorted(out, key=lambda p: -p[1])
 
@@ -498,7 +502,8 @@ def conditions_text(items):
     return ", ".join([figures.tissue_name(x) for x in names if x not in results.STAGES] + embryo)
 
 
-FACT_ORDER = ("gene", "region", "gwas", "chromatin", "summit", "pike", "known", "molqtl", "scores")
+FACT_ORDER = ("gene", "region", "gwas", "known", "chromatin", "summit", "pike", "molqtl", "scores")
+SHOWN_ONLY = ("summit", "pike", "molqtl", "scores")  # card.html lists these apart: shown, never counted in a tier
 
 
 def chip(text, cls="", tip="", key="", url=None):
@@ -507,7 +512,8 @@ def chip(text, cls="", tip="", key="", url=None):
 
 
 def ordered(chips):
-    """The key facts by group: the SNP (gene, region), then its evidence (GWAS, chromatin, known locus, molQTL).
+    """The key facts by group: the SNP (gene, region), then its evidence (GWAS, known locus, chromatin), then what is shown
+    and not counted (summit, pike, molQTL, variant scores).
     How it would work as a marker sits in the As a marker header (marker_chips)."""
     return sorted(chips, key=lambda c: FACT_ORDER.index(c[3]) if c[3] in FACT_ORDER else len(FACT_ORDER))
 
@@ -535,8 +541,8 @@ def facts(snp, ev, states, chosen, active_states):
                         else "no ATAC peak", "" if peak else "muted", tip, "chromatin"))
     summit = results.summit_text(g)
     if summit and "summit" not in fired:  # the nearest ATAC summit: how far, and how strong among its condition's peaks
-        out.append(chip("ATAC summit " + summit[0] if g("summit_distance") else "at an ATAC summit" + summit[0][len("at the summit"):],
-                        "", summit[1], "summit"))
+        text = "ATAC summit " + summit[0] if g("summit_distance") else "at an ATAC summit" + summit[0][len("at the summit"):]
+        out.append(chip(text.replace(" · ", ", "), "", summit[1], "summit"))  # the facts line separates facts with dots
     if g("pike") and "pike" not in fired:
         out.append(chip("aligns to pike", "", "Sequence that aligns to northern pike, the closest relative without the salmonid genome "
                         "duplication (AQUA-FAANG salmon-trout-pike alignment): display only, not counted in tiers", "pike"))
@@ -550,7 +556,7 @@ def facts(snp, ev, states, chosen, active_states):
         out.append(chip("molQTL lead", "", f"{(g('molqtl_tissues') or '').replace(',', ', ')}: display only, not counted in tiers", "molqtl"))
     for s in results.row_scores(snp):  # I15: per-variant scores (DeepFARM, ...), 'not scored' outside a model's set
         label, text, tip = results.score_text(s)
-        out.append(chip(f"{label} {text}", "" if s["score"] is not None else "muted", tip, "scores"))
+        out.append(chip(f"{label} {text}".replace(" · ", ", "), "" if s["score"] is not None else "muted", tip, "scores"))
     return ordered(out)
 
 
@@ -560,7 +566,7 @@ def marker_chips(snp, ev):
     out = []
     if ev.get("assay"):
         a = ev["assay"]
-        out.append((f"{a['icon']} assay {a['status']}", a["cls"], "Assay design check of the probe flanks" + (f": {a['all']}" if a["all"] else "")))
+        out.append((f"assay {a['status']}", a["cls"], "Assay design check of the probe flanks" + (f": {a['all']}" if a["all"] else "")))
         if a["gc"]:
             out.append((a["gc"][0], a["gc"][1] or "plain", a["gc"][2]))
     m = ev.get("maf")

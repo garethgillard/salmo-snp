@@ -202,7 +202,7 @@ class PortalTest(SimpleTestCase):
         root = ET.fromstring(text)
         self.assertEqual(root.get("role"), "img")
         tsv = self.client.get(reverse("snpportal:figure", args=[key, "summary"]) + "?format=tsv&plain=1").content.decode()
-        self.assertEqual(sum(int(line.split("\t")[2]) for line in tsv.splitlines()[1:] if line.startswith("Tier for ")), n)
+        self.assertEqual(sum(int(line.split("\t")[2]) for line in tsv.splitlines()[1:] if line.startswith("Tier\t")), n)
 
     def test_switching_preset_never_rescores_and_card_reads_one_row(self):
         url = self.upload().url
@@ -253,7 +253,7 @@ class PortalTest(SimpleTestCase):
         self.assertTrue((Path(self.release) / "demo" / "known_loci.tsv").exists())  # copied, not moved
         folder = self.results / self.key(response)
         if (folder / "validation.json").exists():  # snpscore writes a validation report and the rejected rows
-            self.assertContains(self.client.get(response.url), "Upload QC")
+            self.assertContains(self.client.get(response.url), "Upload check")
         if (folder / "rejects.tsv").exists():
             rejects = self.client.get(reverse("snpportal:download", args=[self.key(response)]) + "?format=rejects")
             self.assertIn(b"reason", b"".join(rejects.streaming_content))

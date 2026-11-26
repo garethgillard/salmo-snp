@@ -70,7 +70,7 @@ MAFS = ("0.01", "0.05", "0.1", "0.2")
 MAF_TIP = "Minor allele frequency in 504 public fish, pooled; your strain can differ"
 UNNAMED = "Unnamed in Ensembl; named by its human ortholog"
 TERMS = {"active": "active in a condition", "active_elsewhere": "active elsewhere only",
-         "weak": "weak state in the chosen conditions", "coding": "CDS (protein change or unknown)", "synonymous": "CDS (synonymous)",
+         "weak": "weak state, active in no condition", "coding": "CDS (protein change or unknown)", "synonymous": "CDS (synonymous)",
          "splice": "splice region", "utr": "UTR",
          "constrained": "GERP constrained", "regbuild": "Ensembl regulatory", "molqtl": "molQTL lead (display only)",
          "motif": "TF motif change in a peak", "pike": "aligns to pike", "summit": "near a strong ATAC summit"}
@@ -103,18 +103,18 @@ STAGES = ["LateBlastulation", "MidGastrulation", "EarlySomitogenesis", "MidSomit
 STAGE_LABELS = figures.STAGE_LABELS
 SAMPLES = ("brain, gonad, liver, muscle and gill of 12 AquaGen fish (BodyMap); head kidney of juvenile fish after PBS, "
            "poly I:C or Vibrio (ImmunoMap); 5 embryo stages from embryo pools (DevMap)")
-NO_PEAK = f"No AQUA-FAANG peak in the 27 conditions sampled ({SAMPLES}). No skin or intestine."
+NO_PEAK = "No AQUA-FAANG peak in the 27 conditions sampled. No skin or intestine."  # the samples: the card's Details
 CARD_SQL = "SELECT * FROM v WHERE file_row_number = ?"  # the card reads one row, never the whole result
 
 # Table columns, in display order: key -> (header, tooltip, columns (shown when any exists; () = always), sort [(SQL,
 # ascending)]; ?desc=1 reverses every term). ?col= and the column chooser accept only these keys; {maf} in a sort is
 # the MAF expression. p, beta and PIP exist for GWAS jobs only.
 COLUMNS = {
-    "tier": ("Tier", "1 = strongest functional evidence for the chosen conditions; 4 = no evidence found (not evidence of no effect)",
+    "tier": ("Tier", "1 = strongest functional evidence, in any of the 27 conditions; 4 = no evidence found (not evidence of no effect)",
              ("tier",), [("tier", True), ("tier_score", False)]),
     "score": ("Score", "Tier score: the summed weights of the SNP's evidence (its card lists them)", ("tier_score",),
               [("tier_score", False)]),
-    "id": ("SNP locus", "SNP id, its position (Ssal_v3.1, 1-based) when the id doesn't say it, and alleles (ref > alt): "
+    "id": ("SNP", "SNP id, its position (Ssal_v3.1, 1-based) when the id doesn't say it, and alleles (ref > alt): "
            "click for its card", (), [("length(chrom)", True), ("chrom", True), ("pos", True)]),
     "size": ("Size", "Bases of the genome the SV spans, start to end (an insertion: the junction's two bases; its "
              "inserted length, when your file gives it, on hover)", ("length",), [("length", False)]),
@@ -125,13 +125,14 @@ COLUMNS = {
     "gene": ("Gene", "Nearest Ensembl 116 gene (and how far, when the SNP is outside it); ~NAME: unnamed in Ensembl, named "
              "by its human ortholog", ("gene_name", "gene_id"),
              [("coalesce(gene_name, gene_ortholog_human, gene_id)", True)]),
-    "region": ("Consequence", "Where the SNP falls in the nearest gene and, in coding sequence, its effect on the protein "
+    "region": ("Gene region", "Where the SNP falls in the nearest gene and, in coding sequence, its effect on the protein "
                "(Ensembl 116 gene models)", ("region_class",), [("region_class", True)]),
-    "chromatin": ("Chromatin", "AQUA-FAANG chromatin state in 27 conditions: Brain, Gill, Gonad, Liver, Muscle (immature "
-                  "F, M; mature F, M; gill has no mature F), head kidney (PBS, poly I:C, Vibrio), then 5 embryo stages",
+    "chromatin": ("Chromatin", "AQUA-FAANG chromatin state in 27 conditions, one cell each: Brain, Gonad, Liver, Muscle "
+                  "(immature F, M; mature F, M), Gill (no mature F), head kidney (PBS, poly I:C, Vibrio), then 5 embryo stages; "
+                  "a grey tick: no peak",
                   ("chromatin",), []),
     "known": ("Known locus", "A published locus of the known-loci catalogue within the window: this SNP, or one nearby (how "
-              "far); * a caveat (hover)", ("known_locus",), [("known_locus_dist", True)]),
+              "far); 'caveat': hover for it", ("known_locus",), [("known_locus_dist", True)]),
     "molqtl": ("molQTL", "Lead SNP of an eQTL (e) or caQTL (ca) in 12 fish; display only, never counted in tiers",
                ("molqtl",), [("molqtl_best_bf", True)]),
     "gerp": ("GERP", "GERP constrained-element score (65 fish)", ("gerp_score",), [("gerp_score", True)]),
@@ -148,7 +149,7 @@ COLUMNS = {
     "cm": ("cM (F/M)", "Genetic map position, female / male cM (Brekke et al. 2023 linkage map, interpolated)",
            ("cm_female",), [("cm_female", True)]),
     "assay": ("Assay", "Assay design check of the probe flanks; hover for the reasons", ("assay_status",), [("assay_status", True)]),
-    "flags": ("Flags", "Blacklisted region, LORe, A/T or C/G, public variants within 35 bp",
+    "flags": ("Flags", "Blacklisted region, LORe, A/T or C/G, public variants in the 35-bp probe flanks",
               ("blacklist", "lore", "strand_ambiguous", "flank_variants"), []),
     "ref_check": ("Ref. check", "Input ref allele against the Ssal_v3.1 genome", ("ref_check",), [("ref_check", True)]),
 }  # in display order: the score, the SNP, where it is, what it is, then genotyping
@@ -308,7 +309,7 @@ def filters(request, types, weights, d=None):
         out.append(({"tier": ",".join(tiers)}, f"Tier {tier_text(tiers)}", f"tier IN ({', '.join(tiers)})"))
     regions = [x for x in consequences(picks(request, "region"), types)]
     if regions:  # any of them
-        out.append(({"region": ",".join(regions)}, "Consequence: " + ", ".join(CONSEQUENCE_FILTERS[x][0] for x in regions),
+        out.append(({"region": ",".join(regions)}, "Gene region: " + ", ".join(CONSEQUENCE_FILTERS[x][0] for x in regions),
                     " OR ".join(f"({consequence_sql(x, types)})" for x in regions)))
     chrom, start, end = get("chrom", ""), get("start", ""), get("end", "")
     if re.fullmatch(r"[\w.]{1,40}", chrom):
@@ -588,7 +589,7 @@ def table(request, key, job=None):
     total = con.execute("SELECT count(*) FROM r").fetchone()[0]
     every, mark = [c for c in conds if c[1] != UNSELECTED], next((c for c in conds if c[1] == UNSELECTED), None)
     view_picks = get("picked") if get("picked") in ("all", "out") and mark else "in"  # the + rows unless asked
-    shown_conds = every + ([mark] if view_picks == "in" and mark else [({}, "Unselected only", mark[2].replace("NOT IN", "IN"))]
+    shown_conds = every + ([mark] if view_picks == "in" and mark else [({}, "Left-out SNPs only", mark[2].replace("NOT IN", "IN"))]
                            if view_picks == "out" else [])
     snp = int(get("snp")) if get("snp", "").isdecimal() else None
     if snp is not None and view_picks != "all" and mark:  # the open card's SNP stays in the table until the card closes
@@ -667,7 +668,8 @@ def table(request, key, job=None):
     if "tier" in types:
         counts = dict(tier_counts)
         dd("list", "tier", "Tier", f"{tier_text(ticked['tier'])}" if ticked["tier"] else "any", bool(ticked["tier"]),
-           "1 = strongest functional evidence for these conditions; 4 = no evidence found", name="tier", any="Any tier", column="tier",
+           "1 = strongest functional evidence, in any of the 27 conditions; 4 = no evidence found", name="tier", any="Any tier",
+           column="tier",
            options=[(str(x), f"Tier {x}", str(x) in ticked["tier"], f"{counts.get(x, 0):,}") for x in (1, 2, 3, 4)])
     if weights and "tier_terms" in types:
         low = int(chosen["min_score"]) if "min_score" in chosen else 0
@@ -676,9 +678,9 @@ def table(request, key, job=None):
            low=low, top=top)
     if "region_class" in types:
         offered = consequences(CONSEQUENCE_FILTERS, types)
-        dd("list", "region", "Consequence", ", ".join(CONSEQUENCE_FILTERS[x][0] for x in ticked["region"]) or "any",
+        dd("list", "region", "Gene region", ", ".join(CONSEQUENCE_FILTERS[x][0] for x in ticked["region"]) or "any",
            bool(ticked["region"]), "Where the SNP falls in the nearest gene, and its effect on the protein; any of the ticked ones",
-           name="region", any="Any consequence", column="region",
+           name="region", any="Any gene region", column="region",
            options=[(x, CONSEQUENCE_FILTERS[x][0], x in ticked["region"], "") for x in offered])
     chroms = sorted((summary.get("chrom_tiers", {}).get(chosen["trait"]) or {}), key=_chrom_key) or \
         sorted((c for c, in con.execute("SELECT DISTINCT chrom FROM r").fetchall()), key=_chrom_key)
@@ -713,9 +715,9 @@ def table(request, key, job=None):
     n_on = sum(c for _, _, c in checks)
     if checks:
         dd("more", "more", "Flags", f"{n_on} hidden" if n_on else "", bool(n_on), "Leave out flagged SNPs", extras=checks, column="flags")
-    pick = {"kind": "pick", "id": "dd-pick", "label": "Selected", "on": view_picks != "in", "summary": "",
-            "views": [("", f"+ selected ({n_every - n_out:,})", view_picks == "in"), ("out", f"− unselected ({n_out:,})", view_picks == "out"),
-                      ("all", f"all rows ({n_every:,})", view_picks == "all")] if n_out else [],
+    pick = {"kind": "pick", "id": "dd-pick", "label": "Keep", "on": view_picks != "in", "summary": "",
+            "views": [("", f"Kept ({n_every - n_out:,})", view_picks == "in"), ("out", f"Left out ({n_out:,})", view_picks == "out"),
+                      ("all", f"All rows ({n_every:,})", view_picks == "all")] if n_out else [],
             "reset": link(include_all=1, picked=None, page=None) if n_out else None}
     for x in dds:  # a filter sits on its column; a hidden column's filter is off (a filtered column always shows)
         x["header"] = x.get("column") in shown
@@ -726,6 +728,10 @@ def table(request, key, job=None):
         label, tip, _, sorts = COLUMNS[k]
         if k == "maf" and maf_source == "yours":
             tip = "Minor allele frequency from your maf or af column"
+        if k == "chromatin" and conditions:  # the cells' order, as this release has them
+            tip = (f"AQUA-FAANG chromatin state in {len(conditions)} conditions, one cell each, left to right: "
+                   + "; ".join(f"{figures.tissue_name(t)} ({', '.join(label for label, _ in cells)})" for t, cells in condition_groups(conditions))
+                   + ". A grey tick: no peak")
         on = k == sort
         href = link(sort=k, desc="1" if on and not desc else "", page=None) if sorts else None
         headers.append((k, label, tip, href, ("descending" if desc else "ascending") if on else "", on_column.get(k),
@@ -744,6 +750,7 @@ def table(request, key, job=None):
                         "sv": "Panels hold SNP markers: structural variants can't be added.",
                         }.get(get("panel_error", "")),
         "dds": dds, "pick": pick, "n_selected": n_every - n_out, "n_out": n_out, "sv": is_sv(types),  # SVs: no panels
+        "fit": not custom_cols, "tkey": table_key(rows, conditions),
         "shown_tiers": [(x, k) for x, k in shown_tiers if x is not None and k],
 
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
@@ -793,6 +800,27 @@ def _page(con, view, ids, types, shown, maf, conditions, in_preset, active_state
     found = {r["file_row_number"]: r for r in (dict(zip(names, x)) for x in cur.fetchall())}
     groups = condition_groups(conditions)
     return [_row(found[i], groups, in_preset, set(active_states), caveats) for i in ids if i in found]
+
+
+def table_key(rows, conditions):
+    """The one-line key above the Table: the Chromatin cells' tissue groups in order [(tissue, conditions)], the states
+    the shown rows have [(css class, label)] in the locus browser's order, and whether a gene is named by its human
+    ortholog (~NAME). Display only."""
+    from .browser import IMMUNOMAP_STATES, LEGEND_STATES, TROUT_IMMUNOMAP_STATES
+    seen = {cls.split()[0] for r in rows for cells in r.get("barcode") or () for cls, _ in cells if cls}
+    order = list(LEGEND_STATES) + list(IMMUNOMAP_STATES) + list(TROUT_IMMUNOMAP_STATES) + list(palette.STATES)
+    states, labels = [], set()
+    for name in dict.fromkeys(order):
+        label = re.sub(r" [12]$", "", name.replace("_", " ")).replace("Flanking upstream", "Flanking").replace("Flanking downstream", "Flanking")
+        if f"st-{name}" in seen and label not in labels:
+            states.append((f"st-{name}", label))
+            labels.add(label)
+    if "sp-bc-other" in seen:
+        states.append(("sp-bc-other", "other state"))
+    short = {"HeadKidney": "HK", "Embryo": "Em"}
+    return {"groups": [(short.get(t, t[:2]), figures.tissue_name(t), len(cells)) for t, cells in condition_groups(conditions)]
+            if any(r.get("barcode") for r in rows) else [],
+            "states": states, "tilde": any((r.get("gene") or "").startswith("~") for r in rows)}
 
 
 def _dist(bp):
@@ -907,13 +935,13 @@ def _row(r, groups, in_preset, active_states, caveats):
     out["assay"] = (ASSAY.get(status, ("?", "not_checked")) + (status.replace("_", " "), _assay_tip(g))) if status else None
     flags = []
     if g("blacklist"):
-        flags.append(("⚠", "blacklisted", "In a blacklisted region: no peak here means 'can't tell'"))
+        flags.append(("", "blacklisted", "In a blacklisted region: no peak here means 'can't tell'"))
     if g("lore"):
-        flags.append(("⚠", "LORe", "Region where the duplicated chromosomes still pair; probes may cross-hybridise"))
+        flags.append(("", "LORe", "Region where the duplicated chromosomes still pair; probes may cross-hybridise"))
     if g("strand_ambiguous"):
-        flags.append(("⇄", "A/T-C/G", "Strand-ambiguous; needs care on arrays"))
+        flags.append(("", "A/T or C/G", "Strand-ambiguous; needs care on arrays"))
     if g("flank_variants"):
-        flags.append(("⚠", f"{g('flank_variants')} near", "Public variants within 35 bp"))
+        flags.append(("", f"{g('flank_variants')} in flanks", "Public variants in the 35-bp probe flanks"))
     out["flags"] = flags
     if "chromatin" in r or any(k.startswith("chromatin_") for k in r):
         cells, active, peaks = [], 0, 0
@@ -1112,13 +1140,13 @@ def _fig_summary(c, link, desc):
     public = _shares((bg.get("tiers") or {}).get(trait))
     chroms = len([k for k, v in (s.get("chrom_tiers", {}).get(trait) or {}).items() if sum(v.values())])
     head = [(f"{n:,}", "SNPs scored", f"on {chroms} chromosome{'' if chroms == 1 else 's'}" if chroms else "", None),
-            (f"{top2:,}", f"in tier 1–2 for {c['preset']}",
-             f"{pct(top2, n)} of the list" + (f"; {100 * (public.get('1', 0) + public.get('2', 0)):.1f}% of public sites" if public else ""),
+            (f"{top2:,}", "in tier 1–2", f"{figures.share_label(top2, n)} of the list"  # whole percentages, as the legends
+             + (f"\n{figures.share_label(public.get('1', 0) + public.get('2', 0), 1)} of public sites" if public else ""),
              href(tier="1-2"))]
     if c.get("loci"):
         head.append((f"{c['loci'][0]:,}", "loci", "on the Association tab", c["loci"][1]))
-    names = {t: figures.TIER_NAMES[t].capitalize() for t in (1, 2, 3, 4)}
-    groups = [{"title": f"Tier for {c['preset']}", "note": "1 = strongest functional evidence" + (" · thin bar: public sites" if public else ""),
+    names = {t: f"Tier {t}" for t in (1, 2, 3, 4)}
+    groups = [{"title": "Tier", "note": "1 = strongest, 4 = no evidence found" + (" · thin bar: public sites" if public else ""),
                "parts": [(names[t], int(tiers.get(str(t), 0)), palette.TIERS[t][0], href(tier=str(t))) for t in (1, 2, 3, 4)],
                "background": [(names[t], public.get(str(t), 0), palette.TIERS[t][0]) for t in (1, 2, 3, 4)] if public else None}]
     regions, region_bg = s.get("region_tiers", {}).get(trait) or {}, background_regions(bg)
@@ -1131,15 +1159,16 @@ def _fig_summary(c, link, desc):
         window = (c["manifest"].get("catalog") or {}).get("window")
         near = s["counts"]["known"]
         groups.append({"title": "Near a known locus", "note": f"within {window / 1000:g} kb of a published locus" if window else "",
-                       "parts": [("near one", near, palette.GREY[700], href(known="1")), ("further away", n - near, palette.GREY[200], None)]})
+                       "parts": [("near one", near, palette.GREY[700], href(known="1")), ("not near", n - near, palette.GREY[200], None)]})
     if s.get("assay") and c["job"].get("input_kind") != "gwas":
-        groups.append({"title": "Assay check", "note": "probe flanks for genotyping assays",
-                       "parts": [(k.replace("_", " "), s["assay"].get(k, 0), palette.STATUS[ASSAY[k][1]][2], href(assay=k)) for k in ASSAY]})
+        greys = {"pass": palette.GREY[300], "warn": palette.GREY[500], "fail": palette.GREY[900], "not_checked": palette.GREY[100]}
+        groups.append({"title": "Assay check", "note": "probe flanks for genotyping assays",  # data, not a status: in greys
+                       "parts": [(k.replace("_", " "), s["assay"].get(k, 0), greys[k], href(assay=k)) for k in ASSAY]})
     for g in groups:
         g["parts"] = [p for p in g["parts"] if p[1]]
         if g.get("background"):
             g["background"] = [b for b in g["background"] if b[1]]
-    svg = figures.summary(head, [g for g in groups if g["parts"]], f"Summary, {c['preset']}", desc, c["synthetic"])
+    svg = figures.summary(head, [g for g in groups if g["parts"]], "Summary", desc, c["synthetic"])
     return svg, ["group", "category", "snps", "public_share"], \
         [(g["title"], p[0], p[1], next((f"{b[1]:.5f}" for b in g.get("background") or () if b[0] == p[0]), "")) for g in groups for p in g["parts"]]
 
@@ -1154,7 +1183,7 @@ def _fig_ideogram(c, link, desc):
     chroms = [(k, sizes[k]) for k in sorted(sizes, key=_chrom_key)]
     href = (lambda chrom, start, end, tier: link(chrom=chrom, start=start, end=end, tier=tier)) if link else None
     chip = c.get("chip") or {}  # the Panel tab's reference chip, as ticks (P6.6)
-    svg = figures.ideogram(chroms, bins, c["s"]["chrom_tiers"].get(c["trait"], {}), f"SNPs along the genome, {c['preset']}",
+    svg = figures.ideogram(chroms, bins, c["s"]["chrom_tiers"].get(c["trait"], {}), "SNPs along the genome",
                            desc, c["synthetic"] or bool(chip.get("synthetic")), href, chip.get("density"),
                            (chip.get("label") or "chip").lower())
     return svg, ["chrom", "start", "end", "snps", "tier1", "tier2", "tier3", "tier4"], \
@@ -1196,7 +1225,7 @@ def _fig_regions(c, link, desc):
                      "note": f"{sum(k.values()):,} ({pct(sum(k.values()), n)})"})
         tsv += [(g, t, k.get(str(t), 0), f"{bg[g]:.5f}" if g in bg else "") for t in (1, 2, 3, 4)]
     legend = [(palette.TIERS[t][0], figures.TIER_NAMES[t]) for t in (1, 2, 3, 4)] + ([(palette.GREY[900], "background share")] if bg else [])
-    svg = figures.hbars(rows, f"Genic region by tier, {c['preset']}", desc, c["synthetic"], legend)
+    svg = figures.hbars(rows, "Gene region by tier", desc, c["synthetic"], legend)
     return svg, ["region", "tier", "snps", "background_share"], tsv
 
 
@@ -1213,7 +1242,7 @@ def _fig_terms(c, link, desc):
         rows.append({"label": label, "href": link(term=term) if link else None, "note": f"{sum(k.values()):,} ({pct(sum(k.values()), n)})",
                      "segments": _tier_segments(k, n, label, (lambda t, term=term: link(term=term, tier=str(t))) if link else None)})
         tsv += [(term, weights.get(term, ""), t, k.get(str(t), 0)) for t in (1, 2, 3, 4)]
-    svg = figures.hbars(rows, f"Evidence behind the tiers, {c['preset']}", desc, c["synthetic"],
+    svg = figures.hbars(rows, "Evidence behind the tiers", desc, c["synthetic"],
                         [(palette.TIERS[t][0], figures.TIER_NAMES[t]) for t in (1, 2, 3, 4)])
     return svg, ["term", "weight", "tier", "snps"], tsv
 
@@ -1230,12 +1259,12 @@ def _fig_maf(c, link, desc):
         share = bg.get(f"{lo:.2f}-{hi:.2f}")
         tip = f"MAF {lo:.2f}–{hi:.2f}: {k:,} SNPs ({pct(k, n)})" + (f"; public background {100 * share:.1f}%" if share is not None else "")
         href = link(min_maf=f"{lo:g}", max_maf=None if i == len(m["bins"]) - 1 else f"{hi:g}") if link else None
-        bars.append((f"{lo:.2f}", k, palette.TIERS[3][0] if hi <= 0.05 + 1e-9 else palette.ACCENT, tip, href,
+        bars.append((f"{lo:.2f}", k, palette.GREY[300] if hi <= 0.05 + 1e-9 else palette.GREY[500], tip, href,  # no tier, no accent
                      None if share is None else share * n))
         tsv.append((f"{lo:g}", f"{hi:g}", k, "" if share is None else f"{share:.5f}"))
     if m["missing"]:
         share = bg.get("unknown")
-        bars.append(("none", m["missing"], palette.GREY[300], f"No allele frequency: {m['missing']:,} SNPs ({pct(m['missing'], n)})", None,
+        bars.append(("none", m["missing"], palette.GREY[200], f"No allele frequency: {m['missing']:,} SNPs ({pct(m['missing'], n)})", None,
                      None if share is None else share * n))
         tsv.append(("NA", "NA", m["missing"], "" if share is None else f"{share:.5f}"))
     source = "your maf/af column" if m["source"] == "yours" else "504 public fish, pooled"
@@ -1245,18 +1274,18 @@ def _fig_maf(c, link, desc):
 
 
 FIGURES = {  # name -> (card title, (i) definition, builder(context, link or None, desc) -> (svg, header, rows) or None)
-    "summary": ("Summary", "How the SNPs scored for all 27 conditions (tier 1 = strongest functional evidence, tier 4 = no "
-                "evidence found, not evidence of no effect), where they fall relative to genes, how many are near a "
+    "summary": ("Summary", "How the SNPs scored, counted over all 27 conditions (tier 1 = strongest functional evidence, tier "
+                "4 = no evidence found, not evidence of no effect), where they fall relative to genes, how many are near a "
                 "published locus and how they did in the assay design check. Thin bars: the same split for the release's "
-                "public sites, for comparison. Click a number, a part of a bar or its legend entry to list those SNPs.",
+                "public sites, for comparison.",
                 _fig_summary),
     "ideogram": ("Where the SNPs are", "Chromosomes to scale (Ssal_v3.1). Each 1 Mb bin holding SNPs is shaded: blue when "
                  "some are in tier 1–2 (darker = more of them), grey when none are. On the right: each chromosome's SNPs "
-                 "and, as a bar, its tier 1–2 SNPs. Click a bin, chromosome or bar to list those SNPs.", _fig_ideogram),
+                 "and, as a bar, its tier 1–2 SNPs.", _fig_ideogram),
     "conditions": ("Active chromatin per condition", "Share of the SNPs in an active chromatin state in each of the 27 "
                    "AQUA-FAANG conditions; × = fold over a background of public sites, when the release has one. "
                    "Click a cell to list those SNPs.", _fig_conditions),
-    "regions": ("Genic region by tier", "SNPs per genic region class (Ensembl 116), split by tier; the black tick is "
+    "regions": ("Gene region by tier", "SNPs per gene region class (Ensembl 116), split by tier; the black tick is "
                 "the share expected from a background of public sites. Click a bar to list those SNPs.", _fig_regions),
     "terms": ("Evidence behind the tiers", "For each evidence term (its weight in brackets), the SNPs it applies to, split "
               "by the tier they end in. A SNP can have several terms.", _fig_terms),
@@ -1276,7 +1305,7 @@ def _figure_context(key, job, trait, summary, d):
 
 # ---- the Table's selection: its filters (Active in among them) and view, kept per job ----
 
-UNSELECTED = "Unselected SNPs (−)"
+UNSELECTED = "SNPs left out by hand"
 
 
 def unselected(d):

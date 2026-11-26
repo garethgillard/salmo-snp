@@ -357,28 +357,32 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp .sp-search-hits td:first-child a { font-weight: 500; }
 .sp-search-try { color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
 
-/* == results: overview, table filters, chips, sticky grouped header, barcode, assay status == */
-.sp-card-slot { top: 1rem; }
+/* == results: the results page (results.html): Overview, Table (toolbar, key, filters, the Keep column, barcode, assay
+   words), the card beside the table (master-detail at 992 px and wider, over the page below), the card (card.html,
+   also the variant page's), Export == */
 .sp-filters { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-bottom: .6rem; }
 /* filter dropdowns (Columns, the column filters): a summary showing the choice, a panel of ticks applied on change */
 .sp-dd { position: relative; }
 .sp-dd > summary { max-width: 22rem; overflow: hidden; list-style: none; text-overflow: ellipsis; white-space: nowrap; }
 .sp-dd > summary::-webkit-details-marker { display: none; }
-.sp-dd > summary::after { content: ""; display: inline-block; margin-left: .45em; vertical-align: .15em;  /* a caret, as Bootstrap's */
-  border-top: .3em solid; border-right: .3em solid transparent; border-left: .3em solid transparent; }
+.sp-dd > summary::after { content: ""; display: inline-block; width: .4rem; height: .4rem; margin: 0 .1rem 0 .55rem;  /* the folds' chevron */
+  border-right: 1.5px solid; border-bottom: 1.5px solid; transform: translateY(-30%) rotate(45deg); }
+.sp-dd[open] > summary::after { transform: translateY(10%) rotate(-135deg); }
 .sp-dd > summary b { font-weight: 600; }
 .sp-dd[open] > summary.btn-outline-secondary, .sp-dd[open] > summary.btn-outline-primary { background: var(--sp-grey-100); color: var(--sp-ink); }
 /* a column's filter: a funnel beside the header's name (the choice under it); its panel is placed on the page (portal.js) */
-.sp-th { display: inline-flex; align-items: center; gap: .2rem; white-space: nowrap; }
+.sp-th { display: inline-flex; align-items: center; gap: .1rem; min-height: 1.5rem; white-space: nowrap; }  /* as tall as a funnel */
 .sp-dd-col { display: inline-block; }
-.sp-dd > summary.sp-colf { display: inline-flex; align-items: center; padding: .15rem .2rem; border-radius: .2rem; color: var(--sp-muted); }
+.sp-dd > summary.sp-colf { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; padding: 0;
+  border-radius: .25rem; color: var(--sp-muted); }  /* a 24 px target round a 12 px funnel */
 .sp-dd > summary.sp-colf::after { content: none; }
 .sp-colf:hover, .sp-dd[open] > .sp-colf { background: var(--sp-grey-200); color: var(--sp-ink); }
 .sp-dd > summary.sp-colf.on { background: var(--sp-ink); color: var(--sp-white); }
 .sp-colf-val { display: block; max-width: 11rem; overflow: hidden; color: var(--sp-ink); font-size: var(--sp-fs-xs); font-weight: 400;
   text-overflow: ellipsis; white-space: nowrap; }
 .sp-results th .sp-dd-panel { font-weight: 400; text-align: left; white-space: normal; }
-.sp-dd-list > label { display: flex; }
+.sp-dd-list > label { display: flex; align-items: center; gap: .45rem; }
+.sp-dd-list .form-check-input { flex: none; margin: 0; }
 .sp-dd-list .sp-any { margin-bottom: .1rem; padding-bottom: .3rem; border-bottom: 1px solid var(--sp-line); }
 .sp-slider { display: grid; grid-template-columns: 1fr auto; gap: .2rem .5rem; }
 .sp-slider output { font-weight: 600; }
@@ -402,108 +406,172 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-dd-panel fieldset { display: grid; gap: .2rem; }
 .sp-dd-panel legend { float: none; margin: 0; color: var(--sp-ink-2); font-size: var(--sp-fs-xs); }
 .sp-dd-note { max-width: 18rem; margin: .2rem 0 0; color: var(--sp-ink-2); font-size: var(--sp-fs-xs); }
-.sp-dd-picks { display: grid; gap: .1rem; margin: 0; padding: 0; list-style: none; white-space: nowrap; }
-.sp-dd-picks a[aria-current] { font-weight: 600; }
-.sp-chiprow { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-bottom: .5rem; }
-.sp .sp-chip { padding: .05rem .6rem; border: 1px solid var(--sp-line-2); border-radius: 1rem; background: var(--sp-white); color: var(--sp-ink);
-  text-decoration: none; }
-.sp .sp-chip:hover { background: var(--sp-grey-100); }
+.sp-dd-tip { max-width: 18rem; margin: 0; padding-bottom: .3rem; border-bottom: 1px solid var(--sp-line); color: var(--sp-ink-2); font-size: var(--sp-fs-xs); }
+
+/* the Table: a toolbar line, a key line, the table, the pager */
+.sp-tablebar { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-bottom: .45rem; }
+.sp-tablebar-end { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; margin-left: auto; }
+.sp .sp-clear { color: var(--sp-ink-2); }
+.sp-tkey { display: flex; flex-wrap: wrap; gap: .25rem 1.75rem; margin: 0 0 .5rem; color: var(--sp-ink-2); font-size: var(--sp-fs-xs); }
+.sp-tkey b { margin-right: .2rem; color: var(--sp-ink); font-weight: 600; }
+.sp-tkey-sw { display: inline-flex; align-items: center; gap: .3rem; margin-left: .55rem; white-space: nowrap; }
+.sp-pager { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .6rem; }
 .sp-results thead { position: sticky; top: 0; z-index: 2; }
 .sp-results thead th { position: static; }
-.sp-results .sp-groups th { padding-top: .2rem; padding-bottom: .1rem; border-bottom: 1px solid var(--sp-line); color: var(--sp-muted);
-  font-size: var(--sp-fs-xs); font-weight: 600; }
-.sp-results .sp-groups th + th { border-left: 1px solid var(--sp-line); }
 .sp-results tbody tr { cursor: pointer; }
 .sp-results th, .sp-results td { vertical-align: middle; }
+.sp-snps thead th { vertical-align: top; }
 .sp-results th.sp-num, .sp-results th.sp-ctr { text-align: right; }
 .sp-results th.sp-ctr, .sp-results td.sp-ctr { text-align: center; }
-.sp-results .sp-clip { max-width: 15rem; }  /* long gene names and ids: cut, the tooltip has them */
-.sp-results .sp-clip.sp-wide { max-width: 22rem; }
+.sp-results .sp-clip { max-width: 10rem; }  /* long ids, genes and flags: cut, the tooltip has them */
+.sp-results .sp-clip.sp-wide { max-width: 15rem; }
+.sp-results .sp-known { max-width: 11rem; }
+.sp-results .sp-flags { max-width: 7.5rem; }
 .sp .sp-results a.sp-snp { color: var(--sp-ink); font-weight: 500; text-decoration: none; }  /* the row opens the card */
-.sp .sp-results tr:hover a.sp-snp { color: var(--sp-link); text-decoration: underline; }
-/* the selector column: + in the selection, − taken out (the row dimmed) */
-.sp-results .sp-pickcol { width: 2.6rem; padding-left: .25rem; padding-right: .25rem; text-align: center; }
-.sp-pick { display: inline-flex; align-items: center; justify-content: center; width: 1.35rem; height: 1.35rem; border: 1px solid var(--sp-line-2);
-  border-radius: .25rem; background: var(--sp-white); color: var(--sp-ink-2); font-weight: 600; line-height: 1; text-decoration: none; }
-.sp-pick-next { display: none; }  /* under the cursor the mark shows what a click does: + turns a red −, − a + */
-.sp-pick:hover .sp-pick-now, .sp-pick:focus-visible .sp-pick-now, .sp-keep:hover .sp-pick-now, .sp-keep:focus-visible .sp-pick-now { display: none; }
-.sp-pick:hover .sp-pick-next, .sp-pick:focus-visible .sp-pick-next, .sp-keep:hover .sp-pick-next, .sp-keep:focus-visible .sp-pick-next { display: inline; }
-.sp-results tr:not(.sp-out) .sp-pick:hover, .sp-results tr:not(.sp-out) .sp-pick:focus-visible {
-  border-color: var(--sp-fail-border); background: var(--sp-fail-bg); color: var(--sp-fail-text); }
-.sp-results tr.sp-out .sp-pick:hover, .sp-results tr.sp-out .sp-pick:focus-visible {
-  border-color: var(--sp-ink-2); background: var(--sp-white); color: var(--sp-ink); }
-.sp-results tr.sp-out .sp-pick { border-color: var(--sp-muted); background: var(--sp-grey-100); color: var(--sp-ink); }
+.sp .sp-results tr:hover a.sp-snp, .sp .sp-results a.sp-snp:focus-visible { color: var(--sp-link); text-decoration: underline; }
 .sp-results tr.sp-out > td:not(.sp-pickcol) { opacity: .45; }
 .sp-results tbody tr.sp-selected > * { background: var(--sp-grey-100); }
 .sp-results tbody tr.sp-selected > :first-child { box-shadow: inset 3px 0 0 var(--sp-accent); }
-.sp-known { white-space: nowrap; }
-.sp-bc { display: inline-flex; gap: 3px; padding-bottom: 2px; vertical-align: middle; }
+/* the Keep column: a small grey box, ticked while the row is kept (a link: one click each way; x in the card) */
+.sp-results .sp-pickcol { width: 2.6rem; padding-left: .3rem; padding-right: .2rem; text-align: center; }
+.sp .sp-tick { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: .25rem;
+  text-decoration: none; }
+.sp-box { display: inline-flex; flex: none; align-items: center; justify-content: center; width: .9rem; height: .9rem;
+  border: 1.5px solid var(--sp-muted); border-radius: .2rem; background: var(--sp-white); color: var(--sp-ink-2); }
+.sp-box .sp-i { width: .75rem; height: .75rem; stroke-width: 3.2; }
+.sp-tick:hover .sp-box, .sp-tick:focus-visible .sp-box, .sp-keep:hover .sp-box, .sp-keep:focus-visible .sp-box {
+  border-color: var(--sp-ink); color: var(--sp-ink); }
+/* the Design panel page's +/− (panel.html): + in the panel, − dropped */
+.sp-pick { display: inline-flex; align-items: center; justify-content: center; width: 1.35rem; height: 1.35rem; border: 1px solid var(--sp-line-2);
+  border-radius: .25rem; background: var(--sp-white); color: var(--sp-ink-2); font-weight: 600; line-height: 1; text-decoration: none; }
+.sp-pick-next { display: none; }  /* under the cursor the mark shows what a click does */
+.sp-pick:hover .sp-pick-now, .sp-pick:focus-visible .sp-pick-now { display: none; }
+.sp-pick:hover .sp-pick-next, .sp-pick:focus-visible .sp-pick-next { display: inline; }
+.sp-results tr.sp-out .sp-pick { border-color: var(--sp-muted); background: var(--sp-grey-100); color: var(--sp-ink); }
+/* the Chromatin barcode: a cell per condition, filled with its state; no peak is a grey tick at the foot (Quiescent, a
+   pale state, keeps an outline, so the two never look alike); the header names the tissue groups over their cells */
+.sp-bc { display: inline-flex; gap: 3px; vertical-align: middle; }
 .sp-bc > span { display: inline-flex; gap: 1px; }
-.sp-bc i { display: block; width: 6px; height: 14px; border: 1px solid var(--sp-line-2); }  /* fill: .st-<state> from palette.py */
-.sp-bc i[class^="st-"], .sp-bc i.sp-bc-other { border-color: transparent; }
-.sp-bc i.sp-bc-other { background: var(--sp-grey-300); }
+.sp-bc i, .sp-tkey-sw i { display: block; flex: none; width: 6px; height: 14px; box-shadow: inset 0 -2px 0 var(--sp-line-2); }  /* fill: .st-<state> */
+.sp-bc i[class^="st-"], .sp-tkey-sw i[class^="st-"] { box-shadow: none; }
+.sp-bc i.st-Quiescent, .sp-tkey-sw i.st-Quiescent { box-shadow: inset 0 0 0 1px var(--sp-line-2); }
+.sp-bc i.sp-bc-other, .sp-tkey-sw i.sp-bc-other { background: var(--sp-grey-300); box-shadow: none; }
 .sp-bc i.in { box-shadow: 0 2px 0 var(--sp-grey-900); }
-.sp-as { font-size: var(--sp-fs-sm); font-weight: 500; white-space: nowrap; }  /* assay status: a word, coloured only when it needs a look */
-.sp-as-ok, .sp-as-plain, .sp-as-not_checked { color: var(--sp-ink-2); }
+.sp-bc-head { display: flex; margin-top: .1rem; color: var(--sp-muted); font-size: var(--sp-fs-xs); font-weight: 400; line-height: 1.25; }
+.sp-bc-head > span { display: block; overflow: hidden; text-align: center; white-space: nowrap; }
+.sp-bc-n1 { width: 6px; } .sp-bc-n2 { width: 13px; } .sp-bc-n3 { width: 20px; } .sp-bc-n4 { width: 27px; }
+.sp-bc-n5 { width: 34px; } .sp-bc-n6 { width: 41px; } .sp-bc-n7 { width: 48px; } .sp-bc-n8 { width: 55px; }
+/* assay status: a word; only warn and fail get an icon and a colour */
+.sp-as { display: inline-flex; align-items: center; gap: .25rem; font-size: var(--sp-fs-sm); font-weight: 500; white-space: nowrap; }
+.sp-as-plain { color: var(--sp-ink-2); }
+.sp-as-ok, .sp-as-not_checked { color: var(--sp-muted); font-weight: 400; }
 .sp-as-warn { color: var(--sp-warn-text); }
 .sp-as-fail { color: var(--sp-fail-text); }
-/* the card drawer */
-.sp-drawer { z-index: 1040; transition: width .2s ease; }
-.sp-drawer.sp-wide { width: 100%; max-width: none; }  /* the card's locus browser: the drawer over the whole page */
-.sp-drawer.sp-wide > .sp-drawer-body, .sp-drawer.sp-wide > .sp-drawer-tab { display: none; }
+@media (max-width: 767.98px) {  /* a phone: the SNP column stays in view while the table scrolls sideways */
+  .sp-results .sp-clip.sp-wide { max-width: 10rem; }
+  .sp-snps td.sp-wide, .sp-snps th.sp-col-id { position: sticky; left: 0; z-index: 1; background: var(--sp-white);
+    box-shadow: 1px 0 0 var(--sp-line); }
+  .sp-snps th.sp-col-id { background: var(--sp-grey-50); }
+  .sp-snps tr.sp-selected > td.sp-wide { background: var(--sp-grey-100); }
+}
+/* The default columns fit a wide window: the table then scrolls with the page, its header under the top bar. With a
+   card open, other columns or a narrower window it keeps its own box, which keeps the header in view. */
+@media (min-width: 1360px) {
+  #results:not(:has(> #drawer)) .sp-scroll.sp-fit { max-height: none; overflow: visible; }
+  #results:not(:has(> #drawer)) .sp-fit .sp-results thead { top: var(--sp-nav-h); }
+}
+
+/* the card beside the table: a column under the top bar from 992 px (the table narrows), over the page below it */
+.sp-drawer { display: flex; flex-direction: column; background: var(--sp-white); }
+.sp-drawer-body { flex: 1; min-height: 0; overflow: auto; padding: .85rem 1.1rem 1.25rem; }
+@media (min-width: 992px) {
+  #results:has(> #drawer) { display: grid; grid-template-columns: minmax(0, 1fr) clamp(30rem, 46%, 44rem); column-gap: 1.25rem;
+    align-items: start; }
+  #results:has(> #drawer) > * { grid-column: 1; min-width: 0; }
+  #results > #drawer { grid-column: 2; grid-row: 1 / span 4; position: sticky; top: calc(var(--sp-nav-h) + .75rem);
+    height: calc(100vh - var(--sp-nav-h) - 1.5rem); border: 1px solid var(--sp-line); border-radius: var(--sp-radius); }
+}
+@media (max-width: 991.98px) { #drawer { position: fixed; inset: 0; z-index: 1040; } }
+#results > #drawer.sp-wide { position: fixed; inset: 0; z-index: 1040; height: auto; border: 0; border-radius: 0; }  /* its locus browser */
+.sp-drawer.sp-wide > .sp-drawer-body { display: none; }
 .sp-locus-pane { display: flex; flex-direction: column; height: 100%; background: var(--sp-white); }
 .sp-locus-pane[hidden] { display: none; }
 .sp-locus-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: .5rem 1rem; border-bottom: 1px solid var(--sp-line);
   background: var(--sp-grey-50); }
+.sp-locus-bar .sp-i { width: 1em; height: 1em; }
 .sp-locus-frame { flex: 1; width: 100%; border: 0; }
-.sp-embed .sp-main { padding-top: .75rem; }  /* the Table's card drawer: the card inside without its own frame */
+.sp-embed .sp-main { padding-top: .75rem; }  /* the card's locus browser, in a frame */
 .sp-embed { min-height: 0; }
-.sp-drawer-body { border-radius: 0; }
-.sp-drawer-tab { position: absolute; left: -2rem; top: 1rem; display: flex; align-items: center; justify-content: center; width: 2rem;
-  height: 3.25rem; border: 1px solid var(--sp-line-2); border-right: 0; border-radius: .5rem 0 0 .5rem; background: var(--sp-white);
-  box-shadow: -3px 2px 6px var(--sp-line); color: var(--sp-ink-2); }
-.sp .sp-drawer-tab:hover { background: var(--sp-grey-100); color: var(--sp-ink); }
-@media (max-width: 991.98px) { .sp-drawer-tab { left: auto; right: .5rem; z-index: 1; border-right: 1px solid var(--sp-line-2); border-radius: .5rem; } }
-.sp-drawer #card-body { padding: 0; border: 0; }
-/* the card (card.html): a bar with the +/− switch and Previous/Next (the drawer), key facts, caveats, then sections */
-.sp-card-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .5rem; }
-.sp .sp-keep { min-width: 2rem; padding: 0 .45rem; border: 1px solid var(--sp-line-2); background: var(--sp-white); color: var(--sp-ink);
-  font-size: 1rem; font-weight: 600; }  /* the card's +/−: as the table's selector column */
-.sp .sp-keep:hover, .sp .sp-keep:focus-visible { border-color: var(--sp-fail-border); background: var(--sp-fail-bg); color: var(--sp-fail-text); }
-.sp .sp-keep-out { border-style: dashed; background: var(--sp-grey-100); color: var(--sp-ink-2); }
-.sp .sp-keep-out:hover, .sp .sp-keep-out:focus-visible { border-color: var(--sp-ok-border); background: var(--sp-ok-bg); color: var(--sp-ok-text); }
-.sp-card-bar h2 { margin: 0; }
-.sp a.sp-fact { text-decoration: none; }
-.sp-facts { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-bottom: .6rem; }
-.sp-fact { padding: .05rem .55rem; border: 1px solid var(--sp-line-2); border-radius: 1rem; background: var(--sp-white); color: var(--sp-ink);
-  font-size: var(--sp-fs-sm); white-space: nowrap; }
-.sp-fact-ok { color: var(--sp-ok-text); background: var(--sp-ok-bg); border-color: var(--sp-ok-border); }
-.sp-fact-warn { color: var(--sp-warn-text); background: var(--sp-warn-bg); border-color: var(--sp-warn-border); }
-.sp-fact-fail { color: var(--sp-fail-text); background: var(--sp-fail-bg); border-color: var(--sp-fail-border); }
-.sp-fact-muted { color: var(--sp-ink-2); background: var(--sp-grey-50); border-color: var(--sp-line); }
-.sp-caveats { margin: 0 0 .6rem; padding: .35rem .6rem; list-style: none; }
-.sp-caveats li::before { content: "\26A0\00a0"; }
-.sp-cs { margin-top: .25rem; }
-.sp .sp-cs-h { margin: 0; font-size: var(--sp-fs-md); font-weight: 600; }
-.sp .sp-cs-act { margin-left: auto; padding: .05rem .55rem; border: 1px solid var(--sp-line-2); border-radius: .3rem; background: var(--sp-white);
-  color: var(--sp-ink); font-size: var(--sp-fs-xs); font-weight: 500; text-decoration: none; white-space: nowrap; }  /* a section's action */
-.sp .sp-cs-act:hover { background: var(--sp-grey-100); color: var(--sp-ink); }
-.sp-cs > summary:has(.sp-cs-act)::after { margin-left: .35rem; }
-.sp-fact .sp-copy { font-size: inherit; }
-.sp-cs-h4 { margin: .6rem 0 .3rem; font-size: var(--sp-fs-sm); font-weight: 600; }
-.sp-flank { font-size: var(--sp-fs-sm); line-height: 1.7; word-break: break-all; }
-.sp-flank-box { min-width: 0; padding: .25rem .5rem; border: 1px solid var(--sp-line); background: var(--sp-grey-50); }
-.sp .sp-copy-icon { padding: 0 .15rem; border: 0; background: none; color: var(--sp-ink-2); line-height: 1; }
-.sp .sp-copy-icon:hover { color: var(--sp-ink); }
+/* the card's heading in the drawer: tier, name and gene; where and the alleles, with copy; Keep, the stepper, close */
+.sp-card-bar { display: flex; align-items: flex-start; gap: .75rem; margin-bottom: .6rem; }
+.sp-card-name { flex: 1; min-width: 0; }
+.sp-card-name h2 { margin: 0; font-size: var(--sp-fs-lg); font-weight: 600; overflow-wrap: anywhere; }
+.sp-card-name h2 .sp-badge { vertical-align: .12em; }
+.sp-card-where { display: inline-flex; align-items: center; gap: .2rem; margin: 0; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
+.sp .sp-card-where .sp-iconbtn, .sp .sp-card-id .sp-iconbtn, .sp .sp-flank-row .sp-iconbtn { width: auto; min-width: 1.75rem; }  /* 'Copied' fits */
+.sp-card-tools { display: flex; flex: none; align-items: center; gap: .2rem; }
+.sp .sp-keep { display: inline-flex; align-items: center; gap: .4rem; height: 1.75rem; margin-right: .35rem; padding: 0 .5rem;
+  border: 1px solid transparent; border-radius: .375rem; color: var(--sp-ink); font-size: var(--sp-fs-sm); text-decoration: none; }
+.sp .sp-keep:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50); color: var(--sp-ink); }
+.sp-stepper { display: flex; align-items: center; gap: .1rem; font-size: var(--sp-fs-sm); white-space: nowrap; }
+/* the card (card.html): the score, the key facts, what is shown and not counted, caveats, then folding sections */
+.sp-card-id { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .6rem; margin-bottom: .5rem; font-size: var(--sp-fs-md); }
 .sp-score { display: flex; align-items: center; gap: .75rem; }  /* 'Score' beside the bar */
-.sp .sp-score-h { margin: .6rem 0 0; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
-.sp-cs mark.sp-flank-run { background: none; color: inherit; text-decoration: underline 2px var(--sp-warn-border); text-underline-offset: 3px; }
-.sp-as-plain { color: var(--sp-ink-2); }
+.sp .sp-score .sp-score-h { margin: .6rem 0 0; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
+.sp-facts { display: flex; flex-wrap: wrap; align-items: baseline; margin: .3rem 0 .2rem; }
+.sp-facts:empty { display: none; }
+.sp-fact { color: var(--sp-ink); white-space: nowrap; }
+.sp-fact:not(:last-child)::after { content: "\00B7"; margin: 0 .5rem; color: var(--sp-muted); }  /* at a line's end when it wraps */
+.sp-fact-muted { color: var(--sp-muted); }
+.sp a.sp-fact { text-decoration: underline; text-decoration-color: var(--sp-line-2); }
+.sp a.sp-fact:hover { color: var(--sp-link); }
+.sp-facts-shown { margin-top: 0; color: var(--sp-ink-2); }
+.sp-facts-shown .sp-fact { color: var(--sp-ink-2); }
+.sp-facts-shown .sp-fact-muted { color: var(--sp-muted); }
+.sp-facts-h { margin-right: .5rem; color: var(--sp-muted); }
+.sp-caveats { margin: .5rem 0 .6rem; padding: .4rem .7rem; list-style: none; }
+.sp-caveats li { display: flex; align-items: baseline; gap: .4rem; }
+.sp-caveats .sp-i { position: relative; top: .15em; }
+.sp-cs:first-of-type { margin-top: .6rem; }
+.sp .sp-cs-h { margin: 0; font-size: var(--sp-fs-md); font-weight: 600; }
+.sp .sp-cs-act { margin-left: auto; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); font-weight: 500; white-space: nowrap;
+  text-decoration: underline; text-decoration-color: var(--sp-line-2); text-underline-offset: 3px; }  /* a section's action */
+.sp .sp-cs-act:hover { color: var(--sp-link); text-decoration-color: currentColor; }
+.sp-cs > summary:has(.sp-cs-act)::after { margin-left: .35rem; }
+.sp-cs > summary .sp-as { font-size: var(--sp-fs-sm); }
+.sp-cs-note { color: var(--sp-muted); font-size: var(--sp-fs-sm); font-weight: 400; }
+.sp-cs .sp-more > summary { padding: .45rem 0; color: var(--sp-ink-2); font-weight: 500; }  /* folds inside a section: lighter */
+.sp-cs-h4 { margin: .6rem 0 .3rem; font-size: var(--sp-fs-sm); font-weight: 600; }
+.sp-predict { margin-bottom: .5rem; }
+.sp-predict p { margin: .3rem 0 0; }
+.sp-flank-row { display: flex; align-items: center; gap: .35rem; margin-bottom: .5rem; }
+.sp-flank { font-size: var(--sp-fs-sm); line-height: 1.7; word-break: break-all; }
+.sp-flank-box { min-width: 0; padding: .3rem .55rem; border-radius: .3rem; background: var(--sp-grey-50); }
 .sp-flank mark, .sp-cs mark { padding: 0 .1rem; border-radius: .15rem; }
 .sp-cs mark.sp-flank-snp { background: var(--sp-grey-900); color: var(--sp-white); font-weight: 600; }
 .sp-cs mark.sp-flank-var { background: var(--sp-warn-bg); color: var(--sp-warn-text); box-shadow: inset 0 0 0 1px var(--sp-warn-border); }
 .sp-cs mark.sp-flank-n { background: var(--sp-fail-bg); color: var(--sp-fail-text); }
-@media print { .sp-bc i, .sp-as { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .sp-results thead { position: static; } }
+.sp-cs mark.sp-flank-run { background: none; color: inherit; text-decoration: underline 2px var(--sp-warn-border); text-underline-offset: 3px; }
+.sp-cs .sp-note { margin-top: .1rem; }
+
+/* the Overview: two figure cards, one caption, then 'More charts' and the upload check as fold rows */
+.sp-fold-title { flex: none; }
+.sp-fold-what { min-width: 0; overflow: hidden; color: var(--sp-muted); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 575.98px) {  /* the Summary and the ideogram are drawn 580 wide, shown at about half that on a phone */
+  .sp-figure svg .sp-ph { font-size: 19px; }  /* labels and legends, about 10.5 px as shown */
+  .sp-figure svg .sp-md { font-size: 17px; }  /* the ideogram's chromosome names and counts, one 16-unit row each */
+  .sp-figure svg .sp-fnote { display: none; }  /* a bar's side note: the (i) says it */
+}
+/* the Export tab */
+.sp-export th { font-weight: 500; white-space: nowrap; }
+.sp-export td:last-child { width: 1%; text-align: right; }
+.sp-export-scope { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.5rem; margin-bottom: .75rem; }
+.sp-export-scope fieldset { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1.25rem; margin: 0; }
+@media print {
+  .sp-bc i, .sp-as, .sp-box { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sp-results thead { position: static; }
+  #results:has(> #drawer) { display: block; } #results > #drawer { display: none; }
+}
 /* end results */
 
 /* == tour: an illustrated slide show on the page, no frame: the text and its numbered steps beside the screenshot (from
