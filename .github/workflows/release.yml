@@ -25,3 +25,21 @@ jobs:
       - run: gh release create "$GITHUB_REF_NAME" dist/*.whl constraints.txt --title "$GITHUB_REF_NAME" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
+
+  image:
+    # The portal's Docker image for the same tag (G, 2026-11-26: "we'll only be deploying as a docker image"), attached
+    # to the GitHub Release as salmo-snp-<version>.docker.tar.gz with its .sha256: snpportal/deploy/publish_image.sh
+    # takes it from there into salmobase's datafiles, where salmobase's server and users' own Docker installs load it.
+    needs: wheels
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the image and save it as one file
+        run: sh snpportal/deploy/image.sh build "${GITHUB_REF_NAME#v}" .
+      - name: The image runs, with the model packages (the card's Predict button)
+        run: docker run --rm "salmo-snp:${GITHUB_REF_NAME#v}" python -c "import snpportal, snpscore, numpy, onnxruntime; print('ok')"
+      - run: gh release upload "$GITHUB_REF_NAME" salmo-snp-*.docker.tar.gz salmo-snp-*.docker.tar.gz.sha256
+        env:
+          GH_TOKEN: ${{ github.token }}

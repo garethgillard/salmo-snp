@@ -194,6 +194,11 @@ Queued behind it, to run only when G says (cut off twice by the usage limit): a 
 the guided tour, the live demo for both species, speed with the larger pool, handover, unused public data, bugs in
 the week's changes).
 
+The Docker image as the deployed unit (G, 2026-11-26): built for each vX.Y.Z tag (release workflow), published in
+salmobase's datafiles beside the releases (deploy/publish_image.sh, from Orion), loaded by salmobase's server and by
+users' own Docker installs (`salmo-snp-server local`). Still to do: the first tag, then the first publish and install
+on the test server (the Orion chat, when G says); the README's user guide gets the Docker install at 1.0.
+
 Builds, tests and deploys (G, 2026-11-25: faster and simpler for the next releases; builds in the Orion chat from the
 plan in [ORION.md](ORION.md), the data synced to salmobase, the app to move there from NREC):
 - [x] `snpdata fetch` downloads a salmobase input again when it has changed; a build copies unchanged layers from the

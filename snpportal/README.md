@@ -375,6 +375,26 @@ weights sha256, preset, filters, panel hash, PROVISIONAL rules, SYNTHETIC inputs
 command): `#` lines in text files (`?plain=1` drops them), Parquet key-value metadata, `provenance.txt` in the bundle.
 Vendor files say 'layout to confirm against the vendor's current template'.
 
+## A Docker install (instead of the Python package)
+
+The portal is also one Docker image per version (G, 2026-11-26), published beside the data releases:
+`https://salmobase.org/datafiles/datasets/salmo-snp/docker/` holds `salmo-snp-<version>.docker.tar.gz`, its
+`.sha256` and `latest.json`. salmobase's server runs it from there (../docs/SALMOBASE.md); on your own computer:
+
+```bash
+sh image.sh load https://salmobase.org/datafiles/datasets/salmo-snp/docker/salmo-snp-<version>.docker.tar.gz
+docker run -d --name salmo-snp -p 127.0.0.1:8000:8000 -v salmo-snp:/data salmo-snp:<version> salmo-snp-server local
+```
+
+(`image.sh` is `deploy/image.sh`: it checks the file against its sha256, then `docker load`.) The first start
+downloads the data release and the genome into the volume, every file checked, and scores the public sites for
+comparison (`docker logs -f salmo-snp` shows it; a few minutes); later starts need no network until a new image names
+a new release. Then open http://127.0.0.1:8000/snp/. As with `salmo-snp serve`, only this computer can reach it, your
+lists never leave it, and results stay in the volume until you delete them. `-e SALMO_SNP_SPECIES=all` also gets
+rainbow trout; `-e SALMO_SNP_DATA_URL=/copy -v <a copy of the published folder>:/copy:ro` works without internet. A
+newer version: load its image, then `docker rm -f salmo-snp` and the same `docker run` with the new version (the
+volume keeps the data and your results).
+
 ## Predictions on demand
 
 G, 2026-11-25: "see the effect with a button in the snp card ... on demand from the server". The SNP card (the

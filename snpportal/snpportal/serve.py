@@ -173,6 +173,14 @@ def download_genome(release, source):
             get(g["url"].rsplit("/", 1)[0], name + ext, target, sums.get(ext or "fa.gz"))
 
 
+def installed(version):
+    """True when release `version` is in the data folder, passes its check, and has its genome (or none is named)."""
+    from snpscore.release import check
+    folder = HOME / "releases" / version
+    return (folder / "manifest.json").exists() and not check(folder) and bool(
+        local_genome(folder) or not json.loads((folder / "manifest.json").read_text()).get("genome"))
+
+
 def releases():
     return sorted(p.parent for p in (HOME / "releases").glob("*/manifest.json"))
 
@@ -191,7 +199,9 @@ def local_genome(release):
     return path if name and all(Path(str(path) + ext).exists() for ext in ("", ".fai", ".gzi")) else None
 
 
-def serve(release=None, port=8000):
+def serve(release=None, port=8000, host="127.0.0.1"):
+    """The portal on http://<host>:<port>/snp/: 127.0.0.1, this computer only. A container (deploy/server.sh local)
+    listens on 0.0.0.0 inside it and is published on the host's 127.0.0.1 only."""
     given, release = release, pick_release(release)
     if not release or not (release / "manifest.json").exists():
         sys.exit("salmo-snp: no release: run `salmo-snp download` first, or give --release <folder>")
@@ -231,7 +241,7 @@ def serve(release=None, port=8000):
         print("salmo-snp: no local genome, so sequence checks read it from salmobase (that sends genome positions near your "
               "SNPs there): `salmo-snp download` fetches it")
     print(f"salmo-snp: open http://127.0.0.1:{port}/snp/ (this computer only; Ctrl-C stops it)", flush=True)
-    call_command("runserver", f"127.0.0.1:{port}", use_reloader=False, insecure_serving=True)  # static files too
+    call_command("runserver", f"{host}:{port}", use_reloader=False, insecure_serving=True)  # static files too
 
 
 def secret():
@@ -323,9 +333,12 @@ def main(argv=None):
     d.add_argument("--species", choices=[*RELEASES, "all"], help="this version's release of a species (default: "
                    "atlantic_salmon), or of every species; the portal's species bar switches between those downloaded")
     d.add_argument("--no-genome", action="store_true", help="skip the genome (~1 GB); sequence checks then read it remotely")
+    d.add_argument("--if-missing", action="store_true", help="only a release that is not here, or fails its check (the "
+                   "Docker image's first start; a later one then needs no network)")
     s = sub.add_parser("serve", help="run the portal on http://127.0.0.1:<port>/snp/, for this computer only")
     s.add_argument("--release", help="a release folder (default: this code's release, else the newest downloaded)")
     s.add_argument("--port", type=int, default=8000)
+    s.add_argument("--host", default="127.0.0.1", help=argparse.SUPPRESS)  # 0.0.0.0 inside a container only
     sub.add_parser("info", help="where the data and results are, and their sizes")
     r = sub.add_parser("rules", help="the tier rules in use (shipped, or your own weights.yaml in the data folder), checked")
     r.add_argument("--copy", action="store_true", help="copy the shipped rules into the data folder, to edit")
@@ -336,9 +349,12 @@ def main(argv=None):
         versions = [args.version] if args.version or not args.species else (
             list(RELEASES.values()) if args.species == "all" else [RELEASES[args.species]])
         for version in versions:
+            if args.if_missing and installed(version or RELEASE):
+                print(f"release {version or RELEASE}: here, checked")
+                continue
             download(version, args.source, not args.no_genome)
     elif args.cmd == "serve":
-        serve(args.release, args.port)
+        serve(args.release, args.port, args.host)
     elif args.cmd == "rules":
         rules(args.copy)
     else:

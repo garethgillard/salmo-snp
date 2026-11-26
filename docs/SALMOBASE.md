@@ -128,20 +128,30 @@ Start on the test server (`test.salmobase`); repeat on the live one when G says.
 
 ## Install, once
 
-**1. The portal's own folder and container** (any folder this user owns; beside salmobase's is tidy):
+The portal is deployed as a Docker image (G, 2026-11-26: "we'll only be deploying as a docker image. We should have
+the docker uploaded into the same salmobase datafiles, then salmobase can use this docker to set it up on it's
+server"). Each version's image is one file in the datafiles folder, `datasets/salmo-snp/docker/`, beside
+`compose.yml` (the repository's `snpportal/deploy/compose.salmobase.yml`), `smoke.sh` (`tools/smoke.sh`),
+`SHA256SUMS` and `latest.json`, which names the newest version. The release workflow builds the image for each
+vX.Y.Z tag, and `snpportal/deploy/publish_image.sh` puts it there from Orion ("Working from Orion"). The server needs
+no clone of the repository.
+
+**1. The portal's own folder and container** (any folder this user owns; beside salmobase's is tidy). `D` is the
+datafiles folder on the server (the survey says which):
 
 ```bash
-mkdir -p ~/snp/src ~/snp/data && cd ~/snp
-git clone https://github.com/garethgillard/salmo-snp.git src/salmo-snp
-git -C src/salmo-snp checkout -q --detach <commit>
-cp src/salmo-snp/snpportal/deploy/compose.salmobase.yml docker-compose.yml
+mkdir -p ~/snp/data && cd ~/snp
+D=<the datafiles folder>; V=<the version latest.json names, e.g. 0.2.0>
+(cd "$D/datasets/salmo-snp/docker" && sha256sum -c --quiet SHA256SUMS && gunzip -c "salmo-snp-$V.docker.tar.gz" | docker load)
+cp "$D/datasets/salmo-snp/docker/compose.yml" docker-compose.yml && cp "$D/datasets/salmo-snp/docker/smoke.sh" .
 cat > .env <<EOF
+SALMO_SNP_VERSION=$V
 SALMOBASE_NETWORK=<salmobase's network, from the survey>
-DATAFILES=<the folder mounted at /datafiles in salmobase's app container, from the survey>
+DATAFILES=$D
 SITE=test.salmobase.org
 PORTAL_USER=$(id -u):$(id -g)
 EOF
-docker compose build && docker compose up -d && docker compose logs --tail 20 snp
+docker compose up -d && docker compose logs --tail 20 snp
 ```
 
 `SITE` is the name the site answers to: `salmobase.org` on the live server. The container runs as this user, so
@@ -162,7 +172,7 @@ served folder). `PUBLIC POOL MISSING OR BUILT FOR OTHER WEIGHTS`: see "A new dat
 (`PORTAL_PORT` in `.env` for another port):
 
 ```bash
-bash src/salmo-snp/tools/smoke.sh http://127.0.0.1:8090 test.salmobase.org
+bash smoke.sh http://127.0.0.1:8090 test.salmobase.org
 ```
 
 **3. The block in salmobase's Apache file**, `server_config/apache2/salmobase.conf` in salmobase's repository,
@@ -225,8 +235,8 @@ inside its `<VirtualHost>`, after the `<Location /docs>` block and before `Proxy
 **4. Check it through salmobase**: on the server through salmobase's published port 80, then from anywhere.
 
 ```bash
-bash src/salmo-snp/tools/smoke.sh http://127.0.0.1 test.salmobase.org
-bash tools/smoke.sh https://test.salmobase.org
+bash smoke.sh http://127.0.0.1 test.salmobase.org
+bash smoke.sh https://test.salmobase.org
 ```
 
 Then upload a list of a few MB through the public address by hand (the Score page): what ends https in front of
@@ -256,15 +266,20 @@ that one. The second argument is the name the site answers to. The health page a
 
 ## Update to a new version
 
-Only when G says. Pull main on Orion first and read what changed in this file. In the portal's folder on the server:
+Only when G says. Pull main on Orion first and read what changed in this file. Publish the new version's image
+(`publish_image.sh`, "Working from Orion"), then in the portal's folder on the server:
 
 ```bash
-cd ~/snp && git -C src/salmo-snp fetch -q origin main && git -C src/salmo-snp checkout -q --detach <commit>
-docker compose build && docker compose up -d && docker compose logs --tail 20 snp
+cd ~/snp && D=<the datafiles folder>; V=<the new version>
+(cd "$D/datasets/salmo-snp/docker" && sha256sum -c --quiet SHA256SUMS && gunzip -c "salmo-snp-$V.docker.tar.gz" | docker load)
+cp "$D/datasets/salmo-snp/docker/compose.yml" docker-compose.yml && cp "$D/datasets/salmo-snp/docker/smoke.sh" .
+sed -i "s/^SALMO_SNP_VERSION=.*/SALMO_SNP_VERSION=$V/" .env
+docker compose up -d && docker compose logs --tail 20 snp
 ```
 
-Then the smoke test. salmobase's own containers are not touched. To go back: the same with the commit before.
-Results and the secret key are in `data/` and survive both.
+Then the smoke test. salmobase's own containers are not touched. To go back: `SALMO_SNP_VERSION` in `.env` to the
+version before (its image is still loaded, and its file is still in the docker folder), then `docker compose up -d`.
+Results and the secret key are in `data/` and survive both. `docker image prune` removes images no container uses.
 
 To take the portal away: `docker compose down` in its folder, the block out of salmobase's Apache file, and the
 folder removed. Nothing else on the server was changed by it.
@@ -290,13 +305,15 @@ Then `docker compose restart snp` on the server: a running portal may keep the o
 
 - Every command on the server is `ssh salmobase '<command>'` (or `ssh test.salmobase`) from a login node. A login
   node cuts a long connection (an rsync after about ten minutes), so start anything long detached and read its log:
-  `ssh salmobase 'cd ~/snp && nohup docker compose build > build.log 2>&1 &'`, then `ssh salmobase 'tail -3
-  ~/snp/build.log'`.
-- **If the server does not reach GitHub, PyPI or Docker Hub** (the survey's last lines): build the image where
-  Docker and the network are, name it as the server's compose project would (`docker compose config --images` in
-  the portal's folder says the name), and send it with `docker save <image> | ssh salmobase docker load`; then
-  `docker compose up -d --no-build`. The clone can be sent the same way instead of cloned there: `rsync -a --exclude
-  .git ~/git/salmo-snp/ salmobase:snp/src/salmo-snp/`. Not tried.
+  `ssh salmobase 'cd ~/snp && nohup docker compose up -d > up.log 2>&1 &'`, then `ssh salmobase 'tail -3 ~/snp/up.log'`.
+- **Publishing a version's image** (before installing or updating it; only when G says): in a checkout of that
+  version on Orion, on a login node, `MODE=dry bash snpportal/deploy/publish_image.sh <version>`, then `MODE=run`.
+  It takes `salmo-snp-<version>.docker.tar.gz` from the GitHub Release of the tag `v<version>` (the release workflow
+  builds it, about 300 MB), checks it, stages it in the share's `datasets/salmo-snp/docker/` with `compose.yml`,
+  `smoke.sh`, `SHA256SUMS` and `latest.json`, and sends that folder to the server, checked there. Earlier versions
+  stay, so a server can go back. Without a tag (to try a commit): `sh snpportal/deploy/image.sh build <version> <folder>`
+  where Docker is, then `FILE=<folder>/salmo-snp-<version>.docker.tar.gz MODE=run bash snpportal/deploy/publish_image.sh
+  <version>`. The server needs neither GitHub nor PyPI nor Docker Hub: everything comes from its datafiles folder.
 - **Logs**: `docker compose logs snp`. They hold event names, a job's reference, counts and timings, never a SNP or
   a file name. Nothing else needs looking after: results delete themselves, and `free_gb` on the health page is the
   room left in the data folder.

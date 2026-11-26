@@ -433,6 +433,22 @@ def filename(fmt, release, preset="all", tag=None, synthetic=False):
     return "_".join(re.sub(r"[^A-Za-z0-9.-]", "-", str(p)) for p in parts) + "." + ext
 
 
+FRONT = ("chrom", "pos", "end", "length", "svtype", "id", "ref", "alt", "tier", "tier_score", "tier_evidence", "tier_terms")
+
+
+def front(columns):
+    """The columns a table export starts with, of those `columns` has: the variant, then its tier and score (G,
+    2026-11-26: "make sure the output scored tables out the tier and scores too, at least the tsv table"), not after
+    a hundred evidence columns."""
+    return [c for c in FRONT if c in columns]
+
+
+def tiers_first(rel, columns):
+    """`rel` with front(columns) moved to the left, every other column after them in its order."""
+    first = ", ".join(q(c) for c in front(columns))
+    return f"(SELECT {first}, * EXCLUDE ({first}) FROM {rel})" if first else rel
+
+
 def export(source, fmt, out, release_dir, preset="all", meta=None, include_failed=False, plain=False, table="v",
            manifest=None, weights=None, flank=None, template=None, sidecars=True):
     """Write SNPs (annotate output: a parquet/TSV path, or a DuckDB connection with `table`) as `fmt`: tsv, parquet,
@@ -459,6 +475,8 @@ def export(source, fmt, out, release_dir, preset="all", meta=None, include_faile
     m, w = _load(manifest, weights)[:2]
     synthetic = [l["name"] for l in m.get("layers", []) if l.get("synthetic")]
     con, rel, columns = _open(source, table, [release], out, preset, w, synthetic)
+    if fmt in ("tsv", "parquet"):  # the variant, its tier and its score first
+        rel = tiers_first(rel, columns)
     hide = ", ".join(c for c in ("_row", "file_row_number") if c == "_row" or c in columns)
     ordered = isinstance(source, (str, Path))  # a file is read in order; a view may not be (a join)
     if fmt in ("tsv", "parquet"):  # I19: the SNPs' positions on the assemblies the release converts to (fSalSal1)

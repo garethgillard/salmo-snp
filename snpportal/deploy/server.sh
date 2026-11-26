@@ -1,4 +1,11 @@
 #!/bin/sh
+# Two uses of the Docker image (G, 2026-11-26: deployed as a Docker image published in salmobase's datafiles, which
+# users can also run instead of the Python package):
+#   salmo-snp-server         the portal as a service on a server (below)
+#   salmo-snp-server local   on a user's own computer: the data in /data (downloaded and checked at the first start,
+#                            and when a new image names a new release; SALMO_SNP_SPECIES=all for every species,
+#                            SALMO_SNP_DATA_URL for a copy of the published folder), results kept there until
+#                            deleted, as `salmo-snp serve`: run with -p 127.0.0.1:8000:8000 so only this computer reaches it.
 # The portal as a service on a server: what the salmobase container runs (deploy/Dockerfile) and what a server
 # without Docker runs from a virtual environment (docs/SALMOBASE.md). It needs the packages installed (snpscore,
 # salmo-snp, gunicorn) and two folders:
@@ -16,6 +23,13 @@
 set -e
 DATA=${SNPPORTAL_DATA:-/data}
 [ -w "${HOME:-/nonexistent}" ] || export HOME="$DATA"  # a container run as another user: gunicorn keeps a socket in ~
+if [ "${1:-}" = local ]; then  # a user's own computer: the Python package's own commands, its data in /data
+  unset SNPSCORE_SALMOBASE DJANGO_STATIC_URL SNPPORTAL_SERVE_STATIC
+  export SALMO_SNP_HOME="$DATA"
+  cd "$DATA"
+  salmo-snp download --if-missing --species "${SALMO_SNP_SPECIES:-atlantic_salmon}" ${SALMO_SNP_DATA_URL:+--from "$SALMO_SNP_DATA_URL"}
+  exec salmo-snp serve --host 0.0.0.0 --port 8000
+fi
 export SNPPORTAL_RESULTS_DIR="${SNPPORTAL_RESULTS_DIR:-$DATA/results}"
 export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-snpsite.settings}" DJANGO_DEBUG="${DJANGO_DEBUG:-0}"
 export DJANGO_STATIC_URL="${DJANGO_STATIC_URL:-/snp/static/}" SNPPORTAL_SERVE_STATIC="${SNPPORTAL_SERVE_STATIC:-1}"

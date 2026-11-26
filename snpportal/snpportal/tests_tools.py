@@ -377,6 +377,12 @@ class ToolsTest(SimpleTestCase):
             self.assertIn(jobs.read(self.key)["manifest_sha256"], "\n".join(header))
             if fmt in tools.VENDORS:
                 self.assertIn("layout to confirm", "\n".join(header))
+            if fmt == "tsv":  # the variant, then its tier and score (G, 2026-11-26), not after the evidence columns
+                columns = next(line for line in text.splitlines() if not line.startswith("#")).split("\t")
+                self.assertEqual(columns[:9], ["chrom", "pos", "id", "ref", "alt", "tier", "tier_score", "tier_evidence", "tier_terms"])
+        table = body(self.client.get(download)).decode()  # the Table's own download: the same first columns
+        self.assertEqual(next(line for line in table.splitlines() if not line.startswith("#")).split("\t")[:6],
+                         ["chrom", "pos", "id", "ref", "alt", "tier"])
         self.assertFalse([p.name for p in self.d.iterdir() if p.name.startswith(".export-")])  # no export or sidecar left behind
         illumina = [line.split(",") for line in body(self.client.get(download, {"scope": "all", "format": "illumina"})).decode()
                     .splitlines() if not line.startswith("#")]

@@ -11,6 +11,11 @@
 #     -e DJANGO_ALLOWED_HOSTS=salmobase.org salmo-snp:<version>
 # One release in a folder of its own instead (as before 2026-11-25): -v <release>:/release -e SNPSCORE_RELEASE=/release
 # -v <genomes>:/genome:ro -e SNPSCORE_GENOME_DIR=/genome.
+# On a user's own computer instead of the Python package (G, 2026-11-26; deploy/server.sh local): the data downloaded
+# into a volume at the first start, the portal for this computer only:
+#   docker run -d --name salmo-snp -p 127.0.0.1:8000:8000 -v salmo-snp:/data salmo-snp:<version> salmo-snp-server local
+# Published as one file, salmo-snp-<version>.docker.tar.gz, beside the data releases in salmobase's datafiles
+# (deploy/image.sh builds it and loads it; deploy/publish_image.sh publishes it).
 # Behind a proxy that re-signs TLS, give pip its certificate: --secret id=ca,src=<bundle.crt>.
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \

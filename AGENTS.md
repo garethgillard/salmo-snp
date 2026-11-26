@@ -310,6 +310,16 @@ Decided:
   Scores column and the card ('↓ 14% · top 1%'), and the Locus browser's ticks, whose height is now the size of the
   change (|log2 fold change|, square-root scaled, full at 0.5: browser.EFFECT_FULL), not the rank. Own rules can
   count a score layer from a least change as well as a rank (variant_scores {percentile, min_score}).
+- Deployed as a Docker image (G, 2026-11-26: "soon, we'll only be deploying as a docker image. We should have the
+  docker uploaded into the same salmobase datafiles, then salmobase can use this docker to set it up on it's server.
+  That'll let users also be able to choose between a local docker installation, or the python package"): one image
+  per version (snpportal/deploy/Dockerfile), saved as one file, salmo-snp-<version>.docker.tar.gz with its sha256
+  (deploy/image.sh build; the release workflow attaches it to each vX.Y.Z GitHub Release), published by the Orion
+  chat in datafiles/datasets/salmo-snp/docker/ with compose.yml, smoke.sh, SHA256SUMS and latest.json
+  (deploy/publish_image.sh). salmobase's server loads it from there and runs it with that compose.yml: no clone, no
+  build, no registry (docs/SALMOBASE.md). The same image runs on a user's own computer: `salmo-snp-server local`
+  downloads and checks the data into its volume at the first start and serves on the host's 127.0.0.1 only, keeping
+  results until deleted, as the Python package does (snpportal/README.md "A Docker install").
 - Usage documents wait for 1.0 (G, 2026-11-26: "don't update usage document yet, like the tour. Let's wait till a
   first official release to make the tour and help docs final for version 1.0"): no new tour screenshots or Help and
   README user-guide rewrites for each change until the first official release; a statement a change makes false

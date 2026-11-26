@@ -345,11 +345,14 @@ def download(request, key):
         return FileResponse(open(d / "rejects.tsv", "rb"), as_attachment=True, filename="rejected_rows.tsv")
     if fmt != "tsv" or request.GET.get("scope"):  # the Export tab's formats and scopes (all, filtered, a panel)
         return tools.export(request, key, job, fmt)
-    con, _, where, chosen = result_views.open_result(request, key, write=True)
+    con, types, where, chosen = result_views.open_result(request, key, write=True)
     fd, tmp = tempfile.mkstemp(dir=d, prefix=".export-", suffix=".tsv")
     os.close(fd)
+    from .lib.export import front
+    first = ", ".join(jobs.ident(c) for c in front(types))  # the variant, then its tier and score (G, 2026-11-26)
     try:
-        con.execute(f"COPY (SELECT * EXCLUDE (file_row_number) FROM v {where} ORDER BY file_row_number) TO '{tmp}' (HEADER, DELIMITER '\t')")
+        con.execute(f"COPY (SELECT {first + ', ' if first else ''}* EXCLUDE (file_row_number{', ' + first if first else ''}) "
+                    f"FROM v {where} ORDER BY file_row_number) TO '{tmp}' (HEADER, DELIMITER '\t')")
         f = open(tmp, "rb")
     finally:
         os.unlink(tmp)  # an open handle keeps the data until the response is closed; nothing is left behind
