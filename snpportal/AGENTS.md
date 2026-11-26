@@ -74,6 +74,23 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 - After changing a page the guided tour shows, retake its screenshots: `python manage.py tour_images` (a running portal).
 
 ## Design system
+- Data first (the overhaul of 2026-11-26, G: "simpler design so that the data is the focus. I like our salmo-cells
+  design a little more"; Claude's choices, for G to review): a white page; structure from whitespace, type and 1px
+  hairlines, not boxes. A `.sp-card` is for a figure or a repeated item only, never a frame inside a frame; text pages
+  are `.sp-section`s at `.sp-prose` width. portal.css's "== foundation ==" sections hold the tokens and shared
+  components; each page keeps its rules in its own "== page ==" section.
+- Colour roles: ink, ink-2 and muted text, hairlines (`--sp-line`, `--sp-line-2`), salmo-cells' warm neutrals
+  (palette.GREY). The accent (salmobase blue) only for the one primary action of a view, the current page in the top
+  bar and keyboard focus; every other button is quiet. Colour otherwise belongs to the data (tiers, states, regions,
+  tissues, effects) and to status (ok, warn, fail: always with a word or an icon).
+- One type scale (`--sp-fs-xs` 12 to `--sp-fs-2xl` 26 px), weights 400 and 600, sentence case, no letter-spaced capitals;
+  mono only for sequences and code.
+- Icons: one line set (salmo-cells' shapes), `{% icon 'name' %}` (snpportal_tags.ICONS). Icons name places and label
+  icon-only controls; actions are words. ★ is the one known-locus mark.
+- The top bar: icon and label links, a search box, the species switch; the footer: release, tour, Methods, citation,
+  privacy, Run locally. One fold pattern (`.sp-more`, `.sp-cs`: a title row, a chevron at the right); one tab style.
+- Words: one name per thing (Tier, SNP, position, Known locus, Design panel only for the panel page, condition, window
+  for the region around a gene, Print report).
 - Every colour lives in `palette.py`; templates and `portal.css` use classes and `var(--sp-*)` only (tested). SVGs embed literal hex.
 - New pages extend `base_portal.html`; figures use the `_figure.html` card (title, (i) definition, one SVG/PNG/TSV download menu; provenance only in the SVG `<desc>` and downloads).
 - No prototype caveat line on the pages (removed 2026-10-11: a dev version); Methods, the report and every download still
