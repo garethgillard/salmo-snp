@@ -33,7 +33,8 @@
               <input class="sp-fader" id="sp-mix-{{ term }}" type="range" min="0" max="{{ mixer.faders.weight }}" step="1">
               <input class="form-control form-control-sm sp-ch-box" type="number" min="0" max="{{ mixer.max_weight }}" step="1" aria-label="{{ label }}: weight">
               <span class="sp-ch-std" title="The standard value">&#9656; <span data-std></span></span>
-              {% if score %}<label class="sp-ch-pct">counts from percentile <input class="form-control form-control-sm" type="number" min="0" max="1" step="0.01" data-percentile></label>{% endif %}
+              {% if score %}<span class="sp-ch-pct"><label>counts with a change of at least <input class="form-control form-control-sm" type="number" min="0" step="0.05" data-min-score placeholder="any"> log2</label>
+                <label>and a rank from <input class="form-control form-control-sm" type="number" min="0" max="1" step="0.01" data-percentile placeholder="any"></label></span>{% endif %}
             </div>{% endfor %}
           </fieldset>{% endfor %}
           <fieldset class="sp-mix-group">

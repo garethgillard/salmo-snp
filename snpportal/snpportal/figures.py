@@ -317,6 +317,21 @@ def histogram(bars, title, desc="", synthetic=False, axis=None):
     return svg(width, top + height + 40, title, desc, "".join(parts), synthetic)
 
 
+def allele_bars(ref_counts, alt_counts, ref_allele, alt_allele, colour, scale, title, width=250):
+    """A sequence model's predicted signal around a SNP with each allele as two bars on `scale` (the largest of the
+    models shown, so a tissue with a smaller peak has shorter bars): the ref allele grey, the alt allele in `colour`,
+    each labelled with its allele and count. An inline SVG, with a title for screen readers."""
+    room = width - 92
+    out = [f'<svg class="sp-bars" viewBox="0 0 {width} 34" width="{width}" height="34" role="img" aria-label="{escape(title)}" '
+           f'font-family="{escape(FONT)}" font-size="12"><title>{escape(title)}</title>']
+    for y, allele, counts, fill in ((2, ref_allele, ref_counts, palette.GREY[500]), (19, alt_allele, alt_counts, colour)):
+        w = max(1.0, room * counts / scale) if scale else 1.0
+        out.append(_text(10, y + 11, allele, "middle", font_size=11, fill=palette.GREY[900], font_weight="700")
+                   + f'<rect x="20" y="{y}" width="{w:.1f}" height="13" rx="2" fill="{fill}"/>'
+                   + _text(24 + w, y + 11, f"{counts:,.0f}", "start", font_size=11, fill=palette.GREY[900]))
+    return "".join(out) + "</svg>"
+
+
 def profiles(ref, alt, ref_allele, alt_allele, colour, title, desc="", zoom=75, smooth=11, width=580):
     """A sequence model's predicted signal around a SNP with each allele: the ref allele as a grey area and the alt
     allele as a line in `colour`. Left: the model's whole output window (the SNP at its middle, marked), as a running

@@ -8,7 +8,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from snpscore import RESERVED, InputError, annotate, benchmark, connect, load_weights, scored
+from snpscore import RESERVED, InputError, annotate, benchmark, check_weights, connect, load_weights, scored
 from snpdata import build
 from snpscore.annotate import read_snps
 from snpscore.formats import detect, source
@@ -535,6 +535,13 @@ def test_variant_score_layer(tmp_path, monkeypatch):  # I15: a SYNTHETIC per-var
     terms = {(c, p): [t["term"] for t in tt] for c, p, tt in con.execute(
         f"SELECT chrom, pos, tier_terms FROM ({scored('a', weights, columns, 'all')})").fetchall()}
     assert "synscore" in terms[sites[2][0], int(sites[2][1])] and "synscore" not in terms[sites[0][0], int(sites[0][1])]
+    for rule, counted in (({"percentile": None, "min_score": 0.4}, {1, 2}), ({"percentile": 0.9, "min_score": 0.95}, set())):
+        w = {**weights, "variant_scores": {"synscore": rule}}  # an effect size too (G, 2026-11-26: "focus on effect too")
+        assert check_weights(w) == []
+        got = {(c, p) for c, p, tt in con.execute(f"SELECT chrom, pos, tier_terms FROM ({scored('a', w, columns, 'all')})").fetchall()
+               if "synscore" in [t["term"] for t in tt]}
+        assert got == {(sites[i][0], int(sites[i][1])) for i in counted}
+    assert check_weights({**weights, "variant_scores": {"synscore": {"min_score": -1}}})
 
 
 def test_weak_accessible_chromatin_is_weak():

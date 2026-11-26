@@ -205,10 +205,10 @@ def molqtl_rows(chrom, start, end):
 
 
 def score_rows(chrom, start, end, limit=20000):
-    """{label: {sites: [(pos, ref, alt, score, percentile, effect)], up, down, reference}} of the release's per-variant
-    score layers (I15) in a window. effect is the signed effect of the alt allele, None in a layer without one; up,
-    down and reference are the layer's words for it (jobs.score_words)."""
-    out, words = {}, jobs.score_words()
+    """{label: {sites: [(pos, ref, alt, score, percentile, effect)], up, down, reference, log2}} of the release's
+    per-variant score layers (I15) in a window. effect is the signed effect of the alt allele, None in a layer without
+    one; up, down and reference are the layer's words for it (jobs.score_words); log2: its effect is a log2 fold change."""
+    out, words, log2 = {}, jobs.score_words(), jobs.score_log2()
     for name, label in jobs.score_layers():
         path = jobs.release() / f"{name}.parquet"
         if path.exists():
@@ -217,7 +217,7 @@ def score_rows(chrom, start, end, limit=20000):
             sites = con.execute(
                 f"SELECT \"end\", ref, alt, score, percentile, {'effect' if has else 'NULL'} FROM read_parquet({lit(path)}) "
                 f"WHERE chrom = ? AND \"end\" > ? AND \"end\" <= ? ORDER BY \"end\" LIMIT {int(limit)}", [chrom, start, end]).fetchall()
-            out[label] = dict(zip(("up", "down", "reference"), words[name]), sites=sites)
+            out[label] = dict(zip(("up", "down", "reference"), words[name]), sites=sites, log2=name in log2)
     return out
 
 

@@ -300,6 +300,16 @@ Decided:
   elsewhere as 'Active, other tissues', active_elsewhere). This amends 'All conditions' (2026-10-11) for a user's own
   rules only: the standard rules, and so the portal's default tiers, still count every condition, and a focused
   result says its focus (its header, the Overview's 'Tier for your focus: ...', its downloads).
+- ChromBPNet liver, and effects first (G, 2026-11-26: "We have now a chrombpnet model for liver online, add that to
+  the prediction. Reduce the prediction test, and give the result for gill and liver when the button is pressed";
+  then "The ChromBPNet needs to focus on effect too, make it obvious the size difference in the atac peak, not just
+  p-value significance of it"): lib/models.yaml has the liver model (salmobase datafiles chrombpnet/AtlanticSalmon/
+  v1/Liver/); the card's one Predict button runs every model of the assembly, a row each: the predicted ATAC signal
+  with each allele as bars on one scale, the change in percent and log2, then the rank and how peak-like the place
+  is; the text is shorter. Everywhere a ChromBPNet score shows, the size of the change comes first: the Table's
+  Scores column and the card ('↓ 14% · top 1%'), and the Locus browser's ticks, whose height is now the size of the
+  change (|log2 fold change|, square-root scaled, full at 0.5: browser.EFFECT_FULL), not the rank. Own rules can
+  count a score layer from a least change as well as a rank (variant_scores {percentile, min_score}).
 - Usage documents wait for 1.0 (G, 2026-11-26: "don't update usage document yet, like the tour. Let's wait till a
   first official release to make the tour and help docs final for version 1.0"): no new tour screenshots or Help and
   README user-guide rewrites for each change until the first official release; a statement a change makes false

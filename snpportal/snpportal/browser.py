@@ -696,27 +696,34 @@ def other_group(s, ax, data):
     return group("other", "Other annotation", "", rows)
 
 
+EFFECT_FULL = 0.5  # |log2 fold change| at which an effect tick is full height (41% more or less signal), PROVISIONAL
+
+
 def scores_group(s, ax, data):
     """Predicted allele effects: one row per score layer of the release (layers.yaml format variant_scores, such as
-    a ChromBPNet model), one tick per scored variant in the window, its height the score's rank. Where the layer has
-    the signed effect of the alt allele, the tick points up in red when the model's prediction rises with it
-    (ChromBPNet: more accessible) and down in blue when it falls, as the scorer's own browser track colours them;
-    without one it is a grey tick up. None in a release without score layers."""
+    a ChromBPNet model), one tick per scored variant in the window. Where the layer has the signed effect of the alt
+    allele, the tick points up in red when the model's prediction rises with it (ChromBPNet: more accessible) and down
+    in blue when it falls, as the scorer's own browser track colours them, and its height is the effect's size (G,
+    2026-11-26: "make it obvious the size difference in the atac peak, not just p-value significance of it"):
+    square-root scaled, full from EFFECT_FULL. Without a signed effect it is a grey tick up, its height the score's
+    rank. None in a release without score layers."""
     rows, legend, mid, reach = [], [], 17, 15
     for label, layer in (data.get("scores") or {}).items():
         signed = any(e is not None for *_, e in layer["sites"])
         ticks = [f'<line x1="{-W}" x2="{2 * W}" y1="{mid}" y2="{mid}" stroke="{G[300]}" stroke-width="0.6"/>'] if signed else []
         base = mid if signed else 2 * mid - 1
         for pos, ref, alt, score, p, effect in layer["sites"]:
-            h = max(2, reach * p * (1 if signed else 2))
+            h = max(2, reach * min(1, (abs(effect or 0) / EFFECT_FULL) ** 0.5)) if signed else max(2, reach * p * 2)
             down = signed and (effect or 0) < 0
             colour = G[700] if not effect else palette.EFFECTS["down" if down else "up"]
             x, w = ax.x(pos - 1), max(2.2, ax.x(pos) - ax.x(pos - 1))
+            change = abs(100 * (2 ** effect - 1)) if effect and layer.get("log2") else None
             tip = f"{label} {results.score_number(score)} ({ref}>{alt})" + (
-                f": the alt allele is predicted {layer['down'] if down else layer['up']} "
-                f"(effect {results.score_number(effect, sign=True)})" if effect else "")
+                f": the alt allele is predicted {layer['down'] if down else layer['up']}"
+                + (f", {change:.0f}% {'less' if down else 'more'} signal" if change is not None else "")
+                + f" (effect {results.score_number(effect, sign=True)})" if effect else "")
             ticks.append(f'<rect x="{x:.1f}" y="{base if down else base - h:.1f}" width="{w:.1f}" height="{h:.1f}" fill="{colour}">'
-                         f'<title>{escape(tip)}; higher than {100 * p:.1f}% of {escape(layer["reference"])}</title></rect>')
+                         f'<title>{escape(tip)}; larger than at {100 * p:.1f}% of {escape(layer["reference"])}</title></rect>')
         if not layer["sites"]:
             ticks.append(locus_svg._t(4, mid - 4, "no scored variants in this window", 9.5, G[700]))
         n = len(layer["sites"])
@@ -725,8 +732,8 @@ def scores_group(s, ax, data):
             legend = [("sp-effect-up", f"up: alt allele {layer['up']}"), ("sp-effect-down", f"down: alt allele {layer['down']}")]
     if not rows:
         return None
-    return group("scores", "Predicted allele effects", "model predictions for the variants each model scored &middot; height = rank",
-                 rows, legend=legend)
+    return group("scores", "Predicted allele effects", "model predictions for the variants each model scored &middot; "
+                 + ("height = the size of the predicted change" if legend else "height = rank"), rows, legend=legend)
 
 
 # ---- the page ----

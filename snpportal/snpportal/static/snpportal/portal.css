@@ -622,7 +622,8 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp-fader { width: 100%; accent-color: var(--sp-accent); cursor: pointer; }
 .sp-ch-box { text-align: center; padding: .1rem .2rem; }
 .sp-ch-std { font-size: .75rem; color: var(--sp-grey-700); white-space: nowrap; }
-.sp-ch-pct { grid-column: 2 / -1; display: flex; align-items: center; gap: .35rem; margin: 0; font-size: .75rem; color: var(--sp-grey-700); }
+.sp-ch-pct { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .8rem; margin: 0; font-size: .75rem; color: var(--sp-grey-700); }
+.sp-ch-pct label { display: flex; align-items: center; gap: .3rem; margin: 0; }
 .sp-ch-pct input { width: 4rem; padding: .05rem .2rem; }
 .sp-mix-preview { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .9rem; min-height: 2.2rem; margin-bottom: .6rem;
   padding: .35rem .7rem; border: 1px solid var(--sp-grey-300); border-radius: .4rem; background: var(--sp-white);

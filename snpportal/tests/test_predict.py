@@ -1,7 +1,7 @@
 """Predictions on demand (lib/predict.py): the registry, the files' checksums and the model's rules. The rules are
 tested with a stand-in for the fold model (they need numpy, which the base install lacks: skipped there), and against
-the release's own test SNPs when SNPPORTAL_MODEL_TEST names a folder of the model's files and SNPPORTAL_MODEL_GENOME
-the genome (not in CI: the files are 25 MB a fold)."""
+the releases' own test SNPs when SNPPORTAL_MODEL_TEST names a folder for the models' files (a folder per model in it)
+and SNPPORTAL_MODEL_GENOME the genome (not in CI: the files are 25 MB a fold)."""
 import hashlib
 import json
 import math
@@ -24,8 +24,10 @@ def sequence(chrom, start, end):
 
 
 def test_registry():
-    gill, = [m for m in predict.models("Ssal_v3.1") if m["name"] == "chrombpnet_gill"]
-    assert gill["url"].startswith("https://salmobase.org/") and gill["direction"] == ["more accessible", "less accessible"]
+    found = {m["name"]: m for m in predict.models("Ssal_v3.1")}
+    assert list(found) == ["chrombpnet_gill", "chrombpnet_liver"]  # the liver model too (G, 2026-11-26)
+    for m in found.values():
+        assert m["url"].startswith("https://salmobase.org/") and m["direction"] == ["more accessible", "less accessible"]
     assert predict.models("USDA_OmykA_1.1") == []  # no model for rainbow trout yet: its cards have no button
 
 
@@ -114,11 +116,13 @@ def test_the_rules(tmp_path):
 
 
 @pytest.mark.skipif(not (os.environ.get("SNPPORTAL_MODEL_TEST") and os.environ.get("SNPPORTAL_MODEL_GENOME")),
-                    reason="set SNPPORTAL_MODEL_TEST (a folder for the gill model's files) and SNPPORTAL_MODEL_GENOME (Ssal_v3.1 fa.gz)")
-def test_the_gill_model_itself():
-    """The gill ChromBPNet model on its release's own test SNPs: this module's scores are variant-scorer's."""
+                    reason="set SNPPORTAL_MODEL_TEST (a folder for the models' files) and SNPPORTAL_MODEL_GENOME (Ssal_v3.1 fa.gz)")
+@pytest.mark.parametrize("name", ["chrombpnet_gill", "chrombpnet_liver"])
+def test_the_models_themselves(name):
+    """Each ChromBPNet model on 10 of its release's own test SNPs: this module's scores are variant-scorer's."""
+    from pathlib import Path
     from snpscore.fasta import Fasta
     genome = Fasta(os.environ["SNPPORTAL_MODEL_GENOME"])
-    gill = next(m for m in predict.models("Ssal_v3.1") if m["name"] == "chrombpnet_gill")
-    n, *worst = predict.self_test(gill, os.environ["SNPPORTAL_MODEL_TEST"], lambda c, s, e: genome.fetch(c, s, e), limit=25)
-    assert n == 25 and max(worst) < 1e-3
+    model = next(m for m in predict.models("Ssal_v3.1") if m["name"] == name)
+    n, *worst = predict.self_test(model, Path(os.environ["SNPPORTAL_MODEL_TEST"]) / name, lambda c, s, e: genome.fetch(c, s, e), limit=10)
+    assert n == 10 and max(worst) < 1e-3

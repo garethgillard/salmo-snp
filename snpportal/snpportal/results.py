@@ -218,7 +218,7 @@ def _open(request, key, write=False, chip=False):
     else:
         con.execute("CREATE VIEW v0 AS SELECT * FROM r")
     scores = variant_scores_sql([(n, label) for n, label in jobs.score_layers(d) if n + "_percentile" in columns],
-                                columns, jobs.score_words(d))
+                                columns, jobs.score_words(d), jobs.score_log2(d))
     extra = f", {scores} AS variant_scores" if scores else ""
     if (d / "gwas.parquet").exists():  # GWAS jobs: the association statistics for the Table's p and beta columns
         con.execute(f"CREATE VIEW v1 AS SELECT v0.*, s.neglog10p, s.beta, s.se{extra} FROM v0 "
@@ -815,11 +815,12 @@ def locus_note(g):
     return " · ".join(x for x in (where, alleles) if x)
 
 
-def variant_scores_sql(layers, columns=(), words=None):
+def variant_scores_sql(layers, columns=(), words=None, log2=()):
     """The view's variant_scores column for the release's score layers [(name, label)] (I15): a list of {label, score,
-    percentile, effect, up, down, reference}. score, percentile and effect are NULL where the SNP is outside a model's
-    scored set, effect also in a layer without one (it is the signed effect of this row's alt allele); up, down and
-    reference are the layer's words (jobs.score_words). None without score layers."""
+    percentile, effect, up, down, reference, log2}. score, percentile and effect are NULL where the SNP is outside a
+    model's scored set, effect also in a layer without one (it is the signed effect of this row's alt allele); up, down
+    and reference are the layer's words (jobs.score_words); log2: its effect is a log2 fold change (jobs.score_log2).
+    None without score layers."""
     if not layers:
         return None
     def item(n, label):
@@ -827,7 +828,7 @@ def variant_scores_sql(layers, columns=(), words=None):
         effect = f"CASE WHEN {ident(n)} THEN {ident(n + '_effect')} END" if n + "_effect" in columns else "NULL::DOUBLE"
         return (f"{{'label': {lit(label)}, 'score': CASE WHEN {ident(n)} THEN {ident(n + '_score')} END, "
                 f"'percentile': CASE WHEN {ident(n)} THEN {ident(n + '_percentile')} END, 'effect': {effect}, "
-                f"'up': {lit(up)}, 'down': {lit(down)}, 'reference': {lit(reference)}}}")
+                f"'up': {lit(up)}, 'down': {lit(down)}, 'reference': {lit(reference)}, 'log2': {'true' if n in log2 else 'false'}}}")
     return f"[{', '.join(item(n, label) for n, label in layers)}]"
 
 
@@ -836,8 +837,8 @@ def row_scores(snp):
     on the fly) built from the release's score layers' own columns."""
     if "variant_scores" in snp:
         return snp["variant_scores"] or []
-    words = jobs.score_words()
-    return [dict(zip(("up", "down", "reference"), words[n]), label=label, score=snp.get(n + "_score") if snp.get(n) else None,
+    words, log2 = jobs.score_words(), jobs.score_log2()
+    return [dict(zip(("up", "down", "reference"), words[n]), label=label, log2=n in log2, score=snp.get(n + "_score") if snp.get(n) else None,
                  percentile=snp.get(n + "_percentile") if snp.get(n) else None,
                  effect=snp.get(n + "_effect") if snp.get(n) else None)
             for n, label in jobs.score_layers() if n + "_percentile" in snp]
@@ -851,8 +852,10 @@ def score_number(x, sign=False):
 
 
 def score_text(s):
-    """(label, text, tooltip) of one variant score: '0.82 · top 5%', with an arrow first where the model gives the
-    direction of the alt allele's effect ('↑ 0.82 · top 5%'), or 'not scored'."""
+    """(label, text, tooltip) of one variant score, the size of the effect first (G, 2026-11-26: "make it obvious the
+    size difference in the atac peak, not just p-value significance of it"): '↓ 14% · top 1%' for a log2 fold change
+    (the predicted change of the signal), '↑ 0.82 · top 5%' for another signed score, '0.82 · top 5%' without a
+    direction, or 'not scored'."""
     if s["score"] is None:
         return s["label"], "not scored", "Outside the variants this model scored: no score, not a low one"
     top = max(1, round(100 * (1 - s["percentile"])))
@@ -861,7 +864,15 @@ def score_text(s):
     if not effect:  # no signed effect in this layer (or exactly none)
         return s["label"], f"{score_number(s['score'])} · top {top}%", tip
     way = s.get("up") or "higher" if effect > 0 else s.get("down") or "lower"
-    return (s["label"], f"{'↑' if effect > 0 else '↓'} {score_number(s['score'])} · top {top}%",
+    arrow = "↑" if effect > 0 else "↓"
+    if s.get("log2"):  # the predicted signal with the alt allele over the ref's: a percent change says its size
+        change = abs(100 * (2 ** effect - 1))
+        size = f"{change:.0f}%" if change >= 1 else f"{change:.1f}%"
+        return (s["label"], f"{arrow} {size} · top {top}%",
+                f"The alt allele is predicted {way}: {size} {'more' if effect > 0 else 'less'} signal (log2 fold change "
+                f"{score_number(effect, sign=True)}). A larger change than at {100 * s['percentile']:.1f}% of "
+                f"{s.get('reference') or 'the variants scored'}")
+    return (s["label"], f"{arrow} {score_number(s['score'])} · top {top}%",
             f"The alt allele is predicted {way} (effect {score_number(effect, sign=True)}). {tip}")
 
 

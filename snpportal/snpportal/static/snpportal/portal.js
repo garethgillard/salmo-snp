@@ -729,7 +729,10 @@
       var t = ch.getAttribute("data-term"), pct = ch.querySelector("[data-percentile]"), std = ch.querySelector("[data-std]");
       set(ch, (r.weights || {})[t] || 0);
       if (std) std.textContent = (standard.weights || {})[t] || 0;
-      if (pct) pct.value = (r.variant_scores || {})[t] != null ? r.variant_scores[t] : 0.99;
+      var rule = (r.variant_scores || {})[t], least = ch.querySelector("[data-min-score]");
+      rule = rule == null ? {percentile: 0.99} : typeof rule === "object" ? rule : {percentile: rule};
+      if (pct) pct.value = rule.percentile == null ? "" : rule.percentile;
+      if (least) least.value = rule.min_score == null ? "" : rule.min_score;
     });
     box.querySelectorAll("[data-cut]").forEach(function (ch) {
       var i = +ch.getAttribute("data-cut");
@@ -754,8 +757,12 @@
       var t = ch.getAttribute("data-term"), v = Math.max(0, parseInt(ch.querySelector(".sp-ch-box").value, 10) || 0);
       var pct = ch.querySelector("[data-percentile]");
       if (!pct) { r.weights[t] = v; return; }
-      r.variant_scores = Object.assign({}, r.variant_scores);  // a score layer counts only with a weight and a percentile
-      if (v > 0) { r.weights[t] = v; r.variant_scores[t] = parseFloat(pct.value) || 0; } else { delete r.weights[t]; delete r.variant_scores[t]; }
+      r.variant_scores = Object.assign({}, r.variant_scores);  // a score layer counts only with a weight, from a rank and/or a size
+      var least = ch.querySelector("[data-min-score]"), p = parseFloat(pct.value), e = least ? parseFloat(least.value) : NaN;
+      if (v > 0) {
+        r.weights[t] = v;
+        r.variant_scores[t] = isNaN(e) ? (isNaN(p) ? 0 : p) : {percentile: isNaN(p) ? null : p, min_score: e};
+      } else { delete r.weights[t]; delete r.variant_scores[t]; }
     });
     r.tiers = [0, 1, 2].map(function (i) { return parseInt(box.querySelector('[data-cut="' + i + '"] .sp-ch-box').value, 10) || 1; });
     var ticks = box.querySelectorAll("[data-focus]"), focus = [];
@@ -813,7 +820,7 @@
     var ch = e.target.closest(".sp-ch");
     if (ch && e.target.classList.contains("sp-fader")) ch.querySelector(".sp-ch-box").value = e.target.value;
     if (ch && e.target.classList.contains("sp-ch-box")) set(ch, Math.max(+e.target.min || 0, parseInt(e.target.value, 10) || 0));
-    if (ch || e.target.matches("[data-percentile]")) changed();
+    if (ch || e.target.matches("[data-percentile], [data-min-score]")) changed();
   });
   box.addEventListener("change", function (e) { if (e.target.matches("[data-state], [data-focus]")) changed(); });
   box.addEventListener("show.bs.modal", function () { fill(current || saved() || standard); showState(); });

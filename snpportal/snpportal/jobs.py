@@ -500,6 +500,13 @@ def score_layers(where=None):
             if layer.get("format") == "variant_scores"]
 
 
+def score_log2(where=None):
+    """The score layers whose signed effect is a log2 fold change (ChromBPNet's: their description says so), so the
+    pages can say it as a percent change."""
+    return {layer["name"] for layer in manifest(where).get("layers", [])
+            if layer.get("format") == "variant_scores" and "log2" in (layer.get("description") or "")}
+
+
 def score_words(where=None):
     """{layer name: (up, down, reference)}: how a score layer's signed effect and its percentile read. `direction` in
     layers.yaml names what the alt allele is predicted to be when the effect is above and below zero (ChromBPNet:

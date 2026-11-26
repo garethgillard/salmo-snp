@@ -397,6 +397,16 @@ class ResultsTest(SimpleTestCase):
         finally:
             shutil.rmtree(pool)
 
+    def test_effect_sizes_first(self):
+        """A ChromBPNet score says the size of the predicted change first, as a percent, then its rank (G, 2026-11-26:
+        "make it obvious the size difference in the atac peak, not just p-value significance of it")."""
+        self.assertIn("chrombpnet_gill", jobs.score_log2())  # its effect is a log2 fold change: the layer says so
+        label, text, tip = results.score_text({"label": "ChromBPNet Gill", "score": 0.21179, "percentile": 0.9922, "effect": -0.21179,
+                                               "up": "more accessible", "down": "less accessible",
+                                               "reference": "100,000 random public SNPs", "log2": True})
+        self.assertEqual(text, "↓ 14% · top 1%")
+        self.assertTrue(tip.startswith("The alt allele is predicted less accessible: 14% less signal (log2 fold change -0.21)."))
+
     def test_helpers(self):
         self.assertEqual(results.gene_label(None, "ENSSSAG1", "VGLL3,VGLL3B"), "~VGLL3")
         self.assertEqual(results.gene_label(None, "ENSSSAG00000053708", "VGLL3"), "vgll3")  # the catalogue's name, as on gene pages
@@ -425,24 +435,25 @@ class ResultsTest(SimpleTestCase):
 
 
     def test_predict_on_demand(self):
-        """The card's button for a sequence model (G, 2026-11-25): offered for a SNP of an assembly that has a model;
-        its address names the job's row and never the position; the result replaces the button. The model itself is
-        lib.predict's (tests/test_predict.py): a stand-in here."""
+        """The card's button for the sequence models (G, 2026-11-25; one button for gill and liver, the effect first:
+        G, 2026-11-26): offered for a SNP of an assembly that has models; its address names the job's row and never the
+        position; the result replaces the button. The models themselves are lib.predict's (tests/test_predict.py): a
+        stand-in here."""
         from . import predict
         from .lib import predict as lp
         chrom, pos, ref, alt = jobs.connect([self.d]).execute(
             f"SELECT chrom, pos, ref, alt FROM read_parquet('{self.d / 'result.parquet'}', file_row_number=true) WHERE file_row_number = 0").fetchall()[0]
         card_url = reverse("snpportal:card", args=[self.key, 0])
-        url = reverse("snpportal:predict_job", args=[self.key, 0, "chrombpnet_gill"])
+        url = reverse("snpportal:predict_job", args=[self.key, 0, "all"])
         self.assertNotIn(str(pos), url)
         with mock.patch.object(lp, "missing_packages", lambda: []):
             card = self.client.get(card_url, HTTP_HX_REQUEST="true").content.decode()
-        self.assertIn("Predict with ChromBPNet Gill", card)
+        self.assertIn("Predict with ChromBPNet (gill, liver)", card)  # one button, both models
         self.assertIn(f'hx-get="{url}"', card)
         self.assertIn('hx-select="unset"', card)  # the Table's drawer inherits the results page's hx-select
         with mock.patch.object(lp, "missing_packages", lambda: ["onnxruntime"]):  # the base install: no button, but how to get one
             card = self.client.get(card_url, HTTP_HX_REQUEST="true").content.decode()
-        self.assertNotIn("Predict with ChromBPNet Gill", card)
+        self.assertNotIn("Predict with ChromBPNet", card)
         self.assertIn("needs onnxruntime in this install: pip install numpy onnxruntime", card)
         canned = {"model": "Gill", "version": "v1", "fold": 2, "chrom": chrom, "pos": pos, "ref": ref, "alt": alt, "other_strand": False,
                   "ref_counts": 43.25, "alt_counts": 37.35, "effect": -0.21179, "score": 0.21179, "percentile": 0.9922, "jsd": 0.0574,
@@ -456,18 +467,22 @@ class ResultsTest(SimpleTestCase):
         with mock.patch.object(lp, "predict", stand_in):
             page = self.client.get(url, HTTP_HX_REQUEST="true").content.decode()
             again = self.client.get(url, HTTP_HX_REQUEST="true").content.decode()  # from this process's memory
-        self.assertEqual(asked, [("chrombpnet_gill", ("chrombpnet_gill", "v1"), chrom, pos, ref, alt)])
+        self.assertEqual(asked, [(m, (m, "v1"), chrom, pos, ref, alt) for m in ("chrombpnet_gill", "chrombpnet_liver")])
         self.assertEqual(page, again)
-        for text in (f"the alt allele {alt} is predicted", f"<strong>less accessible</strong> than {ref}", "log2 fold change -0.21",
-                     "43.2 &rarr; 37.4 predicted Tn5 cuts in the 1,000 bp", "99.2% of 100,000 random public SNPs (top 1%)",
-                     "&gt;99.9% of them", "not counted in the tier", "on this server for this SNP alone"):
+        for text in ('<th scope="row">Gill</th>', '<th scope="row">Liver</th>', "↓ 14%</strong> less accessible",  # the effect first
+                     f"43 predicted cuts with {ref}, 37 with {alt}", "log2 -0.21; top 1% of random SNPs", "a peak like the model&#x27;s top 90%",
+                     "not counted in the tier", "on this server for this SNP alone"):
             self.assertIn(text, page)
-        self.assertEqual(len(svgs(page)), 1)  # the two predicted profiles, a valid SVG
+        self.assertEqual(len(svgs(page)), 4)  # per model: the two alleles' bars and their predicted profiles, valid SVGs
         self.assertIn(palette.EFFECTS["down"], page)
+        with mock.patch.object(lp, "predict", stand_in):  # one model alone, by its name
+            one = self.client.get(reverse("snpportal:predict_job", args=[self.key, 0, "chrombpnet_gill"]), HTTP_HX_REQUEST="true").content.decode()
+        self.assertIn('<th scope="row">Gill</th>', one)
+        self.assertNotIn("Liver", one)
         predict._CACHE.clear()
         with mock.patch.object(lp, "predict", mock.Mock(side_effect=lp.Unavailable("The model's files could not be fetched from salmobase.org: offline"))):
             page = self.client.get(url, HTTP_HX_REQUEST="true").content.decode()
-        self.assertIn("ChromBPNet Gill: The model&#x27;s files could not be fetched from salmobase.org: offline", page)
+        self.assertIn("The model&#x27;s files could not be fetched from salmobase.org: offline", page)
         self.assertEqual(self.client.get(reverse("snpportal:predict_job", args=[self.key, 0, "nomodel"])).status_code, 404)
         self.assertEqual(self.client.get(reverse("snpportal:predict_job", args=[self.key, 10 ** 7, "chrombpnet_gill"])).status_code, 404)
         with mock.patch.object(lp, "predict", stand_in):  # a variant page's SNP has its own address; alleles are needed

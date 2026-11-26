@@ -87,7 +87,8 @@ def check_weights(w):
             seen.setdefault(state, key)
     scores = w.get("variant_scores") or {}
     if not isinstance(scores, dict):
-        out.append("variant_scores: score layer names with the percentile from which each counts, e.g. {chrombpnet_gill: 0.99}")
+        out.append("variant_scores: score layer names with the percentile from which each counts, e.g. {chrombpnet_gill: 0.99}, "
+                   "or with a least effect too, e.g. {chrombpnet_gill: {percentile: 0.9, min_score: 0.2}}")
         scores = {}
     weights = w.get("weights")
     if "weights" in w and not isinstance(weights, dict):
@@ -104,9 +105,16 @@ def check_weights(w):
             out.append("weights: 'summit' counts, but the summit block (max_distance, min_rank) is missing")
         out += [f"variant_scores: '{name}' has no weight under weights (add one; 0 shows it without counting it)"
                 for name in scores if name not in weights]
+    number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)  # noqa: E731
     for name, cutoff in scores.items():
-        if isinstance(cutoff, bool) or not isinstance(cutoff, (int, float)) or not 0 <= cutoff <= 1:
-            out.append(f"variant_scores: '{name}' is {cutoff!r}; it is the percentile from which the score counts, 0 to 1")
+        rule = cutoff if isinstance(cutoff, dict) else {"percentile": cutoff}
+        if set(rule) - {"percentile", "min_score"} or not any(rule.get(k) is not None for k in ("percentile", "min_score")):
+            out.append(f"variant_scores: '{name}' is {cutoff!r}; a percentile from which it counts (0 to 1), or "
+                       "{percentile, min_score}: the least percentile and the least score (e.g. |log2 fold change|), either may be null")
+        elif rule.get("percentile") is not None and not (number(rule["percentile"]) and 0 <= rule["percentile"] <= 1):
+            out.append(f"variant_scores: '{name}' percentile is {rule['percentile']!r}; it is the percentile from which the score counts, 0 to 1")
+        elif rule.get("min_score") is not None and not (number(rule["min_score"]) and rule["min_score"] >= 0):
+            out.append(f"variant_scores: '{name}' min_score is {rule['min_score']!r}; the least score that counts, 0 or more")
     tiers = w.get("tiers")
     if "tiers" in w and not (isinstance(tiers, list) and len(tiers) == 3
                              and all(isinstance(t, int) and not isinstance(t, bool) for t in tiers)
@@ -257,9 +265,12 @@ def scored(table, weights, columns, trait, synthetic=()):
         terms.append(("summit", "summit", f"coalesce(summit_distance <= {int(rule['max_distance'])} "
                                           f"AND summit_rank >= {float(rule['min_rank'])}, false)",
                       "'ATAC summit ' || summit_distance || ' bp: ' || summit_condition"))
-    for name, cutoff in (weights.get("variant_scores") or {}).items():  # I15: a score layer counts from G's percentile
+    for name, cutoff in (weights.get("variant_scores") or {}).items():  # I15: a score layer counts from G's percentile,
+        rule = cutoff if isinstance(cutoff, dict) else {"percentile": cutoff}  # and, if set, from a least score (an effect)
         if f"{name}_percentile" in columns and name in w:
-            terms.append((name, name, f"coalesce({q(name + '_percentile')} >= {float(cutoff)}, false)",
+            cond = ([f"{q(name + '_percentile')} >= {float(rule['percentile'])}"] if rule.get("percentile") is not None else []) + \
+                   ([f"{q(name + '_score')} >= {float(rule['min_score'])}"] if rule.get("min_score") is not None else [])
+            terms.append((name, name, f"coalesce({' AND '.join(cond) or 'false'}, false)",
                           f"{lit(name + ' ')} || printf('%.2f', {q(name + '_score')})"))
     terms = [t for t in terms if t[0] not in synthetic]
 
