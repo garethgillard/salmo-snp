@@ -1,7 +1,9 @@
 {% extends 'snpportal/base_portal.html' %}
+{# A results link whose job is gone: what happened, and the way back. Text on the page, no frame. #}
 {% block main %}
-<div class="sp-card">
-  <p>These results have expired or were deleted. Results are kept for a limited time and can be deleted at any time by whoever has the link.</p>
-  <a class="btn btn-primary" href="{% url 'snpportal:upload' %}">Score a list again</a>
+<div class="sp-prose">
+  <p>These results have expired or were deleted. On a shared server results are kept for a limited time, and whoever has
+    their link can delete them.</p>
+  <p><a class="btn btn-primary" href="{% url 'snpportal:upload' %}">Score a list again</a></p>
 </div>
 {% endblock main %}
