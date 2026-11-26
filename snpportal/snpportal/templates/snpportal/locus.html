@@ -1,48 +1,52 @@
 {% extends layout %}
 {% load snpportal_tags %}
-{% comment %}Locus browser (browser.context; opens at vgll3 without a region): one slim control bar, then track groups on one
-   axis. htmx swaps #locus-view (controls and tracks) from locus/svg/ when moving; the functional assays load one assay
-   at a time from locus/assay/ when their section is opened. portal.js draws a line at the mouse through the tracks, names
-   its base on the ruler and pins it to that base on a click, and moves the view with the mouse (drag, the ruler, Ctrl + wheel,
-   the keys) by asking for the new window through [data-nav]. Every link and the form also work without JavaScript.{% endcomment %}
+{% comment %}Locus browser (browser.context; opens at vgll3 without a region): one slim control bar, as wide as the tracks, then
+   track groups on one axis. The H1 is for screen readers: the top bar already names the page. htmx swaps #locus-view
+   (controls and tracks) from locus/svg/ when moving; the functional assays load one assay at a time from locus/assay/
+   when their section is opened. portal.js draws a line at the mouse through the tracks, names its base on the ruler and
+   pins it to that base on a click, and moves the view with the mouse (drag, the ruler, Ctrl + wheel, the keys) by asking
+   for the new window through [data-nav]. Every link and the form also work without JavaScript.{% endcomment %}
+{% block page_header %}<h1 class="visually-hidden">Locus browser</h1>{% endblock page_header %}
 {% block main %}
 <div id="locus-view" class="sp-browser">
   <form class="sp-bctl" method="get" action="{% url 'snpportal:locus' %}" role="search">
-    <input class="form-control form-control-sm sp-mono sp-region" id="r" name="r" value="{{ region_text }}" aria-label="Region" autocomplete="off"
+    <span class="sp-bctl-go"><input class="form-control form-control-sm sp-region" id="r" name="r" value="{{ region_text }}" aria-label="Region" autocomplete="off"
            placeholder="25:28,985,000-29,010,000 or ssa25:28.98-29.01 Mb">
     {% if s.key %}<input type="hidden" name="key" value="{{ s.key }}">{% endif %}
     <input type="hidden" name="open" value="{{ open }}" data-open>
-    <button class="btn btn-sm btn-primary" type="submit">Go</button>
-    {% if moves %}{% for label, q, tip in moves %}{% if forloop.counter0|divisibleby:2 %}<span class="btn-group btn-group-sm" role="group">{% endif %}{% if q %}<a class="btn btn-outline-secondary" href="{% url 'snpportal:locus' %}?{{ q }}" title="{{ tip }}" aria-label="{{ tip }}"
+    <button class="btn btn-sm btn-primary" type="submit">Go</button></span>
+    {% if moves %}<span class="sp-bctl-moves">{% for label, q, tip, ic in moves %}{% if forloop.counter0|divisibleby:2 %}<span class="btn-group btn-group-sm" role="group">{% endif %}{% if q %}<a class="btn btn-outline-secondary" href="{% url 'snpportal:locus' %}?{{ q }}" title="{{ tip }}" aria-label="{{ tip }}"
        hx-get="{% url 'snpportal:locus_svg' %}?{{ q }}" hx-target="#locus-view" hx-select="#locus-view" hx-swap="outerHTML" hx-indicator="#locus-busy"
-       hx-push-url="{% url 'snpportal:locus' %}?{{ q }}">{{ label }}</a>{% else %}<span class="btn btn-outline-secondary disabled" aria-disabled="true" title="{{ tip }}">{{ label }}</span>{% endif %}{% if not forloop.counter0|divisibleby:2 %}</span>{% endif %}{% endfor %}
+       hx-push-url="{% url 'snpportal:locus' %}?{{ q }}">{% if ic %}{% icon ic %}{% else %}{{ label }}{% endif %}</a>{% else %}<span class="btn btn-outline-secondary disabled" aria-disabled="true" title="{{ tip }}">{% if ic %}{% icon ic %}{% else %}{{ label }}{% endif %}</span>{% endif %}{% if not forloop.counter0|divisibleby:2 %}</span>{% endif %}{% endfor %}
+    <details class="sp-info sp-move-tip"><summary aria-label="How to move and zoom" title="How to move and zoom">{% icon 'info' %}</summary><p>Drag the tracks to move;
+      drag along the ruler to zoom to that stretch; double-click, or Ctrl&nbsp;+&nbsp;scroll, to zoom. The keys &larr; &rarr; + &minus; work too.
+      Click the tracks to pin the marker line to a base, click again to let it go.</p></details>
     <span id="locus-busy" class="spinner-border sp-spin htmx-indicator" role="status" aria-label="Loading"></span>
-    <span hidden data-nav data-svg="{% url 'snpportal:locus_svg' %}" data-page="{% url 'snpportal:locus' %}" hx-target="#locus-view" hx-select="#locus-view" hx-swap="outerHTML" hx-indicator="#locus-busy"></span>{% endif %}
-    {% if groups %}<span class="sp-push"><a class="btn btn-sm btn-outline-secondary" href="{% url 'snpportal:tracks' %}" hx-boost="false" title="Add your own BED file as a track here, or manage your tracks">Your tracks</a>
-    <button type="button" class="btn btn-sm btn-outline-secondary active" data-line aria-pressed="true" aria-label="Marker line"
-       title="Marker line on or off: it follows the mouse through the tracks; click the tracks to pin it to that base (it then moves with the tracks), click again to let it go"><svg class="sp-ico" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5v13M1.5 8h4M10.5 8h4M3.5 6 1.5 8l2 2M12.5 6l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <span hidden data-nav data-svg="{% url 'snpportal:locus_svg' %}" data-page="{% url 'snpportal:locus' %}" hx-target="#locus-view" hx-select="#locus-view" hx-swap="outerHTML" hx-indicator="#locus-busy"></span></span>{% endif %}
+    {% if groups %}<span class="sp-push">
+    <span class="sp-bctl-links">This region in <a href="{{ jbrowse }}" rel="noreferrer noopener" target="_blank">JBrowse{% icon 'external' %}</a>
+      <a href="{{ ensembl }}" rel="noreferrer noopener" target="_blank">Ensembl{% icon 'external' %}</a></span>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'snpportal:tracks' %}" hx-boost="false" title="Add your own BED file as a track here, or manage your tracks">Your tracks</a>
+    <button type="button" class="btn btn-sm btn-outline-secondary active" data-line aria-pressed="true"
+       title="The marker line follows the mouse through the tracks; click the tracks to pin it to that base (it then moves with the tracks), click again to let it go. Press to turn it off or on">Marker line</button>
     <span class="btn-group btn-group-sm" role="group" aria-label="Track groups"><button type="button" class="btn btn-outline-secondary" data-all="open">Expand all</button><button type="button" class="btn btn-outline-secondary" data-all="close">Collapse all</button></span>
-    <a class="btn btn-sm btn-outline-secondary" href="{{ download }}" title="Download the locus figure (SVG)" aria-label="Download the locus figure (SVG)" hx-boost="false" download>&#10515;</a></span>{% endif %}
+    <a class="sp-iconbtn" href="{{ download }}" title="Download the tracks as one figure (SVG)" aria-label="Download the tracks as one figure (SVG)" hx-boost="false" download>{% icon 'download' %}</a></span>{% endif %}
   </form>
 
-  {% if s.error %}<div class="sp-status sp-status-fail" role="alert">&#10007; {{ s.error }}</div>
-  {% elif s.too_wide %}<div class="sp-status sp-status-warn" role="status">&#9888; This window is wider than 2 Mb: zoom in.
+  {% if s.error %}<div class="sp-status sp-status-fail" role="alert">{% icon 'fail' %} {{ s.error }}</div>
+  {% elif s.too_wide %}<div class="sp-status sp-status-warn" role="status">{% icon 'warn' %} This window is wider than 2 Mb: zoom in.
     <a href="{% url 'snpportal:locus' %}?{{ centre_query }}">Show the central 2 Mb</a>, or browse whole chromosomes in
     <a href="https://salmobase.org/jbrowse/" rel="noreferrer noopener" target="_blank">salmobase JBrowse</a>.</div>
   {% elif groups %}
-  {% for note in notes %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ note }}</div>{% endfor %}
-  {% if truncated %}<div class="sp-status sp-status-warn" role="status">&#9888; Some lanes are cut short in this wide window: zoom in to see all of {{ truncated|join:", " }}.</div>{% endif %}
-  <p class="sp-small sp-muted mb-1">This region in <a href="{{ jbrowse }}" rel="noreferrer noopener" target="_blank">salmobase JBrowse</a> &middot;
-    <a href="{{ ensembl }}" rel="noreferrer noopener" target="_blank">Ensembl</a>
-    <span class="sp-move-tip"> &middot; Drag the tracks to move, drag along the ruler to zoom to a stretch, double-click or Ctrl&nbsp;+&nbsp;scroll to zoom
-    (&larr; &rarr; + &minus; work too); click to pin the marker line</span></p>
+  {% for note in notes %}<div class="sp-status sp-status-warn" role="status">{% icon 'warn' %} {{ note }}</div>{% endfor %}
+  {% if truncated %}<div class="sp-status sp-status-warn" role="status">{% icon 'warn' %} Some lanes are cut short in this wide window: zoom in to see all of {{ truncated|join:", " }}.</div>{% endif %}
   <div class="sp-tracks" data-start="{{ s.start }}" data-end="{{ s.end }}" data-chrom="{{ s.chrom }}" data-size="{{ s.size|default:0 }}" data-min="{{ limits.0 }}" data-max="{{ limits.1 }}" data-query="{{ query }}">
-    <div class="sp-trk sp-trk-chr"><div class="sp-trk-lab"><span class="sp-trk-name">chr{{ s.chrom }}</span><span class="sp-trk-sub">{{ size_text }}</span></div>{{ chromosome }}</div>
-    <div class="sp-trk sp-trk-ruler"><div class="sp-trk-lab"><span class="sp-trk-name">{{ width_text }}</span></div>{{ ruler }}</div>
+    <div class="sp-trk sp-trk-chr"><div class="sp-trk-lab" title="The whole chromosome, this window boxed; grey: the Ss4R duplicate block around it"><span class="sp-trk-name">chr{{ s.chrom }}</span><span class="sp-trk-sub">{{ size_text }}</span></div>{{ chromosome }}</div>
+    <div class="sp-trk sp-trk-ruler"><div class="sp-trk-lab" title="The width of this window"><span class="sp-trk-name">{{ width_text }}</span></div>{{ ruler }}</div>
     {% for g in groups %}{% include 'snpportal/_browser_group.html' %}{% endfor %}
     <section class="sp-grp sp-sec{% if assays_open %} open{% endif %}" id="g-assays" data-group="assays">
-      <header class="sp-grp-h"><h3>Functional assays</h3><span class="sp-grp-note">AQUA-FAANG, live from salmobase &middot; mean of replicates &middot; combined tracks stack the tissue means</span>
-        <button type="button" class="sp-tog" aria-expanded="{% if assays_open %}true{% else %}false{% endif %}" aria-controls="m-assays"><span class="sp-when-closed">Show {{ assays|length }} assays &#9662;</span><span class="sp-when-open">Hide assays &#9652;</span></button></header>
+      <header class="sp-grp-h"><h3 title="AQUA-FAANG RNA-seq, ATAC-seq and ChIP-seq signal, read live from salmobase">Functional assays</h3><span class="sp-grp-note">mean of replicates &middot; combined tracks stack the tissue means</span>
+        <button type="button" class="sp-tog" aria-expanded="{% if assays_open %}true{% else %}false{% endif %}" aria-controls="m-assays"><span class="sp-when-closed">{{ assays|length }} assays</span><span class="sp-when-open">Collapse</span>{% icon 'chevron-down' %}</button></header>
       <div class="sp-more-rows" id="m-assays">
         <div class="sp-trk"><div class="sp-trk-lab"></div><div class="sp-blegend">{% for cls, label in tissue_legend %}<span><i class="{{ cls }}"></i>{{ label }}</span>{% endfor %}</div></div>
         {% for name, title in assays %}<div class="sp-assay-slot" hx-get="{% url 'snpportal:locus_assay' %}?{{ query }}&amp;assay={{ name }}" hx-trigger="{% if assays_open %}load{% else %}sp-open once{% endif %}" hx-swap="outerHTML">

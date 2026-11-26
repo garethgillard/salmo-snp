@@ -449,7 +449,7 @@ def gene(request, gene_id):
     loci = [dict(r, flags=[b for b in r["badges"] if b[0] == "caveat"]) for r in catalogue() if r.get("ensembl_gene") == gene_id]
     return render(request, "snpportal/gene.html", {
         "nav": "explore", "title": g["label"], "gene": g, "synthetic": bool(info["synthetic"]),
-        "meta": f"{g['id']} · chromosome {g['chrom']}:{g['start'] + 1:,}-{g['end']:,} ({g['strand']}) · {g['biotype']}",
+        "meta": f"{g['id']} · chromosome {g['chrom']}:{g['start'] + 1:,}-{g['end']:,} ({g['strand']}) · {(g['biotype'] or '').replace('_', ' ')}",
         "loci": loci, "ss4r": ss4r([gene_id]).get(gene_id), "unnamed_tip": UNNAMED_TIP,
         "ensembl": ENSEMBL_GENE.format(gene_id), "salmobase": SALMOBASE_GENE.format(gene_id), "jbrowse": JBROWSE.format(*locus),
         "locus_url": search.locus_url(*locus),

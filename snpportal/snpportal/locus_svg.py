@@ -10,7 +10,9 @@ from html import escape
 
 from . import figures, palette
 
-WIDTH, GUTTER, RIGHT = 1200, 170, 14
+WIDTH, GUTTER, RIGHT = 1200, 200, 14  # the gutter: the locus browser's label column
+TEXT, LABEL = 11, 12  # the smallest text in every figure here, and a lane's name (as the locus browser's HTML labels)
+EMPTY = "none in this window"  # what an empty lane says, here and in the locus browser
 TISSUE_ORDER = ("Brain", "Gonad", "Liver", "Muscle", "Gill")  # the grid's tissue rows (head kidney and embryo rows follow)
 COLUMNS = (("Immature", "Female", "Imm F"), ("Immature", "Male", "Imm M"), ("Mature", "Female", "Mat F"), ("Mature", "Male", "Mat M"))
 STAGES = figures.STAGE_LABELS
@@ -50,7 +52,7 @@ LORE = palette.STATUS["warn"][2]
 G = palette.GREY
 
 
-def _t(x, y, text, size=10.5, fill=G[900], anchor="start", weight="", extra=""):
+def _t(x, y, text, size=TEXT, fill=G[900], anchor="start", weight="", extra=""):
     w = f' font-weight="{weight}"' if weight else ""
     return (f'<text x="{x:.1f}" y="{y:.1f}" font-size="{size}" fill="{fill}" text-anchor="{anchor}"{w}{extra}>'
             f"{escape(str(text))}</text>")
@@ -127,12 +129,12 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
     body.append(_t(gutter - 10, y + 15, fmt_bp(data["end"] - data["start"]), 11, G[700], "end"))
     y += 24
 
-    small = 10 if compact else 9  # compact figures (the card's, the landing's) are small: no text below 10 px there
+    small = TEXT  # no text below 11 px, in the compact figures too
 
-    def lane_label(text, yy, sub=""):
-        body.append(_t(gutter - 10, yy, text, 10.5, G[900], "end", "600"))
-        if sub and 5.5 * len(sub) < gutter - 14:  # subtitles that don't fit a narrow gutter are left out
-            body.append(_t(gutter - 10, yy + 11, sub, small, G[700], "end"))
+    def lane_label(text, yy, sub=""):  # as the locus browser's labels: the name, then a short muted line
+        body.append(_t(gutter - 10, yy, text, LABEL, G[900], "end", "600"))
+        if sub and 6.2 * len(sub) < gutter - 14:  # subtitles that don't fit a narrow gutter are left out
+            body.append(_t(gutter - 10, yy + 12, sub, small, G[500], "end"))
 
     if gwas:  # P7.3: -log10 p of a GWAS job's SNPs, on top
         y = gwas_lane(body, ax, gwas, y, legend)
@@ -157,7 +159,7 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
 
     # molQTL lead SNPs (nf-RASQUAL, 12 fish): a triangle per lead, in the colour of its first tissue
     if data.get("molqtl") and show("molqtl"):
-        lane_label("molQTL leads", y + 11, "nf-RASQUAL")
+        lane_label("molQTL leads", y + 11, "12 fish")
         for m in data["molqtl"]:
             x = ax.x(m["pos"] - 0.5)
             tissue = (m.get("tissues") or "").split(",")[0]
@@ -165,12 +167,28 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
                         f'stroke-width="0.5"><title>{escape(m.get("title") or "")}</title></path>')
         tissues = sorted({t for m in data["molqtl"] for t in (m.get("tissues") or "").split(",") if t})
         legend["molQTL leads (first tissue)"] = [(f'<path d="M6 0 l5 9 l-10 0z" fill="{palette.TISSUES.get(t, G[700])}"/>', t) for t in tissues]
-        y += 22
+        y += 28
 
     # gene models
     y = _genes(body, ax, data.get("genes", []), y, gene_url, 4 if compact else 8, lane_label)
     if any(g["label"].startswith("~") for g in data.get("genes", [])):
         legend.setdefault("Genes", []).append(("", "~NAME = unnamed in Ensembl 116, named by its human (else zebrafish) ortholog"))
+
+    # then, in the locus browser's order: public SNPs, chromatin, the signal, other annotation (Ensembl regulatory, GERP)
+    # public SNPs, tick height = minor allele frequency
+    if show("variants"):
+        lane_label("Public SNPs", y + 14, "504-fish panel, height = MAF")
+        body.append(f'<line x1="{gutter}" x2="{width - RIGHT}" y1="{y + 30}" y2="{y + 30}" stroke="{G[300]}"/>')
+        if not data.get("variants"):
+            body.append(_t(ax.left, y + 26, EMPTY, TEXT, G[700]))
+        for v in data.get("variants", []):
+            x, h = ax.x(v["pos"] - 0.5), 3 + 24 * min(0.5, v.get("maf") or 0) / 0.5
+            tip = (f"{data['chrom']}:{v['pos']:,} {v.get('ref')}>{v.get('alt')} · 504-fish panel: MAF {_num(v.get('maf'))}, alt AF {_num(v.get('af'))}"
+                   + (f" · AQUA-FAANG 12 fish: alt AF {_num(v.get('aquafaang12_af'))}, DR2 {_num(v.get('aquafaang12_dr2'))}"
+                      if v.get("aquafaang12_af") is not None else ""))
+            body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{y + 30}" y2="{y + 30 - h:.1f}" stroke="{G[700]}">'
+                        f"<title>{escape(tip)}</title></line>")
+        y += 40
 
     # chromatin: 27 condition rows, states inside robust peaks (or the ChromHMM segmentation)
     y, present, chosen = _chromatin(body, ax, data, y, chosen, hmm, compact, gutter, uid, lane_label)
@@ -179,50 +197,35 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
         states.append((f'<path d="M2 0 l6 5 l-6 5z" fill="{palette.ACCENT}"/>', "a chosen condition"))
     legend["Chromatin state" + ("" if hmm else " (inside AQUA-FAANG robust peaks only)")] = states
 
-    # regulatory build and GERP
-    if show("regbuild") and (data.get("regbuild") or not compact):
-        lane_label("Ensembl regulatory", y + 10)
-        for r in data.get("regbuild", []):
-            x, w = ax.span(r["start"], r["end"])
-            body.append(f'<rect x="{x:.1f}" y="{y + 2}" width="{w:.1f}" height="10" fill="{_colour(REGBUILD.get(r.get("type"), G[500]))}">'
-                        f'<title>{escape(str(r.get("type", "")).replace("_", " "))} {escape(str(r.get("id") or ""))}'
-                        f'{escape(" (" + r["gene_id"] + ")" if r.get("gene_id") else "")}</title></rect>')
-        if not data.get("regbuild"):
-            body.append(_t(ax.left, y + 11, "none in this window", 9, G[700]))
-        types = sorted({r.get("type") for r in data.get("regbuild", [])} & set(REGBUILD))
-        if types:
-            legend["Regulatory build"] = [(_swatch(_colour(REGBUILD[t])), t.replace("_", " ")) for t in types]
-        y += 16
-    if show("gerp") and (data.get("gerp") or not compact):
-        lane_label("GERP constrained", y + 10)
-        top_gerp = max([g.get("score") or 0 for g in data.get("gerp", [])] + [1])
-        for g in data.get("gerp", []):
-            x, w = ax.span(g["start"], g["end"])
-            body.append(f'<rect x="{x:.1f}" y="{y + 2}" width="{w:.1f}" height="10" fill="{G[700]}" '
-                        f'fill-opacity="{0.35 + 0.65 * (g.get("score") or 0) / top_gerp:.2f}">'
-                        f'<title>GERP constrained element (65 fish), score {g.get("score")}</title></rect>')
-        if not data.get("gerp"):
-            body.append(_t(ax.left, y + 11, "none in this window", 9, G[700]))
-        y += 16
-
-    # public variants, tick height = minor allele frequency
-    if show("variants"):
-        lane_label("Public variants", y + 14, "504 fish, height = MAF")
-        body.append(f'<line x1="{gutter}" x2="{width - RIGHT}" y1="{y + 30}" y2="{y + 30}" stroke="{G[300]}"/>')
-        if not data.get("variants"):
-            body.append(_t(ax.left, y + 26, "none in this window", 9, G[700]))
-        for v in data.get("variants", []):
-            x, h = ax.x(v["pos"] - 0.5), 3 + 24 * min(0.5, v.get("maf") or 0) / 0.5
-            tip = (f"{data['chrom']}:{v['pos']:,} {v.get('ref')}>{v.get('alt')} · 504-fish panel: MAF {_num(v.get('maf'))}, alt AF {_num(v.get('af'))}"
-                   + (f" · AQUA-FAANG 12 fish: alt AF {_num(v.get('aquafaang12_af'))}, DR2 {_num(v.get('aquafaang12_dr2'))}"
-                      if v.get("aquafaang12_af") is not None else ""))
-            body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{y + 30}" y2="{y + 30 - h:.1f}" stroke="{G[700]}">'
-                        f"<title>{escape(tip)}</title></line>")
-        y += 36
-
     # live signal rows
     if signal is not None:
         y = _signal(body, ax, signal, y, gutter, uid, lane_label, compact)
+
+    # other annotation: the regulatory build and GERP
+    if show("regbuild") and (data.get("regbuild") or not compact):
+        lane_label("Ensembl regulatory", y + 12)
+        for r in data.get("regbuild", []):
+            x, w = ax.span(r["start"], r["end"])
+            body.append(f'<rect x="{x:.1f}" y="{y + 3}" width="{w:.1f}" height="10" fill="{_colour(REGBUILD.get(r.get("type"), G[500]))}">'
+                        f'<title>{escape(str(r.get("type", "")).replace("_", " "))} {escape(str(r.get("id") or ""))}'
+                        f'{escape(" (" + r["gene_id"] + ")" if r.get("gene_id") else "")}</title></rect>')
+        if not data.get("regbuild"):
+            body.append(_t(ax.left, y + 12, EMPTY, TEXT, G[700]))
+        types = sorted({r.get("type") for r in data.get("regbuild", [])} & set(REGBUILD))
+        if types:
+            legend["Regulatory build"] = [(_swatch(_colour(REGBUILD[t])), t.replace("_", " ")) for t in types]
+        y += 20
+    if show("gerp") and (data.get("gerp") or not compact):
+        lane_label("GERP constrained", y + 12)
+        top_gerp = max([g.get("score") or 0 for g in data.get("gerp", [])] + [1])
+        for g in data.get("gerp", []):
+            x, w = ax.span(g["start"], g["end"])
+            body.append(f'<rect x="{x:.1f}" y="{y + 3}" width="{w:.1f}" height="10" fill="{G[700]}" '
+                        f'fill-opacity="{0.35 + 0.65 * (g.get("score") or 0) / top_gerp:.2f}">'
+                        f'<title>GERP constrained element (65 fish), score {g.get("score")}</title></rect>')
+        if not data.get("gerp"):
+            body.append(_t(ax.left, y + 12, EMPTY, TEXT, G[700]))
+        y += 20
 
     # blacklist and LORe: hatched bands behind every lane, explained in the legend
     for b in data.get("blacklist", []):
@@ -240,9 +243,9 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
         x = ax.x(mark - 0.5)
         back.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{top}" y2="{y}" stroke="{palette.ACCENT}" stroke-dasharray="3 2"/>')
     if data.get("truncated"):
-        body.append(_t(gutter, y + 10, "Some lanes are cut short in this wide window: zoom in to see all of "
-                       + ", ".join(data["truncated"]), 9.5, palette.STATUS["warn"][0]))
-        y += 14
+        body.append(_t(gutter, y + 11, "Some lanes are cut short in this wide window: zoom in to see all of "
+                       + ", ".join(data["truncated"]), TEXT, palette.STATUS["warn"][0]))
+        y += 16
 
     y = _legend(body, legend, y + 4, width, gutter) if legend_on else y + 4
     for line in caption.splitlines():
@@ -267,7 +270,7 @@ def _published(body, ax, known, y, lane_label, legend):
     """The published-associations lane: a diamond per catalogue row (dict with pos, id, locus, trait, evidence,
     effect, effect_allele, caveat, kind), filled by evidence kind when the effect allele is stated, hollow when not;
     the id as a label beside the marker where it fits, else centred under it, else only in the tooltip. Returns the new y."""
-    lane_label("Published", y + 11, "known loci")
+    lane_label("Known loci", y + 11)
     known = sorted(known, key=lambda k: int(k.get("pos") or k["start"]))
     for k in known:  # a structural variant (start, end, no pos): a bar over its span, its marker at the visible middle
         if not (k.get("pos") or "").isdigit():
@@ -290,20 +293,20 @@ def _published(body, ax, known, y, lane_label, legend):
                                      k.get("caveat")] if v)
         body.append(f'<path d="M{x:.1f} {y + 2} l5 6 l-5 6 l-5 -6z" fill="{fill if allele else palette.WHITE}" stroke="{fill}" '
                     f'stroke-width="1.4"><title>{escape(tip)}</title></path>')
-        w = 6.2 * len(k.get("id", ""))
+        w = 6.5 * len(k.get("id", ""))
         left = x + 7 + w > ax.x1  # near the right edge: label to the left of the marker
         a, b = (x - 7 - w, x - 7) if left else (x + 7, x + 7 + w)
         if a >= free and not any(a - 5 < other < b + 5 for j, other in enumerate(xs) if j != i):
-            body.append(_t(b if left else a, y + 12, k.get("id", ""), 10.5, G[900], "end" if left else "start"))
+            body.append(_t(b if left else a, y + 12, k.get("id", ""), TEXT, G[900], "end" if left else "start"))
             free = b + 6
         elif under <= x - w / 2 and x + w / 2 <= ax.x1:  # e.g. vgll3_Met54Thr, 2 kb from vgll3_Asn323Lys
-            body.append(_t(x, y + 25, k.get("id", ""), 10.5, G[900], "middle"))
+            body.append(_t(x, y + 26, k.get("id", ""), TEXT, G[900], "middle"))
             under = x + w / 2 + 6
     kinds = sorted({k.get("kind") if k.get("kind") in EVIDENCE else "gwas" for k in known}, key=list(EVIDENCE).index)
-    legend["Published"] = [(f'<path d="M6 0 l5 6 l-5 6 l-5 -6z" fill="{EVIDENCE[kind][0]}"/>', EVIDENCE[kind][1]) for kind in kinds] + (
+    legend["Known loci"] = [(f'<path d="M6 0 l5 6 l-5 6 l-5 -6z" fill="{EVIDENCE[kind][0]}"/>', EVIDENCE[kind][1]) for kind in kinds] + (
         [(f'<path d="M6 0 l5 6 l-5 6 l-5 -6z" fill="{palette.WHITE}" stroke="{G[700]}" stroke-width="1.4"/>', "effect allele not stated")]
         if not all(k.get("effect_allele") or k.get("kind") == "sv" for k in known) else [])
-    return y + (40 if under > ax.x0 else 26)
+    return y + (42 if under > ax.x0 else 28)
 
 
 def _swatch(fill, round_=False):
@@ -317,20 +320,20 @@ def _legend(body, groups, y, width, gutter):
     for name, items in groups.items():
         if not items:
             continue
-        body.append(_t(gutter - 10, y + 10, name.split(" (")[0], 10.5, G[900], "end", "600"))
+        body.append(_t(gutter - 10, y + 10, name.split(" (")[0], TEXT, G[900], "end", "600"))
         x = gutter
         if " (" in name:
-            body.append(_t(x, y + 10, "(" + name.split(" (", 1)[1], 9.5, G[700]))
-            x += 6 * len(name.split(" (", 1)[1]) + 12
+            body.append(_t(x, y + 10, "(" + name.split(" (", 1)[1], TEXT, G[500]))
+            x += 6.4 * len(name.split(" (", 1)[1]) + 12
         for swatch, label in items:
-            w = (16 if swatch else 0) + 5.6 * len(label) + 14
+            w = (16 if swatch else 0) + 6.2 * len(label) + 14
             if x + w > width - RIGHT:
-                x, y = gutter, y + 15
+                x, y = gutter, y + 17
             if swatch:
-                body.append(f'<g transform="translate({x:.1f},{y + 2})">{swatch}</g>')
-            body.append(_t(x + (16 if swatch else 0), y + 10, label, 9.5, G[700]))
+                body.append(f'<g transform="translate({x:.1f},{y + 1})">{swatch}</g>')
+            body.append(_t(x + (16 if swatch else 0), y + 10, label, TEXT, G[700]))
             x += w
-        y += 16
+        y += 19
     return y
 
 
@@ -340,7 +343,7 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label, source="Ensembl 1
     without UTR parts (NCBI's) draws its exons thin and its CDS thick."""
     if not genes:
         lane_label("Genes", y + 12)
-        body.append(_t(ax.left, y + 12, f"no {source} {what[:-1]} in this window", 9.5, G[700]))
+        body.append(_t(ax.left, y + 12, EMPTY, TEXT, G[700]))
         return y + 20
 
     def label_x(x0, x1):  # a label starts with its gene, or at the left edge when the gene comes in from beyond it
@@ -351,7 +354,7 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label, source="Ensembl 1
         for g in sorted(genes, key=lambda g: g["start"]):
             x0, x1 = ax.x(g["start"]), ax.x(g["end"])
             text = len(g["label"]) + 2 + (len(g["dup"]["text"]) + 1 if g.get("dup") else 0)
-            right = max(x1, label_x(x0, x1) + 6.2 * text) if with_labels else x1
+            right = max(x1, label_x(x0, x1) + 6.6 * text) if with_labels else x1
             row = next((i for i, end in enumerate(rows) if end + 8 < x0), None)
             if row is None:
                 if len(rows) == max_rows:
@@ -369,7 +372,7 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label, source="Ensembl 1
         placed, hidden, n = pack(False)
     lane_label("Genes", y + 12, source)
     for row, g in placed:
-        yy = y + row * 26 + (12 if labels else 4)
+        yy = y + row * 27 + (13 if labels else 4)
         coding = g.get("biotype") == "protein_coding"
         colour = G[900] if coding else G[500]
         t = (g.get("transcripts") or [None])[0]
@@ -396,20 +399,20 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label, source="Ensembl 1
             parts.append(f'<rect x="{px:.1f}" y="{yy + 6 - h / 2}" width="{pw:.1f}" height="{h}" fill="{colour}"/>')
         if labels:
             name = f"{g['label']} →" if arrow == 1 else f"← {g['label']}"
-            parts.append(_t(label_x(x0, x0 + w), yy - 3, name, 10, G[900], extra=' font-style="italic"' if g.get("name") else ""))
+            parts.append(_t(label_x(x0, x0 + w), yy - 3, name, TEXT, G[900], extra=' font-style="italic"' if g.get("name") else ""))
         group = "".join(parts)
         body.append(f'<a href="{escape(gene_url(g["id"]))}">{group}</a>' if gene_url else f"<g>{group}</g>")
         if labels and g.get("dup"):  # after the gene's own link, as links can't nest
-            dx = label_x(x0, x0 + w) + 6.3 * (len(g["label"]) + 2) + 6  # after the name and its strand arrow
-            dup = _t(dx, yy - 3, g["dup"]["text"], 9.5, G[700]).replace("</text>", f'<title>{escape(g["dup"]["title"])}</title></text>')
+            dx = label_x(x0, x0 + w) + 6.6 * (len(g["label"]) + 2) + 6  # after the name and its strand arrow
+            dup = _t(dx, yy - 3, g["dup"]["text"], TEXT, G[700]).replace("</text>", f'<title>{escape(g["dup"]["title"])}</title></text>')
             body.append(f'<a href="{escape(g["dup"]["url"])}">{dup}</a>' if g["dup"].get("url") else dup)
-    y += n * 26 + (8 if labels else 4)
+    y += n * 27 + (8 if labels else 4)
     if hidden:
-        body.append(_t(ax.left, y + 8, f"+{hidden} more {what}: zoom in", 9.5, G[700]))
-        y += 12
+        body.append(_t(ax.left, y + 9, f"+{hidden} more {what}: zoom in", TEXT, G[700]))
+        y += 14
     elif not labels:
-        body.append(_t(ax.left, y + 8, f"{what[:-1]} names hidden in this crowded view: zoom in or hover", 9.5, G[700]))
-        y += 12
+        body.append(_t(ax.left, y + 9, f"{what[:-1]} names hidden in this crowded view: zoom in or hover", TEXT, G[700]))
+        y += 14
     return y + 4
 
 
@@ -417,27 +420,29 @@ def _chromatin(body, ax, data, y, chosen, hmm, compact, gutter, uid, lane_label)
     """27 condition rows, grouped by tissue (embryo stages last). Returns (y, states present, conditions marked)."""
     conditions = data.get("conditions") or []
     rows = {r["condition"]: r["segments"] for r in hmm} if hmm is not None else None
-    h, gap = (5, 1) if compact else (9, 1)
-    lane_label("Chromatin states" if hmm is None else "ChromHMM segmentation", y + 10,
-               "AQUA-FAANG, robust peaks" if hmm is None else "AQUA-FAANG, genome-wide")
-    y += 26
+    h, gap = (5, 1) if compact else (11, 2)  # as the locus browser's condition rows: 11 px text beside an 11 px row
+    lane_label("Chromatin states" if hmm is None else "ChromHMM segmentation", y + 12,
+               "inside robust peaks" if hmm is None else "genome-wide")
+    y += 28
     chosen = set(chosen) if len(set(chosen) & set(conditions)) < len(conditions) else set()  # 'all': nothing to point out
     present, last_group, first_y = set(), None, y
     for c in conditions:
         group, label = condition_label(c)
+        name = f"{figures.tissue_name(group)} {label}" if group != "Embryo" else label  # the browser's row label
         if group != last_group and last_group is not None:
-            y += 4
+            body.append(f'<line x1="8" x2="{ax.x1}" y1="{y + 2}" y2="{y + 2}" stroke="{G[200]}"/>')
+            y += 5  # a hairline between tissues, as in the locus browser
         if group != last_group:
             body.append(f'<rect x="{gutter - 6}" y="{y}" width="3" height="{(h + gap) * sum(condition_label(x)[0] == group for x in conditions) - gap}" '
                         f'fill="{palette.TISSUES.get(group, G[500])}"/>')
-            body.append(_t(8, y + h + (3 if compact else 0), figures.tissue_name(group), 11 if compact else 9.5, G[900], weight="600"))
+            if compact:
+                body.append(_t(8, y + h + 3, figures.tissue_name(group), TEXT, G[900], weight="600"))
         last_group = group
         if c in chosen:
             body.append(f'<path d="M{gutter - 15} {y} l5 {h / 2} l-5 {h / 2}z" fill="{palette.ACCENT}"><title>a chosen condition</title></path>')
         if not compact:
-            body.append(_t(gutter - (17 if c in chosen else 10), y + h - 1, label, 8.5, G[900] if c in chosen else G[700], "end",
+            body.append(_t(gutter - (17 if c in chosen else 10), y + h - 1.5, name, TEXT, G[900] if c in chosen else G[700], "end",
                            "600" if c in chosen else ""))
-        name = f"{figures.tissue_name(group)} {label}" if group != "Embryo" else label
         if rows is not None:
             segs = rows.get(c)
             if segs is None:
@@ -469,10 +474,10 @@ def _chromatin(body, ax, data, y, chosen, hmm, compact, gutter, uid, lane_label)
 
 def _signal(body, ax, signal, y, gutter, uid, lane_label, compact):
     """Signal rows: stepped area per track on a shared (or per-track) scale; hatched 'signal unavailable' rows."""
-    lane_label(signal.get("title", "Signal"), y + 10, signal.get("subtitle", ""))
-    y += 22 if signal.get("subtitle") else 16
+    lane_label(signal.get("title", "Signal"), y + 12, signal.get("subtitle", ""))
+    y += 26 if signal.get("subtitle") else 18
     if signal.get("note"):
-        body.append(_t(ax.x0, y - 4, signal["note"], 9.5, G[700]))
+        body.append(_t(ax.x0, y - 4, signal["note"], TEXT, G[700]))
     rows = signal.get("rows", [])
     peak = max([v for r in rows for v in (r["values"] or []) if v is not None] + [0])
     h = 18 if compact else 28
@@ -481,16 +486,16 @@ def _signal(body, ax, signal, y, gutter, uid, lane_label, compact):
         track = r["track"]
         colour = palette.TISSUES.get(track.get("tissue"), G[700])
         body.append(f'<rect x="{gutter - 6}" y="{y}" width="3" height="{h}" fill="{colour}"/>'
-                    + _t(gutter - 10, y + 11, r["label"], 10.5, G[900], "end"))
+                    + _t(gutter - 10, y + 11, r["label"], TEXT, G[900], "end"))
         body.append(f'<line x1="{ax.x0}" x2="{ax.x1}" y1="{y + h}" y2="{y + h}" stroke="{G[300]}"/>')
         if r["values"] is None:
             body.append(f'<rect x="{ax.x0}" y="{y}" width="{ax.x1 - ax.x0}" height="{h}" fill="url(#{uid}-na)" fill-opacity="0.45"/>'
-                        + _t((ax.x0 + ax.x1) / 2, y + h / 2 + 4, "signal unavailable (salmobase did not answer in time)", 10, G[900], "middle"))
+                        + _t((ax.x0 + ax.x1) / 2, y + h / 2 + 4, "signal unavailable (salmobase did not answer in time)", TEXT, G[900], "middle"))
             y += h + 4
             continue
         top = max([v for v in r["values"] if v is not None] + [0]) if signal.get("scale") == "track" else peak
         if not compact:
-            body.append(_t(gutter - 10, y + 24, f"0–{top:.3g} {SIGNAL_UNIT}", 10, G[700], "end"))
+            body.append(_t(gutter - 10, y + 24, f"0–{top:.3g} {SIGNAL_UNIT}", TEXT, G[500], "end"))
         path, prev = [f"M{ax.x0:.1f} {y + h}"], None
         for i, v in enumerate(r["values"]):
             s = first + i * r_bp
@@ -506,10 +511,10 @@ def _signal(body, ax, signal, y, gutter, uid, lane_label, compact):
                     f'{escape(track.get("assay", ""))} {escape(track.get("replicate") or "")}, max {top:.3g} {SIGNAL_UNIT} in view</title></path>')
         y += h + 4
     if rows and not compact:
-        body.append(_t(ax.x0, y + 9, f"y axis: mean signal in {SIGNAL_UNIT} (reads per million mapped reads), "
+        body.append(_t(ax.x0, y + 10, f"y axis: mean signal in {SIGNAL_UNIT} (reads per million mapped reads), "
                        f"{'each row on its own scale' if signal.get('scale') == 'track' else 'one scale for all rows'}, bins of {r_bp:,} bp",
-                       10, G[700]))
-        y += 12
+                       TEXT, G[700]))
+        y += 14
     return y + 4
 
 
@@ -534,25 +539,25 @@ def score_blocks(parts, cutoffs, score, synthetic=False, unit=66, width=590):
         body.append(f'<rect x="{x:.1f}" y="14" width="{bw:.1f}" height="28" rx="4" fill="{colour}"><title>{escape(tip)}</title></rect>'
                     + "".join(f'<path d="M{x + i * u - 2:.1f} 14v5M{x + i * u - 2:.1f} 42v-5" stroke="{palette.WHITE}" stroke-width="1.5" '
                               'stroke-opacity="0.8" pointer-events="none"/>' for i in range(1, w)))  # a ruler: a notch per point
-        text = next((t for t in (label, label.replace(" in ", " "), label.split(" ")[0]) if 6.2 * len(t) <= bw - 12), label)
+        text = next((t for t in (label, label.replace(" in ", " "), label.split(" ")[0]) if 6.5 * len(t) <= bw - 12), label)
         halo = f' stroke="{colour}" stroke-width="3" paint-order="stroke"'  # hides the cut-off lines behind the letters
-        words.append(f'<g pointer-events="none">{_t(x + 6, 32, _fit(text, bw - 12, 10.5), 10.5, ink, "start", "600", halo)}'
-                     + (_t(x + bw - 6, 32, f"+{w}", 10.5, ink, "end", "700", halo) if bw - 12 - 6.2 * len(text) > 20 else "") + "</g>")
+        words.append(f'<g pointer-events="none">{_t(x + 6, 32, _fit(text, bw - 12, TEXT), TEXT, ink, "start", "600", halo)}'
+                     + (_t(x + bw - 6, 32, f"+{w}", TEXT, ink, "end", "700", halo) if bw - 12 - 6.5 * len(text) > 20 else "") + "</g>")
         x += w * u
     if not parts:
-        words.append(_t(4, 32, "no evidence found (not evidence of no effect)", 10.5, G[700], "start", "",
+        words.append(_t(4, 32, "no evidence found (not evidence of no effect)", TEXT, G[700], "start", "",
                         f' stroke="{palette.WHITE}" stroke-width="4" paint-order="stroke"'))
     for i, c in enumerate(cutoffs):  # the cut-offs over the blocks: after c points
         cx = c * u - 2
         body.append(f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="14" y2="42" stroke="{palette.WHITE}" stroke-width="3" stroke-opacity="0.6"/>'  # seen on dark blocks
                     f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="12" y2="44" stroke="{G[900]}" stroke-dasharray="3 2"/>'
-                    + _t(cx, 9, f"T{i + 1}", 9, G[700], "middle").replace("</text>", f"<title>tier {i + 1}: {c} points or more</title></text>"))
+                    + _t(cx, 10, f"T{i + 1}", TEXT, G[700], "middle").replace("</text>", f"<title>tier {i + 1}: {c} points or more</title></text>"))
     body += words + [_t(span * u + 8, 33, f"= {score}", 14, G[900], "start", "700")]  # just after the bar
     desc = "; ".join(p[3] for p in parts) or "no evidence counted"
     return figures.svg(round(span * u + 50), 46, f"Score {score}", f"{desc}. Weights and tier cut-offs are provisional.", "".join(body), synthetic)
 
 
-GRID = {"cw": 58, "ch": 22, "gap": 4, "left": 70, "top": 18}  # the tiles: cell size, gap, label column, header row
+GRID = {"cw": 62, "ch": 22, "gap": 4, "left": 72, "top": 18}  # the tiles: cell size, gap, label column, header row
 
 
 def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="cg", legend=True):
@@ -565,7 +570,7 @@ def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="c
     defs = f"<defs>{_hatch(uid, 'na', G[500])}</defs>"
     parts, y, present = [], GRID["top"], set()
     for i, (_, _, short) in enumerate(COLUMNS):
-        parts.append(_t(left + i * (cw + gap) + cw / 2, 12, short, 9.5, G[700], "middle"))
+        parts.append(_t(left + i * (cw + gap) + cw / 2, 12, short, TEXT, G[700], "middle"))
 
     def cell(x, yy, condition, label, cw=cw):
         if condition not in states:  # not sampled (gill's mature females)
@@ -576,52 +581,53 @@ def chromatin_grid(states, chosen=(), blacklisted=False, synthetic=False, uid="c
         if state:
             fill, text, abbr = palette.state(state)
             present.add(state)
-            out.append(f'<rect x="{x}" y="{yy}" width="{cw}" height="{ch}" rx="2" fill="{fill}"{_edge(fill)}/>' + _t(x + cw / 2, yy + 15, abbr, 10, text, "middle", "600"))
+            out.append(f'<rect x="{x}" y="{yy}" width="{cw}" height="{ch}" rx="2" fill="{fill}"{_edge(fill)}/>' + _t(x + cw / 2, yy + 15, abbr, TEXT, text, "middle", "600"))
         elif blacklisted:
             out.append(f'<rect x="{x}" y="{yy}" width="{cw}" height="{ch}" rx="2" fill="url(#{uid}-na)" stroke="{G[500]}"/>'
-                       + _t(x + cw / 2, yy + 15, "n/a", 9.5, G[900], "middle"))
+                       + _t(x + cw / 2, yy + 15, "n/a", TEXT, G[900], "middle"))
         else:
             out.append(f'<rect x="{x + 0.5}" y="{yy + 0.5}" width="{cw - 1}" height="{ch - 1}" rx="2" fill="{palette.NO_PEAK[0]}" stroke="{palette.NO_PEAK[1]}"/>')
         if condition in chosen:
             out.append(f'<rect x="{x - 1.5}" y="{yy - 1.5}" width="{cw + 3}" height="{ch + 3}" rx="3" fill="none" stroke="{G[900]}" stroke-width="2"/>')
         if label:
-            out.append(_t(x + cw / 2, yy + ch + 10, label, 8.5, G[700], "middle"))
+            out.append(_t(x + cw / 2, yy + ch + 11, label, TEXT, G[700], "middle"))
         return f"<g>{''.join(out)}</g>"
 
     for tissue in TISSUE_ORDER:
         if not any(c.startswith(tissue + "_") for c in states):
             continue
-        parts.append(_t(4, y + 15, tissue, 10.5))
+        parts.append(_t(4, y + 15, tissue))
         for i, (maturity, sex, _) in enumerate(COLUMNS):
             parts.append(cell(left + i * (cw + gap), y, f"{tissue}_{maturity}_{sex}", ""))
         y += ch + gap
     immuno = [c for c in states if c.startswith("HeadKidney_inv")]  # the ImmunoMap: one cell per treatment, labelled
     if immuno:
         y += 4
-        parts.append(_t(4, y + 15, figures.tissue_name("HeadKidney"), 10.5))
+        parts.append(_t(4, y + 15, figures.tissue_name("HeadKidney")))
         hw = (4 * (cw + gap) - gap - (len(immuno) - 1) * gap) / len(immuno)
         order = list(figures.TREATMENTS)
         for i, c in enumerate(sorted(immuno, key=lambda c: (c.split("_")[1] != "invivo", order.index(c.split("_")[2]) if c.split("_")[2] in order else 9))):
             parts.append(cell(round(left + i * (hw + gap), 1), y, c, condition_label(c)[1], round(hw, 1)))
-        y += ch + 14
+        y += ch + 16
     y += 4
-    parts.append(_t(4, y + 15, "Embryo", 10.5))
+    parts.append(_t(4, y + 15, "Embryo"))
     ew = (4 * (cw + gap) - gap - 4 * gap) / 5
     for i, stage in enumerate(STAGES):
         parts.append(cell(round(left + i * (ew + gap), 1), y, stage, STAGES[stage], round(ew, 1)))
-    y += ch + 18
+    y += ch + 20
     x = 4
     for s in palette.STATES if legend else ():
         if s in present:
             label = f"{palette.STATES[s][1]} {s.replace('_', ' ')}"
-            if x + 16 + 5.4 * len(label) > left + 4 * (cw + gap):
-                x, y = 4, y + 14
+            if x + 16 + 6.2 * len(label) > left + 4 * (cw + gap):
+                x, y = 4, y + 16
             parts.append(f'<rect x="{x}" y="{y}" width="12" height="10" fill="{palette.STATES[s][0]}" stroke="{G[500]}" stroke-width="0.5"/>'
-                         + _t(x + 16, y + 9, label, 9, G[700]))
-            x += 16 + 5.4 * len(label) + 10
+                         + _t(x + 16, y + 9, label, TEXT, G[700]))
+            x += 16 + 6.2 * len(label) + 10
     if legend:
-        y += 14 if present else 0
-        parts.append(_t(4, y + 10, "outlined = the chosen conditions; empty = no AQUA-FAANG peak" + ("; n/a = blacklisted" if blacklisted else ""), 9, G[700]))
+        y += 16 if present else 0
+        keys = ["empty = no AQUA-FAANG peak"] + (["outlined = chosen"] if chosen else []) + (["n/a = blacklisted"] if blacklisted else [])
+        parts.append(_t(4, y + 10, "; ".join(keys), TEXT, G[700]))
     else:
         y -= 16
     width = left + 4 * (cw + gap) + 4
@@ -691,7 +697,7 @@ def motif_logos(hits, seq, w, ref, alt, width=640, row=34):
     x of the SNP column's centre) drawn from 0,0; hits: snpscore.motif.hits()."""
     lo = min([h["start"] for h in hits] + [w - 6])
     hi = max([h["start"] + len(h["probs"]) for h in hits] + [w + 7])
-    left, right, n = 64, 132, hi - lo
+    left, right, n = 72, 136, hi - lo
     cw = max(4.0, min(12.0, (width - left - right) / n))
     body, y = [], 0
     for h in hits:
@@ -703,19 +709,19 @@ def motif_logos(hits, seq, w, ref, alt, width=640, row=34):
                f"{other} does not ({min(h['ref_score'], h['alt_score']):.1f}); a match needs {h['cut']:.1f} bits (p < 1e-5)")
         tx = left + n * cw + 8
         body.append(f'<g><title>{escape(tip)}</title><rect x="0" y="{y}" width="{left + n * cw + right:.1f}" height="{row}" fill="{G[50]}" fill-opacity="0.01"/>'
-                    + _t(left - 6, y + row / 2, h["tf"], 10, G[900], "end", "600")
-                    + _t(left - 6, y + row / 2 + 11, f"{h['strand']} strand", 9, G[700], "end")
-                    + _t(tx, y + row / 2, f"{ref} {h['ref_score']:.1f} · {alt} {h['alt_score']:.1f} bits", 9.5, G[900])
-                    + _t(tx, y + row / 2 + 11, f"a match needs {h['cut']:.1f}", 9, G[700])
+                    + _t(left - 6, y + row / 2, h["tf"], TEXT, G[900], "end", "600")
+                    + _t(left - 6, y + row / 2 + 11, f"{h['strand']} strand", TEXT, G[700], "end")
+                    + _t(tx, y + row / 2, f"{ref} {h['ref_score']:.1f} · {alt} {h['alt_score']:.1f} bits", TEXT, G[900])
+                    + _t(tx, y + row / 2 + 11, f"a match needs {h['cut']:.1f}", TEXT, G[700])
                     + "</g>")
         y += row
     for i, b in enumerate(seq[lo:hi]):  # the reference sequence, + strand
-        body.append(_t(left + (i + 0.5) * cw, y + 10, b, 9, G[700] if lo + i != w else G[900], "middle", "600" if lo + i == w else None))
+        body.append(_t(left + (i + 0.5) * cw, y + 10, b, TEXT if cw >= 8 else round(cw * 1.3, 1), G[700] if lo + i != w else G[900], "middle", "600" if lo + i == w else None))
     sx = left + (w - lo) * cw
     body.insert(0, f'<rect x="{sx:.1f}" y="0" width="{cw:.1f}" height="{y + 22}" fill="{palette.MOTIF}" fill-opacity="0.12" '
                    f'stroke="{palette.MOTIF}" stroke-width="1"/>')
-    body.append(_t(sx + cw / 2, y + 21, alt, 9, palette.MOTIF, "middle", "700") + _t(left - 6, y + 10, "+ strand", 9, G[700], "end")
-                + _t(left - 6, y + 21, "alt", 9, G[700], "end"))
+    body.append(_t(sx + cw / 2, y + 21, alt, TEXT, palette.MOTIF, "middle", "700") + _t(left - 6, y + 10, "+ strand", TEXT, G[700], "end")
+                + _t(left - 6, y + 21, "alt", TEXT, G[700], "end"))
     return "".join(body), left + n * cw + right, y + 24, sx + cw / 2
 
 
@@ -739,11 +745,11 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
     locus.user_snps(), with `out` for SNPs not selected. An SV (`end`) is a band over pos..end through the lanes, every
     peak it overlaps outlined, and its tiles hang from the band's middle (the strongest state per condition)."""
     ax = Axis(data["start"], data["end"], 4, width - 4)
-    body, y = [], 14
+    body, y = [], 15
 
     def lane(name, tip):
-        body.append(_t(ax.left, y + 8, name, 9.5, G[900], weight="600").replace("</text>", f"<title>{escape(tip)}</title></text>"))
-        return y + 12
+        body.append(_t(ax.left, y + 9, name, TEXT, G[900], weight="600").replace("</text>", f"<title>{escape(tip)}</title></text>"))
+        return y + 13
 
     if snps:
         best = max([p.get("tier_score") or 0 for p in snps] + [1])
@@ -758,7 +764,7 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
         y += 30
     y = lane("Genes", "Ensembl 116 gene models")
     y = _genes(body, ax, data.get("genes", []), y, gene_url, 3, lambda *a, **k: None)
-    y = lane("Public variants", "504-fish public panel; tick height = MAF")
+    y = lane("Public SNPs", "504-fish panel; tick height = MAF")
     body.append(f'<line x1="{ax.x0}" x2="{ax.x1}" y1="{y + 16}" y2="{y + 16}" stroke="{G[300]}"/>')
     for v in data.get("variants", []):
         x = ax.x(v["pos"] - 0.5)
@@ -770,7 +776,7 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
         x, w = ax.span(g["start"], g["end"])
         body.append(f'<rect x="{x:.1f}" y="{y}" width="{w:.1f}" height="10" fill="{G[700]}" fill-opacity="{0.35 + 0.65 * (g.get("score") or 0) / top:.2f}"/>')
     if not data.get("gerp"):
-        body.append(_t(ax.left, y + 9, "none here", 9, G[700]))
+        body.append(_t(ax.left, y + 9, EMPTY, TEXT, G[700]))
     y += 16
     y = lane("Regulatory elements", "AQUA-FAANG robust ATAC peaks, coloured by their strongest state")
     for p in data.get("peaks", []):
@@ -780,19 +786,19 @@ def mini_browser(data, pos, snps=(), gene_url=None, synthetic=False, width=640, 
         body.append(f'<rect x="{x0:.1f}" y="{y}" width="{max(2, x1 - x0):.1f}" height="12" fill="{palette.state(best)[0]}" stroke="{G[900]}" '
                     f'stroke-width="{2 if mine else 0.5}"><title>{best.replace("_", " ")}</title></rect>')
     if not data.get("peaks"):
-        body.append(_t(ax.left, y + 9, "none here", 9, G[700]))
+        body.append(_t(ax.left, y + 10, EMPTY, TEXT, G[700]))
     y += 12
     if end:  # the SV as a band through every lane, labelled on top; tiles hang from its middle
         x0, w = ax.span(pos - 1, end, 2)
         x, left, right = x0 + w / 2, (pos - 1 - data["start"]) / 1000, (data["end"] - end) / 1000
         body.insert(0, f'<rect x="{x0:.1f}" y="12" width="{w:.1f}" height="{y - 12}" fill="{palette.ACCENT}" fill-opacity="0.12"/>')
-        body.append(_t(x, 9, "SV", 9.5, G[900], "middle", "600") + _t(ax.x0, 9, f"−{left:g} kb", 9, G[700])
-                    + _t(ax.x1, 9, f"+{right:g} kb", 9, G[700], "end"))
+        body.append(_t(x, 10, "SV", TEXT, G[900], "middle", "600") + _t(ax.x0, 10, f"−{left:g} kb", TEXT, G[700])
+                    + _t(ax.x1, 10, f"+{right:g} kb", TEXT, G[700], "end"))
     else:
         x = ax.x(pos - 0.5)  # the SNP through every lane, labelled on top between the window's ends
         left, right = (pos - 1 - data["start"]) / 1000, (data["end"] - pos) / 1000
-        body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="12" y2="{y}" stroke="{G[900]}" stroke-opacity="0.45"/>' + _t(x, 9, "SNP", 9.5, G[900], "middle", "600")
-                    + _t(ax.x0, 9, f"−{left:g} kb", 9, G[700]) + _t(ax.x1, 9, f"+{right:g} kb", 9, G[700], "end"))
+        body.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="12" y2="{y}" stroke="{G[900]}" stroke-opacity="0.45"/>' + _t(x, 10, "SNP", TEXT, G[900], "middle", "600")
+                    + _t(ax.x0, 10, f"−{left:g} kb", TEXT, G[700]) + _t(ax.x1, 10, f"+{right:g} kb", TEXT, G[700], "end"))
     if tiles:  # the SNP's peak per condition: the tiles centred under the SNP (their labels to the left), in a wedge
         gw, gh = (float(v) for v in re.search(r' width="([\d.]+)" height="([\d.]+)"', tiles).groups())  # from it to them
         t0, t1 = GRID["left"], GRID["left"] + 4 * (GRID["cw"] + GRID["gap"]) - GRID["gap"]  # the tiles' span in the grid
@@ -816,9 +822,9 @@ def expression_bars(values, synthetic=False):
     parts, y = [], 4
     for tissue, v in items:
         w = 220 * v / top
-        parts.append(_t(70, y + 11, tissue, 10, G[900], "end")
+        parts.append(_t(70, y + 11, tissue, TEXT, G[900], "end")
                      + f'<rect x="76" y="{y + 2}" width="{max(0.5, w):.1f}" height="11" fill="{palette.TISSUES.get(tissue, G[500])}"/>'
-                     + _t(80 + w, y + 11, f"{v:,.1f}", 9.5, G[700]))
+                     + _t(80 + w, y + 11, f"{v:,.1f}", TEXT, G[700]))
         y += 16
     desc = ", ".join(f"{t} {v:.1f} CPM" for t, v in items)
     return figures.svg(360, y + 4, "Expression per tissue (mean CPM)", desc, "".join(parts), synthetic)
@@ -851,15 +857,15 @@ def gwas_lane(body, ax, gwas, y, legend=None, height=120):
     top = math.ceil(top / step) * step
     y0, h = y + 6, height - 24
     sy = lambda v: y0 + h - h * min(v, top) / top
-    body.append(_t(ax.x0 - 26, y0 + 10, "Association", 10.5, G[900], "end", "600")  # left of the tick labels
-                + _t(ax.x0 - 26, y0 + 21, "-log10 p", 9, G[700], "end"))
+    body.append(_t(ax.x0 - 26, y0 + 10, "Association", LABEL, G[900], "end", "600")  # left of the tick labels
+                + _t(ax.x0 - 26, y0 + 21, "-log10 p", TEXT, G[500], "end"))
     body.append(f'<line x1="{ax.x0}" x2="{ax.x1}" y1="{y0 + h}" y2="{y0 + h}" stroke="{G[500]}"/>')
     for v in range(0, int(top) + 1, int(step) or 1):
         body.append(f'<line x1="{ax.x0 - 4}" x2="{ax.x0}" y1="{sy(v):.1f}" y2="{sy(v):.1f}" stroke="{G[500]}"/>'
-                    + _t(ax.x0 - 6, sy(v) + 3, v, 9, G[700], "end"))
-    body.append(f'<line x1="{ax.x0}" x2="{ax.x1}" y1="{sy(sig):.1f}" y2="{sy(sig):.1f}" stroke="{palette.STATUS["fail"][0]}" '
+                    + _t(ax.x0 - 6, sy(v) + 3, v, TEXT, G[700], "end"))
+    body.append(f'<line x1="{ax.x0}" x2="{ax.x1}" y1="{sy(sig):.1f}" y2="{sy(sig):.1f}" stroke="{G[900]}" '
                 f'stroke-dasharray="5 3"><title>significance line, p = {10 ** -sig:.0e}</title></line>'
-                + _t(ax.x1 - 2, sy(sig) - 3, f"p = {10 ** -sig:.0e}", 9, palette.STATUS["fail"][0], "end"))
+                + _t(ax.x1 - 2, sy(sig) - 3, f"p = {10 ** -sig:.0e}", TEXT, G[900], "end"))
     order = sorted(points, key=lambda p: ((p.get("kind") == "lead"), bool(p.get("cs")), -(p.get("tier") or 4), p["neglog10p"]))
     for p in order:  # leads, credible-set members and better tiers on top
         fill = palette.TIERS.get(p.get("tier") or 4, palette.TIERS[4])[0]
@@ -885,6 +891,6 @@ def gwas_figure(gwas, chrom, start, end, title="", width=WIDTH, gutter=GUTTER, h
 
     y = gwas_lane(body, ax, gwas, y, legend, height)
     for t in ax.ticks(9):
-        body.append(_t(ax.x(t), y + 2, f"{t:,}", 9, G[700], "middle"))
+        body.append(_t(ax.x(t), y + 2, f"{t:,}", TEXT, G[700], "middle"))
     y = _legend(body, legend, y + 8, width, gutter)
     return "".join(body), y + 4

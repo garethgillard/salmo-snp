@@ -154,7 +154,7 @@ class ExploreTest(SimpleTestCase):
         self.assertContains(page, "<h1>vgll3", html=False)  # catalogue name; unnamed in Ensembl
         self.assertContains(page, "VGLL3")
         self.assertContains(page, 'id="fig-expression"')
-        self.assertEqual(page.content.decode().count('<td class="sp-mono"><a href="/snp/variant/'), explore.SHOW_FIRST)  # the 10 best
+        self.assertEqual(page.content.decode().count('<td class="sp-nowrap"><a href="/snp/variant/'), explore.SHOW_FIRST)  # the 10 best
         self.assertContains(page, "&amp;all=1#candidates", html=False)  # then 'Show all'
         self.assertContains(self.client.get(url, {"all": "1"}), reverse("snpportal:variant", args=["25-28996360"]))  # Met54Thr is public
         self.assertEqual(page.content.decode().count('class="text-nowrap" title='), 27)  # 27 condition columns, in a closed section

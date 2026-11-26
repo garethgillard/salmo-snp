@@ -597,60 +597,88 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp .sp-loci details summary { color: var(--sp-link); cursor: pointer; }
 /* end known loci */
 
-/* == locus browser (browser.py): one slim control bar; groups of tracks, an HTML label beside each track's SVG, all on
-   one 1000 px axis (drawn 1:1, so narrower screens scroll the tracks sideways). Sizes in px, to match the SVG. == */
-.sp-bctl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; padding: 0 0 8px;
-  border-bottom: 1px solid var(--sp-line); }
+/* == locus browser (browser.py): one slim control bar, as wide as the tracks; groups of tracks, an HTML label beside each
+   track's SVG, all on one 1000 px axis (drawn 1:1, so narrower screens scroll the tracks sideways). The tracks are the
+   data: the controls and labels stay quiet. Sizes in px, to match the SVG. == */
+.sp-bctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-width: 1200px; margin-bottom: 6px;
+  padding: 0 0 10px; border-bottom: 1px solid var(--sp-line); }
+.sp-bctl-go, .sp-bctl-moves { display: inline-flex; align-items: center; gap: 6px; }
 .sp-bctl .sp-region { width: 16rem; }
-.sp-bctl .sp-push { display: flex; gap: 8px; margin-left: auto; }  /* the line, groups and download buttons wrap together */
+.sp-bctl .btn-group .btn { display: inline-flex; align-items: center; justify-content: center; min-width: 2rem; }
+.sp-bctl .sp-push { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }  /* wrap together */
+.sp-bctl-links { margin-right: 4px; color: var(--sp-muted); font-size: var(--sp-fs-sm); white-space: nowrap; }
+.sp .sp-bctl-links a { color: var(--sp-ink-2); text-decoration: none; }
+.sp .sp-bctl-links a:hover { color: var(--sp-ink); text-decoration: underline; }
+.sp-bctl-links a + a { margin-left: 8px; }
+.sp-bctl-links .sp-i { width: .9em; height: .9em; margin-left: 2px; vertical-align: -.1em; }
+.sp-move-tip[open] p { width: 22rem; }
+@media (max-width: 575.98px) {  /* phones: the region takes the row; the rest wraps under it */
+  .sp-bctl-go { flex: 1 1 100%; } .sp-bctl .sp-region { width: auto; flex: 1; }
+  .sp-bctl .sp-push { margin-left: 0; } .sp-move-tip[open] p { width: 17rem; }
+}
 .sp-tracks { overflow-x: auto; }
-.sp-trk { display: grid; grid-template-columns: 200px 1000px; align-items: center; width: 1200px; min-height: 14px; }
+.sp-trk { display: grid; grid-template-columns: 200px 1000px; align-items: center; width: 1200px; min-height: 20px; }
 .sp-trk-dense { min-height: 13px; }
 .sp-trk-sep { margin-top: 3px; padding-top: 2px; border-top: 1px solid var(--sp-line); }  /* a new tissue or map below */
 .sp-trk-lab { padding-right: 10px; overflow: hidden; font-size: 12px; line-height: 1.15; text-align: right; white-space: nowrap; }
 .sp-trk-dense .sp-trk-lab { font-size: 11px; }
 .sp-trk-name { font-weight: 600; }
+.sp-trk-lab[title] { cursor: help; }
 .sp-trk-dense .sp-trk-name { font-weight: 400; }
 .sp-trk-sub { display: block; color: var(--sp-muted); font-size: 11px; }
 .sp-tbar { display: inline-block; width: 4px; height: 10px; margin-right: 5px; vertical-align: -1px; background: currentColor; }
 .sp-trk-svg { display: block; overflow: visible; }
 .sp-trk-svg.sp-ax { overflow: hidden; }  /* the tracks draw a margin either side (browser.drawn), shown when they are moved */
 .sp-trk-svg text { font-family: var(--sp-font); }
-.sp-grp { margin-top: 10px; padding-top: 6px; border-top: 1px solid var(--sp-line); }
-.sp-grp-h { display: flex; align-items: baseline; gap: 10px; width: 1200px; margin-bottom: 4px; padding: 2px 0; }
-.sp-grp-h h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.sp-grp { width: 1200px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--sp-line); }
+.sp-grp-h { display: flex; align-items: baseline; gap: 12px; width: 1200px; margin-bottom: 4px; }
+.sp-grp-h h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.sp-grp-h h3[title] { cursor: help; }
 .sp-grp-note { color: var(--sp-muted); font-size: 12px; }
-.sp .sp-tog { margin-left: auto; padding: 1px 8px; border: 1px solid var(--sp-line-2); border-radius: 4px; background: var(--sp-white);
-  color: var(--sp-ink); font-size: 12px; white-space: nowrap; }
-.sp .sp-tog:hover { background: var(--sp-grey-100); }
+.sp .sp-grp-note a { color: var(--sp-ink-2); }
+/* a group's toggle: quiet grey words and a chevron that turns when open */
+.sp .sp-tog { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 2px 6px; border: 0; border-radius: 4px;
+  background: none; color: var(--sp-ink-2); font-size: 13px; white-space: nowrap; }
+.sp .sp-tog:hover { background: var(--sp-grey-100); color: var(--sp-ink); }
+.sp-tog .sp-i { width: 15px; height: 15px; transition: transform .15s; }
+.sp-grp.open > .sp-grp-h .sp-tog .sp-i { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .sp-tog .sp-i { transition: none; } }
 .sp-when-open, .sp-grp.open > .sp-grp-h .sp-when-closed { display: none; }
 .sp-grp.open > .sp-grp-h .sp-when-open { display: inline; }
 .sp-more-rows { display: none; }
 .sp-grp.open > .sp-more-rows { display: block; }
 .sp-sec .sp-grp { border-top: 0; }
 .sp-sec .sp-grp .sp-grp-h h3 { font-size: 13px; }
-.sp-blegend { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 1px 0 3px; font-size: 11px; }
-.sp-blegend i { display: inline-block; width: 9px; height: 9px; margin-right: 3px; vertical-align: -1px; border: 1px solid var(--sp-grey-500); }
+.sp-blegend { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 1px 0 4px; color: var(--sp-ink-2); font-size: 11px; }
+.sp-blegend i { display: inline-block; width: 9px; height: 9px; margin-right: 4px; vertical-align: -1px; border: 1px solid var(--sp-grey-500); }
 .sp-blegend i.sp-tbg { background: currentColor; }
+.sp-blegend-lab { color: var(--sp-muted); }
 .sp-assay-slot { padding-left: 200px; }
-.sp-bctl .sp-ico { vertical-align: -2px; }
 .sp .sp-spin { width: .8rem; height: .8rem; margin-right: 5px; border-width: .15em; vertical-align: -.1em; color: var(--sp-ink-2); }
 /* the mouse line (portal.js sets --sp-x and --sp-pos on .sp-tracks): through every track on the axis, its base on the ruler */
 .sp-trk:has(> .sp-ax) { position: relative; }
 .sp-cur .sp-trk:has(> .sp-ax)::after { content: ""; position: absolute; top: 0; bottom: 0; left: var(--sp-x); width: 1px;
   background: var(--sp-grey-900); pointer-events: none; }
 .sp-cur .sp-trk-ruler::before { content: var(--sp-pos); position: absolute; z-index: 1; top: -1px; left: clamp(240px, var(--sp-x), 1160px);
-  padding: 0 4px; transform: translateX(-50%); background: var(--sp-white); font: 600 11px var(--sp-mono); pointer-events: none; }
+  padding: 0 4px; transform: translateX(-50%); background: var(--sp-white); font: 600 11px var(--sp-font); font-variant-numeric: tabular-nums;
+  pointer-events: none; }
 /* moving with the mouse (portal.js): the tracks slide or stretch inside their own boxes until the new window arrives */
 .sp-tracks .sp-trk:not(.sp-trk-chr) > .sp-ax { cursor: grab; user-select: none; -webkit-user-select: none; }
 .sp-tracks .sp-trk-ruler > .sp-ax { cursor: col-resize; }
 .sp-moving .sp-trk:not(.sp-trk-chr) > .sp-ax { cursor: grabbing; }
 .sp-sel { fill: var(--sp-accent); fill-opacity: .18; stroke: var(--sp-accent); pointer-events: none; }
 @media (hover: none) { .sp-move-tip { display: none; } }
-.sp-held.sp-cur .sp-trk:has(> .sp-ax)::after { width: 2px; margin-left: -.5px; background: var(--sp-accent); }
-.sp-held.sp-cur .sp-trk-ruler::before { border-radius: 3px; background: var(--sp-accent); color: var(--sp-accent-text); }
+.sp-held.sp-cur .sp-trk:has(> .sp-ax)::after { width: 2px; margin-left: -.5px; }  /* pinned: thicker, its base in a dark tag */
+.sp-held.sp-cur .sp-trk-ruler::before { border-radius: 3px; background: var(--sp-ink); color: var(--sp-white); }
 @media print { .sp-bctl { display: none; } .sp-more-rows { display: block !important; } .sp-cur .sp-trk::after, .sp-cur .sp-trk::before { content: none; } }
 /* end locus browser */
+
+/* == gene page (gene.html): the facts beside expression, the locus figure, then the public SNPs with their controls == */
+.sp-gene-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.25rem; margin-bottom: .6rem; }
+.sp-gene-bar h2 { margin: 0; }
+.sp-gene-form { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .6rem; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
+.sp-gene-form .form-select { width: auto; }
+.sp-gene-bar .sp-actions { margin-left: auto; }
 
 /* == the Design panel page: two columns as tall as each other; each one's last card takes up the slack == */
 .sp-eq > div > :last-child { flex: 1 1 auto; }
