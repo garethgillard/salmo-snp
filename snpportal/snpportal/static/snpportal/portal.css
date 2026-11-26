@@ -602,24 +602,28 @@ a.sp-card:hover { border-color: var(--sp-accent); }
 .sp button.sp-pick { padding: 0; }  /* the Design panel's +/−: a form button, as the Table's link */
 .sp-num-in { width: 7rem; }  /* small number fields (the Design panel's Upgrade form) */
 
-/* the Tier rules mixer (_mixer.html): a channel strip per evidence term and tier cut-off, faders upright */
+/* the Tier rules mixer (_mixer.html): the sliders in groups by the kind of evidence, then the tier cut-offs */
 .sp-rules-line { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; margin: 0 0 .6rem; }
 .sp-rules-line [data-sp-rules-state] { font-weight: 600; }
 .sp-mixer .modal-title { font-size: 1.15rem; }
-.sp-mix { display: flex; flex-wrap: wrap; gap: .4rem; align-items: stretch; }
-.sp-ch { display: flex; flex-direction: column; align-items: center; width: 5.6rem; padding: .45rem .3rem .4rem;
-  border: 1px solid var(--sp-grey-300); border-radius: .45rem; background: var(--sp-grey-50); }
-.sp-ch-changed { border-color: var(--sp-accent); background: var(--sp-white); box-shadow: inset 0 3px 0 var(--sp-accent); }
-.sp-fader { writing-mode: vertical-lr; direction: rtl; width: 1.75rem; height: 7rem; margin: .35rem 0 .2rem; accent-color: var(--sp-accent); cursor: pointer; }
-.sp-ch-box { width: 3.6rem; text-align: center; padding: .1rem .2rem; }
-.sp-ch-name { font-size: .78rem; font-weight: 600; text-align: center; line-height: 1.15; margin-top: .15rem; }
-.sp-ch-std { font-size: .72rem; color: var(--sp-grey-700); }
-.sp-ch-pct { display: flex; align-items: center; gap: .2rem; margin-top: .15rem; font-size: .72rem; color: var(--sp-grey-700); }
-.sp-ch-pct input { width: 3.4rem; padding: .05rem .2rem; }
-.sp-ch-cut .sp-ch-name { padding: 0 .45rem; border-radius: .25rem; }
-.sp-mix-master { display: grid; grid-template-columns: repeat(3, auto); gap: .4rem; align-content: start; padding-left: .7rem;
-  border-left: 2px solid var(--sp-grey-300); }
-.sp-mix-master-h { grid-column: 1 / -1; max-width: 17.6rem; font-size: .75rem; color: var(--sp-grey-700); line-height: 1.2; }
+.sp-mix { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr)); gap: .6rem .8rem; align-items: start; }
+.sp-mix-group { min-width: 0; margin: 0; padding: .4rem .6rem .5rem; border: 1px solid var(--sp-grey-300); border-radius: .45rem; background: var(--sp-grey-50); }
+.sp-mix-group legend { float: none; width: auto; margin: 0 0 .15rem; padding: 0; font-size: .85rem; font-weight: 700; }
+.sp-mix-group legend span { font-weight: 400; font-size: .75rem; }
+.sp-mix-focus { grid-column: 1 / -1; }
+.sp-mix-tissues { display: flex; flex-wrap: wrap; gap: .25rem 1.1rem; margin: .15rem 0 .3rem; font-size: .85rem; font-weight: 600; }
+.sp-mix-tissues label { display: flex; align-items: center; gap: .35rem; cursor: pointer; }
+.sp-mix-tissues input { margin: 0; }
+.sp-ch-idle { opacity: .55; }
+.sp-ch { display: grid; grid-template-columns: 7.6rem minmax(4rem, 1fr) 3.4rem 2.2rem; align-items: center; gap: .45rem;
+  padding: .12rem .3rem; border-radius: .3rem; }
+.sp-ch-changed { background: var(--sp-white); box-shadow: inset 3px 0 0 var(--sp-accent); }
+.sp-ch-name { margin: 0; font-size: .82rem; font-weight: 600; line-height: 1.15; }
+.sp-fader { width: 100%; accent-color: var(--sp-accent); cursor: pointer; }
+.sp-ch-box { text-align: center; padding: .1rem .2rem; }
+.sp-ch-std { font-size: .75rem; color: var(--sp-grey-700); white-space: nowrap; }
+.sp-ch-pct { grid-column: 2 / -1; display: flex; align-items: center; gap: .35rem; margin: 0; font-size: .75rem; color: var(--sp-grey-700); }
+.sp-ch-pct input { width: 4rem; padding: .05rem .2rem; }
 .sp-mix-preview { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .9rem; min-height: 2.2rem; margin-bottom: .6rem;
   padding: .35rem .7rem; border: 1px solid var(--sp-grey-300); border-radius: .4rem; background: var(--sp-white);
   font-size: .85rem; font-variant-numeric: tabular-nums; }

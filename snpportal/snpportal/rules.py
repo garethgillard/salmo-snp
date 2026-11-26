@@ -2,7 +2,10 @@
 fader and a number box per evidence term, the tier cut-offs, the chromatin states), kept in this browser (localStorage,
 portal.js) and sent with each new list, or applied to finished results, which are tiered again from the evidence they
 hold (jobs.retier). Only the scoring blocks (SCORING) are a user's: the others (presets, assay, design, finemap,
-priors) stay the portal's. Checked as the portal's own rules are (health.rules), within bounds for a public server."""
+priors) stay the portal's, except the focus (G, 2026-11-26: "focus the type of elements, like choosing certain
+tissues extra or to just focus on elements from a give tissue"): the tissues whose chromatin evidence counts as
+active or weak, the rest only as active elsewhere, which is the job's presets.all. Checked as the portal's own rules
+are (health.rules), within bounds for a public server."""
 from __future__ import annotations
 
 import json
@@ -21,23 +24,27 @@ from .lib import export as snp_export
 
 SCORING = ("weights", "tiers", "active_states", "weak_states", "summit", "variant_scores")  # the blocks that are yours
 MAX_WEIGHT, MAX_CUTOFF, MAX_BYTES = 100, 1000, 100_000  # PROVISIONAL bounds: a weight, a tier cut-off, a rules file
-FADERS = {"weight": 10, "cutoff": 20}  # the faders' top (PROVISIONAL); the number boxes go up to the bounds
-TERMS = [  # (term, label, what counts, the release layer it needs): the mixer's channels, in its order. Not here:
-    # active_elsewhere, which never counts in the portal (its tiers count all conditions), and the score layers (below)
-    ("active", "Active state", "An active chromatin state in at least one AQUA-FAANG condition", "chromatin"),
-    ("weak", "Weak state", "A weak chromatin state, and no active one, in at least one condition", "chromatin"),
-    ("coding", "Coding", "A change to the protein (missense, stop gained or lost, start lost) or of unknown effect", "region"),
-    ("synonymous", "Synonymous", "A synonymous change in coding sequence (or stop retained)", "region"),
-    ("splice", "Splice region", "In a splice region", "region"),
-    ("utr", "UTR", "In a 5' or 3' UTR", "region"),
-    ("constrained", "Constrained", "In a GERP constrained element (Ensembl's 65 fish)", "gerp"),
-    ("pike", "Pike conserved", "Sequence that aligns to northern pike", "pike"),
-    ("motif", "TF motif", "In a robust ATAC peak, one allele matches a JASPAR motif and the other doesn't", "motif"),
-    ("summit", "ATAC summit", "Near a strong ATAC summit (the summit rule of the rules file)", "summit"),
-    ("regbuild", "Ensembl regulatory", "An Ensembl regulatory feature where AQUA-FAANG has no peak", "regbuild"),
-    ("molqtl", "molQTL lead", "A caQTL or eQTL lead SNP of the 12 AQUA-FAANG fish (nf-RASQUAL)", "molqtl"),
+FADERS = {"weight": 10, "cutoff": 20}  # the sliders' top (PROVISIONAL); the number boxes go up to the bounds
+GROUPS = ("Chromatin and regulatory elements", "Genes and proteins", "Conservation", "Allele effects")
+TERMS = [  # (term, label, what counts, the release layer it needs, group): the mixer's sliders, in its order; the
+    # score layers join the allele effects
+    ("active", "Active state", "An active chromatin state in at least one condition of your focus (every condition "
+     "without one)", "chromatin", 0),
+    ("active_elsewhere", "Active, other tissues", "Active only in tissues outside your focus: counts only when the Focus "
+     "leaves some tissues out", "chromatin", 0),
+    ("weak", "Weak state", "A weak chromatin state, and no active one, in at least one condition", "chromatin", 0),
+    ("summit", "ATAC summit", "Near a strong ATAC summit (the summit rule of the rules file)", "summit", 0),
+    ("regbuild", "Ensembl regulatory", "An Ensembl regulatory feature where AQUA-FAANG has no peak", "regbuild", 0),
+    ("coding", "Coding", "A change to the protein (missense, stop gained or lost, start lost) or of unknown effect", "region", 1),
+    ("synonymous", "Synonymous", "A synonymous change in coding sequence (or stop retained)", "region", 1),
+    ("splice", "Splice region", "In a splice region", "region", 1),
+    ("utr", "UTR", "In a 5' or 3' UTR", "region", 1),
+    ("constrained", "Constrained", "In a GERP constrained element (Ensembl's 65 fish)", "gerp", 2),
+    ("pike", "Pike conserved", "Sequence that aligns to northern pike", "pike", 2),
+    ("motif", "TF motif", "In a robust ATAC peak, one allele matches a JASPAR motif and the other doesn't", "motif", 3),
+    ("molqtl", "molQTL lead", "A caQTL or eQTL lead SNP of the 12 AQUA-FAANG fish (nf-RASQUAL)", "molqtl", 3),
 ]
-LABELS = {t: label for t, label, _, _ in TERMS} | {"active_elsewhere": "Active elsewhere"}
+LABELS = {t: label for t, label, _, _, _ in TERMS}
 
 
 def standard():
@@ -65,11 +72,23 @@ def parse(text):
 
 def compose(given):
     """(rules, problems, unused): the rules in use with the scoring blocks of `given` (a dict) in their place; the
-    mistakes that make them unusable, each named by its key; and the blocks of `given` left to the portal."""
-    unused = [k for k in given if k in snpscore.score.BLOCKS and k not in SCORING]
-    problems = [f"unknown block '{k}' (mistyped? the blocks your rules can set are {', '.join(SCORING)})"
+    mistakes that make them unusable, each named by its key; and the blocks of `given` left to the portal. The focus
+    (`focus`, from the mixer, or a file's presets.all) becomes the rules' presets.all: [] for every condition."""
+    given, base = dict(given), standard()
+    focus = given.pop("focus", None)
+    presets = given.get("presets") if isinstance(given.get("presets"), dict) else {}
+    if focus is None:
+        focus = presets.get("all")
+    unused = [k for k in given if k in snpscore.score.BLOCKS and k not in SCORING
+              and not (k == "presets" and all(v == (base.get("presets") or {}).get(n) for n, v in presets.items() if n != "all"))]
+    problems = [f"unknown block '{k}' (mistyped? the blocks your rules can set are {', '.join(SCORING)}, and the focus)"
                 for k in given if k not in snpscore.score.BLOCKS]
-    rules = {**standard(), **{k: given[k] for k in SCORING if k in given}}
+    rules = {**base, **{k: given[k] for k in SCORING if k in given}}
+    if focus is not None:
+        if isinstance(focus, list) and all(isinstance(x, str) for x in focus):
+            rules["presets"] = {**(base.get("presets") or {}), "all": list(focus)}
+        else:
+            problems.append("focus: a list of tissues (the beginnings of condition names), e.g. [Gill, HeadKidney]")
     problems += snpscore.check_weights(rules) + snp_export.check_rules(rules)
     weights = rules.get("weights") if isinstance(rules.get("weights"), dict) else {}
     problems += [f"weights: '{t}' is {v}; at most {MAX_WEIGHT} here" for t, v in weights.items()
@@ -97,8 +116,9 @@ def from_json(value):
 
 
 def scoring(rules):
-    """The scoring blocks of a set of rules: what the browser keeps."""
-    return {k: rules[k] for k in SCORING if k in rules}
+    """The scoring blocks of a set of rules, and their focus when they have one: what the browser keeps."""
+    focus = ((rules.get("presets") or {}).get("all") or []) if isinstance(rules.get("presets"), dict) else []
+    return {k: rules[k] for k in SCORING if k in rules} | ({"focus": list(focus)} if focus else {})
 
 
 def changes(rules, base=None):
@@ -116,6 +136,9 @@ def changes(rules, base=None):
         out.append("summit rule")
     if (base.get("variant_scores") or {}) != (rules.get("variant_scores") or {}):
         out.append("score percentiles")
+    focus = ((rules.get("presets") or {}).get("all") or [])
+    if focus != ((base.get("presets") or {}).get("all") or []):
+        out.insert(0, "focus: " + (jobs.focus_text(focus) or "every condition"))
     return out
 
 
@@ -131,7 +154,7 @@ def text(rules):
     lines, out, i = base_text.splitlines(), [], 0
     while i < len(lines):
         m = re.match(r"([A-Za-z_]+):", lines[i])
-        if not m or m.group(1) not in SCORING or rules.get(m.group(1)) == base.get(m.group(1)):
+        if not m or m.group(1) not in (*SCORING, "presets") or rules.get(m.group(1)) == base.get(m.group(1)):
             out.append(lines[i])
             i += 1
             continue
@@ -171,15 +194,19 @@ def for_job(request):
 
 
 def mixer(d=None, key=None):
-    """The Tier rules mixer's context (_mixer.html): its channels, from the terms whose layers this release has and
-    its score layers; the chromatin states; the standard rules, and the rules of the job `d` (else the page starts
-    from this browser's own, or the standard)."""
+    """The Tier rules mixer's context (_mixer.html): its sliders in their groups, from the terms whose layers this
+    release has and its score layers (with the allele effects); the chromatin states; the standard rules, and the rules
+    of the job `d` (else the page starts from this browser's own, or the standard)."""
     release = d or jobs.release()
     names = {x.get("name") for x in jobs.manifest(release).get("layers", [])}
     current = yaml.safe_load(jobs.rules_file(d).read_text()) if d and jobs.rules_file(d).exists() else None
     base = standard()
-    return {"terms": [(t, label, why) for t, label, why, layer in TERMS if layer in names],
-            "scores": [(n, label) for n, label in jobs.score_layers(d)],
+    groups = [(title, [(t, label, why, False) for t, label, why, layer, g in TERMS if g == i and layer in names])
+              for i, title in enumerate(GROUPS)]
+    groups[-1][1].extend((n, label, f"{label}: counts for SNPs at or above the percentile set under its slider", True)
+                         for n, label in jobs.score_layers(d))
+    return {"groups": [(title, sliders) for title, sliders in groups if sliders],
+            "tissues": [(label, ",".join(prefixes)) for label, prefixes in jobs.release_tissues(release)],
             "states": jobs.release_states(release) or list(snpscore.score.STATES),
             "standard": scoring(base), "current": scoring(current) if current else None, "key": key,
             "faders": FADERS, "max_weight": MAX_WEIGHT, "max_cutoff": MAX_CUTOFF}

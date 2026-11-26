@@ -422,6 +422,46 @@ def _states(path, mtime):
     return [s for s in snpscore.score.STATES if s in found] + sorted(found - set(snpscore.score.STATES))
 
 
+@lru_cache(maxsize=8)
+def _conditions(path, mtime):
+    con = connect([Path(path).parent])
+    try:
+        columns = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet({lit(path)}))").fetchall()]
+    finally:
+        con.close()
+    return [c for c in columns if c not in ("chrom", "start", "end", "id", "summary")]
+
+
+def release_tissues(where=None):
+    """[(label, [condition prefixes])] of the tissues the release's chromatin layer has, in the portal's order; the
+    DevMap stages are one, 'Embryo stages'. The Tier rules mixer's Focus offers them."""
+    path = Path(where or release()) / "chromatin.parquet"
+    if not path.exists() and where:
+        path = release() / "chromatin.parquet"
+    try:
+        conditions = _conditions(str(path), path.stat().st_mtime) if path.exists() else []
+    except duckdb.Error:
+        return []
+    found = {c.split("_")[0] for c in conditions if c not in STAGES}
+    out = [(figures.tissue_name(t), [t]) for t in [*TISSUES, *sorted(found)] if t in found]
+    stages = [s for s in STAGES if s in conditions]
+    return list(dict(out).items()) + ([("Embryo stages", stages)] if stages else [])
+
+
+def focus(where=None):
+    """The condition prefixes a job's own rules focus on (its presets.all, the tissues the mixer's Focus ticked), []
+    for every condition (the standard)."""
+    w = weights(where) if where else None
+    return list(((w or {}).get("presets") or {}).get("all") or [])
+
+
+def focus_text(prefixes):
+    """How a focus reads: 'gill, head kidney', 'embryo stages'."""
+    stages = [p for p in prefixes if p in STAGES]
+    names = [figures.tissue_name(p).lower() for p in prefixes if p not in STAGES]
+    return ", ".join(names + (["embryo stages" if len(stages) == len(STAGES) else ", ".join(stages)] if stages else []))
+
+
 def release_states(where=None):
     """The chromatin state labels the release's chromatin layer uses, in snpscore's order ([] without the layer)."""
     path = Path(where or release()) / "chromatin.parquet"
@@ -495,9 +535,12 @@ def presets(where=None):
     return [("all", trait_label("all"))] + [(t, trait_label(t)) for t in TISSUES] if weights(where) else []
 
 
-def trait_label(trait):
-    """The conditions tiers count, as people read them: 'all conditions', 'brain + gonad (mature females)'. A
-    weights.yaml preset name (older links, job.json) reads as its tissues."""
+def trait_label(trait, where=None):
+    """The conditions tiers count, as people read them: 'all conditions', 'brain + gonad (mature females)', or for a
+    job (`where`) whose own rules focus on some tissues, 'your focus: gill'. A weights.yaml preset name (older links,
+    job.json) reads as its tissues."""
+    if trait == "all" and where and focus(where):
+        return "your focus: " + focus_text(focus(where))
     sel = selection(trait if trait == "all" or selection(trait) else _as_key(trait))
     if sel and trait != "all":
         tissues, maturity, sex = sel
@@ -785,6 +828,7 @@ def create(src, suffix, input_kind="snps", preset="all", label="", input_format=
         "manifest_sha256": sha256(d / "manifest.json") if (d / "manifest.json").exists() else None,
         "weights_sha256": sha256(d / "weights.yaml") if (d / "weights.yaml").exists() else None,
         "standard_sha256": rules_sha256(), "custom_rules": bool(rules),  # the rules in use now; the job's own or those
+        "focus": focus(d),  # the tissues its own rules focus on ([]: every condition)
         "snpscore_version": _version("snpscore"), "duckdb_version": duckdb.__version__,
         "created": now, "created_utc": utc(now), "started": None, "heartbeat": now, "timings": {},
         "error_code": None, "error": None, **({"positions": positions} if positions and positions in dict(position_choices()) else {}),
@@ -840,7 +884,7 @@ def retier(key, text):
             shutil.rmtree(d / cache, ignore_errors=True)
         now, own = time.time(), sha256(d / "weights.yaml")
         update(key, state="queued", stage="tiers", heartbeat=now, weights_sha256=own, custom_rules=own != rules_sha256(),
-               standard_sha256=rules_sha256(), retiered_utc=utc(now))
+               standard_sha256=rules_sha256(), retiered_utc=utc(now), focus=focus(d))
     log.info("job_retier job_ref=%s", job_ref(key))
     pool = executor()
     if pool is None:
@@ -1314,7 +1358,7 @@ def provenance(job, trait=None, filters=None):
         f"release {job.get('release')} ({job.get('assembly', 'Ssal_v3.1')}); manifest sha256 {job.get('manifest_sha256')}; "
         f"weights sha256 {job.get('weights_sha256')}" + (" (your own tier rules, set in the portal)" if job.get("custom_rules") else ""),
         f"snpscore {job.get('snpscore_version')}; duckdb {job.get('duckdb_version')}; job created {job.get('created_utc')}",
-        f"conditions {trait_label(trait)}; filters: {', '.join(f'{k}={v}' for k, v in (filters or {}).items()) or 'none'}",
+        f"conditions {('your focus: ' + focus_text(job['focus'])) if trait == 'all' and job.get('focus') else trait_label(trait)}; filters: {', '.join(f'{k}={v}' for k, v in (filters or {}).items()) or 'none'}",
         "tier rules PROVISIONAL (prototype weights, under review)",
     ]
     if job.get("synthetic_input") or job.get("synthetic_layers"):

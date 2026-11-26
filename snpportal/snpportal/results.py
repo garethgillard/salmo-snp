@@ -1252,7 +1252,7 @@ def _fig_maf(c, link, desc):
 
 
 FIGURES = {  # name -> (card title, (i) definition, builder(context, link or None, desc) -> (svg, header, rows) or None)
-    "summary": ("Summary", "How the SNPs scored for all 27 conditions (tier 1 = strongest functional evidence, tier 4 = no "
+    "summary": ("Summary", "How the SNPs scored, for the conditions under the heading (tier 1 = strongest functional evidence, tier 4 = no "
                 "evidence found, not evidence of no effect), where they fall relative to genes, how many are near a "
                 "published locus and how they did in the assay design check. Thin bars: the same split for the release's "
                 "public sites, for comparison. Click a number, a part of a bar or its legend entry to list those SNPs.",
@@ -1275,7 +1275,7 @@ OPEN = ("summary", "ideogram")  # side by side on the Overview (GWAS jobs: condi
 
 
 def _figure_context(key, job, trait, summary, d):
-    return {"key": key, "job": job, "trait": trait, "preset": jobs.trait_label(trait), "s": summary, "weights": jobs.weights(d),
+    return {"key": key, "job": job, "trait": trait, "preset": jobs.trait_label(trait, d), "s": summary, "weights": jobs.weights(d),
             "manifest": jobs.manifest(d), "background": {} if job.get("input_kind") == "sv" else background(d),  # public SNPs: not SVs' peers
             "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers")),
             "chip": jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}}
@@ -1360,7 +1360,7 @@ def overview(request, key, job):
         "warnings": warnings_of(validation) if validation else [],
         "qc_items": qc_items, "qc_warning": qc_warning, "qc_alias": validation.get("alias_warnings") or [],
         "qc_line": qc_line(validation), "qc_open": qc_problem(validation),
-        "rejects": (d / "rejects.tsv").exists() and bool(rejected), "trait": trait, "trait_label": jobs.trait_label(trait),
+        "rejects": (d / "rejects.tsv").exists() and bool(rejected), "trait": trait, "trait_label": jobs.trait_label(trait, d),
         "background_note": "" if job.get("input_kind") == "sv" else jobs.pool_note(d),  # left out: made with other rules
     }
 

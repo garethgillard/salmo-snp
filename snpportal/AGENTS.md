@@ -86,6 +86,8 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   `jobs.create(rules=...)` writes them as the job's weights.yaml (`custom_rules` in job.json). On a results page the
   mixer previews tiers (rules_preview) and Apply re-tiers the job in the queue (`jobs.retier`: tiers.parquet,
   summary.json, the own background; panels/ and loci/ removed). A new job-starting form needs `data-sp-rules`.
+  Its Focus (G, 2026-11-26) is the job's presets.all (`jobs.focus(folder)`); name the conditions tiers count with
+  `jobs.trait_label(trait, folder)`, which says 'your focus: gill' for such a job.
 - Tier rules: a job, a Design panel and a saved version each keep the weights.yaml their tiers were made with (a
   panel's is its first source's). Read them with `jobs.weights(folder)`, `jobs.rules_sha256(folder)`; the rules in
   use with no folder (`snpscore.score.rules_file()`, never `snpscore.score.WEIGHTS`). The public pool only with

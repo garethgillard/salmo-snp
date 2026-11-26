@@ -292,7 +292,14 @@ Decided:
   result (snpportal/snpportal/rules.py, `_mixer.html`, portal.js): a fader and a number box per evidence term, the
   tier cut-offs and the chromatin states; upload a weights.yaml, download the standard one or these. A user's rules
   live in the browser (localStorage) and go with each new list; on a results page the mixer shows the tiers the faders
-  would give and Apply tiers the job again (jobs.retier). Claude's choices: DECISIONS #69-#71 (Provisional below).
+  would give and Apply tiers the job again (jobs.retier). Claude's choices: DECISIONS #69-#72 (Provisional below).
+  Then (G, 2026-11-26): "Make the sliders horizontal, and grouped logically" (chromatin and regulatory elements,
+  genes and proteins, conservation, allele effects, tier cut-offs); and "make it able to focus the type of elements,
+  like choosing certain tissues extra or to just focus on elements from a give tissue, we need that option": the
+  mixer's Focus (the tissues ticked are the job's presets.all; active and weak states count there, activity only
+  elsewhere as 'Active, other tissues', active_elsewhere). This amends 'All conditions' (2026-10-11) for a user's own
+  rules only: the standard rules, and so the portal's default tiers, still count every condition, and a focused
+  result says its focus (its header, the Overview's 'Tier for your focus: ...', its downloads).
 - Usage documents wait for 1.0 (G, 2026-11-26: "don't update usage document yet, like the tour. Let's wait till a
   first official release to make the tour and help docs final for version 1.0"): no new tour screenshots or Help and
   README user-guide rewrites for each change until the first official release; a statement a change makes false

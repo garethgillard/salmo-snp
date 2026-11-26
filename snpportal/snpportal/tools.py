@@ -374,7 +374,7 @@ def _chip_tag(d, trait):
 
 
 def _context(key, job, d, trait, con):
-    return {"key": key, "job": job, "d": d, "trait": trait, "preset": jobs.trait_label(trait), "con": con,
+    return {"key": key, "job": job, "d": d, "trait": trait, "preset": jobs.trait_label(trait, d), "con": con,
             "synthetic": _synthetic(job)}
 
 

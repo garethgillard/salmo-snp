@@ -663,6 +663,7 @@
   function changes(r) {  // how r differs from the standard, in words (as rules.changes says it)
     if (!r || !standard) return [];
     var out = [], sw = standard.weights || {}, rw = r.weights || {}, label = names();
+    if (String(standard.focus || []) !== String(r.focus || [])) out.push("focus: " + focusNames(r.focus));
     Object.keys(Object.assign({}, sw, rw)).forEach(function (t) {
       if ((sw[t] || 0) !== (rw[t] || 0)) out.push((label[t] || t.replace(/_/g, " ")) + " " + (sw[t] || 0) + " → " + (rw[t] || 0));
     });
@@ -673,6 +674,15 @@
       return differ;
     });
     return out;
+  }
+  function focusNames(prefixes) {  // the tissues a focus ticks, by their labels
+    if (!prefixes || !prefixes.length) return "every condition";
+    var out = [];
+    if (box) box.querySelectorAll("[data-focus]").forEach(function (cb) {
+      var mine = cb.getAttribute("data-focus").split(",");
+      if (mine.some(function (p) { return prefixes.indexOf(p) >= 0; })) out.push(cb.parentNode.textContent.trim());
+    });
+    return out.length ? out.join(", ") : prefixes.join(", ");
   }
   function showState() {
     var own = saved(), said = changes(own);
@@ -730,6 +740,10 @@
       var s = sel.getAttribute("data-state");
       sel.value = (r.active_states || []).indexOf(s) >= 0 ? "active" : (r.weak_states || []).indexOf(s) >= 0 ? "weak" : "";
     });
+    box.querySelectorAll("[data-focus]").forEach(function (cb) {
+      var mine = cb.getAttribute("data-focus").split(",");
+      cb.checked = !r.focus || !r.focus.length || mine.some(function (p) { return r.focus.indexOf(p) >= 0; });
+    });
     say(null);
     changed();
   }
@@ -744,6 +758,9 @@
       if (v > 0) { r.weights[t] = v; r.variant_scores[t] = parseFloat(pct.value) || 0; } else { delete r.weights[t]; delete r.variant_scores[t]; }
     });
     r.tiers = [0, 1, 2].map(function (i) { return parseInt(box.querySelector('[data-cut="' + i + '"] .sp-ch-box').value, 10) || 1; });
+    var ticks = box.querySelectorAll("[data-focus]"), focus = [];
+    ticks.forEach(function (cb) { if (cb.checked) focus = focus.concat(cb.getAttribute("data-focus").split(",")); });
+    if (focus.length && box.querySelectorAll("[data-focus]:checked").length < ticks.length) r.focus = focus; else delete r.focus;
     var states = box.querySelectorAll("[data-state]");
     if (states.length) {
       var listed = [], active = [], weak = [];
@@ -768,6 +785,10 @@
       var i = +ch.getAttribute("data-cut");
       ch.classList.toggle("sp-ch-changed", r.tiers[i] !== (standard.tiers || [])[i]);
     });
+    var other = box.querySelector('[data-term="active_elsewhere"]');
+    if (other) other.classList.toggle("sp-ch-idle", !r.focus);
+    var focusBox = box.querySelector(".sp-mix-focus");
+    if (focusBox) focusBox.classList.toggle("sp-ch-changed", !!r.focus);
     var n = changes(r).length;
     box.querySelector("[data-mix-state]").textContent = n ? n + (n === 1 ? " change" : " changes") + " from the standard" : "the standard rules";
     if (!box.hasAttribute("data-preview")) return;
@@ -794,7 +815,7 @@
     if (ch && e.target.classList.contains("sp-ch-box")) set(ch, Math.max(+e.target.min || 0, parseInt(e.target.value, 10) || 0));
     if (ch || e.target.matches("[data-percentile]")) changed();
   });
-  box.addEventListener("change", function (e) { if (e.target.matches("[data-state]")) changed(); });
+  box.addEventListener("change", function (e) { if (e.target.matches("[data-state], [data-focus]")) changed(); });
   box.addEventListener("show.bs.modal", function () { fill(current || saved() || standard); showState(); });
   box.querySelector('[data-mix="standard"]').addEventListener("click", function () { fill(standard); });
   var mine = box.querySelector('[data-mix="mine"]');

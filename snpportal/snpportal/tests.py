@@ -377,7 +377,8 @@ class PortalTest(SimpleTestCase):
         check = lambda **post: self.client.post(reverse("snpportal:rules_check"), post).json()  # noqa: E731
         ok = check(text=standard.replace("  active: 3", "  active: 5"))
         self.assertEqual((ok["ok"], ok["rules"]["weights"]["active"], ok["changes"]), (True, 5, ["Active state 3 → 5"]))
-        self.assertIn("presets", ok["unused"])  # a whole weights.yaml: only its scoring blocks are used
+        self.assertIn("assay", ok["unused"])  # a whole weights.yaml: only its scoring blocks (and the focus) are used
+        self.assertNotIn("presets", ok["unused"])  # its presets.all is the focus; the others are the standard's
         for text, said in ((standard.replace("  splice: 3", "  splice: three"), "'splice' is 'three'"),
                            ("weights: &w {active: 3}\ntiers: *w\n", "anchors"), ("presetz: {}\n", "unknown block 'presetz'"),
                            (standard.replace("  active: 3", "  active: 1000"), "at most 100")):
@@ -411,6 +412,18 @@ class PortalTest(SimpleTestCase):
         self.assertEqual({str(t): n for t, n in after.items() if n}, {t: n for t, n in preview["new"].items() if n})
         self.assertNotEqual(before, after)  # coding 7 made a tier 1 of the vgll3 missense SNP
         self.assertEqual(preview["moved"], 1)
+        focused = {**mine, "focus": ["Brain"], "weights": {**mine["weights"], "active_elsewhere": 0}}  # one tissue only
+        got = check(rules=json.dumps(focused))
+        self.assertEqual((got["ok"], got["rules"]["focus"]), (True, ["Brain"]))
+        self.assertEqual(got["changes"][0], "focus: brain")
+        self.assertIn("Brian", " ".join(check(rules=json.dumps({**focused, "focus": ["Brian"]}))["problems"]))
+        key = self.key(self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T", "rules": json.dumps(focused)}))
+        self.assertEqual(yaml.safe_load((self.results / key / "weights.yaml").read_text())["presets"]["all"], ["Brain"])
+        self.assertEqual(jobs.read(key)["focus"], ["Brain"])
+        page = self.client.get(reverse("snpportal:results", args=[key])).content.decode()
+        self.assertIn("Tier for your focus: brain", page)
+        self.assertIn("focus: brain", page)  # the header's own rules
+        self.assertIn('data-focus="Brain"', page)  # the mixer's Focus
         download = self.client.post(reverse("snpportal:rules_download"), {"rules": json.dumps(mine)})
         self.assertEqual(yaml.safe_load(download.content)["weights"]["coding"], 7)
         self.assertTrue(download.content.decode().startswith("# Your own tier rules"))
