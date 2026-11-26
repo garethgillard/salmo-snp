@@ -120,7 +120,7 @@ class SVTest(SimpleTestCase):
     def test_known_svs(self):
         page = self.client.get(reverse("snpportal:known_loci"), {"tab": "local_adaptation"}).content.decode()
         self.assertIn("6 structural variants", page)
-        self.assertIn("9:85365420-91103390", page)  # a span, not a position
+        self.assertIn("9:85,365,420-91,103,390", page)  # a span, not a position
         self.assertIn(">structural variant<", page)  # its evidence badge
         example = self.client.post(reverse("snpportal:upload"), {"kind": "sv", "example": "known_svs"})
         job = jobs.read(example.url.split("/")[-2])

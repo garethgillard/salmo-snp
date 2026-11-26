@@ -5,7 +5,7 @@
 {% else %}<p class="sp-lead">Confidential lists never need to leave your computer: install the portal itself and run it there,
   with the same release and rules, so it gives the same tiers. Nothing you score is sent anywhere.</p>{% endif %}
 
-<div class="sp-card sp-narrow">
+<section class="sp-section sp-prose">
   <h2>The whole portal on your computer</h2>
   <ol class="sp-small mb-0">
     <li class="mb-2">Install it (Python 3.11 or newer, in a fresh conda environment or venv):
@@ -20,9 +20,9 @@
   </ol>
   <p class="sp-small sp-muted mt-2 mb-0"><code>salmo-snp info</code> shows where the data and your results are kept; they stay
     until you delete them.</p>
-</div>
+</section>
 
-<div class="sp-card sp-narrow">
+<section class="sp-section sp-prose">
   <h2>From the command line</h2>
   <ol class="sp-small mb-0">
     <li class="mb-2">Score a list (VCF, SNP table, PLINK .bim/.map or chip manifest) against a release folder
@@ -39,5 +39,5 @@ shasum -a 256 "$(python3 -c 'import snpscore; print(snpscore.WEIGHTS)')"   # {{ 
   </ol>
   <p class="sp-small sp-muted mt-2 mb-0">Every portal download starts with &lsquo;#&rsquo; lines naming the release, the manifest and
     weights sha256 and the equivalent snpscore command, so a result can be reproduced and checked.</p>
-</div>
+</section>
 {% endblock main %}

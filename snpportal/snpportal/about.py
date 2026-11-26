@@ -32,8 +32,8 @@ STATE_MODELS = {"Bivalent": "DevMap only", "Poised_enhancer_2": "BodyMap only", 
                 "Weak_accessible_chromatin": "rainbow trout ImmunoMap only"}
 TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.scored)
     "active": "An active state (Active TSS or Active enhancer) in at least one of the 27 conditions.",
-    "active_elsewhere": "An active state only outside the chosen conditions (snpscore's --trait; never in the portal, "
-                        "which counts all 27).",
+    "active_elsewhere": "Command line only (snpscore's --trait): an active state only outside the conditions of the "
+                        "trait. The portal counts all 27 conditions, so it never applies here.",
     "weak": "A weak state in at least one condition, and no active state in any.",
     "coding": "A CDS change to the protein (missense, stop gained or lost, start lost) or of unknown effect.",
     "synonymous": "A synonymous CDS change (or stop retained): no amino-acid change (weight under review).",

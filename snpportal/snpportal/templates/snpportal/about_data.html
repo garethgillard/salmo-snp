@@ -7,9 +7,9 @@
 {% if release.synthetic %}<div class="sp-status sp-status-warn" role="note">&#9888; Synthetic layers in this release:
   {{ release.synthetic|join:", " }}. They never count in tiers.</div>{% endif %}
 
-<section class="sp-card mb-3" aria-labelledby="layers-h">
+<section class="sp-section" aria-labelledby="layers-h">
   <h2 id="layers-h">Annotation layers</h2>
-  <div class="table-responsive"><table class="table table-sm sp-small mb-0 mt-1">
+  <div class="table-responsive"><table class="table table-sm sp-small sp-plain mb-0 mt-1">
     <thead><tr><th scope="col">What it is</th><th scope="col">Source</th><th scope="col">Version</th></tr></thead>
     <tbody>{% for layer in layers %}<tr id="layer-{{ layer.name }}">
       <td>{{ layer.what }}{% if layer.synthetic %} <span class="sp-muted">(synthetic)</span>{% endif %}</td>
@@ -53,13 +53,13 @@
   </details>
 </section>
 
-<section class="sp-card mb-3" id="samples" aria-labelledby="samples-h">
+<section class="sp-section" id="samples" aria-labelledby="samples-h">
   <h2 id="samples-h">Samples and population scope</h2>
-  {% if not salmon %}<ul class="sp-small mt-2 mb-1 ps-3">
+  {% if not salmon %}<ul class="sp-small sp-prose mt-2 mb-1 ps-3">
     {% for line in samples %}<li>{{ line }}</li>{% endfor %}
     {% if population %}<li>Public allele frequencies (MAF): {{ population }}; your strain can differ.</li>{% endif %}
   </ul>{% else %}
-  <ul class="sp-small mt-2 mb-1 ps-3">
+  <ul class="sp-small sp-prose mt-2 mb-1 ps-3">
     <li>Chromatin states, ATAC peaks and signal: 12 AquaGen commercial fish (AQUA-FAANG BodyMap: brain, gonad, liver, muscle and
       gill), head kidney of juvenile parr after PBS, poly I:C or Vibrio (ImmunoMap, 6 fish per treatment) and embryo pools at
       five stages (DevMap). molQTL and expression: the 12 BodyMap fish.</li>
@@ -91,7 +91,7 @@
   </details>{% endif %}
 </section>
 
-<details class="sp-card sp-more" id="cite"><summary>How to cite the data</summary>
+<details class="sp-more" id="cite"><summary>How to cite the data</summary>
   <p class="sp-small mt-2">Please cite the sources of the layers you used, and give the release and the checksums from your download.</p>
   <dl class="sp-dl sp-small mb-0">{% for what, ref, url in citations %}<dt>{{ what }}</dt>
     <dd>{{ ref }}{% if url %} <a href="{{ url }}" rel="noreferrer noopener" target="_blank">{{ url|cut:"https://" }}</a>{% endif %}</dd>{% endfor %}</dl>

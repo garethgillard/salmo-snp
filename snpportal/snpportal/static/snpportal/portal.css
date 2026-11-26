@@ -817,5 +817,7 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-section > .sp-more:last-child, .sp-folds > .sp-more:last-child { border-bottom: 1px solid var(--sp-line); }
 .sp-folds { margin-top: 2.5rem; }
 .sp-folds > .sp-more > :not(summary) { max-width: 70ch; }
+.sp-methods { max-width: 60rem; }  /* Methods: one column, wide enough for its tables */
+.sp-methods .sp-section:first-child { margin-top: 0; }
 @media print { .sp-toc { display: none; } }
 /* end content pages */
