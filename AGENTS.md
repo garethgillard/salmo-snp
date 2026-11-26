@@ -285,6 +285,14 @@ Decided:
   Navigation between salmobase's pages and the portal is left for later (G, 2026-11-25: "Don't worry about
   navigation to and from salmobase for now"): the portal is an address.
 
+- Your own tier rules (G, 2026-11-26: "the option to upload a custom weights yaml (with a link to download the latest
+  one to modify), and also a large pop-up box in the middle of the screen that has all the scoring factors listed with
+  sliders and a text box ... to adjust like a sound mixer. Then this custom weights will be in their browser to score
+  the snps or change the scored results on the fly"): the Tier rules mixer on the Score page and on every finished
+  result (snpportal/snpportal/rules.py, `_mixer.html`, portal.js): a fader and a number box per evidence term, the
+  tier cut-offs and the chromatin states; upload a weights.yaml, download the standard one or these. A user's rules
+  live in the browser (localStorage) and go with each new list; on a results page the mixer shows the tiers the faders
+  would give and Apply tiers the job again (jobs.retier). Claude's choices: DECISIONS #69-#71 (Provisional below).
 - Usage documents wait for 1.0 (G, 2026-11-26: "don't update usage document yet, like the tour. Let's wait till a
   first official release to make the tour and help docs final for version 1.0"): no new tour screenshots or Help and
   README user-guide rewrites for each change until the first official release; a statement a change makes false
@@ -372,6 +380,11 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   says why it leaves the background out). A Design panel takes the rules of its first source and refuses a list
   scored with others; saved versions keep them and download with their stored tiers. Outputs name the rules
   (validation.json `rules`, Parquet key-value metadata, the pool's stamp, the benchmark's head, gwas.json).
+- A user's own tier rules (2026-11-26, DECISIONS #69-#71): only the scoring blocks (weights, tiers, the state lists,
+  summit, variant_scores) are theirs, the other blocks stay the portal's; a weight is at most 100, a cut-off at most
+  1000, a file at most 100 KB without YAML anchors; faders 0-10 and 1-20 (rules.py). Kept in the browser only; a job
+  keeps the rules it was scored with, and Apply re-tiers it through the job queue. Results with own rules compare
+  with the public pool tiered again with their rules (jobs.own_background, cached in the results folder).
 - Structural variants (2026-11-24, DECISIONS #55-#57): each evidence term counts once however many elements an SV
   overlaps (a 1-bp SV scores as a SNP at that base); per condition the strongest state of the peaks it overlaps; the
   most severe gene region; Ensembl regulatory only without an AQUA-FAANG peak; insertions and breakends are their

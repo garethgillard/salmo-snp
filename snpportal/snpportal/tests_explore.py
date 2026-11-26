@@ -2,6 +2,7 @@
 suggestions, gene pages with candidates (with and without a pool), candidate jobs from genes and intervals, the
 known-loci page, and the data, methods, help and run-locally pages generated from the release."""
 import hashlib
+import json
 import logging
 import os
 import shutil
@@ -217,6 +218,19 @@ class ExploreTest(SimpleTestCase):
         self.assertEqual(pick(fresh[0]), pick(pooled[0]))
         self.assertNotContains(page, "annotated now")
         self.assertContains(page, "504-fish reference panel (release pool)")
+        with override_settings(SNPSCORE_RELEASE=str(release)):  # results with their own rules keep a public background
+            import yaml
+            mine = yaml.safe_load(snpscore.score.WEIGHTS.read_text())
+            mine = {"weights": {**mine["weights"], "coding": 7}}
+            url = self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T", "rules": json.dumps(mine)}).url.split("?")[0]
+            d = jobs.folder(url.rstrip("/").split("/")[-1])
+            own = jobs.read_json(jobs.own_background_file(jobs.rules_sha256(d)))
+            self.assertEqual(own["weights_sha256"], jobs.rules_sha256(d))  # the pool tiered with the job's rules
+            self.assertNotEqual(own["tiers"]["all"], jobs.read_json(release / "pool" / "background.json")["tiers"]["all"])
+            overview = self.client.get(url).content.decode()
+        self.assertIn("Public background:", overview)  # the gene-region bars' ticks
+        self.assertIn("background share", overview)  # and the tiers' (the legend)
+        self.assertNotIn("The public background is left out", overview)
 
     def test_about_pages(self):
         data = self.client.get(reverse("snpportal:about_data"))

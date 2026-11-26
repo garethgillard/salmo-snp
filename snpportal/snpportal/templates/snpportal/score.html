@@ -27,7 +27,7 @@
 </section>{% endif %}
 
 {% if tries %}<div class="sp-try" id="try-it"><span class="sp-try-h">Examples</span>
-  {% for ex in tries %}<form method="post" action="{% if ex.gwas %}{% url 'snpportal:gwas_score' %}{% else %}{% url 'snpportal:upload' %}{% endif %}">{% csrf_token %}
+  {% for ex in tries %}<form method="post" action="{% if ex.gwas %}{% url 'snpportal:gwas_score' %}{% else %}{% url 'snpportal:upload' %}{% endif %}" data-sp-rules>{% csrf_token %}
     {% if ex.gwas %}<input type="hidden" name="trait" value="all">{% endif %}{% if ex.sv %}<input type="hidden" name="kind" value="sv">{% endif %}
     <button class="btn btn-sm btn-outline-primary" type="submit" name="example" value="{{ ex.name }}" title="{{ ex.title }}: {{ ex.what }}">{{ ex.title }}{% if ex.synthetic %} <small>synthetic</small>{% endif %}</button>
   </form>{% endfor %}
@@ -35,13 +35,15 @@
 
 {# one tab per input (?input= without JavaScript); each form posts to its own view, whose errors re-show its tab #}
 <section class="sp-inputs" aria-label="Your data">
+  <p class="sp-rules-line sp-small">Tier rules: <span data-sp-rules-state>standard</span>
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#sp-mixer">Adjust or upload your own</button></p>
   <ul class="nav nav-tabs" role="tablist">
     {% for value, label in tabs %}<li class="nav-item" role="presentation">
       <a class="nav-link{% if tab == value %} active{% endif %}" id="tab-{{ value }}" href="{% url 'snpportal:upload' %}?input={{ value }}" data-bs-toggle="tab"
          data-bs-target="#pane-{{ value }}" role="tab" aria-controls="pane-{{ value }}" aria-selected="{% if tab == value %}true{% else %}false{% endif %}">{{ label }}</a></li>{% endfor %}
   </ul>
   <div class="tab-content">
-    <form class="tab-pane{% if tab == 'file' %} active{% endif %}" id="pane-file" role="tabpanel" aria-labelledby="tab-file" method="post" action="{% url 'snpportal:upload' %}" enctype="multipart/form-data">
+    <form class="tab-pane{% if tab == 'file' %} active{% endif %}" id="pane-file" role="tabpanel" aria-labelledby="tab-file" method="post" action="{% url 'snpportal:upload' %}" enctype="multipart/form-data" data-sp-rules>
       {% csrf_token %}
       <div class="sp-drop" data-drop-for="snps-file">
         <svg class="sp-drop-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -56,7 +58,7 @@
       {% include 'snpportal/_job_name.html' with id='name-file' file='snps-file' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
-    <form class="tab-pane{% if tab == 'paste' %} active{% endif %}" id="pane-paste" role="tabpanel" aria-labelledby="tab-paste" method="post" action="{% url 'snpportal:upload' %}">
+    <form class="tab-pane{% if tab == 'paste' %} active{% endif %}" id="pane-paste" role="tabpanel" aria-labelledby="tab-paste" method="post" action="{% url 'snpportal:upload' %}" data-sp-rules>
       {% csrf_token %}
       <label class="visually-hidden" for="paste">SNPs, one per line</label>
       <textarea class="form-control sp-paste" id="paste" name="paste" rows="4" required aria-describedby="paste-help"
@@ -65,7 +67,7 @@
       {% include 'snpportal/_job_name.html' with id='name-paste' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
-    <form class="tab-pane{% if tab == 'regions' %} active{% endif %}" id="pane-regions" role="tabpanel" aria-labelledby="tab-regions" method="post" action="{% url 'snpportal:candidates' %}">
+    <form class="tab-pane{% if tab == 'regions' %} active{% endif %}" id="pane-regions" role="tabpanel" aria-labelledby="tab-regions" method="post" action="{% url 'snpportal:candidates' %}" data-sp-rules>
       {% csrf_token %}
       <label class="visually-hidden" for="targets">Genes, positions or intervals, one per line</label>
       <textarea class="form-control sp-paste" id="targets" name="targets" rows="4" required aria-describedby="targets-help"
@@ -78,7 +80,7 @@
             {% for f in flanks %}<option value="{{ f }}"{% if f == flank %} selected{% endif %}>&plusmn; {{ f|thousands }} bp</option>{% endfor %}
           </select></label></div>
     </form>
-    <form class="tab-pane{% if tab == 'sv' %} active{% endif %}" id="pane-sv" role="tabpanel" aria-labelledby="tab-sv" method="post" action="{% url 'snpportal:upload' %}" enctype="multipart/form-data">
+    <form class="tab-pane{% if tab == 'sv' %} active{% endif %}" id="pane-sv" role="tabpanel" aria-labelledby="tab-sv" method="post" action="{% url 'snpportal:upload' %}" enctype="multipart/form-data" data-sp-rules>
       {% csrf_token %}<input type="hidden" name="kind" value="sv">
       <div class="sp-drop" data-drop-for="sv-file">
         <svg class="sp-drop-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -95,7 +97,7 @@
       {% include 'snpportal/_job_name.html' with id='name-sv' file='sv-file' %}
       <div class="sp-go-row">{% include 'snpportal/_score_button.html' %}</div>
     </form>
-    <form class="tab-pane{% if tab == 'gwas' %} active{% endif %}" id="pane-gwas" role="tabpanel" aria-labelledby="tab-gwas" method="post" action="{% url 'snpportal:gwas_score' %}" enctype="multipart/form-data">
+    <form class="tab-pane{% if tab == 'gwas' %} active{% endif %}" id="pane-gwas" role="tabpanel" aria-labelledby="tab-gwas" method="post" action="{% url 'snpportal:gwas_score' %}" enctype="multipart/form-data" data-sp-rules>
       {% csrf_token %}
       <div class="sp-drop" data-drop-for="gwas-file">
         <svg class="sp-drop-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -114,6 +116,7 @@
   {{ results_dir }}, until you delete them.</p>
 {% else %}<p class="sp-small sp-muted mb-0" id="privacy">Results are kept for {{ keep_hours }}; anyone with their link can open them.
   Confidential? <a href="{% url 'snpportal:run_locally' %}">Run it locally</a>.</p>{% endif %}
+{% include 'snpportal/_mixer.html' %}
 </div>
 
 <aside class="col-lg-5">

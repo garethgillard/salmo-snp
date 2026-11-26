@@ -105,15 +105,17 @@ def score(request):
 @csrf_protect
 @sensitive_post_parameters()
 def _score(request):
+    from . import rules as own_rules
     preset = "all"  # tiers (and the functional prior) always count all 27 conditions
     example, upload = request.POST.get("example"), request.FILES.get("sumstats")
     try:
+        rules = own_rules.for_job(request)  # this browser's own tier rules (the mixer), else the rules in use
         if example:
             found = views.examples().get(example) if example.startswith("gwas_") else None
             if found is None:
                 raise jobs.InputError("That example is not part of this release.")
             key = jobs.create(found["path"], found["suffix"], "gwas", preset, "Example: synthetic maturation GWAS",
-                              synthetic=found["synthetic"], move=False)
+                              synthetic=found["synthetic"], move=False, rules=rules)
         elif upload:
             suffix = suffix_of(upload.name)
             if suffix is None:
@@ -122,7 +124,7 @@ def _score(request):
             if not upload.size:
                 raise jobs.InputError("The uploaded file is empty.")
             key = jobs.create(Path(upload.path), suffix, "gwas", preset,
-                              jobs.job_name(request.POST.get("name"), "Uploaded GWAS summary statistics"))
+                              jobs.job_name(request.POST.get("name"), "Uploaded GWAS summary statistics"), rules=rules)
         else:
             raise jobs.InputError("Choose a summary-statistics file or the GWAS example.")
     except jobs.InputError as e:

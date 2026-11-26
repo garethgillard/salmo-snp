@@ -542,7 +542,8 @@ def candidate_job(request):
             raise jobs.InputError(f"These windows hold more than {MAX_CANDIDATES:,} public variants. Use fewer or shorter intervals.")
         label = "Public variants in " + ", ".join(labels)
         label = jobs.job_name(request.POST.get("name"), label if len(label) <= 120 else label[:117] + "...")
-        key = jobs.create_from_rows(rows, label, trait)
+        from . import rules as own_rules
+        key = jobs.create_from_rows(rows, label, trait, rules=own_rules.for_job(request))  # the browser's own tier rules
     except jobs.InputError as e:
         return score_page(request, str(e), 400, tab="regions", targets=text)
     except jobs.QueueFull:

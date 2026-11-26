@@ -363,6 +363,58 @@ class PortalTest(SimpleTestCase):
                 "SELECT tier, count(*) FROM v GROUP BY 1").fetchall())
             self.assertEqual({str(t): n for t, n in tiers.items()}, before["all"])
 
+    def test_own_tier_rules(self):
+        """Your own tier rules (G, 2026-11-26): the standard file to download, a file or the mixer's values checked
+        (each mistake named), a list scored with them, its tiers previewed and applied again on the fly."""
+        import yaml
+        page = self.client.get(reverse("snpportal:upload")).content.decode()
+        for part in ('id="sp-mixer"', 'id="sp-rules-standard"', 'data-term="active"', "data-sp-rules", "Adjust or upload your own"):
+            self.assertIn(part, page)
+        standard = snpscore.score.WEIGHTS.read_text()
+        got = self.client.get(reverse("snpportal:rules_standard"))
+        self.assertEqual(got.content.decode(), standard)
+        self.assertIn("attachment", got["Content-Disposition"])
+        check = lambda **post: self.client.post(reverse("snpportal:rules_check"), post).json()  # noqa: E731
+        ok = check(text=standard.replace("  active: 3", "  active: 5"))
+        self.assertEqual((ok["ok"], ok["rules"]["weights"]["active"], ok["changes"]), (True, 5, ["Active state 3 → 5"]))
+        self.assertIn("presets", ok["unused"])  # a whole weights.yaml: only its scoring blocks are used
+        for text, said in ((standard.replace("  splice: 3", "  splice: three"), "'splice' is 'three'"),
+                           ("weights: &w {active: 3}\ntiers: *w\n", "anchors"), ("presetz: {}\n", "unknown block 'presetz'"),
+                           (standard.replace("  active: 3", "  active: 1000"), "at most 100")):
+            bad = check(text=text)
+            self.assertFalse(bad["ok"], said)
+            self.assertIn(said, " ".join(bad["problems"]))
+        mine = {**yaml.safe_load(standard), "weights": {**yaml.safe_load(standard)["weights"], "coding": 7}}
+        mine = {k: mine[k] for k in ("weights", "tiers", "active_states", "weak_states", "summit", "variant_scores")}
+        refused = self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T", "rules": json.dumps({**mine, "tiers": [1, 3, 5]})})
+        self.assertContains(refused, "Your tier rules can&#x27;t be used: tiers: [1, 3, 5]", status_code=400)
+        key = self.key(self.client.post(reverse("snpportal:upload"), {"paste": "25 28996360 C T\n26 19138923 A G",
+                                                                       "rules": json.dumps(mine)}))
+        d, job = self.results / key, jobs.read(key)
+        own = (d / "weights.yaml").read_text()
+        self.assertIn("  coding: 7            # CDS change to the protein", own)  # the standard file's comments kept
+        self.assertEqual(yaml.safe_load(own)["weights"]["coding"], 7)
+        self.assertTrue(job["custom_rules"])
+        page = self.client.get(reverse("snpportal:results", args=[key])).content.decode()
+        self.assertIn("Tiers from your own tier rules (Coding 3 → 7)", page)
+        self.assertNotIn("The release has changed since", page)  # own rules are not a changed release
+        self.assertIn('data-preview="', page)
+        preview = self.client.post(reverse("snpportal:rules_preview", args=[key]), {"rules": json.dumps(
+            {**mine, "weights": {**mine["weights"], "coding": 3}})}).json()
+        self.assertTrue(preview["ok"])
+        self.assertEqual(sum(preview["new"].values()), sum(preview["now"].values()))
+        before = jobs.read_json(d / "summary.json")["tiers"]["all"]
+        self.assertEqual(self.client.post(reverse("snpportal:rules_apply", args=[key]), {"rules": ""}).status_code, 302)  # the standard
+        self.assertEqual((d / "weights.yaml").read_text(), standard)
+        self.assertFalse(jobs.read(key)["custom_rules"])
+        after = jobs.read_json(d / "summary.json")["tiers"]["all"]
+        self.assertEqual({str(t): n for t, n in after.items() if n}, {t: n for t, n in preview["new"].items() if n})
+        self.assertNotEqual(before, after)  # coding 7 made a tier 1 of the vgll3 missense SNP
+        self.assertEqual(preview["moved"], 1)
+        download = self.client.post(reverse("snpportal:rules_download"), {"rules": json.dumps(mine)})
+        self.assertEqual(yaml.safe_load(download.content)["weights"]["coding"], 7)
+        self.assertTrue(download.content.decode().startswith("# Your own tier rules"))
+
     def test_names_and_renaming(self):
         """The Score page's forms name the results: the date and time, or the file's name (G, 2026-11-26); and the list
         of this browser's results renames them."""

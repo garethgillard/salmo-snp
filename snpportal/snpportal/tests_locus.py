@@ -207,7 +207,7 @@ class LocusTest(SimpleTestCase):
                                      ("25", 28964518, "mq", None, None)], "Card rows")
         page = self.get(reverse("snpportal:results", args=[key]) + "?tab=table&trait=brain&snp=0")  # the card, in the drawer (trait: ignored)
         self.assertNotIn("sp-caveat", page)  # no prototype line on the pages (Methods, the report and downloads keep it)
-        card = page[page.index('id="drawer"'):]
+        card = page[page.index('id="drawer"'):].split('id="sp-rules-standard"')[0]  # the drawer, not the Tier rules mixer after it
         d = jobs.folder(key)
         scores = dict(jobs.connect([d]).execute(f"SELECT file_row_number, tier_score__all FROM read_parquet('{d / 'tiers.parquet'}')").fetchall())
         blocks = svg_of(card[card.index('id="card-body"'):])  # the score, first: blocks and = score

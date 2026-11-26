@@ -80,6 +80,12 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 - The guided tour and Help are made final for 1.0 (G, 2026-11-26): until then a change does not retake the tour's
   screenshots or rewrite Help, only corrects a statement it makes false. Then: `python manage.py tour_images` (a
   running portal).
+- Your own tier rules (G, 2026-11-26; rules.py): the Tier rules mixer (`_mixer.html`, included by score.html and
+  results.html; portal.js) keeps a user's rules in the browser (localStorage "snpportal.rules": the scoring blocks as
+  JSON). Forms that start a job carry `data-sp-rules`, so they send them (`rules=`); `rules.for_job` checks them and
+  `jobs.create(rules=...)` writes them as the job's weights.yaml (`custom_rules` in job.json). On a results page the
+  mixer previews tiers (rules_preview) and Apply re-tiers the job in the queue (`jobs.retier`: tiers.parquet,
+  summary.json, the own background; panels/ and loci/ removed). A new job-starting form needs `data-sp-rules`.
 - Tier rules: a job, a Design panel and a saved version each keep the weights.yaml their tiers were made with (a
   panel's is its first source's). Read them with `jobs.weights(folder)`, `jobs.rules_sha256(folder)`; the rules in
   use with no folder (`snpscore.score.rules_file()`, never `snpscore.score.WEIGHTS`). The public pool only with

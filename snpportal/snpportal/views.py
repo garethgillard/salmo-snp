@@ -145,6 +145,7 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
     """The Score page, also the home page: one card with the tabs Upload SNPs | Paste positions | Genes or regions |
     GWAS (?input=, or `tab` after an error, so each form's errors come back on its own tab) and the examples (TRY) under
     them; beside it this browser's results and the tour."""
+    from . import rules as own_rules
     from .explore import FLANK, FLANKS  # the gene/region flank choices (explore.candidate_job reads them)
     tab = tab if tab in INPUTS else request.GET.get("input") if request.GET.get("input") in INPUTS else "file"
     found, listed = examples(), mine(request)
@@ -155,7 +156,7 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
         "sv_lines": SV_PASTE_LINES,
         "targets": targets, "flanks": FLANKS, "flank": FLANK, "paste_lines": PASTE_LINES,
         "max_mb": f"{float(jobs.setting('SNPPORTAL_MAX_UPLOAD_MB', 300)):g}",
-        "keep_hours": jobs.keep_text(), "local": jobs.local(), "default_name": jobs.default_name(),
+        "keep_hours": jobs.keep_text(), "local": jobs.local(), "default_name": jobs.default_name(), "mixer": own_rules.mixer(),
         "positions": jobs.position_choices(),
         "results_dir": jobs.results_dir(),
     }, status=status))
@@ -205,16 +206,18 @@ def _score(request):
 
 def start_job(request):
     """Create the job for a POSTed example, file or paste. Returns (key, preset)."""
+    from . import rules as own_rules
     preset = "all"  # tiers always count all 27 conditions
     example, upload, paste = request.POST.get("example"), request.FILES.get("snps"), request.POST.get("paste", "").strip()
+    rules = own_rules.for_job(request)  # this browser's own tier rules (the mixer), else None: the rules in use
     if example:
         found = examples().get(example)
         if found is None:
             raise jobs.InputError("That example is not part of this release.")
         return jobs.create(found["path"], found["suffix"], "sv" if found["sv"] else "snps", preset, f"Example: {found['label']}",
-                           synthetic=found["synthetic"], move=False), preset
+                           synthetic=found["synthetic"], move=False, rules=rules), preset
     if request.POST.get("kind") == "sv":
-        return start_sv_job(request, preset), preset
+        return start_sv_job(request, preset, rules), preset
     if upload:
         suffix = accepted_suffix(upload.name)
         if suffix is None:
@@ -224,15 +227,15 @@ def start_job(request):
             raise jobs.InputError("The uploaded file is empty.")
         name = jobs.job_name(request.POST.get("name"), Path(upload.name or "").name[:80] or "Uploaded list")  # else the file's
         positions = request.POST.get("positions") if request.POST.get("positions") in dict(jobs.position_choices()) else None
-        return jobs.create(Path(upload.path), suffix, "snps", preset, name, positions=positions or None), preset
+        return jobs.create(Path(upload.path), suffix, "snps", preset, name, positions=positions or None, rules=rules), preset
     if paste:
         rows = jobs.parse_paste(paste, PASTE_LINES)
         return jobs.create_from_rows(rows, jobs.job_name(request.POST.get("name"), f"Pasted {jobs.utc()}"), preset, kind="snps",
-                                     input_format="paste"), preset
+                                     input_format="paste", rules=rules), preset
     raise jobs.InputError("Choose a file, paste some positions or pick an example.")
 
 
-def start_sv_job(request, preset):
+def start_sv_job(request, preset, rules=None):
     """Create the job for POSTed structural variants: a file (svs) or pasted regions (sv_paste). Returns the key."""
     upload, paste = request.FILES.get("svs"), request.POST.get("sv_paste", "").strip()
     if upload:
@@ -243,10 +246,10 @@ def start_sv_job(request, preset):
         if not upload.size:
             raise jobs.InputError("The uploaded file is empty.")
         name = jobs.job_name(request.POST.get("name"), Path(upload.name or "").name[:80] or "Uploaded SVs")
-        return jobs.create(Path(upload.path), suffix, "sv", preset, name)
+        return jobs.create(Path(upload.path), suffix, "sv", preset, name, rules=rules)
     if paste:
         rows = jobs.parse_sv_paste(paste, SV_PASTE_LINES)
-        return jobs.create_from_sv_rows(rows, jobs.job_name(request.POST.get("name"), f"Pasted SVs {jobs.utc()}"), preset)
+        return jobs.create_from_sv_rows(rows, jobs.job_name(request.POST.get("name"), f"Pasted SVs {jobs.utc()}"), preset, rules=rules)
     raise jobs.InputError("Choose a file of structural variants, or paste some regions.")
 
 
@@ -303,7 +306,12 @@ def results(request, key):
             context.update(tools.exports(request, key, job))
         context["table_query"] = result_views.selection(d) or urlencode(settings)  # the Table tab returns to the selection
         context["actions"] = [{"label": "Report", "url": f"{reverse('snpportal:report', args=[key])}?{context['table_query']}"},
+                              {"label": "Tier rules", "modal": "sp-mixer", "title": "See or change the rules that make these tiers"},
                               {"label": "Score another list", "url": reverse("snpportal:upload")}]
+        from . import rules as own_rules
+        context["mixer"] = own_rules.mixer(d, key)
+        said = own_rules.summary(d, job)
+        context["meta"] = context["meta"] + (f" · Tiers from {said}" if said else "")
     context.setdefault("actions", []).append(
         {"label": "Delete", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",
          "confirm": "Delete these results now? This can't be undone."})

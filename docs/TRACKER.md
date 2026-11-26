@@ -176,6 +176,10 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
 - [ ] S7 Customisation: a supported own-weights file, named profiles, the rules stated in every export, and an
       enrichment-per-tier report from the user's own GWAS. Still to do: named profiles in the portal and the
       enrichment report
+  - [x] Your own tier rules in the browser (G, 2026-11-26; DECISIONS #69-#71): the Tier rules mixer on the Score page
+        and every result (a fader and a number box per term, the cut-offs, the chromatin states; upload a weights.yaml,
+        download the standard one), kept in the browser, sent with new lists; on results it previews the tiers and
+        applies them (the job tiered again from its evidence)
   - [x] The gaps the audit demonstrated (SCORING.md section 6; fixed 2026-11-26, G: "Fix the gaps now first"): an
         edited weights.yaml is checked first (`snpscore rules`, `salmo-snp rules`, the portal's system check), each
         mistake named by its key; the portal leaves out a public background scored with other rules and says so;
