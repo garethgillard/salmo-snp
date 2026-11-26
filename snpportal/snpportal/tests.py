@@ -232,9 +232,15 @@ class PortalTest(SimpleTestCase):
     def test_examples_run_end_to_end(self):
         page = self.client.get(reverse("snpportal:upload")).content.decode()
         tabs = re.findall(r'role="tab"[^>]*>([^<]+)</a>', page)
-        self.assertEqual(tabs, ["Upload SNPs", "Paste positions", "Genes or regions", "Structural variants", "GWAS"])
+        self.assertEqual(tabs, ["SNPs", "Genes or regions", "Structural variants", "GWAS results"])
+        pane = page[page.index('id="pane-file"'):page.index('id="pane-regions"')]  # SNPs: a file or pasted lines, one form
+        self.assertEqual(pane.count("</form>"), 1)
+        for field in ('name="snps"', 'name="paste"'):
+            self.assertIn(field, pane)
+        self.assertNotIn("required", pane)  # either one will do
         self.assertIn('name="example" value="known_loci" title="Known loci: ', page)  # the examples under the tabs
-        self.assertRegex(page, r'value="chip_demo_SYNTHETIC" title="SNP chip: synthetic, [\d,]+ SNPs">SNP chip <small>synthetic</small>')
+        self.assertRegex(page, r'value="chip_demo_SYNTHETIC" title="SNP chip: synthetic, [\d,]+ SNPs">SNP chip <span>[\d,]+ SNPs, synthetic</span>')
+        self.assertContains(self.client.get(reverse("snpportal:upload"), {"input": "paste"}), 'class="tab-pane active" id="pane-file"')
         chip =self.client.post(reverse("snpportal:upload"), {"example": "chip_demo_SYNTHETIC"})
         job = jobs.read(self.key(chip))
         self.assertEqual((job["state"], job["label"], job["synthetic_input"]), ("done", "Example: SNP chip (synthetic)", True))
