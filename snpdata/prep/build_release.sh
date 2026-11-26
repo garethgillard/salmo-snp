@@ -3,13 +3,15 @@
 # missing, the example inputs, the build, the public pool, a check of every file, and a summary to compare with
 # docs/ORION.md. Run in snpdata/; it stops at the first step that fails, and a second run goes on from the inputs
 # that are there. Nothing is published: that is `snpdata publish <release> --to <the site folder>`.
-#   bash prep/build_release.sh salmon 2026-11-25
-#   bash prep/build_release.sh trout trout-2026-11-25
+#   bash prep/build_release.sh salmon 2026-11-26      -> release/atlantic_salmon-Ssal_v3.1-2026-11-26
+#   bash prep/build_release.sh trout 2026-11-26       -> release/rainbow_trout-USDA_OmykA_1.1-2026-11-26
+# A release is named <species>-<assembly>-<date> (G, 2026-11-26; `snpdata name`): give the day of the build (default
+# today), or the whole name. The releases before that day keep their names (2026-11-25, trout-2026-11-25).
 # Environment (all optional):
 #   MEMORY=32GB THREADS=16   DuckDB's limits (defaults: 16GB, and the cores this job may use)
 #   SPILL=<folder>           where DuckDB may spill to (default: <release folder>/../.spill-<version>, removed after)
 #   SNPDATA_SALMOBASE=<dir>  a copy of salmobase's datafiles folder: fetch reads salmobase's files from it
-#   PREVIOUS=<release>       the release before, as a folder (default: the newest release of the species in OUT):
+#   PREVIOUS=<release>       the release before, as a folder (default: the species' newest release in OUT, by build date):
 #                            a layer whose settings and inputs did not change is copied from it instead of computed
 #                            again (`snpdata build --reuse`; G, 2026-11-25), and `snpscore diff` lists what changed
 #                            since. A folder with the manifest alone gives the diff
@@ -20,22 +22,28 @@
 #                            DATA: Orion exports DATA=/data/$USER at every login.)
 set -euo pipefail
 species=${1:?salmon or trout}
-version=${2:?the release name: <date> for salmon, trout-<date> for rainbow trout}
 case $species in
-  salmon) layers=layers.yaml; default=data/raw; named='[0-9]*' ;;
-  trout) layers=rainbow_trout/layers.yaml; default=data/rainbow_trout/raw; named='trout-[0-9]*' ;;
+  salmon) layers=layers.yaml; default=data/raw ;;
+  trout) layers=rainbow_trout/layers.yaml; default=data/rainbow_trout/raw ;;
   *) echo "the species is salmon or trout" >&2; exit 1 ;;
 esac
-case "$species:$version" in
-  salmon:[0-9]*|trout:trout-[0-9]*) ;;
-  *) echo "a salmon release is named <date>, a rainbow trout one trout-<date>" >&2; exit 1 ;;
+prefix=$(snpdata name --layers "$layers")  # atlantic_salmon-Ssal_v3.1, rainbow_trout-USDA_OmykA_1.1
+given=${2:-$(date +%F)}
+case $given in
+  "$prefix"-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) version=$given ;;
+  [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) version=$prefix-$given ;;
+  *) echo "a $species release is named $prefix-<date>: give the day of the build, e.g. $(date +%F)" >&2; exit 1 ;;
 esac
 data=${RAW:-$default}
 out=${OUT:-release}/$version
 [ ! -e "$out" ] || { echo "$out exists: a release never changes, so choose another name (or remove a failed build)" >&2; exit 1; }
 previous=${PREVIOUS:-}
-if [ -z "$previous" ]; then  # the newest of the species' releases already there (their names sort by date)
-  for r in "${OUT:-release}"/$named/; do [ -f "$r/manifest.json" ] && previous=${r%/}; done
+if [ -z "$previous" ]; then  # the species' newest release already there, by its build date (the earlier names too)
+  previous=$(python -c 'import json, sys
+from pathlib import Path
+found = [(m.get("created") or "", str(p.parent)) for p in Path(sys.argv[1]).glob("*/manifest.json")
+         for m in [json.loads(p.read_text())] if (m.get("species") or {}).get("key", "atlantic_salmon") == sys.argv[2]]
+print(max(found)[1] if found else "")' "${OUT:-release}" "${prefix%%-*}")
 fi
 threads=${THREADS:-$(python -c 'import os; print(len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count())')}
 memory=${MEMORY:-16GB}

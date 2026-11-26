@@ -186,10 +186,17 @@ def releases():
 
 
 def pick_release(release=None):
+    """--release, else this code's release, else the newest Atlantic salmon release downloaded (by its build date:
+    names alone would sort the species together)."""
     if release:
         return Path(release)
     found = {p.name: p for p in releases()}
-    return found.get(RELEASE) or (list(found.values())[-1] if found else None)
+    if RELEASE in found:
+        return found[RELEASE]
+    salmon = [(m.get("created") or "", p.name, p) for p in found.values()
+              for m in [json.loads((p / "manifest.json").read_text())]
+              if (m.get("species") or {}).get("key", "atlantic_salmon") == "atlantic_salmon"]
+    return max(salmon)[2] if salmon else None
 
 
 def local_genome(release):

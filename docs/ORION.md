@@ -12,9 +12,22 @@ Read [../AGENTS.md](../AGENTS.md) first: its rules apply here too.
 G, 2026-11-25: "From now, the builds will run on orion in a separate orion ssh chat, using a build plan it pulls
 from the repo and serve the data by syncing it to salmobase."
 
-**The plan.** None yet: G says what the next releases contain, and it is written here as a table per species (what
-changes, and the check after the build), as "The latest build" below was. The candidates are under "Left for the
-next build".
+**The plan (G, 2026-11-26: "working towards a new build and release today, with the final salmobase release coming
+tomorrow after we do more work").** Today: releases `atlantic_salmon-Ssal_v3.1-2026-11-26` and
+`rainbow_trout-USDA_OmykA_1.1-2026-11-26`, the first named <species>-<assembly>-<date> (G, 2026-11-26: "add salmon
+genome name to the salmon one ... the genome version ... consistant between salmon and trout ... atlantic and rainbow
+in the name"). Their data is that of 2026-11-25 and trout-2026-11-25, with whatever salmobase has changed since: fetch
+downloads a changed file again and the build copies every other layer. The checks: `changes since` lists only the
+layers whose inputs salmobase changed (none is expected: report any to G before going on), the summary's rows equal
+those of 2026-11-25 ("The latest build"), and the release test ends `release test: ok`. Publish with G's go-ahead,
+then hand back the two names, which the chat on the code names in serve.py. The liver ChromBPNet model is not a layer
+yet: its folder on salmobase has the model and no `scores/` file, so it runs on demand only (the card's Predict
+button, from lib/models.yaml); its scores join a later build, as the gill model's did.
+
+Tomorrow, the salmobase release: once the code is merged, G tags it (vX.Y.Z), the release workflow builds the wheels
+and the Docker image, this chat publishes the image beside the releases (`snpportal/deploy/publish_image.sh`;
+SALMOBASE.md "Working from Orion") and installs it on the server from there (SALMOBASE.md "Install, once"), each step
+when G says.
 
 **The steps**, the same for every build (the commands are for `snpdata/` in the clone `~/git/salmo-snp`):
 
@@ -23,15 +36,16 @@ next build".
 2. Tell G, then submit one job per species; the date is the day of the build, and a name that was published is
    never built again:
    `sbatch --job-name=salmon-<date> prep/orion_build.sbatch salmon <date>` and
-   `sbatch --job-name=trout-<date> prep/orion_build.sbatch trout trout-<date>`.
+   `sbatch --job-name=trout-<date> prep/orion_build.sbatch trout <date>`, which build `atlantic_salmon-Ssal_v3.1-<date>` and
+   `rainbow_trout-USDA_OmykA_1.1-<date>` (G, 2026-11-26: every release named <species>-<assembly>-<date>; `snpdata name` says it).
    Each fetches what is missing or has changed on salmobase, copies the unchanged layers from the release before,
    builds the rest and the pool, and checks every file ("How a build runs").
 3. Read the end of each log (`/mnt/project/ELIXIR/salmo-snp/logs/`): `changes since` must list the layers the plan
    names and no other, and the summary's rows must be the plan's. Then test the two releases together:
-   `sbatch --job-name=test-<date> prep/orion_test.sbatch <date> trout-<date>` starts the portal on them as a user
+   `sbatch --job-name=test-<date> prep/orion_test.sbatch atlantic_salmon-Ssal_v3.1-<date> rainbow_trout-USDA_OmykA_1.1-<date>` starts the portal on them as a user
    runs it and scores every example of both species through the job queue (`prep/release_test.sh`; two to three
    minutes); its log must end with `release test: ok`. Anything else is a finding: stop and tell G.
-4. `MODE=dry bash prep/orion_publish.sh <date> trout-<date>` on a login node, and with G's go-ahead `MODE=run`
+4. `MODE=dry bash prep/orion_publish.sh atlantic_salmon-Ssal_v3.1-<date> rainbow_trout-USDA_OmykA_1.1-<date>` on a login node, and with G's go-ahead `MODE=run`
    ("Hosting on salmobase").
 5. Hand back to the chat that works on the code: the two versions, the `changes since` and summary lines of both
    logs, and anything that was not as planned. That chat names the releases in serve.py (a pull request, which G
@@ -204,8 +218,8 @@ One command per release, in `snpdata/`, the same on any machine (`prep/build_rel
 
 ```bash
 MEMORY=64GB bash prep/build_release.sh salmon <date>
-MEMORY=64GB bash prep/build_release.sh trout trout-<date>
-MODE=dry bash prep/orion_publish.sh <date> trout-<date>      # only after the checks; then MODE=run, with G's go-ahead
+MEMORY=64GB bash prep/build_release.sh trout <date>          # -> release/rainbow_trout-USDA_OmykA_1.1-<date>
+MODE=dry bash prep/orion_publish.sh atlantic_salmon-Ssal_v3.1-<date> rainbow_trout-USDA_OmykA_1.1-<date>   # only after the checks; then MODE=run, with G's go-ahead
 ```
 
 On Orion these run as SLURM jobs (`prep/orion_build.sbatch`, "On Orion" below); elsewhere `snpdata publish
@@ -361,7 +375,7 @@ matched its checksum.
 - One job per species, from `snpdata/` (32 cores, 96 GB, no time limit; the log goes to
   `/mnt/project/ELIXIR/salmo-snp/logs/`). The date is the day of the build, and a name that was published is never
   built again: `sbatch --job-name=salmon-<date> prep/orion_build.sbatch salmon <date>` and
-  `sbatch --job-name=trout-<date> prep/orion_build.sbatch trout trout-<date>`. The release before is the newest of
+  `sbatch --job-name=trout-<date> prep/orion_build.sbatch trout <date>`. The release before is the newest of
   the species in `release/`; a third argument names another (a folder in `release/`, or in
   `/mnt/project/ELIXIR/salmo-snp/previous/` with its manifest.json, which gives the diff alone).
 - Then publishing: `MODE=dry bash prep/orion_publish.sh <salmon version> <trout version>`, and `MODE=run` with G's

@@ -341,6 +341,15 @@ def read_variant_scores(path, layer):
 
 SALMON = {"key": "atlantic_salmon", "name": "Atlantic salmon", "latin": "Salmo salar", "prefix": "ssa"}  # layers.yaml `species`
 
+
+def release_name(layers_path, date=None):
+    """A release's name (G, 2026-11-26: the species, Atlantic or rainbow, and the genome assembly in it, the same for
+    salmon and trout): '<species key>-<assembly>-<date>', e.g. atlantic_salmon-Ssal_v3.1-2026-11-26 and
+    rainbow_trout-USDA_OmykA_1.1-2026-11-26; without a date, the part before it."""
+    cfg = load_yaml(layers_path)
+    prefix = f"{(cfg.get('species') or SALMON)['key']}-{cfg['assembly']}"
+    return f"{prefix}-{date}" if date else prefix
+
 READERS = {"bed": read_bed, "tsv": read_tsv, "aquafaang_peaks": read_aquafaang_peaks, "gff3": read_gff3,
            "gff3_regions": read_gff3_regions, "vcf": read_vcf, "rna_counts": read_rna_counts,
            "gff3_transcripts": read_gff3_transcripts, "gff3_ncbi_transcripts": read_gff3_ncbi_transcripts, "vcf_info": read_vcf_info, "gene_tsv": read_gene_tsv,

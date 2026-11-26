@@ -24,7 +24,8 @@ and the portal.
   own scorer (numpy and onnxruntime in a scratch environment, never in this project's dependencies).
 - One registry per species: `layers.yaml` (Atlantic salmon) and `rainbow_trout/layers.yaml` (USDA_OmykA_1.1; its
   tracks.yaml beside it, its fixture tests/fixture/rainbow_trout from `python prep/make_fixture_trout.py`). A release's
-  version says the species (trout-<date>); README "Rainbow trout". build.py has no species in it: what differs is
+  version says the species and the assembly (`snpdata name`: rainbow_trout-USDA_OmykA_1.1-<date>; G, 2026-11-26;
+  trout-<date> before); README "Rainbow trout". Code reads the species from the manifest, never from a name. build.py has no species in it: what differs is
   in layers.yaml (`species`, `chromosome_names`, a layer's `species`, `pool`).
 - `fetch` and `build` need data/raw (~1.5 GB) and, in a cloud session, the hosts listed in ../AGENTS.md "Cloud
   sessions"; the published release (../tools/get_data.sh) is enough for everything else.

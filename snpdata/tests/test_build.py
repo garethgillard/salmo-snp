@@ -372,3 +372,9 @@ def test_rainbow_trout_release(tmp_path, capsys, monkeypatch):
     aliases = dict(con.execute(f"SELECT alias, chrom FROM read_parquet('{out / 'alias.parquet'}')").fetchall())
     assert (aliases["omy28"], aliases["nc_048592.1"], aliases["chry"]) == ("28", "28", "Y")
     assert con.execute(f"SELECT ohnolog_chrom FROM read_parquet('{out / 'ss4r.parquet'}') WHERE gene_id = 'ENSOMYG00000036625'").fetchone() == ("8",)
+
+
+def test_release_names():  # G, 2026-11-26: the species and the assembly in every release's name, alike for both
+    from snpdata.build import release_name
+    assert release_name(DATA / "layers.yaml", "2026-11-26") == "atlantic_salmon-Ssal_v3.1-2026-11-26"
+    assert release_name(DATA / "rainbow_trout" / "layers.yaml") == "rainbow_trout-USDA_OmykA_1.1"

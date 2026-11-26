@@ -62,8 +62,11 @@ Each folder has its own AGENTS.md (CLAUDE.md imports it). docs/TRACKER.md says w
    (CODEOWNERS); a merge to main deploys nothing: the NREC demo is updated when G asks (the `deploy` workflow);
    a vX.Y.Z tag builds the wheels (and later the image) as a GitHub Release.
 
-7. Species (G, 2026-11-12): a release is for one species and assembly. Salmon releases are named by their date
-   (2026-11-05), another species' with the species first (trout-2026-11-13), and the manifest's `species` block
+7. Species (G, 2026-11-12): a release is for one species and assembly. From the builds of 2026-11-26 every release
+   is named <species>-<assembly>-<date> (G, 2026-11-26: "add salmon genome name to the salmon one ... the genome
+   version ... consistant between salmon and trout ... atlantic and rainbow in the name"): atlantic_salmon-Ssal_v3.1-
+   2026-11-26 and rainbow_trout-USDA_OmykA_1.1-2026-11-26 (`snpdata name`); the earlier releases keep their names
+   (2026-11-25, trout-2026-11-25). Code never reads the species from a name: the manifest's `species` block
    (layers.yaml: key, name, latin, prefix, the browser's example locus, the pages' wording, samples, searches) says
    which. The portal's species bar (top right; a cookie, so it works on a server too) picks the species: new lists are
    scored against that species' release (serve.py RELEASES names one per species), while results, panels and saved

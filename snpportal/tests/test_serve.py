@@ -113,3 +113,17 @@ def test_own_rules_outlive_an_update(tmp_path, monkeypatch, capsys):
         serve.main(["rules"])
     with pytest.raises(SystemExit, match="is there already"):
         serve.main(["rules", "--copy"])
+
+
+def test_the_newest_salmon_release_without_this_versions(tmp_path, monkeypatch):
+    """Without the release this version names, `serve` takes the newest Atlantic salmon release by its build date:
+    names alone sort the species together (rainbow_trout-... after atlantic_salmon-..., trout-... after 2026-...)."""
+    for name, created, species in (("2026-11-25", "2026-11-25", None), ("trout-2026-11-25", "2026-11-25", "rainbow_trout"),
+                                   ("atlantic_salmon-Ssal_v3.1-2026-11-26", "2026-11-26", None),
+                                   ("rainbow_trout-USDA_OmykA_1.1-2026-11-27", "2026-11-27", "rainbow_trout")):
+        (tmp_path / "releases" / name).mkdir(parents=True)
+        (tmp_path / "releases" / name / "manifest.json").write_text(json.dumps(
+            {"version": name, "created": created, **({"species": {"key": species}} if species else {})}))
+    monkeypatch.setattr(serve, "HOME", tmp_path)
+    monkeypatch.setattr(serve, "RELEASE", "atlantic_salmon-Ssal_v3.1-2099-01-01")
+    assert serve.pick_release().name == "atlantic_salmon-Ssal_v3.1-2026-11-26"
