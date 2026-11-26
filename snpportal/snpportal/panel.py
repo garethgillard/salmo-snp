@@ -76,11 +76,11 @@ def _cookie(response, d):
 
 
 def count(request):
-    """The nav's 'Design panel' badge: the panel's SNP count (empty without a panel)."""
+    """The nav's 'Design panel' count, shown as a small pill: the panel's SNP count (empty without a panel)."""
     d = _folder(request)
     s = jobs.read_json(d / "panel.json") if d else {}
     n = sum(x["n"] for x in s.get("sources", [])) - len(s.get("dropped", []))  # sources overlap: an upper bound
-    return HttpResponse(f" ({n:,})" if n else "", content_type="text/plain")
+    return HttpResponse(f"{n:,}" if n else "", content_type="text/plain")
 
 
 def holds(request, snp):

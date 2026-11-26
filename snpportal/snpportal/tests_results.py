@@ -27,7 +27,7 @@ from . import figures, jobs, palette, results
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 DATA = SNPSCORE.parent / "snpdata"  # layers.yaml, the fixture, prep/, the catalogue, data/ and release/
 FIXTURE = DATA / "tests" / "fixture"
-SVG = re.compile(r"<svg .*?</svg>", re.S)
+SVG = re.compile(r'<svg (?!class="sp-i").*?</svg>', re.S)  # figures, not the icons
 
 
 def svgs(html):

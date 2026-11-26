@@ -34,14 +34,15 @@ def key_of(url):
 
 
 def svgs(html):
-    """The page's inline figures (not nested)."""
-    return re.findall(r"<svg .*?</svg>", html, re.S)
+    """The page's inline figures (not nested; not the icons)."""
+    return [s for s in re.findall(r"<svg .*?</svg>", html, re.S) if not s.startswith('<svg class="sp-i"')]
 
 
 def figure_svg(html, name):
     """The whole SVG of figure card `name`, nested SVGs included."""
     part = html[html.index(f'id="fig-{name}"'):]
     part = part[:part.index("</figure>")]
+    part = re.sub(r'<svg class="sp-i".*?</svg>', "", part, flags=re.S)  # not the card's icons
     return part[part.index("<svg "):part.rindex("</svg>") + 6]
 
 

@@ -61,9 +61,9 @@ class SVTest(SimpleTestCase):
         overview = self.client.get(self.url).content.decode()
         self.assertIn("4 SVs", overview)
         self.assertNotIn("4 SNPs", overview)
-        self.assertIn("Functional SNP portal", overview)  # the site's name stays
+        self.assertIn('<span>salmo-snp</span>', overview)  # the site's name stays
         self.assertIn("no valid end", overview)  # the upload QC names the rejected row's reason
-        for svg in re.findall(r"<svg .*?</svg>", overview, re.S):
+        for svg in re.findall(r'<svg (?!class="sp-i").*?</svg>', overview, re.S):
             ET.fromstring(svg)
         table = self.client.get(self.url, {"tab": "table"}).content.decode()
         self.assertIn("25:28,996,001–28,997,000", table)  # the SV's span beside its id

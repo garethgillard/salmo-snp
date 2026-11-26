@@ -51,7 +51,7 @@ class PaletteTest(SimpleTestCase):
             self.assertEqual(palette.use_states("aquafaang"), "aquafaang")
             self.assertEqual(palette.STATES["Poised_enhancer_1"], ("#F9E700", "Poi"))
             self.assertIn(".st-Active_TSS{background:#BF2026", palette.css())
-            self.assertIn('stroke="#6C757D"', locus_svg.chromatin_grid({"Brain_Immature_Female": "Quiescent"}))  # white: outlined
+            self.assertIn(f'stroke="{palette.GREY[500]}"', locus_svg.chromatin_grid({"Brain_Immature_Female": "Quiescent"}))  # white: outlined
         finally:
             palette.use_states("portal")
         self.assertIn(".st-Active_TSS{background:#B2182B", palette.css())

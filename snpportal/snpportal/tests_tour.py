@@ -95,8 +95,8 @@ class TourTest(SimpleTestCase):
         for bad in ("0", "99", "x"):
             self.assertEqual(shown(self.client.get(tour, {"slide": bad}).content.decode()), explore.TOUR[0]["title"])
 
-        menu = re.search(r'<details class="sp-menu">.*?</details>', self.client.get(reverse("snpportal:upload")).content.decode(), re.S)
-        self.assertIn(f'href="{tour}">Guided tour</a>', menu.group(0))  # in the Help menu
+        foot = re.search(r'<footer class="sp-foot">.*?</footer>', self.client.get(reverse("snpportal:upload")).content.decode(), re.S)
+        self.assertIn(f'href="{tour}">Guided tour</a>', foot.group(0))  # in every page's footer
         self.assertContains(self.client.get(reverse("snpportal:upload")), f'href="{tour}"')  # 'Take the tour'
 
         self.assertIn(f'href="{reverse("snpportal:upload")}">Back to Score</a>', html)  # out of the tour on every slide

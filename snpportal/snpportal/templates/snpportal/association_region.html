@@ -13,12 +13,12 @@
 
 <figure class="sp-card sp-figure" id="fig-region" aria-label="Regional association plot">
   <div class="sp-card-head">
-    <details class="sp-info"><summary aria-label="What does this figure show?">i</summary>
+    <details class="sp-info"><summary aria-label="What does this figure show?" title="What does this figure show?">{% icon 'info' %}</summary>
       <p>Top: -log10 p of your summary statistics, coloured by tier for the trait; a diamond marks the lead, triangles CDS or
         splice-region SNPs, a dark ring the 95% credible set under the functional prior. Click a point for its evidence card.
         Below, on the same axis: genes, published loci, the trait&rsquo;s chromatin states and GERP constraint.</p></details>
     <details class="sp-dlmenu" hx-boost="false">
-      <summary aria-label="Download the regional plot" title="Download">&#10515;</summary>
+      <summary aria-label="Download the regional plot" title="Download">{% icon 'download' %}</summary>
       <div class="sp-dlmenu-items">
         <a href="{{ svg_url }}" download>SVG</a>
         <button type="button" data-png="fig-region" data-name="{{ file_name }}">PNG</button>

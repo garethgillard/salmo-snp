@@ -7,8 +7,11 @@ from collections.abc import Mapping
 from contextvars import ContextVar
 from functools import lru_cache
 
-ACCENT = "#0072BC"  # salmobase blue
-GREY = {50: "#F8F9FA", 100: "#F1F3F5", 200: "#E3E6EA", 300: "#CED4DA", 500: "#6C757D", 700: "#495057", 900: "#212529"}
+ACCENT = "#0072BC"  # salmobase blue: the one primary action of a view, the current page in the nav, keyboard focus
+LINK = "#005A96"  # links in running text (7.2:1); links inside data tables are ink, with the link colour on hover
+# Warm neutrals, as salmo-cells': 900 ink, 700 secondary text, 500 muted text (4.7:1 on white; not on 100), 300 control
+# borders, 200 hairlines between sections and rows, 100 hover and selected fills, 50 table heads and the footer.
+GREY = {50: "#FAFAF8", 100: "#F3F2EF", 200: "#E4E3DE", 300: "#CFCDC6", 500: "#76746E", 700: "#4D4C48", 900: "#1D1D1B"}
 WHITE, BLACK = "#FFFFFF", "#000000"
 
 # Tier -> (fill, text). Sequential blues, the number is always printed. Tier 2 is darker than the roadmap's #3182BD,
@@ -161,7 +164,7 @@ def css():
 @lru_cache(maxsize=4)
 def _css(active):
     props = {"accent": ACCENT, "accent-text": text_on(ACCENT), "white": WHITE, "black": BLACK,
-             "focus": "#FFBF47", "no-peak-border": NO_PEAK[1], "link": "#005A96",
+             "focus": ACCENT, "no-peak-border": NO_PEAK[1], "link": LINK,
              "prov": PROVISIONAL[0], "syn-1": SYNTHETIC[0], "syn-2": SYNTHETIC[1], "syn-text": SYNTHETIC[2]}
     props.update({f"grey-{k}": v for k, v in GREY.items()})
     for status, (text, bg, border) in STATUS.items():

@@ -28,7 +28,7 @@ from .tests import boosted_links
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 DATA = SNPSCORE.parent / "snpdata"  # layers.yaml, the fixture, prep/, the catalogue, data/ and release/
 FIXTURE = DATA / "tests" / "fixture"
-SVG = re.compile(r"<svg .*?</svg>", re.S)
+SVG = re.compile(r'<svg (?!class="sp-i").*?</svg>', re.S)  # figures, not the icons
 
 
 def sha(path):
@@ -439,7 +439,7 @@ class ToolsTest(SimpleTestCase):
         self.assertEqual(s["shared"] + s["novel_functional"] + s["other"], s["total"])
         self.assertGreater(s["shared"], 0)
         self.assertGreaterEqual(s["gaps"], 1)  # the planted gap
-        svg = re.search(r'<svg .*?</svg>', page.content.decode().split('id="fig-chip-coverage"')[1], re.S).group(0)
+        svg = re.search(r'<svg (?!class="sp-i").*?</svg>', page.content.decode().split('id="fig-chip-coverage"')[1], re.S).group(0)
         self.assertIn("SYNTHETIC test data", svg)  # said in the figure's description (downloads keep it)
         overview = self.client.get(url).content.decode()
         self.assertNotIn("SYNTHETIC data", overview)  # only the chip is synthetic: no page line, but the figure says so

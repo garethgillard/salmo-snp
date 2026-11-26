@@ -1,8 +1,11 @@
 {% extends 'salmobase/base.html' %}
 {% load static snpportal_tags %}
-{# Every portal page extends this: sub-nav, page header, footer, portal.css + palette, htmx and portal.js. #}
+{# Every portal page extends this: the top bar (icon + label links, search, species), page header, footer, portal.css + palette, htmx and portal.js. #}
+
+{% block title %}{% if title %}{{ title }} · {% endif %}salmo-snp{% endblock title %}
 
 {% block head %}{{ block.super }}
+{% favicon %}
 <link rel="stylesheet" href="{% asset 'snpportal/portal.css' %}">
 <style>{% palette_css %}</style>
 {% block portal_head %}{% endblock portal_head %}
@@ -11,31 +14,25 @@
 {% block content %}{% portal_release as rel %}
 <div class="sp">
   <a class="sp-skip" href="#sp-main">Skip to content</a>
-  <nav class="sp-nav" aria-label="SNP portal">
+  <nav class="sp-nav" aria-label="salmo-snp">
     <div class="sp-wrap">
-      <a class="sp-brand" href="{% url 'snpportal:upload' %}">Functional SNP portal</a>
-      <ul>
-        <li><a href="{% url 'snpportal:upload' %}"{% if nav == 'score' %} aria-current="page"{% endif %}>Score</a></li>
-        <li><a href="{% url 'snpportal:design_panel' %}"{% if nav == 'panel' %} aria-current="page"{% endif %}>Design panel<span hx-get="{% url 'snpportal:panel_count' %}" hx-trigger="load" hx-swap="innerHTML"></span></a></li>
-        {% if rel.known_loci %}<li><a href="{% url 'snpportal:known_loci' %}"{% if nav == 'known' %} aria-current="page"{% endif %}>Known loci</a></li>{% endif %}
-        <li><a href="{% url 'snpportal:locus' %}?r={{ rel.species.example.region }}"{% if nav == 'explore' %} aria-current="page"{% endif %}>Locus browser</a></li>
-        <li><details class="sp-menu"><summary{% if nav == 'help' or nav == 'about' %} aria-current="page"{% endif %}>Help</summary>
-          <ul>
-            <li><a href="{% url 'snpportal:help' %}">Help</a></li>
-            <li><a href="{% url 'snpportal:tour' %}">Guided tour</a></li>
-            <li><a href="{% url 'snpportal:about_data' %}">Data</a></li>
-            <li><a href="{% url 'snpportal:methods' %}">Methods</a></li>
-            <li><a href="{% url 'snpportal:run_locally' %}">Run locally</a></li>
-            <li><a href="{% url 'snpportal:help' %}#privacy">Privacy</a></li>
-            <li><a href="{% url 'snpportal:about_data' %}#cite">How to cite</a></li>
-          </ul></details></li>
+      <a class="sp-brand" href="{% url 'snpportal:upload' %}">{% icon 'brand' %}<span>salmo-snp</span></a>
+      <ul class="sp-links">
+        <li><a href="{% url 'snpportal:upload' %}"{% if nav == 'score' %} aria-current="page"{% endif %} title="Score a list of SNPs">{% icon 'score' %}<span>Score</span></a></li>
+        <li><a href="{% url 'snpportal:design_panel' %}"{% if nav == 'panel' %} aria-current="page"{% endif %} title="Your Design panel">{% icon 'panel' %}<span>Design panel</span><span class="sp-count" hx-get="{% url 'snpportal:panel_count' %}" hx-trigger="load" hx-swap="innerHTML"></span></a></li>
+        {% if rel.known_loci %}<li><a href="{% url 'snpportal:known_loci' %}"{% if nav == 'known' %} aria-current="page"{% endif %} title="Published loci">{% icon 'known' %}<span>Known loci</span></a></li>{% endif %}
+        <li><a href="{% url 'snpportal:locus' %}?r={{ rel.species.example.region }}"{% if nav == 'explore' %} aria-current="page"{% endif %} title="Locus browser">{% icon 'locus' %}<span>Locus browser</span></a></li>
+        <li><a href="{% url 'snpportal:help' %}"{% if nav == 'help' %} aria-current="page"{% endif %} title="Help">{% icon 'help' %}<span>Help</span></a></li>
+        <li><a href="{% url 'snpportal:about_data' %}"{% if nav == 'about' %} aria-current="page"{% endif %} title="The data and methods">{% icon 'info' %}<span>About</span></a></li>
       </ul>
+      <form class="sp-search" method="get" action="{% url 'snpportal:search' %}" role="search">
+        <label class="visually-hidden" for="sp-q">Find a gene, rs ID or region</label>
+        <input class="form-control form-control-sm" id="sp-q" name="q" type="search" placeholder="Gene, rs ID or region" autocomplete="off">
+        <button class="btn btn-sm btn-outline-secondary" type="submit">{% icon 'search' 'Search' %}</button>
+      </form>
       {% if rel.species_choices %}<form class="sp-species" method="post" action="{% url 'snpportal:species' %}" aria-label="Species">{% csrf_token %}
-        <span class="sp-species-label">Species</span>
         {% for s in rel.species_choices %}<button type="submit" name="species" value="{{ s.key }}"{% if s.current %} aria-pressed="true"{% endif %} title="{{ s.latin }}{% if s.current %}: the species of this page{% else %}: score SNPs against the {{ s.name|lower }} data{% endif %}">{{ s.name }}</button>{% endfor %}
       </form>{% endif %}
-      {% if rel.several %}<a class="sp-release" href="{% url 'snpportal:releases' %}" title="Annotation release and genome assembly of this page: switch the release new work uses">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</a>
-      {% else %}<span class="sp-release" title="Annotation release and genome assembly">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</span>{% endif %}
     </div>
   </nav>
   <main id="sp-main" class="sp-main">
@@ -44,6 +41,17 @@
       {% block main %}{% endblock main %}
     </div>
   </main>
+  <footer class="sp-foot">
+    <div class="sp-wrap">
+      <span>{% if rel.several %}<a href="{% url 'snpportal:releases' %}" title="Annotation release and genome assembly of this page: switch the release new work uses">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</a>{% else %}<span title="Annotation release and genome assembly">Release {{ job.release|default:rel.version }} · {{ rel.assembly|default:"Ssal_v3.1" }}</span>{% endif %}</span>
+      <a href="{% url 'snpportal:tour' %}">Guided tour</a>
+      <a href="{% url 'snpportal:methods' %}">Methods</a>
+      <a href="{% url 'snpportal:about_data' %}#cite">How to cite</a>
+      <a href="{% url 'snpportal:help' %}#privacy">Privacy</a>
+      <a href="{% url 'snpportal:run_locally' %}">Run locally</a>
+      <span class="sp-foot-by">NMBU · AQUA-FAANG data</span>
+    </div>
+  </footer>
 </div>
 {% endblock content %}
 
