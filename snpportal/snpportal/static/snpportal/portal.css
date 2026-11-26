@@ -366,7 +366,8 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-colf-val { display: block; max-width: 11rem; overflow: hidden; color: var(--sp-ink); font-size: var(--sp-fs-xs); font-weight: 400;
   text-overflow: ellipsis; white-space: nowrap; }
 .sp-results th .sp-dd-panel { font-weight: 400; text-align: left; white-space: normal; }
-.sp-dd-list > label { display: flex; }
+.sp-dd-list > label { display: flex; align-items: center; gap: .45rem; }
+.sp-dd-list .form-check-input { flex: none; margin: 0; }
 .sp-dd-list .sp-any { margin-bottom: .1rem; padding-bottom: .3rem; border-bottom: 1px solid var(--sp-line); }
 .sp-slider { display: grid; grid-template-columns: 1fr auto; gap: .2rem .5rem; }
 .sp-slider output { font-weight: 600; }
@@ -542,7 +543,7 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-fold-title { flex: none; }
 .sp-fold-what { min-width: 0; overflow: hidden; color: var(--sp-muted); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 575.98px) {  /* the Summary and the ideogram are drawn 580 wide, shown at about half that on a phone */
-  .sp-figure svg .sp-ph { font-size: 20px; }  /* labels and legends, about 11 px as shown */
+  .sp-figure svg .sp-ph { font-size: 19px; }  /* labels and legends, about 10.5 px as shown */
   .sp-figure svg .sp-md { font-size: 17px; }  /* the ideogram's chromosome names and counts, one 16-unit row each */
   .sp-figure svg .sp-fnote { display: none; }  /* a bar's side note: the (i) says it */
 }

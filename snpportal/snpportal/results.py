@@ -1259,7 +1259,7 @@ def _fig_maf(c, link, desc):
         share = bg.get(f"{lo:.2f}-{hi:.2f}")
         tip = f"MAF {lo:.2f}–{hi:.2f}: {k:,} SNPs ({pct(k, n)})" + (f"; public background {100 * share:.1f}%" if share is not None else "")
         href = link(min_maf=f"{lo:g}", max_maf=None if i == len(m["bins"]) - 1 else f"{hi:g}") if link else None
-        bars.append((f"{lo:.2f}", k, palette.GREY[300] if hi <= 0.05 + 1e-9 else palette.GREY[700], tip, href,  # no tier, no accent
+        bars.append((f"{lo:.2f}", k, palette.GREY[300] if hi <= 0.05 + 1e-9 else palette.GREY[500], tip, href,  # no tier, no accent
                      None if share is None else share * n))
         tsv.append((f"{lo:g}", f"{hi:g}", k, "" if share is None else f"{share:.5f}"))
     if m["missing"]:

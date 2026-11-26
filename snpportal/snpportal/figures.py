@@ -234,7 +234,7 @@ def heatmap(rows, title, desc="", synthetic=False, link=None, scale_max=None):
     """Share of SNPs active per condition, one row per tissue (plus the embryo stages), with the fold over the
     background printed when known. rows: [(group, colour, [(label, condition, share, fold or None, in preset)])];
     link(condition) -> href. Darker = higher share; outlined = one of the trait's conditions."""
-    left, cw, ch, pad, top = 86, 66, 44, 5, 6
+    left, cw, ch, pad, top = 100, 66, 44, 5, 6
     ncol = max([len(cells) for _, _, cells in rows] + [1])
     width = left + ncol * (cw + pad)
     top_share = scale_max or max([share for _, _, cells in rows for _, _, share, _, _ in cells] + [0.01])
