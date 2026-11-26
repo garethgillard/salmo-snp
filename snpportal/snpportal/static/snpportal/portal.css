@@ -674,8 +674,20 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
   .sp-loci-tabs .tab-pane { display: block !important; }
   .sp-loci-tabs h2.visually-hidden { position: static !important; width: auto !important; height: auto !important;
     clip: auto !important; overflow: visible !important; margin: 1rem 0 .4rem !important; } }
-.sp-loci td, .sp-loci th { vertical-align: top; }
-.sp .sp-loci details summary { color: var(--sp-link); cursor: pointer; }
+.sp-loci { font-size: var(--sp-fs-sm); }
+.sp-loci td, .sp-loci th { padding-top: .5rem; padding-bottom: .5rem; vertical-align: top; }
+.sp-loci thead th { color: var(--sp-ink-2); font-weight: 600; }
+.sp-loci .sp-ev-cell { min-width: 13rem; }   /* evidence and effect: a readable column, not 4 words a line */
+.sp-loci .sp-cav-cell { min-width: 10rem; }
+.sp-loci .sp-sub { display: block; color: var(--sp-muted); }  /* a second line: the rs ID, the alleles, SalmoBase */
+.sp-loci a.sp-sub:hover { color: var(--sp-ink); }
+.sp-loci a.sp-sub, .sp-loci-go { white-space: nowrap; }
+.sp-loci-go a + a { margin-left: .6rem; }  /* under the locus name: Browse, Public SNPs */
+.sp .sp-loci-go a { color: var(--sp-ink-2); }
+.sp-loci .sp-doi { display: block; white-space: nowrap; }  /* a DOI never breaks mid-string */
+.sp-loci .sp-i { width: .9em; height: .9em; vertical-align: -.1em; }
+.sp .sp-loci details summary { color: var(--sp-ink-2); cursor: pointer; }
+.sp-loci-tabs .nav-tabs { gap: 0 1.25rem; }
 /* end known loci */
 
 /* == locus browser (browser.py): one slim control bar, as wide as the tracks; groups of tracks, an HTML label beside each
