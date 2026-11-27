@@ -202,6 +202,11 @@ Decided:
   what Claude chose in building them is under Provisional); the missense plan is docs/MISSENSE.md (DECISIONS #59).
   ChromBPNet allele effects are expected from the Orion repository at the end of that week.
 
+- Users' own weights and score bands (G, 2026-11-27): a weight per kind of evidence and the three band cut-offs, set on
+  the Score page or with Weights in a result's Table, rescore the whole result. Cut-offs left blank with weights of the
+  user's are set from the public pool: "Keep the default bands' shares" (DECISIONS #69), the cut-offs under which its
+  shares at or above each come closest (by ratio) to the default bands' (0.38%, 6.5% and 15% in release 2026-11-25), so
+  the default weights keep 5, 3 and 1 (jobs.cuts_from_public).
 - Builds on Orion, releases on salmobase (G, 2026-11-24): releases are built on Orion from now on ("faster as we can
   run slurm jobs, have access to salmobase data there"), the built snapshots are uploaded to salmobase's data files,
   and the live app and installs retrieve them from there; the work continues in a chat on Orion over SSH. The brief,
@@ -312,9 +317,6 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   IDs with one offset (layers.yaml liftover); fSalSal1 from same-chromosome minimap2 asm5 alignments, mapq >= 5,
   overlapping blocks dropped (DECISIONS #37; the alignment postponed, G 2026-11-06: no fSalSal1
   tables in a release until I20).
-- Users' own score bands (2026-11-27, DECISIONS #69): cut-offs left blank with weights of the user's are set from the
-  public pool, the cut-offs under which its shares at or above each come closest (by ratio) to the default bands' (0.38%,
-  6.5% and 15% in release 2026-11-25), so the default weights keep 5, 3 and 1 (jobs.cuts_from_public).
 - The gill ChromBPNet scores' first set (2026-11-25, DECISIONS #60): until every site is scored, the public and
   Synchrosmolt SNPs inside the model's own training peaks (216,592 SNPs in the gill MACS2 peaks; 216,586 scored in
   release 2026-11-25, on CPU in about an hour), where its predictions mean the most. The layer's percentile is the scorer's, among 100,000 random public
