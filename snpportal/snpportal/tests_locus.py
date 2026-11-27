@@ -197,6 +197,9 @@ class LocusTest(SimpleTestCase):
         centred = self.get(f"{reverse('snpportal:locus')}?key={key}&row=1")  # opened from a card: no coordinates in the URL
         self.assertIn('value="25:28,988,410-29,008,409"', centred)
         self.assertIn(">28,998,410</text>", centred)  # the centre: the SNP, in red on the ruler
+        own = jobs.create_from_rows([("25", p, f"snp{i}", "C", "T") for i, p in enumerate(positions)], "Own bands", cuts=[9, 7, 2])
+        legend = self.get(f"{reverse('snpportal:locus_svg')}?{VGLL3}&key={own}")  # the SVG's legend names the job's own bands
+        self.assertTrue(any(f">{b}</text>" in legend for b in ("9+", "7–8", "2–6", "0–1")), "no band of the job's cut-offs")
         bare = Path(self.tmp.name) / "bare.tsv"  # a list with no id, ref or alt column (e.g. a chip of chrom, pos)
         bare.write_text("chrom\tpos\n25\t28996360\n")
         key = jobs.create(bare, ".tsv", label="Positions only")

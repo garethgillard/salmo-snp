@@ -243,20 +243,32 @@ def middleware(get_response):
 
 
 def job_cuts(request):
-    """The score cut-offs of the job whose page `request` is (its weights.yaml's tiers), or on the Design panel's pages
-    those its sources were scored with when they share them; else None (the installed ones)."""
+    """The score cut-offs of the job whose page `request` is (its weights.yaml's tiers; also the Locus browser drawing a
+    job's SNPs, ?key=), or of the Design panel or a saved project version: those its sources share; else None (the
+    installed ones)."""
     m = JOB_URL.search(request.path)
     try:
-        if m:
-            return (weights(folder(m.group(1))) or {}).get("tiers")
+        key = m.group(1) if m else request.GET.get("key") if "/locus/" in request.path else None
+        if key:
+            return (weights(folder(key)) or {}).get("tiers")
         if "/panel/" in request.path:
             from . import panel
             d = panel._folder(request)
-            held = {tuple(x.get("cuts") or figures.default_cuts()) for x in read_json(d / "panel.json").get("sources", [])} if d else set()
-            return list(held.pop()) if len(held) == 1 else None
+            return shared_cuts(read_json(d / "panel.json").get("sources", [])) if d else None
+        p = re.search(r"/projects/([^/]+)/(\d+)/", request.path)
+        if p:
+            from . import projects
+            return read_json(projects.root() / p.group(1) / f"v{int(p.group(2))}" / "meta.json").get("cuts")
     except (OSError, ValueError, yaml.YAMLError):
         return None
     return None
+
+
+def shared_cuts(sources):
+    """The cut-offs a Design panel's sources were scored with when they all share them, else None (the installed ones;
+    each source then names its own rules)."""
+    held = {tuple(x.get("cuts") or figures.default_cuts()) for x in sources}
+    return list(held.pop()) if len(held) == 1 else None
 
 
 SV_WORDING = [  # (pattern, replacement): an SV job's pages, written for SNPs; the site's name and other SNP things stay
@@ -1038,14 +1050,12 @@ def _write_weights(d, w):
         return False
     if not default.exists():
         shutil.copyfile(now, default)
-    if w == snpscore.load_weights(default):
-        shutil.copyfile(default, now)
-    else:
-        fd, tmp = tempfile.mkstemp(dir=d, prefix=".tmp-")
-        with os.fdopen(fd, "w") as f:
-            f.write("# The user's own weights or score bands (snpportal), over weights.default.yaml\n"
-                    + yaml.safe_dump(w, sort_keys=False))
-        os.replace(tmp, now)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".tmp-")  # replaced whole: pages read it meanwhile
+    with os.fdopen(fd, "wb") as f:
+        f.write(default.read_bytes() if w == snpscore.load_weights(default) else
+                ("# The user's own weights or score bands (snpportal), over weights.default.yaml\n"
+                 + yaml.safe_dump(w, sort_keys=False)).encode())
+    os.replace(tmp, now)
     return True
 
 
@@ -1246,8 +1256,11 @@ def _retier(key):
             os.replace(d / ".weights.previous", d / "weights.yaml")
             update(key, cuts=read(key).get("cuts_before"))
             n = precompute(d)
-            if custom(d):
-                public_tiers(d)
+            try:
+                if custom(d):
+                    public_tiers(d)
+            except Exception:  # noqa: BLE001 - the Overview then shows no public background for these rules
+                log.error("public_tiers_failed job_ref=%s", job_ref(key))
             error = "Scoring with these weights failed, so the results keep their earlier weights."
         (d / ".weights.previous").unlink(missing_ok=True)
         update(key, state="done", stage="done", n_rows=n, weights_sha256=sha256(d / "weights.yaml"),

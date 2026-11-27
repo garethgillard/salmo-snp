@@ -101,7 +101,8 @@ def save(panel_dir, name, note=""):
         "version": n, "created_utc": jobs.utc(), "note": str(note).strip()[:500], "n": len(keys),
         "hash": hashlib.sha256("\n".join(keys).encode()).hexdigest()[:16],
         "sources": [x.get("label") for x in s.get("sources", [])], "chip": chip.get("label"),
-        "release": jobs.manifest().get("version"), "weights_sha256": jobs._file("sha256", snpscore_weights())})
+        "release": jobs.manifest().get("version"), "weights_sha256": jobs._file("sha256", snpscore_weights()),
+        "cuts": jobs.shared_cuts(s.get("sources", []))})  # the score bands its SNPs' tiers were cut by, when they share them
     return folder, n
 
 
@@ -134,7 +135,8 @@ def open_in_panel(d, n):
     copy_extras(v, out)
     jobs._write_json(out / "panel.json", {"sources": [{"id": 1, "project": d.name, "version": n, "label": f"{name}, version {n}",
                                                        "n": meta["n"], "selection": "", "filters": [meta.get("note") or "saved panel"],
-                                                       "synthetic": False, "added_utc": jobs.utc()}],
+                                                       "synthetic": False, "added_utc": jobs.utc(),
+                                                       **({"cuts": meta["cuts"]} if meta.get("cuts") else {})}],
                                           "next": 2, "created_utc": jobs.utc(),
                                           "release": meta.get("release") or jobs.manifest().get("version")})  # I17: its own
     return out
