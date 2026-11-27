@@ -269,8 +269,12 @@ def known_loci(request):
         parts[part].append(r)
     where = lambda r: (order.get(r.get("trait") or "other", len(order)), int(r["chrom"]) if (r.get("chrom") or "").isdigit() else 99,
                        int(r.get("start") or r.get("pos") or 0) if (r.get("start") or r.get("pos") or "").isdecimal() else 0)
+    n_qtl = sum(1 for r in parts["region"] if r.get("type") == "qtl_interval")
+    said = [f"{n:,} {word}{'' if n == 1 else 's'}" for n, word in ((len(parts["snp"]), "SNP"), (len(parts["sv"]), "structural variant"),
+            (len(parts["region"]) - n_qtl, "gene region"), (n_qtl, "QTL window")) if n]  # what there is, e.g. no '0 SNPs' for trout
     return render(request, "snpportal/known_loci.html", {
         "nav": "known", "title": "Known loci", "snp_groups": by_trait(parts["snp"]), "n_snps": len(parts["snp"]),
+        "summary": " and ".join([", ".join(said[:-1]), said[-1]]) if len(said) > 1 else "".join(said),
         "svs": sorted(parts["sv"], key=where), "regions": sorted(parts["region"], key=where),
         "has_ss4r": bool(_file("ss4r")), "counts": catalogue_counts(rows)})
 

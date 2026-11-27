@@ -51,6 +51,8 @@ class SpeciesTest(SimpleTestCase):
         for text in ("Migration timing", "greb1l", "BCWD resistance", "sdY", "10.1016/j.cub.2012.05.045"):
             self.assertIn(text, known)
         self.assertNotIn("akap11", known)
+        self.assertNotIn("0 SNPs", known)  # the summary names what there is: structural variants, gene regions, QTL windows
+        self.assertNotIn('id="snps"', known)
         self.assertIn(">Atlantic salmon</button>", home)  # the other species keeps its name
         self.assertIn("28:12020000-12210000", home)  # the Locus browser opens at the species' example
         url = self.client.post(reverse("snpportal:upload"), {"paste": "omy28 12029722 T C\nY 6002000 G A\n"}).url.split("?")[0]
