@@ -159,7 +159,9 @@ def add(request, key):
                          "selection": f"panel={picked['hash']}" if picked else query, "tab": "panel" if picked else "table",
                          "filters": [f"picked automatically: {tools.panel_name(picked)}"] if picked else
                          [label for _, label, _ in results.filters(req, types, jobs.weights(jd), jd)],
-                         "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers")), "added_utc": jobs.utc()})
+                         "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers")), "added_utc": jobs.utc(),
+                         "cuts": list((jobs.weights(jd) or {}).get("tiers") or figures.default_cuts()),  # its own bands, for the page's
+                         **({"rules": jobs.rules_text(job)} if jobs.rules_text(job) else {})})
     s["next"] = i + 1
     jobs._write_json(d / "panel.json", s)
     return _cookie(redirect(f"{back}&added={n}"), d)
@@ -239,7 +241,7 @@ def _figure(con, d, chip, res, synthetic):
              for c, b, t, n in rows]
     counts = dict(con.execute("SELECT chrom, count(*) FROM p GROUP BY 1").fetchall())
     density, gaps = None, []
-    legend = [(tools._tier_fill(t), figures.TIER_NAMES[t]) for t in (1, 2, 3, 4)]
+    legend = [(tools._tier_fill(t), figures.tier_name(t)) for t in (1, 2, 3, 4)]
     if chip:
         top = max([n for _, _, n in chip["density"]] + [1])
         density = [(c, mb * 1_000_000, (mb + 1) * 1_000_000, n / top, f"{c}:{mb}–{mb + 1} Mb: {n:,} chip markers")

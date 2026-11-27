@@ -414,6 +414,11 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-weights { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .3rem 1.75rem; }
 .sp .sp-weight { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: 0; font-size: var(--sp-fs-sm); }
 .sp-weight input { flex: none; width: 3.75rem; text-align: right; }
+.sp .sp-cuts { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .75rem; margin: .9rem 0 0; }
+.sp-cuts legend { float: none; width: auto; margin: 0 .25rem 0 0; font-size: var(--sp-fs-sm); font-weight: 500; }
+.sp .sp-cut { display: inline-flex; align-items: center; margin: 0; font-size: var(--sp-fs-sm); }
+.sp-cut input { width: 3.25rem; text-align: right; }
+.sp-cuts .sp-hint { flex-basis: 100%; margin: 0; }
 .sp-weights-fold { margin-top: .75rem; }
 .sp-weights-fold .sp-hint { margin: .25rem 0 .6rem; }
 .sp-dd-weights { width: 23rem; }

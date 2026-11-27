@@ -11,6 +11,7 @@ Conventions every figure follows:
 """
 from __future__ import annotations
 
+import contextvars
 import math
 from functools import lru_cache
 from html import escape
@@ -18,13 +19,25 @@ from html import escape
 from . import palette
 
 FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif"
+_cuts = contextvars.ContextVar("snpportal_cuts", default=None)  # the cut-offs of the job whose page this is (use_cuts)
 
 
 @lru_cache(maxsize=1)
-def cuts():
-    """The score cut-offs between the bands: the installed weights.yaml's tiers (5, 3, 1)."""
+def default_cuts():
+    """The installed weights.yaml's score cut-offs between the bands (5, 3, 1)."""
     import snpscore
     return tuple((snpscore.load_weights() or {}).get("tiers") or (5, 3, 1))
+
+
+def cuts():
+    """The score cut-offs between the bands: those of the job whose page this is (its weights.yaml's: the user's own,
+    or set from the public SNPs; jobs.middleware), else the installed weights.yaml's."""
+    return _cuts.get() or default_cuts()
+
+
+def use_cuts(c):
+    """Make `c` (a job's cut-offs; None: the installed ones) this request's cut-offs; returns the token to reset."""
+    return _cuts.set(tuple(int(x) for x in c) if c else None)
 
 
 def bands(c=None):
@@ -34,11 +47,16 @@ def bands(c=None):
     for i, x in enumerate(c):
         out[i + 1] = f"{x}+" if top is None else f"{x}–{top - 1}" if top - 1 > x else f"{x}"
         top = x
-    out[len(c) + 1] = "0" if c[-1] == 1 else f"below {c[-1]}"
+    out[len(c) + 1] = "0" if c[-1] == 1 else f"0–{c[-1] - 1}"
     return out
 
 
-TIER_NAMES = {t: f"score {b}" + (" (no evidence)" if t == 4 else "") for t, b in bands().items()}
+def tier_name(t):
+    """A legend's name of tier t's band: 'score 5+', ..., 'score 0 (no evidence)'."""
+    b = bands()[t]
+    return f"score {b}" + (" (no evidence)" if b == "0" else "")
+
+
 STAGE_LABELS = {"LateBlastulation": "Blastula", "MidGastrulation": "Gastrula", "EarlySomitogenesis": "E somit.",  # the one
                 "MidSomitogenesis": "M somit.", "LateSomitogenesis": "L somit."}  # short name of each embryo stage
 TISSUE_NAMES = {"HeadKidney": "Head kidney"}  # tissue keys of the condition names, as pages write them

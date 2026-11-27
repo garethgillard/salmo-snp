@@ -396,12 +396,19 @@ def methods(request):
     blocks = [(name, [(k, _flat(v)) for k, v in (value.items() if isinstance(value, dict) else [("value", value)])])
               for name, value in w.items() if name not in STANDARD]
     return render(request, "snpportal/methods.html", {
-        "nav": "about", "title": "Methods", "states": states, "emissions": EMISSIONS, "tiers": tiers, "blocks": blocks,
+        "nav": "about", "title": "Methods", "states": states, "emissions": EMISSIONS, "tiers": tiers, "blocks": blocks, "shares": shares_text(),
         "weights": [(name, value, TERM_TEXT.get(name, "")) for name, value in sorted((w.get("weights") or {}).items(), key=lambda kv: -kv[1])],
         "finemap": w.get("finemap") or {},
         "glossary": [(a, t, text.format(window=(m.get("catalog") or {}).get("window") or 50_000)) for a, t, text in GLOSSARY],
         "benchmark": rows[0]["positives"] if rows else None, "benchmark_fig": fig, "text": methods_text(m, w),
         "citations": citations(m)})
+
+
+def shares_text():
+    """'0.38%, 6.5% and 15%': the shares of the public SNPs the default score bands hold from the top (scoring 5+, 3+
+    and 1+), or '' without a public pool."""
+    shares = jobs.reference_shares()
+    return f"{', '.join(jobs.share_text(x) for x in shares[:-1])} and {jobs.share_text(shares[-1])}" if shares else ""
 
 
 def tier_rules(w):
@@ -511,6 +518,7 @@ def help_page(request):
     w = jobs.weights() or {}
     return render(request, "snpportal/help.html", {
         "nav": "help", "title": "Help", "formats": FORMATS, "tiers": tier_rules(w), "example": tier_example(w), "key": colour_key(w),
+        "shares": shares_text(),
         "window": (jobs.manifest().get("catalog") or {}).get("window") or 50_000,
         "aliases": [(name, ", ".join(names)) for name, names in formats.ALIASES.items()],
         "chrom_aliases": chrom_aliases("25"), "assembly_share": f"{ASSEMBLY_WARNING:.0%}",

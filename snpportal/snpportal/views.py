@@ -24,7 +24,7 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_POST
 
-from . import jobs, results as result_views, tools
+from . import figures, jobs, results as result_views, tools
 
 SUFFIXES = (".vcf.gz", ".vcf", ".tsv.gz", ".tsv", ".csv.gz", ".csv", ".txt.gz", ".txt", ".bim", ".map")
 SV_SUFFIXES = (".vcf.gz", ".vcf", ".bed.gz", ".bed", ".tsv.gz", ".tsv", ".csv.gz", ".csv", ".txt.gz", ".txt")  # structural variants
@@ -167,7 +167,7 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(),
         "positions": jobs.position_choices(),
         "results_dir": jobs.results_dir(),
-        "weights": {"terms": jobs.weight_terms(), "max": jobs.MAX_WEIGHT},  # the user's own weights (G, 2026-11-27)
+        "weights": {"terms": jobs.weight_terms(), "max": jobs.MAX_WEIGHT, **cut_fields()},  # the user's own weights and bands (G, 2026-11-27)
     }, status=status))
 
 
@@ -218,14 +218,15 @@ def start_job(request):
     preset = "all"  # tiers always count all 27 conditions
     example, upload, paste = request.POST.get("example"), request.FILES.get("snps"), request.POST.get("paste", "").strip()
     weights = jobs.parse_weights(request.POST)  # the form's evidence weights where they differ from the defaults
+    cuts = jobs.parse_cuts(request.POST)  # the form's score-band cut-offs, None when left blank (from the public SNPs)
     if example:
         found = examples().get(example)
         if found is None:
             raise jobs.InputError("That example is not part of this release.")
         return jobs.create(found["path"], found["suffix"], "sv" if found["sv"] else "snps", preset, f"Example: {found['label']}",
-                           synthetic=found["synthetic"], move=False, weights=weights), preset
+                           synthetic=found["synthetic"], move=False, weights=weights, cuts=cuts), preset
     if request.POST.get("kind") == "sv":
-        return start_sv_job(request, preset, weights), preset
+        return start_sv_job(request, preset, weights, cuts), preset
     if upload:
         suffix = accepted_suffix(upload.name)
         if suffix is None:
@@ -235,14 +236,14 @@ def start_job(request):
             raise jobs.InputError("The uploaded file is empty.")
         name = Path(upload.name or "").name[:80] or "Uploaded list"  # the file's name names the results
         positions = request.POST.get("positions") if request.POST.get("positions") in dict(jobs.position_choices()) else None
-        return jobs.create(Path(upload.path), suffix, "snps", preset, name, positions=positions or None, weights=weights), preset
+        return jobs.create(Path(upload.path), suffix, "snps", preset, name, positions=positions or None, weights=weights, cuts=cuts), preset
     if paste:
         rows = jobs.parse_paste(paste, PASTE_LINES)
-        return jobs.create_from_rows(rows, f"Pasted {jobs.utc()}", preset, kind="snps", input_format="paste", weights=weights), preset
+        return jobs.create_from_rows(rows, f"Pasted {jobs.utc()}", preset, kind="snps", input_format="paste", weights=weights, cuts=cuts), preset
     raise jobs.InputError("Choose a file, paste some positions or pick an example.")
 
 
-def start_sv_job(request, preset, weights=None):
+def start_sv_job(request, preset, weights=None, cuts=None):
     """Create the job for POSTed structural variants: a file (svs) or pasted regions (sv_paste). Returns the key."""
     upload, paste = request.FILES.get("svs"), request.POST.get("sv_paste", "").strip()
     if upload:
@@ -253,20 +254,35 @@ def start_sv_job(request, preset, weights=None):
         if not upload.size:
             raise jobs.InputError("The uploaded file is empty.")
         name = Path(upload.name or "").name[:80] or "Uploaded SVs"
-        return jobs.create(Path(upload.path), suffix, "sv", preset, name, weights=weights)
+        return jobs.create(Path(upload.path), suffix, "sv", preset, name, weights=weights, cuts=cuts)
     if paste:
         rows = jobs.parse_sv_paste(paste, SV_PASTE_LINES)
-        return jobs.create_from_sv_rows(rows, f"Pasted SVs {jobs.utc()}", preset, weights=weights)
+        return jobs.create_from_sv_rows(rows, f"Pasted SVs {jobs.utc()}", preset, weights=weights, cuts=cuts)
     raise jobs.InputError("Choose a file of structural variants, or paste some regions.")
 
 
+def cut_fields(d=None, job=None):
+    """The score-band cut-off fields (G, 2026-11-27): [(tier, value)] filled with the user's own cut-offs (else blank,
+    so they follow the weights), the cut-offs in use as placeholders, and the hint saying how blank ones are set."""
+    c = job.get("cuts") or {} if job else {}
+    now = list((jobs.weights(d) or {}).get("tiers") or figures.default_cuts()) if d else list(figures.default_cuts())
+    own = c.get("now") if c.get("source") == "own" else None
+    shares = jobs.reference_shares()
+    first = list(jobs.first_rules(d)["tiers"]) if d else list(figures.default_cuts())
+    hint = (f"Blank: set from the public SNPs, the scores that the top {', '.join(jobs.share_text(x) for x in shares[:-1])} and "
+            f"{jobs.share_text(shares[-1])} of them reach with these weights ({', '.join(map(str, first[:-1]))} and {first[-1]} "
+            "with the defaults)." if shares else f"Blank: the defaults, {', '.join(map(str, first[:-1]))} and {first[-1]}.")
+    return {"cuts": [(t, own[t - 1] if own else "", now[t - 1]) for t in (1, 2, 3)], "max_cut": jobs.MAX_CUT, "cuts_hint": hint,
+            "cuts_own": bool(own)}
+
+
 def weights_context(key, job):
-    """The results pages' evidence weights (G, 2026-11-27): the Table's Weights control and, when they are the user's
-    own, the note on every tab."""
+    """The results pages' evidence weights and score bands (G, 2026-11-27): the Table's Weights control and, when they
+    are the user's own, the note on every tab."""
     d = jobs.folder(key)
-    custom = job.get("weights_custom") or {}
-    return {"terms": jobs.weight_terms(d), "max": jobs.MAX_WEIGHT, "custom": custom, "text": jobs.weights_text(custom),
-            "error": job.get("weights_error"), "url": reverse("snpportal:rescore", args=[key])}
+    note = jobs.rules_text(job)
+    return {"terms": jobs.weight_terms(d), "max": jobs.MAX_WEIGHT, "custom": bool(note), "note": note + "." if note else "",
+            "error": job.get("weights_error"), "url": reverse("snpportal:rescore", args=[key]), **cut_fields(d, job)}
 
 
 @private
@@ -283,9 +299,10 @@ def rescore(request, key):
         return redirect(back)
     try:
         chosen = {} if request.POST.get("reset") else jobs.parse_weights(request.POST, jobs.folder(key))
+        cuts = None if request.POST.get("reset") else jobs.parse_cuts(request.POST)
     except jobs.InputError:
         return redirect(f"{back}&weights_error=1")
-    jobs.rescore(key, chosen)
+    jobs.rescore(key, chosen, cuts)
     return redirect(back)
 
 

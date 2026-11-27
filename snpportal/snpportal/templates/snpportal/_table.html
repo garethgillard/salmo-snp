@@ -22,7 +22,7 @@
     {% if download and matching %}<a href="{{ download }}">Download these {{ n_selected|thousands }} (TSV)</a>{% endif %}
     {% if n_selected %}<a href="{{ to_export }}" hx-boost="true" title="Vendor files and other downloads{% if not sv %}, or add these SNPs to your Design panel{% endif %}">{% if sv %}Export{% else %}Export or add to Design panel{% endif %} &rarr;</a>{% endif %}
     {% if weights.terms %}<details class="sp-dd" id="dd-weights"><summary class="btn btn-sm btn-outline-secondary">Weights{% if weights.custom %}: yours{% endif %}</summary>
-      <div class="sp-dd-panel sp-dd-right sp-dd-weights"><div class="sp-dd-head"><span>Evidence weights</span>{% if weights.custom %}<button class="btn btn-link btn-sm p-0" type="submit" form="weights-form" name="reset" value="1">Defaults</button>{% endif %}</div>
+      <div class="sp-dd-panel sp-dd-right sp-dd-weights"><div class="sp-dd-head"><span>Evidence weights and score bands</span>{% if weights.custom %}<button class="btn btn-link btn-sm p-0" type="submit" form="weights-form" name="reset" value="1">Defaults</button>{% endif %}</div>
         <p class="sp-dd-note">A SNP's score adds up the weights of its evidence; 0 = not counted. Rescoring changes the whole result: Overview, Table, cards and downloads.</p>
         {% include 'snpportal/_weights.html' with prefix='t' form='weights-form' %}
         <button class="btn btn-sm btn-primary mt-2" type="submit" form="weights-form">Rescore</button>

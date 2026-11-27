@@ -361,6 +361,55 @@ class PortalTest(SimpleTestCase):
         tsv = b"".join(self.client.get(reverse("snpportal:download", args=[key]), {"format": "tsv"}).streaming_content).decode()
         self.assertIn("# your own weights: GERP constrained 4 (default 2)", tsv)
 
+    def test_own_score_bands(self):
+        """G, 2026-11-27: users set the cut-offs between the score bands (Score page, Table); left blank with weights of
+        their own, the cut-offs come from the public SNPs (the shares the default bands hold of them); a bad set
+        changes nothing."""
+        self.assertIn('name="cut_1"', self.client.get(reverse("snpportal:upload")).content.decode())
+        with open(FIXTURE / "snps.vcf", "rb") as f:
+            key = self.key(self.client.post(reverse("snpportal:upload"), {"snps": f, "cut_1": "4", "cut_2": "2", "cut_3": "1"}))
+        d, url, rescore = self.results / key, reverse("snpportal:results", args=[key]), reverse("snpportal:rescore", args=[key])
+        self.assertEqual((jobs.weights(d)["tiers"], jobs.read(key)["cuts"]["source"]), ([4, 2, 1], "own"))
+        tiers = duckdb.sql(f"SELECT DISTINCT tier__all, tier_score__all >= 4, tier_score__all >= 2 FROM read_parquet('{d / 'tiers.parquet'}')").fetchall()
+        self.assertTrue(all((t == 1) == four and (t <= 2) == two for t, four, two in tiers))
+        table = self.client.get(url, {"tab": "table"}).content.decode()
+        self.assertIn("Scored with your own score bands 4+ · 2–3 · 1 · 0 (default 5+ · 3–4 · 1–2 · 0).", table)
+        self.assertIn('name="cut_1" value="4"', table)  # the user's own stay in the fields
+        self.assertNotIn("The release has changed", table)  # rules of the user's are no change of release
+        self.assertIn("Score 4+", self.client.get(url).content.decode())  # the Overview's bands are the job's
+        self.assertIn("weights_error=1", self.client.post(rescore, {"cut_1": "2", "cut_2": "3", "cut_3": "1"}).url)
+        self.assertEqual(jobs.weights(d)["tiers"], [4, 2, 1])
+        original = (d / "weights.default.yaml").read_bytes()
+        self.client.post(rescore, {"next": "table"})  # all blank, with the default weights: the first rules again
+        self.assertEqual(((d / "weights.yaml").read_bytes(), jobs.read(key).get("cuts")), (original, None))
+        pool = self.release / "pool"
+        pool.mkdir(exist_ok=True)
+        try:  # SYNTHETIC public pool: the fixture's own SNPs, its background's tiers under the default rules
+            shutil.copyfile(d / "result.parquet", pool / "pool.parquet")
+            counts = dict(duckdb.sql(f"SELECT tier__all, count(*) FROM read_parquet('{d / 'tiers.parquet'}') GROUP BY 1").fetchall())
+            (pool / "background.json").write_text(json.dumps({"tiers": {"all": {str(t): {"n": n} for t, n in counts.items()}}}))
+            self.client.post(rescore, {"w_constrained": "4"})
+            cuts, picked = jobs.read(key)["cuts"], jobs.cuts_from_public(jobs.public_scores(d), jobs.reference_shares())
+            self.assertEqual((cuts["source"], cuts["now"], jobs.weights(d)["tiers"]), ("public", picked, picked))
+            self.assertIn(", set from the public SNPs (", self.client.get(url).content.decode())
+        finally:
+            shutil.rmtree(pool)
+
+    def test_cuts_from_public(self):
+        """The cut-offs from the public SNPs: the default bands' shares give the default cut-offs back, doubled weights
+        doubled cut-offs; a tie keeps the higher cut-off; fields are three falling whole numbers or all blank."""
+        public = {0: 850, 1: 85, 2: 20, 3: 30, 4: 10, 5: 3, 6: 2}
+        shares = [5 / 1000, 45 / 1000, 150 / 1000]  # scoring 5+, 3+ and 1+
+        self.assertEqual(jobs.cuts_from_public(public, shares), [5, 3, 1])
+        self.assertEqual(jobs.cuts_from_public({2 * s: n for s, n in public.items()}, shares), [10, 6, 2])
+        self.assertEqual(jobs.cuts_from_public({0: 90, 3: 10}, shares), [3, 2, 1])
+        self.assertIsNone(jobs.cuts_from_public({0: 100}, shares))
+        self.assertEqual((jobs.parse_cuts({"cut_1": "6", "cut_2": "3", "cut_3": "1"}), jobs.parse_cuts({})), ([6, 3, 1], None))
+        for bad in ({"cut_1": "6"}, {"cut_1": "3", "cut_2": "3", "cut_3": "1"}, {"cut_1": "6", "cut_2": "3", "cut_3": "0"},
+                    {"cut_1": "100", "cut_2": "3", "cut_3": "1"}, {"cut_1": "6", "cut_2": "x", "cut_3": "1"}):
+            with self.assertRaises(jobs.InputError):
+                jobs.parse_cuts(bad)
+
     def test_local_install_keeps_results(self):
         """salmo-snp serve (SNPPORTAL_LOCAL): the Score page says once that the results stay on this computer (the
         result pages don't repeat it), nothing expires and the cleanup deletes nothing, however old."""

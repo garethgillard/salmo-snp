@@ -28,7 +28,7 @@
     </ul>
 
     {% if weights.error %}<div class="sp-status sp-status-warn" role="status">{% icon 'warn' %} {{ weights.error }}</div>{% endif %}
-    {% if weights.custom %}<p class="sp-weights-note">{% icon 'info' %} Scored with your own weights: {{ weights.text }}.
+    {% if weights.custom %}<p class="sp-weights-note">{% icon 'info' %} {{ weights.note }}
       <button class="btn btn-link btn-sm p-0 align-baseline" type="submit" form="weights-reset">Back to the defaults</button></p>
     <form id="weights-reset" method="post" action="{{ weights.url }}">{% csrf_token %}<input type="hidden" name="reset" value="1"><input type="hidden" name="next" value="{{ tab }}"></form>{% endif %}
     {% if tab == 'table' %}{% include 'snpportal/_table.html' %}

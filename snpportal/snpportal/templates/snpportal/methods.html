@@ -10,6 +10,11 @@
       <table class="table table-sm sp-small sp-plain mb-1">
         <tbody>{% for tier, rule in tiers %}<tr><td>{% include 'snpportal/_badges.html' with kind='tier' value=tier %}</td><td>{{ rule }}</td></tr>{% endfor %}</tbody>
       </table>
+      <p class="sp-small sp-muted mt-1 mb-0" id="own-bands">These are the default cut-offs. Users can set their own next to
+        the weights (on the Score page, or Weights in the Table).{% if shares %} Left blank with weights of their own,
+        they are set from the public SNPs (the public background, scored with the same weights): the cut-offs, each lower
+        than the one before, under which the shares of them at or above each come closest (by ratio) to the
+        {{ shares }} that reach the default ones with the default weights.{% endif %}</p>
       {% if benchmark and not benchmark_fig %}<p class="sp-small sp-muted mb-0" id="benchmark">Not yet validated against known causal variants (n = {{ benchmark }}).
         <a href="?download=benchmark.tsv" download>Benchmark data</a></p>{% endif %}
       {% if benchmark_fig %}<div id="benchmark" class="mt-3">{% include 'snpportal/_figure.html' with fig=benchmark_fig %}

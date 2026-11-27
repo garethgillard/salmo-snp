@@ -262,7 +262,7 @@ def _fig_coverage(c, link, desc):
     gaps = [(g["chrom"], g["start"], g["end"], f"{g['chrom']}:{g['start']:,}–{g['end']:,}: {_bp(g['size'])} without a marker")
             for g in p["gaps"] if g["size"] > gap]
     href = (lambda chrom, a, b: link(chrom=chrom, start=a, end=b)) if link else None
-    legend = [(_tier_fill(t), figures.TIER_NAMES[t]) for t in (1, 2, 3, 4)] + [_gap_legend(f"gap > {gap / 1e6:g} Mb")]
+    legend = [(_tier_fill(t), figures.tier_name(t)) for t in (1, 2, 3, 4)] + [_gap_legend(f"gap > {gap / 1e6:g} Mb")]
     svg = coverage(_chroms(c["d"], [(chrom, end) for chrom, _, end in ends]), marks, f"Panel markers along the genome, {c['preset']}",
                    desc, c["synthetic"], gaps, counts=counts, legend=legend, link=href)
     tsv = c["con"].execute(f"SELECT panel_rank, chrom, pos, {ident}, tier, selection_reason FROM {p['rel']} ORDER BY panel_rank").fetchall()

@@ -1112,10 +1112,10 @@ def summary_of(d):
 
 def background(d=None):
     """The release's public background (pool/background.json from `snpscore pool`), or {} when it has no pool. For a
-    job scored with the user's own weights, its tiers under those weights (public_tiers.json, jobs.public_tiers), or
-    none: never the default weights' beside the user's."""
+    job scored with the user's own weights or score bands, its tiers under those (public_tiers.json,
+    jobs.public_tiers), or none: never the default rules' beside the user's."""
     bg = jobs.read_json(jobs.release() / "pool" / "background.json")
-    if bg and d is not None and jobs.custom_weights(d):
+    if bg and d is not None and jobs.custom(d):
         own = jobs.read_json(d / "public_tiers.json") if (d / "public_tiers.json").exists() else {}
         mine = own.get("tiers") if own.get("weights_sha256") == jobs.sha256(d / "weights.yaml") else None
         bg = {**bg, "tiers": {**(bg.get("tiers") or {}), "all": mine} if mine else {}}
@@ -1238,7 +1238,7 @@ def _fig_regions(c, link, desc):
                      "tick": (bg[g] * n, f"Public background: {100 * bg[g]:.1f}% of SNPs") if g in bg else None,
                      "note": f"{sum(k.values()):,} ({pct(sum(k.values()), n)})"})
         tsv += [(g, t, k.get(str(t), 0), f"{bg[g]:.5f}" if g in bg else "") for t in (1, 2, 3, 4)]
-    legend = [(palette.TIERS[t][0], figures.TIER_NAMES[t]) for t in (1, 2, 3, 4)] + ([(palette.GREY[900], "background share")] if bg else [])
+    legend = [(palette.TIERS[t][0], figures.tier_name(t)) for t in (1, 2, 3, 4)] + ([(palette.GREY[900], "background share")] if bg else [])
     svg = figures.hbars(rows, "Gene region by score", desc, c["synthetic"], legend)
     return svg, ["region", "tier", "snps", "background_share"], tsv
 
@@ -1257,7 +1257,7 @@ def _fig_terms(c, link, desc):
                      "segments": _tier_segments(k, n, label, (lambda t, term=term: link(term=term, tier=str(t))) if link else None)})
         tsv += [(term, weights.get(term, ""), t, k.get(str(t), 0)) for t in (1, 2, 3, 4)]
     svg = figures.hbars(rows, "Evidence behind the scores", desc, c["synthetic"],
-                        [(palette.TIERS[t][0], figures.TIER_NAMES[t]) for t in (1, 2, 3, 4)])
+                        [(palette.TIERS[t][0], figures.tier_name(t)) for t in (1, 2, 3, 4)])
     return svg, ["term", "weight", "tier", "snps"], tsv
 
 

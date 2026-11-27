@@ -31,7 +31,9 @@
       <a href="{% url 'snpportal:methods' %}#weights">All the weights</a></dd>
     <dt id="w-tier">Score band</dt>
     <dd>Scores are coloured by band:{% for tier, range, note in tiers %} <span class="sp-badge sp-tier-{{ tier }}">{{ tier|band }}</span>{% endfor %}
-      (the strongest first; your weights never move the bands' edges).</dd>
+      (the strongest first). You can set where each band starts, next to the weights{% if shares %}; left blank with
+      weights of your own, the bands start at the scores that the top {{ shares }} of the public SNPs reach, as the
+      default bands do{% endif %}. <a href="{% url 'snpportal:methods' %}#tiers">How</a></dd>
     <dt id="w-condition">Condition</dt>
     <dd>One AQUA-FAANG sample group: a tissue of fish of one maturity and sex, head kidney after one immune treatment, or
       one embryo stage. Scores count all 27.</dd>

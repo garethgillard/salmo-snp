@@ -1,6 +1,6 @@
-{% comment %}The Score page's evidence weights, closed, above each form's Score button (prefix: the form's, for the ids). The job
-   is scored with them; the Table's Weights control changes them later.{% endcomment %}
-{% if weights.terms %}<details class="sp-more sp-weights-fold"><summary>Evidence weights <span class="sp-fold-what">the defaults, or your own</span></summary>
+{% comment %}The Score page's evidence weights and score bands, closed, above each form's Score button (prefix: the form's, for
+   the ids). The job is scored with them; the Table's Weights control changes them later.{% endcomment %}
+{% if weights.terms %}<details class="sp-more sp-weights-fold"><summary>Evidence weights and score bands <span class="sp-fold-what">the defaults, or your own</span></summary>
   <p class="sp-hint">A SNP's score adds up the weights of its evidence; 0 = not counted. You can change them later in the Table.</p>
   {% include 'snpportal/_weights.html' with prefix=prefix %}
 </details>{% endif %}
