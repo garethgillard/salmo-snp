@@ -25,8 +25,9 @@ def asset(path):
 # whose shapes these reuse; the rest drawn to match). Icons name places (the nav) and label icon-only controls; actions
 # are words. {% icon 'search' %} is decorative (aria-hidden); {% icon 'search' 'Search' %} names itself for screen readers.
 ICONS = {
-    "brand": '<path d="M12 17.5s-5.6-5.2-5.6-9.4a5.6 5.6 0 0 1 11.2 0c0 4.2-5.6 9.4-5.6 9.4z"/>'
-             '<circle cx="12" cy="8.1" r="2" fill="currentColor"/><path d="M3.5 21h17"/>',  # a pin on a line: a SNP's place
+    "brand": '<path d="M2 20.5c3.6 0 4.6-1.3 6-4.6C9.3 12.8 10.4 11 12 11s2.7 1.8 4 4.9c1.4 3.3 2.4 4.6 6 4.6" fill="currentColor" '
+             'fill-opacity=".15" stroke-opacity=".5"/><path d="M2 20.5h20M12 7.6v12.9"/><circle cx="12" cy="5" r="2.6" fill="currentColor"/>',  # a push pin in a
+    # track, an ATAC peak behind it: a SNP at a functional site (G, 2026-11-27)
     "score": '<path d="M4 6.5h16M4 12h11M4 17.5h6"/>',
     "panel": '<path d="M10 6.5h10M10 12h10M10 17.5h10"/><path d="M4 6.5l1.2 1.2L7.5 5.4M4 12l1.2 1.2 2.3-2.3M4 17.5l1.2 1.2'
              ' 2.3-2.3"/>',
@@ -69,7 +70,7 @@ def icon(name, label=""):
 def favicon():
     """The brand mark as the browser tab's icon (an inline SVG data URL in the accent colour)."""
     svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="{palette.ACCENT}" '
-           f'stroke-width="2.2" stroke-linecap="round">{ICONS["brand"]}</svg>')
+           f'color="{palette.ACCENT}" stroke-width="2.2" stroke-linecap="round">{ICONS["brand"]}</svg>')  # color: the head's fill
     return mark_safe('<link rel="icon" href="data:image/svg+xml,' + svg.replace("#", "%23").replace('"', "'")
                      .replace("<", "%3C").replace(">", "%3E") + '">')
 

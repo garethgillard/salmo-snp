@@ -1,2 +1,8 @@
-{# the Score button of every input tab on the Score page: the same place and label; the page's one primary action #}
-<button class="btn btn-primary sp-go" type="submit">Score</button>
+{% comment %}The end of every input tab on the Score page (G, 2026-11-27): the results' name, filled in with today's date
+   or, once a file is chosen, the file's name (portal.js; genes or regions: named after them), and editable; then the
+   Score button at the right, the page's
+   one primary action, whose hover sends pixels in from both sides. Blank: the server names it. Context: prefix.{% endcomment %}
+<div class="sp-name-row"><label for="{{ prefix }}-name">Name</label>
+  <input class="form-control form-control-sm" id="{{ prefix }}-name" name="label" maxlength="80" autocomplete="off"
+         {% if prefix == 'regions' %}placeholder="Named after the genes or regions"{% else %}data-job-name placeholder="Today's date, or the file's name"{% endif %}></div>
+<div class="sp-go-row"><button class="btn btn-primary sp-go" type="submit">Score</button></div>

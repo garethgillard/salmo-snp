@@ -47,19 +47,19 @@
 .sp-prose { max-width: var(--sp-measure); }
 
 /* == foundation: top bar == */
-.sp-nav { position: sticky; top: 0; z-index: 1030; background: var(--sp-white); border-bottom: 1px solid var(--sp-line); }
+.sp-nav { position: sticky; top: 0; z-index: 1030; background: var(--sp-white); }  /* no line under it (G, 2026-11-27) */
 .sp-nav .sp-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 0 .75rem; min-height: var(--sp-nav-h); }
 .sp .sp-brand { display: inline-flex; align-items: center; gap: .45rem; margin-right: .75rem; color: var(--sp-ink);
   font-size: var(--sp-fs-lg); font-weight: 600; text-decoration: none; }
 .sp-brand .sp-i { width: 1.45em; height: 1.45em; color: var(--sp-accent); }
-.sp-links { display: flex; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
+.sp-links { display: flex; flex-wrap: wrap; list-style: none; margin: 0 auto 0 0; padding: 0; }  /* the species switch, then the search, at the right */
 .sp .sp-links a { display: inline-flex; align-items: center; gap: .4rem; height: var(--sp-nav-h); padding: 0 .6rem;
   border-bottom: 2px solid transparent; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); text-decoration: none; }
 .sp .sp-links a:hover { color: var(--sp-ink); border-bottom-color: var(--sp-line-2); }
 .sp .sp-links a[aria-current="page"] { color: var(--sp-accent); border-bottom-color: var(--sp-accent); }
 .sp-count:not(:empty) { padding: 0 .4rem; border-radius: 1rem; background: var(--sp-grey-100); color: var(--sp-ink);
   font-size: var(--sp-fs-xs); font-weight: 600; line-height: 1.5; }
-.sp-search { display: flex; gap: .3rem; margin-left: auto; }
+.sp-search { display: flex; gap: .3rem; }
 .sp-search input { width: 13rem; }
 .sp-search .btn { display: inline-flex; align-items: center; }
 .sp-species { display: flex; border: 1px solid var(--sp-line-2); border-radius: .375rem; overflow: hidden; }
@@ -83,7 +83,7 @@
 .sp-foot .sp-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1.25rem; }
 .sp .sp-foot a { color: var(--sp-ink-2); text-decoration: none; }
 .sp .sp-foot a:hover { color: var(--sp-ink); text-decoration: underline; }
-.sp-foot-by { margin-left: auto; color: var(--sp-muted); }
+.sp-foot-by { margin-left: auto; color: var(--sp-muted); }  /* © year, NMBU, the maintainer */
 
 /* == foundation: page header == */
 .sp-main { flex: 1 0 auto; padding: 1.5rem 0 1rem; }
@@ -196,11 +196,11 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp .form-check-input:checked { background-color: var(--sp-accent); border-color: var(--sp-accent); }
 .sp .form-check-input:focus { box-shadow: none; border-color: var(--sp-accent); }
 /* tabs: one style everywhere, the same underline as the top bar's current page (in ink, not the accent) */
-.sp .nav-tabs { gap: 0 1.5rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--sp-line); }
+.sp .nav-tabs { gap: 0 1.5rem; margin-bottom: 1.25rem; border-bottom: 0; }  /* no grey line: the open tab's blue underline only (G, 2026-11-27) */
 .sp .nav-tabs .nav-link { margin-bottom: -1px; padding: .5rem 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
   background: none; color: var(--sp-ink-2); font-weight: 500; text-decoration: none; }
 .sp .nav-tabs .nav-link:hover { border-bottom-color: var(--sp-line-2); color: var(--sp-ink); }
-.sp .nav-tabs .nav-link.active { border-bottom-color: var(--sp-ink); background: none; color: var(--sp-ink); }  /* same weight: no shift */
+.sp .nav-tabs .nav-link.active { border-bottom-color: var(--sp-accent); background: none; color: var(--sp-ink); }  /* same weight: no shift */
 /* keyboard focus: a 2px accent ring, 3:1 or more against white and the greys */
 .sp a:focus-visible, .sp button:focus-visible, .sp input:focus-visible, .sp select:focus-visible,
 .sp textarea:focus-visible, .sp summary:focus-visible, .sp [tabindex]:focus-visible {
@@ -302,10 +302,9 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 }
 .sp-narrow { max-width: 46rem; }
 
-/* == home: the Score page (score.html). The question; the inputs (the page's one primary button), then under a
-   hairline the examples and the tour link; beside them 'Your results' as a plain list and where results are kept. == */
-.sp .sp-home-lead { max-width: 60rem; margin-bottom: .3rem; }
-.sp-home-sub { margin: 0 0 1.75rem; color: var(--sp-muted); font-size: var(--sp-fs-sm); }  /* species, assembly, release, coverage, tiers */
+/* == home: the Score page (score.html; G's notes, 2026-11-27). The title, then one row of examples and the tour link;
+   the inputs, each ending with its name and the page's one primary button at the right; beside them 'Your results'
+   as a plain list and where results are kept. == */
 @media (min-width: 992px) { .sp-home-row { --bs-gutter-x: 2.5rem; } }  /* half of it is the page's side padding: no overflow */
 /* the inputs: one underline row of tabs, scrolling sideways on a phone rather than wrapping */
 .sp-inputs .nav-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
@@ -321,18 +320,36 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-or { display: block; margin-top: 1.25rem; }
 .sp textarea.sp-paste { resize: vertical; font-family: var(--sp-mono); font-size: var(--sp-fs-sm); }
 .sp-hint { margin: .4rem 0 0; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
-.sp-pane-intro { margin: 0 0 .75rem; }
 .sp .sp-positions { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem; margin-top: .75rem; }
-.sp-go-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.5rem; margin-top: 1.25rem; }
-.sp .sp-go { padding: .45rem 2rem; font-weight: 600; }
-/* under the inputs: 'Try' an example, the tour, where results are kept */
-.sp-try { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: 2rem; padding-top: 1.25rem;
-  border-top: 1px solid var(--sp-line); }
+.sp-name-row { display: flex; align-items: center; gap: .6rem; margin-top: 1rem; }
+.sp-name-row label { color: var(--sp-ink); font-size: var(--sp-fs-sm); font-weight: 600; }
+.sp-name-row input { max-width: 24rem; }
+.sp-go-row { display: flex; justify-content: flex-end; margin-top: .75rem; }
+/* the Score button: on hover, pixels drift in from both sides in waves (G asked for "something cool but easy"): two dot
+   grids in white, each faded towards the middle, moving inwards and bobbing; still for those who ask for less motion */
+.sp .sp-go { position: relative; padding: .45rem 2.25rem; overflow: hidden; font-weight: 600; isolation: isolate; }
+.sp-go::before, .sp-go::after { content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0; pointer-events: none;
+  background-image: radial-gradient(circle, var(--sp-white) .8px, transparent 1.3px),
+                    radial-gradient(circle, var(--sp-white) .6px, transparent 1.1px);
+  background-size: 7px 7px, 11px 11px; transition: opacity .3s; }
+.sp-go::before { -webkit-mask-image: linear-gradient(to right, var(--sp-ink), transparent 60%);
+  mask-image: linear-gradient(to right, var(--sp-ink), transparent 60%); }
+.sp-go::after { -webkit-mask-image: linear-gradient(to left, var(--sp-ink), transparent 60%);
+  mask-image: linear-gradient(to left, var(--sp-ink), transparent 60%); }
+.sp-go:hover::before, .sp-go:focus-visible::before { opacity: .6; animation: sp-waves-in 1.4s linear infinite; }
+.sp-go:hover::after, .sp-go:focus-visible::after { opacity: .6; animation: sp-waves-in 1.4s linear infinite reverse; }
+@keyframes sp-waves-in {  /* one full turn of each grid (28 = 4 x 7, 44 = 4 x 11 px), so the loop has no seam */
+  0% { background-position: 0 0, 0 4px; } 25% { background-position: 7px 2px, 11px 1px; }
+  50% { background-position: 14px 0, 22px 4px; } 75% { background-position: 21px -2px, 33px 7px; }
+  100% { background-position: 28px 0, 44px 4px; } }
+@media (prefers-reduced-motion: reduce) { .sp-go::before, .sp-go::after { animation: none !important; } }
+/* under the title: 'Try' an example, and the tour at the row's end; short buttons, so the row stays one line */
+.sp-try { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: -.25rem 0 1.5rem; }
 .sp-try form { margin: 0; }
 .sp-try-h { margin-right: .25rem; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); font-weight: 600; }
-.sp .sp-try .btn { padding: .2rem .8rem; border-radius: 2rem; font-weight: 500; }
+.sp .sp-try .btn { padding: .15rem .7rem; border-radius: 2rem; font-weight: 500; }
 .sp-try .btn span { margin-left: .2rem; color: var(--sp-ink-2); font-weight: 400; }
-.sp-home-tour { margin: 1rem 0 0; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
+.sp-home-tour { margin-left: auto; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
 /* 'Your results': a plain list, the name and Delete on one line, the size and date under them; then where they are kept */
 .sp-mine-box h2 { margin: .35rem 0 .6rem; font-size: var(--sp-fs-lg); }
 .sp-mine-none { margin: 0; padding: .6rem 0; border-top: 1px solid var(--sp-line); color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
@@ -345,8 +362,12 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp .sp-mine-name:hover { text-decoration: underline; }
 .sp-mine-meta { grid-column: 1 / -1; color: var(--sp-muted); font-size: var(--sp-fs-xs); }
 .sp-mine-current { box-shadow: inset 2px 0 0 var(--sp-ink-2); background: var(--sp-grey-50); }
-.sp .sp-mine-del { padding: 0; color: var(--sp-ink-2); font-size: var(--sp-fs-xs); text-decoration: none; }
-.sp .sp-mine-del:hover { color: var(--sp-fail-text); text-decoration: underline; }
+.sp-mine-acts { display: inline-flex; gap: .75rem; }
+.sp .sp-mine-act { padding: 0; color: var(--sp-ink-2); font-size: var(--sp-fs-xs); text-decoration: none; }
+.sp .sp-mine-act:hover { color: var(--sp-ink); text-decoration: underline; }
+.sp .sp-mine-del:hover { color: var(--sp-fail-text); }
+.sp-rename form { display: grid; gap: .6rem; padding: 1.25rem 1.25rem 1rem; }  /* the rename dialog (portal.js) */
+.sp-rename .form-label { margin: 0; font-weight: 600; }
 /* the small pages around scoring: progress while a job runs (_progress.html), the search page (search.html) */
 .sp-progress { max-width: var(--sp-measure); }
 .sp-progress h2 { margin-bottom: .5rem; }
@@ -419,7 +440,9 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp .sp-cut { display: inline-flex; align-items: center; margin: 0; font-size: var(--sp-fs-sm); }
 .sp-cut input { width: 3.25rem; text-align: right; }
 .sp-cuts .sp-hint { flex-basis: 100%; margin: 0; }
-.sp-weights-fold { margin-top: .75rem; }
+.sp-weights-fold { margin-top: .75rem; border-top: 0; }  /* no line above; the chevron beside the title, then 'custom' */
+.sp-weights-fold > summary::after { order: 1; margin-left: 0; }
+.sp-weights-fold > summary .sp-fold-what { order: 2; }
 .sp-weights-fold .sp-hint { margin: .25rem 0 .6rem; }
 .sp-dd-weights { width: 23rem; }
 .sp-dd-weights .sp-weights { grid-template-columns: 1fr; }

@@ -87,8 +87,17 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   mono only for sequences and code.
 - Icons: one line set (salmo-cells' shapes), `{% icon 'name' %}` (snpportal_tags.ICONS). Icons name places and label
   icon-only controls; actions are words. ★ is the one known-locus mark.
-- The top bar: icon and label links, a search box, the species switch; the footer: release, tour, Methods, citation,
-  privacy, Run locally. One fold pattern (`.sp-more`, `.sp-cs`: a title row, a chevron at the right); one tab style.
+- The top bar (G, 2026-11-27): the push-pin mark (a pin in a track, an ATAC peak behind it), icon and label links, then
+  the species switch and the search box at the far right; no line under it. The footer: release, tour, Methods, How
+  scores are made, citation, privacy, Run locally; at the right "© 2026 NMBU · Gareth Gillard". One fold pattern
+  (`.sp-more`, `.sp-cs`: a title row, a chevron at the right); one tab style: no line under the row, the open tab
+  underlined in the accent.
+- The Score page (G, 2026-11-27): the title, then one row of short example buttons (counts as 53k) and the tour link;
+  the tabs SNPs, Structural variants, GWAS results, Genes or regions; each tab ends with Evidence weights (a fold, its
+  chevron beside the title, 'custom' when they are not the defaults), a Name box (the date, or the chosen file's name;
+  editable) and the Score button at the right (pixels drift in on hover). The weights and bands a browser scored with
+  last are remembered (`snp_weights` cookie, views.remembered). Pasted positions convert from another assembly like a
+  file's (Positions on, above the weights). Results are renamed from the Score page's list or the results page.
 - Words: one name per thing (Tier, SNP, position, Known locus, Design panel only for the panel page, condition, window
   for the region around a gene, Print report).
 - G's answers on the overhaul (2026-11-27): one Score tab for SNPs, a file or pasted lines; the 'why this tier' bar

@@ -80,9 +80,30 @@
     });
     zone.addEventListener("drop", function (e) {
       e.preventDefault();
-      if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; show(); }
+      if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; input.dispatchEvent(new Event("change")); }
     });
     input.addEventListener("change", show);
+  });
+
+  // The Score page's Name boxes (G, 2026-11-27): today's date by this computer's clock, then the chosen file's name,
+  // until the user types a name of their own.
+  document.querySelectorAll("[data-job-name]").forEach(function (box) {
+    var typed = false, d = new Date(), pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    if (!box.value) box.value = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    box.addEventListener("input", function () { typed = true; });
+    box.form.querySelectorAll("input[type=file]").forEach(function (file) {
+      file.addEventListener("change", function () { if (!typed && file.files.length) box.value = file.files[0].name.slice(0, 80); });
+    });
+  });
+
+  // The weights fold's 'Back to the defaults': each weight to its default, the band fields blank (sent with Score).
+  document.addEventListener("click", function (e) {
+    var back = e.target.closest && e.target.closest("[data-weights-defaults]");
+    if (!back) return;
+    var fold = back.closest("details");
+    fold.querySelectorAll("input[data-default]").forEach(function (i) { i.value = i.getAttribute("data-default"); });
+    fold.querySelectorAll("input[name^='cut_']").forEach(function (i) { i.value = ""; });
+    fold.querySelectorAll("[data-custom], [data-defaults-wrap]").forEach(function (el) { el.hidden = true; });
   });
 
   // j/k move between table rows that open a card (rows with [data-card]); Enter opens it. With a card open they step
@@ -157,6 +178,44 @@
     dialog.querySelector("p").textContent = form.getAttribute("data-confirm");
     dialog.querySelector("[data-yes]").textContent = form.getAttribute("data-confirm-ok") || "Delete";
     dialog.showModal();
+  }, true);
+})();
+
+/* rename: a form with data-rename asks for the new name in a small dialog, filled in with its label field's value;
+   Save sends it. Without JavaScript the form sends the name unchanged. */
+(function () {
+  "use strict";
+  var dialog, pending;
+  function build() {
+    dialog = document.createElement("dialog");
+    dialog.className = "sp-confirm sp-rename";
+    dialog.innerHTML = '<form method="dialog"><label class="form-label" for="sp-rename-name">Rename these results</label>' +
+      '<input class="form-control form-control-sm" id="sp-rename-name" maxlength="80" autocomplete="off" required>' +
+      '<div class="sp-confirm-btns"><button type="button" class="btn btn-sm btn-outline-secondary" data-no>Cancel</button>' +
+      '<button type="submit" class="btn btn-sm btn-primary">Save</button></div></form>';
+    (document.querySelector(".sp") || document.body).appendChild(dialog);
+    dialog.addEventListener("click", function (e) { if (e.target === dialog || e.target.closest("[data-no]")) dialog.close(); });
+    dialog.querySelector("form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var name = dialog.querySelector("input").value.trim();
+      dialog.close();
+      if (!name) return;
+      pending.querySelector("input[name='label']").value = name;
+      pending.setAttribute("data-renamed", "");
+      pending.requestSubmit();
+    });
+  }
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form.hasAttribute || !form.hasAttribute("data-rename")) return;
+    if (form.hasAttribute("data-renamed")) { form.removeAttribute("data-renamed"); return; }
+    e.preventDefault();
+    if (!dialog) build();
+    pending = form;
+    var input = dialog.querySelector("input");
+    input.value = form.querySelector("input[name='label']").value;
+    dialog.showModal();
+    input.select();
   }, true);
 })();
 

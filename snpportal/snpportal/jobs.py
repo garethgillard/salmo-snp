@@ -1333,7 +1333,8 @@ def _version(package):
         return None
 
 
-def create_from_rows(rows, label, preset="all", kind="from_rows", input_format="rows", synthetic=False, weights=None, cuts=None):
+def create_from_rows(rows, label, preset="all", kind="from_rows", input_format="rows", synthetic=False, weights=None, cuts=None,
+                     positions=None):
     """Make a job from rows of (chrom, pos, id, ref, alt), e.g. a gene or interval candidate list. Returns the key."""
     fd, tmp = tempfile.mkstemp(dir=results_dir(), prefix=".rows-", suffix=".tsv")
     try:
@@ -1341,7 +1342,8 @@ def create_from_rows(rows, label, preset="all", kind="from_rows", input_format="
             f.write("chrom\tpos\tid\tref\talt\n")
             for row in rows:
                 f.write("\t".join("" if v is None else str(v).replace("\t", " ") for v in row) + "\n")
-        return create(Path(tmp), ".tsv", kind, preset, label, input_format, synthetic, weights=weights, cuts=cuts)
+        return create(Path(tmp), ".tsv", kind, preset, label, input_format, synthetic, weights=weights, cuts=cuts,
+                      positions=positions)
     finally:
         Path(tmp).unlink(missing_ok=True)
 

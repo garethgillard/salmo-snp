@@ -43,8 +43,7 @@ class ReleasesTest(SimpleTestCase):
         self.assertIn("<strong>in use</strong>", page)
         self.client.post(reverse("snpportal:releases"), {"version": "rel-b"})
         score = self.client.get(reverse("snpportal:upload")).content.decode()
-        self.assertIn("Release rel-b", score)  # the badge, a link to the Releases page
-        self.assertIn(", release rel-b)", score)  # the Score page names the release (and assembly) it scores with
+        self.assertIn("Release rel-b", score)  # the footer's badge, a link to the Releases page: the release it scores with
         b_url, b = self.score()
         self.assertEqual(jobs.read_json(jobs.folder(b) / "job.json")["release"], "rel-b")
         self.assertEqual(jobs.read_json(jobs.folder(a) / "job.json")["release"], "rel-a")

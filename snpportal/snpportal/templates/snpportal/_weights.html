@@ -2,16 +2,15 @@
    filled with its current weight and naming its default when it differs. A SNP's score is the sum of the weights of
    its evidence. Then the lowest score of each band, in the band's colour: the user's own, else blank (set from the
    public SNPs), with the cut-offs in use as placeholders. Context: weights {terms: [(term, name, weight, default)], max,
-   cuts: [(tier, own value or '', in use)], max_cut, cuts_hint}, prefix (for the ids), form (the id of the form the
-   inputs belong to, when they sit outside it, as in the Table's toolbar).{% endcomment %}
+   cuts: [(tier, own value or '', in use)], max_cut}, prefix (for the ids), form (the id of the form the inputs belong
+   to, when they sit outside it, as in the Table's toolbar).{% endcomment %}
 <div class="sp-weights">
   {% for term, name, value, default in weights.terms %}<label class="sp-weight" for="{{ prefix }}-w-{{ term }}"><span>{{ name }}{% if value != default %} <span class="sp-muted">(default {{ default }})</span>{% endif %}</span>
-    <input class="form-control form-control-sm" type="number" id="{{ prefix }}-w-{{ term }}" name="w_{{ term }}" value="{{ value }}" min="0" max="{{ weights.max }}" step="1" inputmode="numeric"{% if form %} form="{{ form }}"{% endif %}></label>
+    <input class="form-control form-control-sm" type="number" id="{{ prefix }}-w-{{ term }}" name="w_{{ term }}" value="{{ value }}" min="0" max="{{ weights.max }}" step="1" inputmode="numeric" data-default="{{ default }}"{% if form %} form="{{ form }}"{% endif %}></label>
   {% endfor %}
 </div>
 {% if weights.cuts %}<fieldset class="sp-cuts"><legend>Score bands from</legend>
   {% for t, value, now in weights.cuts %}<label class="sp-cut" for="{{ prefix }}-cut-{{ t }}"><span class="sp-sw sp-tier-{{ t }}" aria-hidden="true"></span><span class="visually-hidden">Band {{ forloop.counter }}: scores from</span>
     <input class="form-control form-control-sm" type="number" id="{{ prefix }}-cut-{{ t }}" name="cut_{{ t }}" value="{{ value }}" placeholder="{{ now }}" min="1" max="{{ weights.max_cut }}" step="1" inputmode="numeric"{% if form %} form="{{ form }}"{% endif %}></label>
   {% endfor %}<span class="sp-cut"><span class="sp-sw sp-tier-4" aria-hidden="true"></span>below</span>
-  <p class="sp-hint">{{ weights.cuts_hint }}</p>
 </fieldset>{% endif %}

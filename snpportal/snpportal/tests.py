@@ -236,14 +236,14 @@ class PortalTest(SimpleTestCase):
     def test_examples_run_end_to_end(self):
         page = self.client.get(reverse("snpportal:upload")).content.decode()
         tabs = re.findall(r'role="tab"[^>]*>([^<]+)</a>', page)
-        self.assertEqual(tabs, ["SNPs", "Genes or regions", "Structural variants", "GWAS results"])
-        pane = page[page.index('id="pane-file"'):page.index('id="pane-regions"')]  # SNPs: a file or pasted lines, one form
+        self.assertEqual(tabs, ["SNPs", "Structural variants", "GWAS results", "Genes or regions"])  # G's order, 2026-11-27
+        pane = page[page.index('id="pane-file"'):page.index('id="pane-sv"')]  # SNPs: a file or pasted lines, one form
         self.assertEqual(pane.count("</form>"), 1)
         for field in ('name="snps"', 'name="paste"'):
             self.assertIn(field, pane)
         self.assertNotIn("required", pane)  # either one will do
-        self.assertIn('name="example" value="known_loci" title="Known loci: ', page)  # the examples under the tabs
-        self.assertRegex(page, r'value="chip_demo_SYNTHETIC" title="SNP chip: synthetic, [\d,]+ SNPs">SNP chip <span>[\d,]+ SNPs, synthetic</span>')
+        self.assertIn('name="example" value="known_loci" title="Known loci: ', page)  # the examples under the title
+        self.assertRegex(page, r'value="chip_demo_SYNTHETIC" title="SNP chip: synthetic, [\d,]+ SNPs">SNP chip <span>\d+k?</span>')  # short
         self.assertContains(self.client.get(reverse("snpportal:upload"), {"input": "paste"}), 'class="tab-pane active" id="pane-file"')
         chip =self.client.post(reverse("snpportal:upload"), {"example": "chip_demo_SYNTHETIC"})
         job = jobs.read(self.key(chip))
@@ -394,6 +394,37 @@ class PortalTest(SimpleTestCase):
             self.assertIn(", set from the public SNPs (", self.client.get(url).content.decode())
         finally:
             shutil.rmtree(pool)
+
+    def test_score_page_names_and_remembers(self):
+        """G, 2026-11-27: a list takes the Name box's name (blank: its file or the date), and is renamed from the Score
+        page's list; the weights and bands a browser scored with fill its next form, marked custom; pasted positions
+        convert from another assembly as a file's do; the regions form keeps its bands."""
+        upload = reverse("snpportal:upload")
+        response = self.client.post(upload, {"paste": "25 28996360 C T", "label": "  My   list ", "w_pike": "1", "cut_1": "6",
+                                              "cut_2": "3", "cut_3": "2"})
+        key = self.key(response)
+        self.client.get(response.url)  # opened: on this browser's list
+        self.assertEqual(jobs.read(key)["label"], "My list")
+        self.assertEqual(response.cookies["snp_weights"].value, "w_pike:1,cut_1:6,cut_2:3,cut_3:2")
+        page = self.client.get(upload).content.decode()
+        self.assertIn('Evidence weights <span class="sp-fold-what" data-custom>custom</span>', page)
+        self.assertIn('name="w_pike" value="1"', page)
+        self.assertIn('name="cut_1" value="6"', page)
+        self.assertEqual(self.client.post(reverse("snpportal:rename", args=[key]), {"label": "Renamed", "next": "score"}).url, upload)
+        self.assertEqual(jobs.read(key)["label"], "Renamed")
+        self.assertIn(">Renamed</a>", self.client.get(upload).content.decode())
+        self.client.post(upload, {"paste": "25 28996360 C T"})  # the default weights again: forgotten
+        self.assertNotIn("data-custom", self.client.get(upload).content.decode())
+        lifted = dict(jobs.position_choices())
+        other = next((v for v in lifted if v not in ("", "flank")), None)
+        if other:
+            job = jobs.read(self.key(self.client.post(upload, {"paste": "25 28996360 C T", "positions": other})))
+            self.assertEqual((job["positions"], job["label"][:7]), (other, "Pasted "))
+        if "flank" in lifted:
+            self.assertEqual(self.client.post(upload, {"paste": "25 28996360", "positions": "flank"}).status_code, 400)
+        regions = self.client.post(reverse("snpportal:candidates"), {"targets": "25:28990000-29000000", "cut_1": "6", "cut_2": "3",
+                                                                     "cut_3": "1"})
+        self.assertEqual(jobs.read(self.key(regions))["cuts"]["now"], [6, 3, 1])
 
     def test_cuts_from_public(self):
         """The cut-offs from the public SNPs: the default bands' shares give the default cut-offs back, doubled weights

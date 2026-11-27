@@ -109,12 +109,13 @@ def _score(request):
     example, upload = request.POST.get("example"), request.FILES.get("sumstats")
     try:
         weights = jobs.parse_weights(request.POST)  # the form's evidence weights: the functional prior follows them
+        cuts = jobs.parse_cuts(request.POST)  # and its score bands
         if example:
             found = views.examples().get(example) if example.startswith("gwas_") else None
             if found is None:
                 raise jobs.InputError("That example is not part of this release.")
             key = jobs.create(found["path"], found["suffix"], "gwas", preset, "Example: synthetic maturation GWAS",
-                              synthetic=found["synthetic"], move=False, weights=weights)
+                              synthetic=found["synthetic"], move=False, weights=weights, cuts=cuts)
         elif upload:
             suffix = suffix_of(upload.name)
             if suffix is None:
@@ -122,7 +123,8 @@ def _score(request):
                                       "GCTA-fastGWA, PLINK2 .glm, regenie, BOLT-LMM or GEMMA output.")
             if not upload.size:
                 raise jobs.InputError("The uploaded file is empty.")
-            key = jobs.create(Path(upload.path), suffix, "gwas", preset, "Uploaded GWAS summary statistics", weights=weights)
+            name = views.job_name(request) or Path(upload.name or "").name[:80] or "Uploaded GWAS summary statistics"
+            key = jobs.create(Path(upload.path), suffix, "gwas", preset, name, weights=weights, cuts=cuts)
         else:
             raise jobs.InputError("Choose a summary-statistics file or the GWAS example.")
     except jobs.InputError as e:
@@ -132,7 +134,7 @@ def _score(request):
                                     503, "gwas")
         response["Retry-After"] = "60"
         return response
-    return redirect(f"{reverse('snpportal:association', args=[key])}?{urlencode({'trait': preset})}")
+    return views.remember(redirect(f"{reverse('snpportal:association', args=[key])}?{urlencode({'trait': preset})}"), request)
 
 
 # ---- settings, data and analysis for one request ----

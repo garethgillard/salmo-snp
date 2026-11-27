@@ -42,17 +42,19 @@ EXAMPLES = {  # the release's demo/ files (name without extension) -> (title, wh
     "known_svs": ("Known SVs", "{n:,} published structural variants"),  # SV examples: scored as SVs (sv=True below)
     "svs_demo_SYNTHETIC": ("SVs", "synthetic, {n:,} structural variants"),
 }
-CHIPS = {  # the Score page's 'Try' buttons: what you get (name, detail; {n}: its rows); a synthetic file's detail says so
-    "known_loci": ("Known loci", "{n:,} SNPs"),
-    "chip_demo_SYNTHETIC": ("SNP chip", "{n:,} SNPs, synthetic"),
-    "gwas_maturation_SYNTHETIC": ("Maturation GWAS", "{n:,} SNPs, synthetic"),
-    "public_50k": ("Public SNPs", "{n:,} SNPs"),
-    "known_svs": ("Known SVs", "{n:,} SVs"),
-    "svs_demo_SYNTHETIC": ("SV calls", "{n:,} SVs, synthetic"),
+CHIPS = {  # the Score page's 'Try' buttons, kept short (G, 2026-11-27): name and count ({k}: its rows, 53k); a synthetic
+    # file's button says so in its tooltip (EXAMPLES), and its results in their title
+    "known_loci": ("Known loci", "{k}"),
+    "chip_demo_SYNTHETIC": ("SNP chip", "{k}"),
+    "gwas_maturation_SYNTHETIC": ("Maturation GWAS", "{k}"),
+    "public_50k": ("Public SNPs", "{k}"),
+    "known_svs": ("Known SVs", "{k}"),
+    "svs_demo_SYNTHETIC": ("SV calls", "{k}"),
 }
 TRY = ("known_loci", "chip_demo_SYNTHETIC", "gwas_maturation_SYNTHETIC", "known_svs", "svs_demo_SYNTHETIC")  # the Score page's examples
 SV_EXAMPLES = ("known_svs", "svs_demo_SYNTHETIC")
-INPUTS = {"file": "SNPs", "regions": "Genes or regions", "sv": "Structural variants", "gwas": "GWAS results"}  # Score tabs
+INPUTS = {"file": "SNPs", "sv": "Structural variants", "gwas": "GWAS results", "regions": "Genes or regions"}  # Score tabs
+# (G, 2026-11-27: in this order)
 # (SNPs: a file or pasted lines, so ?input=paste and a pasted list's errors show that tab)
 
 
@@ -134,13 +136,18 @@ def examples():
             title, what = EXAMPLES.get(name, (name.replace("_", " "), ""))
             synthetic = "SYNTHETIC" in p.name
             chip, detail = CHIPS.get(name, (title, "synthetic" if synthetic else ""))
-            if "{n" in what + detail:
+            if "{" in what + detail:
                 n = _rows(p, p.stat().st_mtime_ns)
-                what, detail = what.format(n=n), detail.format(n=n)
+                what, detail = what.format(n=n), detail.format(n=n, k=short_count(n))
             found[name] = {"title": title, "what": what, "label": f"{title} (synthetic)" if synthetic else title,
                            "chip": chip, "detail": detail,
                            "path": p, "suffix": suffix, "synthetic": synthetic, "sv": name in SV_EXAMPLES}
     return found
+
+
+def short_count(n):
+    """40 -> '40', 53,917 -> '53k', 209,327 -> '209k', 1,600,000 -> '1.6M': a count on a small button."""
+    return str(n) if n < 1000 else f"{n // 1000}k" if n < 1_000_000 else f"{n / 1e6:.1f}M"
 
 
 @lru_cache(maxsize=64)
@@ -167,7 +174,7 @@ def score_page(request, error=None, status=200, tab=None, targets=""):
         "keep_hours": f"{float(jobs.setting('SNPPORTAL_KEEP_HOURS', 24)):g}", "local": jobs.local(),
         "positions": jobs.position_choices(),
         "results_dir": jobs.results_dir(),
-        "weights": {"terms": jobs.weight_terms(), "max": jobs.MAX_WEIGHT, **cut_fields()},  # the user's own weights and bands (G, 2026-11-27)
+        "weights": score_weights(request),  # the user's own weights and bands, remembered (G, 2026-11-27)
     }, status=status))
 
 
@@ -210,7 +217,7 @@ def _score(request):
         return response
     params = {"trait": preset} if preset != "all" else {}
     url = reverse("snpportal:results", args=[key])
-    return redirect(f"{url}?{urlencode(params)}" if params else url)
+    return remember(redirect(f"{url}?{urlencode(params)}" if params else url), request)
 
 
 def start_job(request):
@@ -219,6 +226,8 @@ def start_job(request):
     example, upload, paste = request.POST.get("example"), request.FILES.get("snps"), request.POST.get("paste", "").strip()
     weights = jobs.parse_weights(request.POST)  # the form's evidence weights where they differ from the defaults
     cuts = jobs.parse_cuts(request.POST)  # the form's score-band cut-offs, None when left blank (from the public SNPs)
+    name = job_name(request)  # the form's Name box, else the file's name or the date
+    positions = request.POST.get("positions") if request.POST.get("positions") in dict(jobs.position_choices()) else None
     if example:
         found = examples().get(example)
         if found is None:
@@ -234,12 +243,15 @@ def start_job(request):
                                   ".txt, optionally gzipped) or a PLINK .bim/.map file: see Format help.")
         if not upload.size:
             raise jobs.InputError("The uploaded file is empty.")
-        name = Path(upload.name or "").name[:80] or "Uploaded list"  # the file's name names the results
-        positions = request.POST.get("positions") if request.POST.get("positions") in dict(jobs.position_choices()) else None
-        return jobs.create(Path(upload.path), suffix, "snps", preset, name, positions=positions or None, weights=weights, cuts=cuts), preset
+        name = name or Path(upload.name or "").name[:80] or "Uploaded list"  # else the file's name names the results
+        return jobs.create(Path(upload.path), suffix, "snps", preset, name, positions=positions, weights=weights, cuts=cuts), preset
     if paste:
-        rows = jobs.parse_paste(paste, PASTE_LINES)
-        return jobs.create_from_rows(rows, f"Pasted {jobs.utc()}", preset, kind="snps", input_format="paste", weights=weights, cuts=cuts), preset
+        if positions == "flank":
+            raise jobs.InputError("Pasted lines have no flank sequences to place them by: choose the assembly they are on, "
+                                  "or upload a file with the flanks.")
+        rows = jobs.parse_paste(paste, PASTE_LINES)  # converted from another assembly like a file (G, 2026-11-27)
+        return jobs.create_from_rows(rows, name or f"Pasted {jobs.utc()}", preset, kind="snps", input_format="paste",
+                                     weights=weights, cuts=cuts, positions=positions), preset
     raise jobs.InputError("Choose a file, paste some positions or pick an example.")
 
 
@@ -253,27 +265,79 @@ def start_sv_job(request, preset, weights=None, cuts=None):
                                   "BED file or a table (.tsv, .csv or .txt, optionally gzipped): see Format help.")
         if not upload.size:
             raise jobs.InputError("The uploaded file is empty.")
-        name = Path(upload.name or "").name[:80] or "Uploaded SVs"
+        name = job_name(request) or Path(upload.name or "").name[:80] or "Uploaded SVs"
         return jobs.create(Path(upload.path), suffix, "sv", preset, name, weights=weights, cuts=cuts)
     if paste:
         rows = jobs.parse_sv_paste(paste, SV_PASTE_LINES)
-        return jobs.create_from_sv_rows(rows, f"Pasted SVs {jobs.utc()}", preset, weights=weights, cuts=cuts)
+        return jobs.create_from_sv_rows(rows, job_name(request) or f"Pasted SVs {jobs.utc()}", preset, weights=weights, cuts=cuts)
     raise jobs.InputError("Choose a file of structural variants, or paste some regions.")
 
 
-def cut_fields(d=None, job=None):
-    """The score-band cut-off fields (G, 2026-11-27): [(tier, value)] filled with the user's own cut-offs (else blank,
-    so they follow the weights), the cut-offs in use as placeholders, and the hint saying how blank ones are set."""
+def cut_fields(d=None, job=None, own=None):
+    """The score-band cut-off fields (G, 2026-11-27): [(tier, value)] filled with the user's own cut-offs (a job's, or
+    `own`; else blank, so they follow the weights) and the cut-offs in use as placeholders."""
     c = job.get("cuts") or {} if job else {}
     now = list((jobs.weights(d) or {}).get("tiers") or figures.default_cuts()) if d else list(figures.default_cuts())
-    own = c.get("now") if c.get("source") == "own" else None
-    shares = jobs.reference_shares()
-    first = list(jobs.first_rules(d)["tiers"]) if d else list(figures.default_cuts())
-    hint = (f"Blank: set from the public SNPs, the scores that the top {', '.join(jobs.share_text(x) for x in shares[:-1])} and "
-            f"{jobs.share_text(shares[-1])} of them reach with these weights ({', '.join(map(str, first[:-1]))} and {first[-1]} "
-            "with the defaults)." if shares else f"Blank: the defaults, {', '.join(map(str, first[:-1]))} and {first[-1]}.")
-    return {"cuts": [(t, own[t - 1] if own else "", now[t - 1]) for t in (1, 2, 3)], "max_cut": jobs.MAX_CUT, "cuts_hint": hint,
-            "cuts_own": bool(own)}
+    own = c.get("now") if c.get("source") == "own" else own
+    return {"cuts": [(t, own[t - 1] if own else "", now[t - 1]) for t in (1, 2, 3)], "max_cut": jobs.MAX_CUT, "cuts_own": bool(own)}
+
+
+WEIGHTS_COOKIE = "snp_weights"  # the weights and bands this browser scored with last on the Score page (G, 2026-11-27)
+
+
+def remembered(request):
+    """({term: weight}, cut-offs or None) this browser scored with last (the cookie, checked as a form's fields would
+    be); ({}, None) when none, or when they no longer fit this release's weights."""
+    raw = request.COOKIES.get(WEIGHTS_COOKIE, "")
+    fields = dict(pair.split(":", 1) for pair in raw.split(",") if ":" in pair)
+    try:
+        return jobs.parse_weights(fields), jobs.parse_cuts(fields)
+    except jobs.InputError:
+        return {}, None
+
+
+def remember(response, request):
+    """Keep the weights and bands of a Score page form that made a job for this browser's next list (a year), or forget
+    them when they are the defaults."""
+    if request.POST.get("example"):  # an example's button carries no weights: what was remembered stays
+        return response
+    try:
+        chosen, cuts = jobs.parse_weights(request.POST), jobs.parse_cuts(request.POST)
+    except jobs.InputError:
+        return response
+    if chosen or cuts:
+        value = ",".join([f"w_{t}:{w}" for t, w in sorted(chosen.items())] + [f"cut_{i}:{c}" for i, c in enumerate(cuts or [], 1)])
+        response.set_cookie(WEIGHTS_COOKIE, value, max_age=365 * 86400, httponly=True, samesite="Lax")
+    elif WEIGHTS_COOKIE in request.COOKIES:
+        response.delete_cookie(WEIGHTS_COOKIE)
+    return response
+
+
+def score_weights(request):
+    """The Score page's weights fold: the release's terms filled with this browser's remembered weights (or the
+    defaults), the cut-off fields, and 'custom' when they are not the defaults."""
+    chosen, cuts = remembered(request)
+    terms = [(t, name, chosen.get(t, value), default) for t, name, value, default in jobs.weight_terms()]
+    return {"terms": terms, "max": jobs.MAX_WEIGHT, **cut_fields(own=cuts), "custom": bool(chosen or cuts)}
+
+
+def job_name(request):
+    """The Score page's Name box (G, 2026-11-27), or '' to name the results by their file or the date."""
+    return " ".join(str(request.POST.get("label") or "").split())[:80]
+
+
+@private
+@csrf_protect
+def rename(request, key):
+    """POST label (and next=score): renames results, from the Score page's list or the results page."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    if jobs.status(key) is None:
+        raise Http404("Result not found or expired")
+    name = job_name(request)
+    if name:
+        jobs.update(key, label=name)
+    return redirect(reverse("snpportal:upload") if request.POST.get("next") == "score" else reverse("snpportal:results", args=[key]))
 
 
 def weights_context(key, job):
@@ -360,7 +424,9 @@ def results(request, key):
         context["table_query"] = result_views.selection(d) or urlencode(settings)  # the Table tab returns to the selection
         context["actions"] = [{"label": "Print report", "url": f"{reverse('snpportal:report', args=[key])}?{context['table_query']}"},
                               {"label": "Score another list", "url": reverse("snpportal:upload")}]
-    context.setdefault("actions", []).append(
+    context.setdefault("actions", []).append(  # renamed in a small dialog (portal.js data-rename)
+        {"label": "Rename", "url": reverse("snpportal:rename", args=[key]), "post": True, "rename": job.get("label") or "Results"})
+    context["actions"].append(
         {"label": "Delete", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",
          "confirm": "Delete these results now? This can't be undone."})
     response = render(request, "snpportal/results.html", context)

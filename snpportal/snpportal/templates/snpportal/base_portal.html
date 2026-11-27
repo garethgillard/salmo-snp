@@ -1,6 +1,6 @@
 {% extends 'salmobase/base.html' %}
 {% load static snpportal_tags %}
-{# Every portal page extends this: the top bar (icon + label links, search, species), page header, footer, portal.css + palette, htmx and portal.js. #}
+{# Every portal page extends this: the top bar (icon + label links, species, search), page header, footer, portal.css + palette, htmx and portal.js. #}
 
 {% block title %}{% if title %}{{ title }} · {% endif %}salmo-snp{% endblock title %}
 
@@ -25,14 +25,14 @@
         <li><a href="{% url 'snpportal:help' %}"{% if nav == 'help' %} aria-current="page"{% endif %} title="Help">{% icon 'help' %}<span>Help</span></a></li>
         <li><a href="{% url 'snpportal:about_data' %}"{% if nav == 'about' %} aria-current="page"{% endif %} title="The data and methods">{% icon 'info' %}<span>About</span></a></li>
       </ul>
+      {% if rel.species_choices %}<form class="sp-species" method="post" action="{% url 'snpportal:species' %}" aria-label="Species">{% csrf_token %}
+        {% for s in rel.species_choices %}<button type="submit" name="species" value="{{ s.key }}"{% if s.current %} aria-pressed="true"{% endif %} title="{{ s.latin }}{% if s.current %}: the species of this page{% else %}: score SNPs against the {{ s.name|lower }} data{% endif %}">{{ s.name }}</button>{% endfor %}
+      </form>{% endif %}
       <form class="sp-search" method="get" action="{% url 'snpportal:search' %}" role="search">
         <label class="visually-hidden" for="sp-q">Find a gene, rs ID or region</label>
         <input class="form-control form-control-sm" id="sp-q" name="q" type="search" placeholder="Gene, rs ID or region" autocomplete="off">
         <button class="btn btn-sm btn-outline-secondary" type="submit">{% icon 'search' 'Search' %}</button>
       </form>
-      {% if rel.species_choices %}<form class="sp-species" method="post" action="{% url 'snpportal:species' %}" aria-label="Species">{% csrf_token %}
-        {% for s in rel.species_choices %}<button type="submit" name="species" value="{{ s.key }}"{% if s.current %} aria-pressed="true"{% endif %} title="{{ s.latin }}{% if s.current %}: the species of this page{% else %}: score SNPs against the {{ s.name|lower }} data{% endif %}">{{ s.name }}</button>{% endfor %}
-      </form>{% endif %}
     </div>
   </nav>
   <main id="sp-main" class="sp-main">
@@ -50,7 +50,7 @@
       <a href="{% url 'snpportal:about_data' %}#cite">How to cite</a>
       <a href="{% url 'snpportal:help' %}#privacy">Privacy</a>
       <a href="{% url 'snpportal:run_locally' %}">Run locally</a>
-      <span class="sp-foot-by">NMBU · AQUA-FAANG data</span>
+      <span class="sp-foot-by">&copy; 2026 NMBU &middot; Gareth Gillard</span>
     </div>
   </footer>
 </div>

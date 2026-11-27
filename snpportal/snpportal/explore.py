@@ -566,9 +566,9 @@ def candidate_job(request):
             raise jobs.InputError("There are no public variants in these genes or intervals.")
         if len(rows) > MAX_CANDIDATES:
             raise jobs.InputError(f"These windows hold more than {MAX_CANDIDATES:,} public variants. Use fewer or shorter intervals.")
-        label = "Public variants in " + ", ".join(labels)
+        label = views.job_name(request) or "Public variants in " + ", ".join(labels)
         key = jobs.create_from_rows(rows, label if len(label) <= 120 else label[:117] + "...", trait,
-                                    weights=jobs.parse_weights(request.POST))  # the form's evidence weights
+                                    weights=jobs.parse_weights(request.POST), cuts=jobs.parse_cuts(request.POST))  # the form's weights and bands
     except jobs.InputError as e:
         return score_page(request, str(e), 400, tab="regions", targets=text)
     except jobs.QueueFull:
@@ -577,7 +577,7 @@ def candidate_job(request):
         response["Retry-After"] = "60"
         return response
     url = reverse("snpportal:results", args=[key])
-    return redirect(url if trait == "all" else f"{url}?{urlencode({'trait': trait})}")
+    return views.remember(redirect(url if trait == "all" else f"{url}?{urlencode({'trait': trait})}"), request)
 
 
 # ---- the guided tour: an illustrated slide show ----
