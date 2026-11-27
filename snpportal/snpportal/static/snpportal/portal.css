@@ -435,7 +435,8 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-results tbody tr.sp-selected > * { background: var(--sp-grey-100); }
 .sp-results tbody tr.sp-selected > :first-child { box-shadow: inset 3px 0 0 var(--sp-accent); }
 /* the Keep column: a small grey box, ticked while the row is kept (a link: one click each way; x in the card) */
-.sp-results .sp-pickcol { width: 2.6rem; padding-left: .3rem; padding-right: .2rem; text-align: center; }
+.sp-results .sp-pickcol { width: 2.6rem; min-width: 2.6rem; max-width: 2.6rem; padding-left: .3rem; padding-right: .2rem;
+  text-align: center; }  /* exactly: the sticky SNP column starts at 2.6rem */
 .sp .sp-tick { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: .25rem;
   text-decoration: none; }
 .sp-box { display: inline-flex; flex: none; align-items: center; justify-content: center; width: .9rem; height: .9rem;
@@ -469,13 +470,14 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-as-ok, .sp-as-not_checked { color: var(--sp-muted); font-weight: 400; }
 .sp-as-warn { color: var(--sp-warn-text); }
 .sp-as-fail { color: var(--sp-fail-text); }
-@media (max-width: 767.98px) {  /* a phone: the SNP column stays in view while the table scrolls sideways */
-  .sp-results .sp-clip.sp-wide { max-width: 10rem; }
-  .sp-snps td.sp-wide, .sp-snps th.sp-col-id { position: sticky; left: 0; z-index: 1; background: var(--sp-white);
-    box-shadow: 1px 0 0 var(--sp-line); }
-  .sp-snps th.sp-col-id { background: var(--sp-grey-50); }
-  .sp-snps tr.sp-selected > td.sp-wide { background: var(--sp-grey-100); }
-}
+/* the Keep and SNP columns stay in view while the table scrolls sideways (added columns, a card open, a phone; G,
+   2026-11-27: at every width, as on a phone before) */
+.sp-snps .sp-pickcol, .sp-snps td.sp-wide, .sp-snps th.sp-col-id { position: sticky; left: 0; z-index: 1; background: var(--sp-white); }
+.sp-snps td.sp-wide, .sp-snps th.sp-col-id { left: 2.6rem;  /* after Keep's 2.6rem; a rule at its right; the row's hover tint */
+  box-shadow: inset 0 0 0 9999px var(--bs-table-accent-bg, transparent), 1px 0 0 var(--sp-line); }
+.sp-snps thead .sp-pickcol, .sp-snps th.sp-col-id { background: var(--sp-grey-50); }
+.sp-snps tr.sp-selected > .sp-pickcol, .sp-snps tr.sp-selected > td.sp-wide { background: var(--sp-grey-100); }
+@media (max-width: 767.98px) { .sp-results .sp-clip.sp-wide { max-width: 10rem; } }
 /* The default columns fit a wide window: the table then scrolls with the page, its header under the top bar. With a
    card open, other columns or a narrower window it keeps its own box, which keeps the header in view. */
 @media (min-width: 1360px) {
