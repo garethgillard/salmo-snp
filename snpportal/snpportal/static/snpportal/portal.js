@@ -688,25 +688,6 @@
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") tell({sp: "back"}); });
 })();
 
-/* the card beside the Table (from 992 px) starts and ends with the Table's box, so the two read as one band (G,
-   2026-11-27). A short table (a box under half the window) leaves the card its CSS column, as tall as the window; so
-   does a narrow window, the card's own locus browser and a page without JavaScript. */
-(function () {
-  "use strict";
-  function align() {
-    var card = document.querySelector("#results > #drawer"), box = document.querySelector("#results .sp-scroll");
-    if (!card) return;
-    var on = !!box && window.innerWidth >= 992 && box.offsetHeight >= window.innerHeight / 2;
-    card.classList.toggle("sp-aligned", on);
-    if (!on) return;
-    card.style.setProperty("--sp-card-top", (box.getBoundingClientRect().top - card.parentElement.getBoundingClientRect().top) + "px");
-    card.style.setProperty("--sp-card-h", box.offsetHeight + "px");
-  }
-  align();
-  document.addEventListener("htmx:afterSettle", align);
-  window.addEventListener("resize", align);
-})();
-
 /* Known loci: the contents mark the part (and the trait) you are reading as you scroll (G, 2026-11-27): the last
    section whose top has passed just under the top bar. */
 (function () {

@@ -87,7 +87,8 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   mono only for sequences and code.
 - Icons: one line set (salmo-cells' shapes), `{% icon 'name' %}` (snpportal_tags.ICONS). Icons name places and label
   icon-only controls; actions are words. ★ is the one known-locus mark.
-- The top bar (G, 2026-11-27): the push-pin mark (a blue pin in a track, a warm grey ATAC peak behind it), icon and label links, then
+- The top bar (G, 2026-11-27): the push-pin mark (a blue pin in a track, a warm grey ATAC peak behind it) as tall as
+  the bar and the name in salmobase's title font, Comfortaa (bundled, static/snpportal/vendor), icon and label links, then
   the species switch and the search box at the far right; no line under it. The footer: release, tour, Methods, How
   scores are made, citation, privacy, Run locally; at the right "© 2026 NMBU · Gareth Gillard". One fold pattern
   (`.sp-more`, `.sp-cs`: a title row, a chevron at the right); one tab style: no line under the row, the open tab
@@ -97,12 +98,18 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   never scrolls the page down. Overview: no key number, the bars from the top, the assay check's boxes with a dark rim,
   the genome map's legend on one line. Table: a chip per score band that switches its SNPs on or off (all on at first;
   a hovered chip greys), the Score column narrow with the number centred; the Chromatin colours and ~NAME
-  behind (i) icons in their column titles. Export in four labelled parts: Print a report, Add to your Design panel,
-  Pick markers automatically, then Download. The printed report fits one A4 page (the top 8 SNPs).
+  behind (i) icons in their column titles. From 992 px the Table tab fills the window, footer included, and the page
+  never scrolls: the table's box takes the height left (the same with or without a card) and scrolls inside, Weights
+  and Columns stay at the right of the toolbar's first line, and a SNP's card is a column from under the top bar to
+  the footer (as the trout table had); the weights note sits in the Weights menu there. Export in four labelled
+  parts: Print a report, Add to your Design panel, Pick markers automatically, then Download. The printed report fits
+  one A4 page (the top 8 SNPs).
 - The Score page (G, 2026-11-27): the title, then one row of short example buttons (counts as 53k) and the tour link
-  under them; the inputs in a narrower column, room before 'Your results'; the tabs SNPs, Structural variants, GWAS
+  under them; the inputs in a narrower column, room before 'Your results' (each result with its species, size and
+  time under its name); the tabs SNPs, Structural variants, GWAS
   results, Genes or regions; each tab ends with one row, a Name box (the date, or the chosen file's name; editable) and
-  the Score button at the right (on hover, square pixels leave its middle in waves), then Evidence weights (a fold, its
+  the Score button at the right (on hover a ring of the score bands' blues turns slowly round its edge, with a soft
+  glow; nothing else moves: G found moving pixels sickening), then Evidence weights (a fold, its
   chevron beside the title, 'custom' when they are not the defaults). The weights and bands a browser scored with
   last are remembered (`snp_weights` cookie, views.remembered). Pasted positions convert from another assembly like a
   file's (Positions on, above the weights). Results are renamed from the Score page's list or the results page.
@@ -111,7 +118,7 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
 - G's answers on the overhaul (2026-11-27): one Score tab for SNPs, a file or pasted lines; the 'why this tier' bar
   draws where a SNP is in a gene (CDS, synonymous, splice, UTR) in the Overview's coding colour, so tier blues mean
   tiers only (locus_svg.TERMS); the Table's column is 'Gene region' (not 'Consequence'); from 992 px the SNP card
-  beside the Table starts and ends with the Table's box (portal.js; a short table leaves the card its full column).
+  beside the Table runs from under the top bar to the footer (_drawer.html, portal.css "the Table tab").
 - Every colour lives in `palette.py`; templates and `portal.css` use classes and `var(--sp-*)` only (tested). SVGs embed literal hex.
 - New pages extend `base_portal.html`; figures use the `_figure.html` card (title, (i) definition, one SVG/PNG/TSV download menu; provenance only in the SVG `<desc>` and downloads).
 - No prototype caveat line on the pages (removed 2026-10-11: a dev version); Methods, the report and every download still

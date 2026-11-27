@@ -514,7 +514,8 @@ def no_store(listed, response):
 
 def mine(request):
     """This browser's results that still exist, newest first, for the Score page and the Design panel's picker links:
-    [{key, name, n, when, state, url, kind}]."""
+    [{key, name, species, n, when, state, url, kind}]; species: the name of the species of the job's release (G,
+    2026-11-27: under each result on the Score page), None when that release is no longer installed."""
     out = []
     for key in _mine_keys(request):
         try:
@@ -522,7 +523,9 @@ def mine(request):
         except (ValueError, OSError):
             job = None
         if job:
+            release = jobs.release_for(job.get("release"))
             out.append({"key": key, "name": job.get("label") or "Results", "n": job.get("n_rows"), "when": job.get("created_utc"),
+                        "species": jobs.species(release)["name"] if release else None,
                         "unit": "SVs" if job.get("input_kind") == "sv" else "SNPs", "kind": job.get("input_kind") or "snps",
                         "state": job.get("state"), "url": reverse("snpportal:results", args=[key]),
                         "current": not out})  # the one opened last

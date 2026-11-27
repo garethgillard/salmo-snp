@@ -16,13 +16,13 @@
     <p><a href="{% url 'snpportal:upload' %}">Score another list</a> · <a href="{% url 'snpportal:help' %}">Help with formats</a></p>
   </div>
 {% else %}
-  {% if release_changed %}<div class="sp-status sp-status-warn" role="status">{% icon 'warn' %} The release has changed since these results were made;
-    they still use release {{ job.release }} as it was. <a href="{% url 'snpportal:upload' %}">Score the list again</a> to update them.</div>{% endif %}
-
   {% comment %}Links and forms that stay on this page (tabs, table filters, sort, pages, the drawer) swap in the new
      #results. Only those: a boosted link to another page or a file would swap in nothing. Tiers always count all 27
      conditions; everything also works without JavaScript.{% endcomment %}
-  <div id="results" hx-target="#results" hx-select="#results" hx-swap="outerHTML">
+  <div id="results" class="sp-res-{{ tab }}{% if drawer %} sp-res-card{% endif %}" hx-target="#results" hx-select="#results" hx-swap="outerHTML">
+   <div class="sp-res-main">{# the page's column; the Table's card (?snp=) is beside it #}
+    {% if release_changed %}<div class="sp-status sp-status-warn" role="status">{% icon 'warn' %} The release has changed since these results were made;
+      they still use release {{ job.release }} as it was. <a href="{% url 'snpportal:upload' %}">Score the list again</a> to update them.</div>{% endif %}
     <div class="sp-res-head">
       <h1 class="sp-res-title">{{ name }}{% if n_text %} <span class="sp-res-n">{{ n_text }}</span>{% endif %}</h1>
       <form class="sp-res-rename" method="post" action="{% url 'snpportal:rename' key %}" data-rename hx-boost="false">{% csrf_token %}
@@ -38,13 +38,15 @@
     </div>
 
     {% if weights.error %}<div class="sp-status sp-status-warn" role="status">{% icon 'warn' %} {{ weights.error }}</div>{% endif %}
-    {% if weights.custom %}<p class="sp-weights-note">{% icon 'info' %} {{ weights.note }}
-      <button class="btn btn-link btn-sm p-0 align-baseline" type="submit" form="weights-reset">Back to the defaults</button></p>
+    {% if weights.custom %}{% if tab != 'table' %}<p class="sp-weights-note">{% icon 'info' %} {{ weights.note }}
+      <button class="btn btn-link btn-sm p-0 align-baseline" type="submit" form="weights-reset">Back to the defaults</button></p>{% endif %}{# the Table: in its Weights menu #}
     <form id="weights-reset" method="post" action="{{ weights.url }}">{% csrf_token %}<input type="hidden" name="reset" value="1"><input type="hidden" name="next" value="{{ tab }}"></form>{% endif %}
     {% if tab == 'table' %}{% include 'snpportal/_table.html' %}
     {% elif tab == 'panel' %}{% include 'snpportal/_panel.html' %}
     {% elif tab == 'export' %}{% include 'snpportal/_exports.html' %}
     {% else %}{% include 'snpportal/_overview.html' %}{% endif %}
+   </div>
+    {% if drawer %}{% include 'snpportal/_drawer.html' %}{% endif %}
   </div>
 {% endif %}
 {% endblock main %}

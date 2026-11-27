@@ -1,7 +1,7 @@
 {% comment %}The end of every input tab on the Score page (G, 2026-11-27), one row: the results' name, filled in with today's
    date or, once a file is chosen, the file's name (portal.js; genes or regions: named after them), and editable; then
-   the Score button at the right, the page's one primary action, whose hover sends square pixels out from its middle
-   in waves. Blank: the server names it. Context: prefix.{% endcomment %}
+   the Score button at the right, the page's one primary action, round whose edge a ring of the score bands' blues
+   turns on hover. Blank: the server names it. Context: prefix.{% endcomment %}
 <div class="sp-go-row"><label for="{{ prefix }}-name">Name</label>
   <input class="form-control form-control-sm" id="{{ prefix }}-name" name="label" maxlength="80" autocomplete="off"
          {% if prefix == 'regions' %}placeholder="Named after the genes or regions"{% else %}data-job-name placeholder="Today's date, or the file's name"{% endif %}>

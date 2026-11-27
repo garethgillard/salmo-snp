@@ -103,13 +103,15 @@ stays on the user's computer. On the public demo, uploaded files are deleted aft
 
 ## Third-party software
 
-The software bundles two front-end libraries and installs three Python libraries, and two more are optional. All
-seven are under permissive licences that allow commercial use and require only that their notices are kept.
+The software bundles two front-end libraries and a font and installs three Python libraries, and two more are
+optional. All eight are under permissive licences that allow commercial use and require only that their notices are
+kept.
 
 | Software | How it is used | Licence |
 | --- | --- | --- |
 | htmx 2.0.11 | Bundled in the package (with its licence file) | Zero-Clause BSD |
 | Bootstrap 5.1.3 | Bundled in the package (with its licence file) | MIT |
+| Comfortaa (font) | Bundled in the package (with its licence file): the brand's name, as salmobase's titles | SIL Open Font License 1.1 |
 | Django 5.2 | Installed with the package | BSD-3-Clause |
 | DuckDB 2 | Installed with the package | MIT |
 | PyYAML 6 | Installed with the package | MIT |

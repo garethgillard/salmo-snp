@@ -97,7 +97,7 @@
       <input type="hidden" name="label" value="{{ r.name }}"><button class="btn btn-sm btn-link sp-mine-act" type="submit" title="Rename these results" aria-label="Rename {{ r.name }}">Rename</button></form>
     <form method="post" action="{% url 'snpportal:delete' r.key %}" data-confirm="Delete {{ r.name }}? This can't be undone." data-confirm-ok="Delete">{% csrf_token %}<input type="hidden" name="next" value="score">
       <button class="btn btn-sm btn-link sp-mine-act sp-mine-del" type="submit" title="Delete these results" aria-label="Delete {{ r.name }}">Delete</button></form></span>
-    <span class="sp-mine-meta">{% if r.state == 'done' %}{{ r.n|thousands }} {{ r.unit }}{% elif r.state == 'failed' %}failed{% else %}scoring&hellip;{% endif %} &middot; {{ r.when }}</span>
+    <span class="sp-mine-meta">{% if r.species %}<span>{{ r.species }}</span> &middot; {% endif %}{% if r.state == 'done' %}{{ r.n|thousands }} {{ r.unit }}{% elif r.state == 'failed' %}failed{% else %}scoring&hellip;{% endif %} &middot; {{ r.when }}</span>
   </li>{% endfor %}</ul>
   {% else %}<p class="sp-mine-none">None yet: the lists you score are listed here.</p>{% endif %}
   {% if local %}<p class="sp-home-note" id="privacy">Running on this computer: your lists and results stay here, in

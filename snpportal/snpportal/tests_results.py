@@ -370,7 +370,7 @@ class ResultsTest(SimpleTestCase):
         self.assertIn('id="fig-ideogram"', overview)  # rebuilt from the result
         self.assertEqual(jobs.read_json(d / "summary.json")["version"], jobs.SUMMARY_VERSION)
         table = self.client.get(url + "?tab=table&assay=pass&min_maf=0.1&known=1&sort=maf").content.decode()
-        self.assertIn(f"Showing 1&ndash;50 of {self.summary['n_rows']:,} SNPs", table)
+        self.assertIn(f">1&ndash;50 of {self.summary['n_rows']:,} SNPs<", table)
         for gone in ('name="assay"', 'name="min_maf"', 'name="known"', ">MAF<"):
             self.assertNotIn(gone, table)
 

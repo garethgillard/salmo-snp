@@ -478,7 +478,7 @@ class PortalTest(SimpleTestCase):
             self.client.get(reverse("snpportal:results", args=[key]))  # opening results adds them to the list
         page = self.client.get(reverse("snpportal:upload")).content.decode()
         self.assertLess(page.index("Second list"), page.index("First list"))  # newest first
-        self.assertIn("1 SNPs", page)
+        self.assertIn("<span>Atlantic salmon</span> &middot; 1 SNPs", page)  # the species under each result (G)
         self.assertIn('class="sp-mine-current"', page)
         response = self.client.post(reverse("snpportal:delete", args=[b]), {"next": "score"})
         self.assertEqual(response["Location"], reverse("snpportal:upload"))  # back to the Score page

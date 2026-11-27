@@ -1,0 +1,35 @@
+{% load snpportal_tags %}
+{% comment %}The Table's card (?snp=): the SNP's full card beside the table from 992 px, from under the top bar to the footer
+   (G, 2026-11-27); over the page below 992 px. Keep, the stepper (j, k) and close (Esc) at the top right; its locus browser
+   opens over the whole page (portal.js).{% endcomment %}
+<aside class="sp-drawer" id="drawer" aria-labelledby="drawer-h">
+  <div class="sp-drawer-body">
+    <div class="sp-card-bar">
+      <div class="sp-card-name">
+        <h2 id="drawer-h">{% if drawer.ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=drawer.ev.tier score=drawer.ev.score %} {% endif %}{{ drawer.ev.title }}{% if drawer.ev.gene %}
+          <span class="sp-muted">&middot;</span> <a href="{{ drawer.ev.gene.url }}"{% if drawer.ev.gene.tip %} title="{{ drawer.ev.gene.tip }}"{% endif %}>{% if drawer.ev.gene.named %}<em>{{ drawer.ev.gene.label }}</em>{% else %}{{ drawer.ev.gene.label }}{% endif %}</a>{% endif %}</h2>
+        <p class="sp-card-where">{{ drawer.ev.place }}{% if drawer.ev.alleles %} &middot; {{ drawer.ev.alleles }}{% endif %}
+          <button type="button" class="sp-iconbtn" data-copy="{{ drawer.ev.spec }}" title="Copy {{ drawer.ev.spec }}" aria-label="Copy {{ drawer.ev.spec }}">{% icon 'copy' %}</button></p>
+      </div>
+      <div class="sp-card-tools">
+        <a class="sp-keep{% if drawer.out %} sp-keep-out{% endif %}" href="{{ drawer.pick }}" hx-get="{{ drawer.pick }}" data-pick role="button"
+         aria-pressed="{% if drawer.out %}false{% else %}true{% endif %}" title="{% if drawer.out %}Left out of the selection: click to keep it{% else %}Kept in the selection: click to leave it out{% endif %} (x)"><span class="sp-box" aria-hidden="true">{% if not drawer.out %}{% icon 'check' %}{% endif %}</span>Keep</a>
+        {% if drawer.steps %}<nav class="sp-stepper" aria-label="Other SNPs of the table">
+          {% if drawer.steps.prev %}<a class="sp-iconbtn" href="{{ drawer.steps.prev }}" hx-get="{{ drawer.steps.prev }}" data-prev title="Previous row (k)">{% icon 'chevron-left' 'Previous row' %}</a>{% endif %}
+          <span class="sp-muted">{{ drawer.steps.rank|thousands }} of {{ drawer.steps.of|thousands }}</span>
+          {% if drawer.steps.next %}<a class="sp-iconbtn" href="{{ drawer.steps.next }}" hx-get="{{ drawer.steps.next }}" data-next title="Next row (j)">{% icon 'chevron-right' 'Next row' %}</a>{% endif %}
+        </nav>{% endif %}
+        <a class="sp-iconbtn" href="{{ drawer.close }}" hx-get="{{ drawer.close }}" data-close title="Close the card (Esc)">{% icon 'close' 'Close the card' %}</a>
+      </div>
+    </div>
+    {% include 'snpportal/card.html' with heading=1 ev=drawer.ev hx=drawer.hx locus_url=drawer.locus_url panel=drawer.panel predict=drawer.predict crumbs=None %}
+  </div>
+  {% if drawer.locus_url %}<div class="sp-locus-pane" hidden>
+    <div class="sp-locus-bar">
+      <button type="button" class="btn btn-sm btn-primary" data-back title="Back to the card (Esc)">Back to the card</button>
+      <span class="sp-locus-what">{% if drawer.ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=drawer.ev.tier score=drawer.ev.score %} {% endif %}<strong>{{ drawer.ev.title }}</strong>{% if drawer.ev.gene %} &middot; <em>{{ drawer.ev.gene.label }}</em>{% endif %} <span class="sp-muted">in the locus browser</span></span>
+      <a class="ms-auto sp-small" href="{{ drawer.locus_url }}" target="_blank" rel="noopener">Open in a new tab {% icon 'external' %}</a>
+    </div>
+    <iframe class="sp-locus-frame" title="Locus browser around {{ drawer.ev.title }}" data-src="{{ drawer.locus_url }}&amp;embed=1"></iframe>
+  </div>{% endif %}
+</aside>

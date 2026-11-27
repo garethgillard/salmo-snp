@@ -62,6 +62,7 @@ class SpeciesTest(SimpleTestCase):
         result = self.client.get(url).content.decode()  # the trout job stays a trout page
         self.assertIn("USDA_OmykA_1.1", result)
         self.assertIn('value="rainbow_trout" aria-pressed="true"', result)
+        self.assertIn("<span>Rainbow trout</span> &middot; 2 SNPs", self.page())  # Your results names each result's species
         self.client.post(reverse("snpportal:species"), {"species": "no_such_fish"})  # ignored
         self.assertIn("Ssal_v3.1", self.page())
         data = self.client.get(reverse("snpportal:about_data"))

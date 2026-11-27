@@ -49,9 +49,13 @@
 /* == foundation: top bar == */
 .sp-nav { position: sticky; top: 0; z-index: 1030; background: var(--sp-white); }  /* no line under it (G, 2026-11-27) */
 .sp-nav .sp-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 0 .75rem; min-height: var(--sp-nav-h); }
-.sp .sp-brand { display: inline-flex; align-items: center; gap: .45rem; margin-right: .75rem; color: var(--sp-ink);
-  font-size: var(--sp-fs-lg); font-weight: 600; text-decoration: none; }
-.sp-brand .sp-i { width: 1.45em; height: 1.45em; color: var(--sp-accent); }
+/* the brand (G, 2026-11-27): the mark as tall as the bar, the name in salmobase's title font, Comfortaa (bundled:
+   vendor/README.txt) */
+@font-face { font-family: "Comfortaa"; font-style: normal; font-weight: 300 700; font-display: swap;
+  src: url("vendor/comfortaa-v47-latin.woff2") format("woff2"); }
+.sp .sp-brand { display: inline-flex; align-items: center; gap: .4rem; height: var(--sp-nav-h); margin-right: .75rem; color: var(--sp-ink);
+  font-family: "Comfortaa", var(--sp-font); font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; text-decoration: none; }
+.sp-brand .sp-i { width: 3rem; height: 3rem; margin: .35rem -.3rem 0 -.3rem; color: var(--sp-accent); stroke-width: 1.5; }  /* its drawing, centred in the bar */
 .sp-brand-peak { fill: var(--sp-grey-200); stroke: var(--sp-grey-300); }  /* the logo's ATAC peak, warm grey behind the pin (G) */
 .sp-links { display: flex; flex-wrap: wrap; list-style: none; margin: 0 auto 0 0; padding: 0; }  /* the species switch, then the search, at the right */
 .sp .sp-links a { display: inline-flex; align-items: center; gap: .4rem; height: var(--sp-nav-h); padding: 0 .6rem;
@@ -333,30 +337,21 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-go-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .6rem; margin-top: 1.25rem; }
 .sp-go-row label { color: var(--sp-ink); font-size: var(--sp-fs-sm); font-weight: 600; }
 .sp-go-row input { flex: 1 1 12rem; max-width: 22rem; }
-/* the Score button: on hover, square pixels leave its middle for both sides in waves (G asked for "something cool but
-   easy"): two grids of white squares, each half moving outwards and fading towards its edge, bobbing as they go;
-   still for those who ask for less motion */
-.sp .sp-go { position: relative; margin-left: auto; padding: .45rem 2.25rem; overflow: hidden; font-weight: 600; isolation: isolate; }
-.sp-go::before, .sp-go::after { content: ""; position: absolute; top: 0; bottom: 0; z-index: -1; width: 50%; opacity: 0;
-  pointer-events: none; transition: opacity .3s;
-  background-image: conic-gradient(at 3px 3px, transparent 75%, var(--sp-white) 0),
-                    conic-gradient(at 2px 2px, transparent 75%, var(--sp-white) 0);
-  background-size: 8px 8px, 12px 12px; }
-.sp-go::before { left: 0; -webkit-mask-image: linear-gradient(to left, var(--sp-ink), transparent);
-  mask-image: linear-gradient(to left, var(--sp-ink), transparent); }
-.sp-go::after { right: 0; -webkit-mask-image: linear-gradient(to right, var(--sp-ink), transparent);
-  mask-image: linear-gradient(to right, var(--sp-ink), transparent); }
-.sp-go:hover::before, .sp-go:focus-visible::before { opacity: .7; animation: sp-waves-left 1.2s linear infinite; }
-.sp-go:hover::after, .sp-go:focus-visible::after { opacity: .7; animation: sp-waves-right 1.2s linear infinite; }
-@keyframes sp-waves-left {  /* one full turn of each grid (32 = 4 x 8, 48 = 4 x 12 px): no seam in the loop */
-  0% { background-position: 0 0, 0 4px; } 25% { background-position: -8px 2px, -12px 1px; }
-  50% { background-position: -16px 0, -24px 4px; } 75% { background-position: -24px -2px, -36px 7px; }
-  100% { background-position: -32px 0, -48px 4px; } }
-@keyframes sp-waves-right {
-  0% { background-position: 0 0, 0 4px; } 25% { background-position: 8px 2px, 12px 1px; }
-  50% { background-position: 16px 0, 24px 4px; } 75% { background-position: 24px -2px, 36px 7px; }
-  100% { background-position: 32px 0, 48px 4px; } }
-@media (prefers-reduced-motion: reduce) { .sp-go::before, .sp-go::after { animation: none !important; } }
+/* the Score button: on hover or keyboard focus a thin ring of the score bands' blues turns slowly round its edge, with a
+   soft glow; the button and its label stay still (G, 2026-11-27: "like your ultracode button", without the waves, which
+   made them feel sick). Standing still for those who ask for less motion, and where the angle can't be animated. */
+@property --sp-ring { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.sp .sp-go { position: relative; margin-left: auto; padding: .45rem 2.25rem; font-weight: 600; transition: box-shadow .3s; }
+.sp-go::before { content: ""; position: absolute; inset: -1px; padding: 2px; border-radius: inherit; pointer-events: none;
+  opacity: 0; transition: opacity .3s; animation: sp-ring 3.5s linear infinite paused;
+  background: conic-gradient(from var(--sp-ring), var(--sp-tier-1), var(--sp-accent) 30%, var(--sp-tier-3) 42%,
+                             var(--sp-tier-2) 56%, var(--sp-tier-1) 80%);
+  -webkit-mask: linear-gradient(var(--sp-black) 0 0) content-box, linear-gradient(var(--sp-black) 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; }
+.sp .sp-go:hover, .sp .sp-go:focus-visible { filter: none; box-shadow: 0 0 .75rem color-mix(in srgb, var(--sp-tier-2) 45%, transparent); }
+.sp-go:hover::before, .sp-go:focus-visible::before { opacity: 1; animation-play-state: running; }
+@keyframes sp-ring { to { --sp-ring: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .sp-go::before { animation: none; } }
 /* under the title: 'Try' an example, and the tour at the row's end; short buttons, so the row stays one line */
 .sp-try { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: -.25rem 0 .5rem; }
 .sp-try form { margin: 0; }
@@ -467,7 +462,8 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 
 /* the Table: a toolbar line, a key line, the table, the pager */
 .sp-tablebar { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-bottom: .45rem; }
-.sp-tablebar-end { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; margin-left: auto; }
+.sp-tablebar-start { display: flex; flex: 1 1 0; flex-wrap: wrap; align-items: center; gap: .4rem .45rem; min-width: 0; }
+.sp-tablebar-end { display: flex; flex: none; align-items: center; gap: .4rem .5rem; margin-left: auto; }  /* one line, at the right */
 .sp .sp-clear { color: var(--sp-ink-2); }
 /* an (i) in a column title that shows a small key while hovered or focused (G, 2026-11-27: Chromatin's colours, ~NAME) */
 .sp-tip { position: relative; display: inline-flex; color: var(--sp-muted); cursor: help; }
@@ -483,7 +479,7 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp .sp-band { text-decoration: none; }
 .sp .sp-results .sp-col-score { width: 1%; white-space: nowrap; }  /* the Score column: as narrow as its title, the number centred (G) */
 .sp .sp-band-off, .sp a.sp-band:not(.sp-band-off):hover { background: var(--sp-grey-100); border-color: var(--sp-line-2); color: var(--sp-muted); }  /* a hovered chip shows it would go */
-.sp-pager { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .6rem; }
+.sp-pager { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .45rem; }
 .sp-results thead { position: sticky; top: 0; z-index: 2; }
 .sp-results thead th { position: static; }
 .sp-results tbody tr { cursor: pointer; }
@@ -544,27 +540,29 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-snps thead .sp-pickcol, .sp-snps th.sp-col-id { background: var(--sp-grey-50); }
 .sp-snps tr.sp-selected > .sp-pickcol, .sp-snps tr.sp-selected > td.sp-wide { background: var(--sp-grey-100); }
 @media (max-width: 767.98px) { .sp-results .sp-clip.sp-wide { max-width: 10rem; } }
-/* The default columns fit a wide window: the table then scrolls with the page, its header under the top bar. With a
-   card open, other columns or a narrower window it keeps its own box, which keeps the header in view. */
-@media (min-width: 1360px) {
-  #results:not(:has(> #drawer)) .sp-scroll.sp-fit { max-height: none; overflow: visible; }
-  #results:not(:has(> #drawer)) .sp-fit .sp-results thead { top: var(--sp-nav-h); }
-}
-
-/* the card beside the table: a column under the top bar from 992 px (the table narrows), over the page below it */
+/* The Table tab (G, 2026-11-27): from 992 px the page fills the window, footer included, without scrolling. The
+   results' column holds the header, the toolbar (Weights and Columns at its right, on its first line), the table's box,
+   which takes the height left and keeps it with or without a card, and the pager; the card (?snp=) is a column beside it
+   from under the top bar to the footer, as tall as the window allows. The table and the card scroll inside. Below
+   992 px the page scrolls and the card covers it. */
 .sp-drawer { display: flex; flex-direction: column; background: var(--sp-white); }
 .sp-drawer-body { flex: 1; min-height: 0; overflow: auto; padding: .85rem 1.1rem 1.25rem; }
-@media (min-width: 992px) {
-  #results:has(> #drawer) { display: grid; grid-template-columns: minmax(0, 1fr) clamp(30rem, 46%, 44rem); column-gap: 1.25rem;
-    align-items: start; }
-  #results:has(> #drawer) > * { grid-column: 1; min-width: 0; }
-  #results > #drawer { grid-column: 2; grid-row: 1 / span 4; position: sticky; top: calc(var(--sp-nav-h) + .75rem);
-    height: calc(100vh - var(--sp-nav-h) - 1.5rem); border: 1px solid var(--sp-line); border-radius: var(--sp-radius); }
-  /* portal.js: level with the Table's box, top and bottom */
-  #results > #drawer.sp-aligned:not(.sp-wide) { position: static; margin-top: var(--sp-card-top); height: var(--sp-card-h); }
+@media screen and (min-width: 992px) {
+  .sp:has(.sp-res-table) { height: 100vh; min-height: 36rem; }
+  .sp:has(.sp-res-table) :is(.sp-main, .sp-main > .sp-wrap) { display: flex; flex: 1 1 0; flex-direction: column; width: 100%;
+    min-height: 0; }
+  .sp:has(.sp-res-table) .sp-main { padding-bottom: .5rem; }
+  .sp:has(.sp-res-table) .sp-foot { margin-top: 0; padding: .45rem 0; }
+  #results.sp-res-table { display: flex; flex: 1 1 0; gap: 1.25rem; min-height: 0; }
+  .sp-res-table > .sp-res-main, .sp-res-table #tf { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; min-height: 0; }
+  .sp-res-table .sp-res-head { margin-bottom: .5rem; }
+  .sp-res-table .sp-tablebar { flex-wrap: nowrap; }
+  .sp-res-table .sp-scroll { flex: 1 1 0; min-height: 0; max-height: none; }
+  .sp-res-table .sp-dd-weights { max-height: calc(100vh - 15rem); overflow-y: auto; }  /* the window does not scroll */
+  .sp-res-table > #drawer { flex: 0 0 clamp(30rem, 46%, 44rem); min-height: 0; border: 1px solid var(--sp-line); border-radius: var(--sp-radius); }
 }
 @media (max-width: 991.98px) { #drawer { position: fixed; inset: 0; z-index: 1040; } }
-#results > #drawer.sp-wide { position: fixed; inset: 0; z-index: 1040; height: auto; border: 0; border-radius: 0; }  /* its locus browser */
+#drawer.sp-wide { position: fixed; inset: 0; z-index: 1040; height: auto; border: 0; border-radius: 0; }  /* its locus browser */
 .sp-drawer.sp-wide > .sp-drawer-body { display: none; }
 .sp-locus-pane { display: flex; flex-direction: column; height: 100%; background: var(--sp-white); }
 .sp-locus-pane[hidden] { display: none; }
@@ -651,7 +649,7 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 @media print {
   .sp-bc i, .sp-as, .sp-box { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .sp-results thead { position: static; }
-  #results:has(> #drawer) { display: block; } #results > #drawer { display: none; }
+  #drawer { display: none; }
 }
 /* end results */
 

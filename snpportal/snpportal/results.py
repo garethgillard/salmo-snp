@@ -764,7 +764,7 @@ def table(request, key, job=None):
         "total": total, "matching": matching, "first": (page - 1) * size + 1 if matching else 0,
         "last": min(page * size, matching), "chosen": chosen, "query": urlencode({"trait": chosen["trait"], **settings}),
         "dds": dds, "pick": pick, "n_selected": n_every - n_out, "n_out": n_out, "sv": is_sv(types),  # SVs: no panels
-        "fit": not custom_cols, "tkey": table_key(rows, conditions),
+        "tkey": table_key(rows, conditions),
         "band_chips": band_chips,
 
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
