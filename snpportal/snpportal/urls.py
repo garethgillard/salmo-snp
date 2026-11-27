@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import about, association, browser, explore, health, locus, mytracks, panel, panel_report, predict, projects, report, search, tools, views
+from . import about, association, browser, explore, health, locus, mytracks, panel, panel_report, predict, projects, report, scoring, search, tools, views
 
 app_name = "snpportal"
 urlpatterns = [
@@ -37,6 +37,7 @@ urlpatterns = [
     path("variant/<str:spec>/predict/<slug:name>/", predict.variant, name="predict_variant"),
     path("about/data/", about.data, name="about_data"),
     path("about/methods/", about.methods, name="methods"),
+    path("about/scoring/", scoring.scoring, name="scoring"),
     path("help/", about.help_page, name="help"),
     path("run-locally/", about.run_locally, name="run_locally"),
     path("releases/", about.releases, name="releases"),

@@ -23,7 +23,7 @@
     </section>
     <section class="sp-section" id="weights" aria-labelledby="w-h">
       <h2 id="w-h">Evidence weights</h2>
-      <p class="sp-small sp-muted mt-1">A SNP's score is the sum of the weights of its evidence, counted over all 27 conditions; users can set their own weights (Weights, in the Table).</p>
+      <p class="sp-small sp-muted mt-1">A SNP's score is the sum of the weights of its evidence, counted over all 27 conditions; users can set their own weights (Weights, in the Table). Why these weights, with the literature and our tests: <a href="{% url 'snpportal:scoring' %}">How scores are made</a>.</p>
       <table class="table table-sm sp-small mb-0">
         <thead><tr><th scope="col">Evidence</th><th scope="col" class="sp-num">Weight</th><th scope="col">Fires when</th></tr></thead>
         <tbody>{% for name, value, text in weights %}<tr id="term-{{ name }}"><th scope="row" class="fw-normal sp-mono">{{ name }}</th>

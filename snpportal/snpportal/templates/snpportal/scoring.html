@@ -1,0 +1,145 @@
+{% extends 'snpportal/base_portal.html' %}
+{% load snpportal_tags %}
+{% block main %}
+{% comment %}How scores are made (G, 2026-11-27): docs/SCORING.md for users, the test data first. The numbers are the
+   doc's (scoring.py); the weights, band cut-offs and shares are the installed weights.yaml's and the release's.{% endcomment %}
+<div class="sp-methods sp-scoring">
+<p class="sp-lead">What goes into a SNP's score, what the literature says about weighting each kind of evidence, and what
+  our own tests show so far. The weights are a provisional starting point: you can set your own.</p>
+<nav class="sp-toc" aria-label="On this page"><span>On this page</span>
+  <a href="#test-data">The test data</a><a href="#score">How a score is made</a><a href="#evidence">The evidence, one by one</a>
+  <a href="#works">Does the score work?</a><a href="#reading">Reading a score</a><a href="#others">What other projects do</a>
+  <a href="#bands">Score bands</a><a href="#open">Still open</a><a href="#references">References</a></nav>
+
+<section class="sp-section" id="test-data" aria-labelledby="test-data-h"><h2 id="test-data-h">The test data</h2>
+  <p>Every test on this page used Atlantic salmon: release {{ tested }} and the layers and GWAS added on 2026-11-24. The
+    truth sets are small, and their lead SNPs are tags rather than causal SNPs, so read the results as signs, not proof.
+    Rainbow trout has no test set yet; it is scored with the same weights, untested.</p>
+  <div class="table-responsive"><table class="table table-sm sp-plain">
+    <thead><tr><th scope="col">Test set</th><th scope="col">What it is</th><th scope="col">What it can test</th><th scope="col">Its limits</th></tr></thead>
+    <tbody>{% for name, what, tests, limits in tests %}<tr><th scope="row">{{ name }}</th><td>{{ what }}</td><td>{{ tests }}</td><td>{{ limits }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="sp-small sp-muted">The full research note, with every table: <a href="{{ note_url }}">SCORING.md</a>. The literature: six reviews by AI research agents (Claude) of papers found through PubMed and
+    Europe PMC, 2026-11-21 and 22; the 51 papers cited were re-checked against their PubMed records. A number marked †
+    is in the paper's full text only, as the reviewer read it, and was not re-checked. Our own tests: computed by one
+    agent, re-derived by a second with its own queries, and the counts checked against the release; the scripts are kept
+    outside the repository.</p>
+</section>
+
+<section class="sp-section" id="score" aria-labelledby="score-h"><h2 id="score-h">How a score is made</h2>
+  <p>A SNP's score adds up the weights of the kinds of evidence it has, counted over all {{ conditions }} conditions (tissues,
+    maturity and sex, immune stimulation, embryo stages). Each kind counts once: chromatin counts its best state over the
+    conditions, active or else weak. Scores are coloured in bands,{% for t, b in bands.items %}
+    <span class="sp-badge sp-tier-{{ t }}">{{ b }}</span>{% endfor %}, and 0 means no evidence was found, not evidence of no
+    effect.</p>
+  <p>Layers with weight 0 are shown and never counted: molQTL lead SNPs, sequence that aligns to pike, ATAC summits and the
+    ChromBPNet allele effects. Each waits for a test of what it adds, or for the maintainer's decision.</p>
+  <p>You can set your own weights and band cut-offs, on the <a href="{% url 'snpportal:upload' %}">Score page</a> or with
+    Weights in a result's Table. The whole result is scored again, and every page, report and download says which rules
+    made it. The rules themselves are on <a href="{% url 'snpportal:methods' %}#weights">Methods</a>.</p>
+</section>
+
+<section class="sp-section" id="evidence" aria-labelledby="evidence-h"><h2 id="evidence-h">The evidence, one by one</h2>
+  <p>At a glance: how much more often lead SNPs have each kind of evidence than matched SNPs (odds ratio, 95% interval;
+    1 means no difference). Chromatin rows compare with SNPs outside peaks, the others with SNPs that lack the evidence.
+    Blank: not measured.</p>
+  <div class="table-responsive"><table class="table table-sm sp-plain sp-glance">
+    <thead><tr><th scope="col">Evidence</th><th scope="col" class="sp-num">Weight</th><th scope="col">eQTL leads, design S</th>
+      <th scope="col">Design T</th><th scope="col" class="sp-num">Leads with it</th><th scope="col">GWAS leads</th></tr></thead>
+    <tbody>{% for t in terms %}<tr><th scope="row" class="fw-normal"><a href="#ev-{{ t.term }}">{{ t.name }}</a></th><td class="sp-num">{{ t.weight }}</td>
+      {% if t.glance %}<td>{{ t.glance.0 }}</td><td>{{ t.glance.1 }}</td><td class="sp-num">{{ t.glance.2 }}</td><td>{{ t.glance.3 }}</td>{% else %}<td></td><td></td><td></td><td></td>{% endif %}</tr>{% endfor %}
+      {% for label, s, t, n, gwas in glance_rows %}<tr><th scope="row" class="fw-normal">{{ label }}</th><td></td><td>{{ s }}</td><td>{{ t }}</td><td class="sp-num">{{ n }}</td><td>{{ gwas }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% for t in terms %}
+  <h3 id="ev-{{ t.term }}">{{ t.name }} <span class="sp-weight-now">{% if t.weight %}weight {{ t.weight }}{% else %}shown, not counted{% endif %}</span></h3>
+  <dl class="sp-terms">
+    {% if t.counts %}<dt>Counts when</dt><dd>{{ t.counts }}</dd>{% endif %}
+    <dt>The literature</dt><dd>{{ t.literature }}</dd>
+    <dt>Our tests</dt><dd>{{ t.ours }}</dd>
+  </dl>{% endfor %}
+  <h3 id="ev-chrombpnet">{{ chrombpnet.0 }} <span class="sp-weight-now">shown, not counted</span></h3>
+  <dl class="sp-terms">
+    <dt>The literature</dt><dd>{{ chrombpnet.1 }}</dd>
+    <dt>Our tests</dt><dd>{{ chrombpnet.2 }}</dd>
+  </dl>
+</section>
+
+<section class="sp-section" id="works" aria-labelledby="works-h"><h2 id="works-h">Does the score work?</h2>
+  <ul>
+    <li><strong>It carries signal, modestly.</strong> eQTL lead SNPs score 3 or more 1.56 (1.32–1.83) times as often as
+      matched SNPs (1.47 in design T), and the GWAS leads 1.51 (0.95–2.33) times. Known loci: 5.2 (2.9–9.3), from few loci,
+      a quarter of them coding. caQTL leads: 3.2 (2.8–3.6), circular.</li>
+    <li><strong>There is no gradient.</strong> Scores of 1–2 are as enriched as 3–4 (1.60 against 1.64), and score by score
+      the odds stay near 1.7. A plain "any evidence, yes or no" ranks the eQTL leads as well as the score does (AUC 0.539,
+      0.528–0.550).</li>
+    <li><strong>It does not beat distance.</strong> Distance to the nearest protein-coding gene start ranks eQTL leads a
+      little better (AUC 0.562). That is the eQTL bias the literature describes: GWAS hits, unlike eQTL, do not cluster at
+      gene starts (Mostafavi 2023), so distance is a control here, not evidence.</li>
+    <li><strong>The open choices do not change it.</strong> No option for the active and weak states or the synonymous
+      weight moves the eQTL result measurably (odds ratios 1.44 to 1.58, AUC within 0.004), though they move many SNPs.</li>
+    <li><strong>The GWAS signal is coding, not chromatin.</strong> The maturity GWAS's leads are enriched in coding sequence
+      (2.65) and not in active states (0.81), but its leads are array tags, which favour coding SNPs.</li>
+    <li><strong>The GWAS prior is too steep.</strong> The Association page's fine-mapping prior, exp({{ lambda|default:0.5 }} ×
+      score), gives 4.5-fold prior odds at score 3 and 12-fold at 5. The maturity GWAS supports a slope of 0.05 to 0.15 per
+      point, and 0.5 fits worse than a flat prior. Inside its loci the posterior does not sit on high-scoring SNPs.</li>
+  </ul>
+  <p>What the tests cannot say yet: the right size of any weight, a choice between the options, or whether chromatin
+    evidence should be graded. That needs a better truth set: allelic imbalance in the 12 fish, the ChromBPNet effects, a
+    large fine-mapped eQTL study, or a company's own GWAS.</p>
+</section>
+
+<section class="sp-section" id="reading" aria-labelledby="reading-h"><h2 id="reading-h">Reading a score</h2>
+  <ul>
+    <li>A score says a SNP lies in a region with functional evidence. It does not say the SNP is causal, and SNPs in the same
+      element tie.</li>
+    <li>For a GWAS locus, compare scores among the SNPs linked to the lead SNP.</li>
+    <li>For a chip, use the score as a preference inside genome bins, after reliability, spacing and allele frequency, as
+      the panel designer does. Combined with your own GWAS, this follows the one design with a documented gain (XT-50K,
+      in cattle).</li>
+    <li>For genomic prediction within one population, expect little: in the studies reviewed the gain was small or nil.
+      Estimate any gain in fish that took no part in choosing the markers.</li>
+  </ul>
+</section>
+
+<section class="sp-section" id="others" aria-labelledby="others-h"><h2 id="others-h">What other projects do</h2>
+  <p>Nobody has a proven set of weights to copy. The transparent human schemes were validated only by enrichment; the
+    learned human scores work for rare, damaging variants and do hardly better than chance for common variants inside
+    one LD block; the livestock scores that work were learned from trait records of 44,000 to 103,000 cattle. No
+    aquaculture species has a trained or validated score.</p>
+  <div class="table-responsive"><table class="table table-sm sp-plain">
+    <thead><tr><th scope="col">Scheme</th><th scope="col">How it scores</th><th scope="col">What was shown</th></tr></thead>
+    <tbody>{% for scheme, how, shown in others %}<tr><th scope="row" class="fw-normal">{{ scheme }}</th><td>{{ how }}</td><td>{{ shown }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p>So the score keeps a basic, transparent additive form, the form of both published livestock scores and of the
+    standard fine-mapping priors; the order of the evidence comes from the literature, and its scale should come from our
+    own tests. The literature orders the evidence differently from the default weights in three places: a protein change
+    and evolutionary constraint carry more per SNP than a regulatory element; an active promoter more than an active
+    enhancer; and a synonymous change is not a protein change. These are open decisions (below).</p>
+  <p>What orders SNPs inside one locus is evidence at the base, not the region: a predicted allele effect, allelic
+    imbalance, a protein change. Chromatin states separate regions from the background, and then tie.</p>
+</section>
+
+<section class="sp-section" id="bands" aria-labelledby="bands-h"><h2 id="bands-h">Score bands</h2>
+  <p>The default cut-offs are {{ cuts.0 }}, {{ cuts.1 }} and {{ cuts.2 }}:{% for t, b in bands.items %}
+    <span class="sp-badge sp-tier-{{ t }}">{{ b }}</span>{% endfor %}.{% if shares %} Among the public SNPs, {{ shares }}
+    score at or above them.{% endif %} You can set your own cut-offs next to the weights.{% if shares %} Left blank with
+    weights of your own, they are set from the public SNPs: the cut-offs that put about the same shares of them in each
+    band as the defaults do, so that a band means the same rarity whatever the weights.{% endif %}</p>
+</section>
+
+<section class="sp-section" id="open" aria-labelledby="open-h"><h2 id="open-h">Still open</h2>
+  <p>The weights are the maintainer's to set, and these questions are open. The numbers refer to the project's
+    <a href="{{ decisions_url }}">list of decisions</a>.</p>
+  <div class="table-responsive"><table class="table table-sm sp-plain">
+    <thead><tr><th scope="col">Question</th><th scope="col">Today</th><th scope="col">What the evidence says</th><th scope="col">Recommended</th></tr></thead>
+    <tbody>{% for question, today, evidence, recommended in open %}<tr><th scope="row" class="fw-normal">{{ question }}</th><td>{{ today }}</td><td>{{ evidence }}</td><td>{{ recommended }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+
+<section class="sp-section" id="references" aria-labelledby="references-h"><h2 id="references-h">References</h2>
+  <ul class="sp-refs">{% for citation, doi in references %}<li>{{ citation }} <a href="https://doi.org/{{ doi }}">doi:{{ doi }}</a></li>{% endfor %}</ul>
+  <p class="sp-small sp-muted">† The number is in the paper's full text only, as the reviewer read it, and was not
+    re-checked.</p>
+</section>
+</div>
+{% endblock main %}

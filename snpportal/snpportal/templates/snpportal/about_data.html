@@ -2,7 +2,7 @@
 {% load snpportal_tags %}
 {% block main %}
 <p class="sp-lead">Everything the portal shows comes from one release, built from the public sources below. See also
-  <a href="{% url 'snpportal:methods' %}">Methods</a>.</p>
+  <a href="{% url 'snpportal:methods' %}">Methods</a> and <a href="{% url 'snpportal:scoring' %}">How scores are made</a>.</p>
 <p class="sp-small" id="facts">{{ built }}: {{ facts }}.</p>
 {% if release.synthetic %}<div class="sp-status sp-status-warn" role="note">&#9888; Synthetic layers in this release:
   {{ release.synthetic|join:", " }}. They never count in scores.</div>{% endif %}

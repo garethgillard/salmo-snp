@@ -228,7 +228,7 @@ def middleware(get_response):
         try:
             response = get_response(request)
             kind = response.get("Content-Type", "")
-            if not response.streaming and kind.startswith(("text/html", "image/svg")) and not request.path.endswith("/releases/"):
+            if not response.streaming and kind.startswith(("text/html", "image/svg")) and not request.path.endswith(("/releases/", "/about/scoring/")):
                 pairs = wording() + sv_wording(request)
                 if pairs:
                     text = response.content.decode(response.charset or "utf-8")

@@ -44,6 +44,10 @@ TERM_TEXT = {  # weights.yaml evidence terms -> what fires them (see snpscore.sc
     "molqtl": "A molQTL lead SNP: shown, not scored.",
     "motif": "Inside a robust ATAC peak, one allele matches a JASPAR 2024 vertebrate motif at p < 1e-5 and the other "
              "doesn't, at least 4 bits (16-fold) apart.",
+    "pike": "The base aligns to northern pike in AQUA-FAANG's salmon-trout-pike alignment (gaps of up to 50 bp closed): "
+            "shown, not scored until the maintainer sets it.",
+    "summit": "Within 50 bp of an ATAC summit in the strongest quarter of its condition's peaks, inside a robust peak: "
+              "shown, not scored until the maintainer sets it.",
 }
 GLOSSARY = [  # (anchor, term, definition)
     ("peak", "Robust ATAC peak", "An AQUA-FAANG open-chromatin peak reproduced across samples. States are only known inside these peaks."),

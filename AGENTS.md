@@ -312,6 +312,9 @@ Provisional (chosen by Claude on 2026-10-06 so the prototype works; G to confirm
   IDs with one offset (layers.yaml liftover); fSalSal1 from same-chromosome minimap2 asm5 alignments, mapq >= 5,
   overlapping blocks dropped (DECISIONS #37; the alignment postponed, G 2026-11-06: no fSalSal1
   tables in a release until I20).
+- Users' own score bands (2026-11-27, DECISIONS #69): cut-offs left blank with weights of the user's are set from the
+  public pool, the cut-offs under which its shares at or above each come closest (by ratio) to the default bands' (0.38%,
+  6.5% and 15% in release 2026-11-25), so the default weights keep 5, 3 and 1 (jobs.cuts_from_public).
 - The gill ChromBPNet scores' first set (2026-11-25, DECISIONS #60): until every site is scored, the public and
   Synchrosmolt SNPs inside the model's own training peaks (216,592 SNPs in the gill MACS2 peaks; 216,586 scored in
   release 2026-11-25, on CPU in about an hour), where its predictions mean the most. The layer's percentile is the scorer's, among 100,000 random public

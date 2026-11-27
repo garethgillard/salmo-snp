@@ -250,6 +250,14 @@ class ExploreTest(SimpleTestCase):
             self.assertIn(f'id="{anchor}"', methods)
         self.assertIn("no evidence found (not evidence of no effect)", methods)
         self.assertIn("Methods text for a paper", methods)
+        scoring = self.client.get(reverse("snpportal:scoring")).content.decode()  # G, 2026-11-27: the scoring doc for users
+        self.assertLess(scoring.index('id="test-data"'), scoring.index('id="evidence"'))  # the test data come first
+        for term in ("active", "coding", "constrained", "motif", "pike", "chrombpnet"):  # each kind of evidence has a section
+            self.assertIn(f'id="ev-{term}"', scoring)
+        self.assertIn("Sinclair-Waters et al. 2020", scoring)
+        self.assertIn("https://doi.org/10.1038/s41588-023-01529-1", scoring)  # its references link their DOIs
+        self.assertIn(reverse("snpportal:scoring"), methods)  # reached from Methods, Help and every page's footer
+        self.assertIn(reverse("snpportal:scoring"), help_page)
 
         release = self.copy()  # editing weights.yaml changes the tables; extra blocks are shown and badged
         weights = release / "edited_weights.yaml"

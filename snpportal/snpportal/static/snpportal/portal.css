@@ -541,6 +541,7 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-card-id { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .6rem; margin-bottom: .5rem; font-size: var(--sp-fs-md); }
 .sp-score { display: flex; align-items: center; gap: .75rem; }  /* 'Score' beside the bar */
 .sp .sp-score .sp-score-h { margin: .6rem 0 0; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
+.sp .sp-score-h a { color: inherit; text-decoration-color: var(--sp-line-2); }
 .sp-facts { display: flex; flex-wrap: wrap; align-items: baseline; margin: .3rem 0 .2rem; }
 .sp-facts:empty { display: none; }
 .sp-fact { color: var(--sp-ink); white-space: nowrap; }
@@ -899,6 +900,13 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-folds { margin-top: 2.5rem; }
 .sp-folds > .sp-more > :not(summary) { max-width: 70ch; }
 .sp-methods { max-width: 60rem; }  /* Methods: one column, wide enough for its tables */
+/* How scores are made: prose at reading width beside wide tables; each kind of evidence a heading with its weight now */
+.sp-scoring .sp-section > p, .sp-scoring .sp-section > ul, .sp-scoring dl.sp-terms { max-width: 70ch; }
+.sp-scoring .sp-section > h3 { scroll-margin-top: 1rem; }
+.sp-weight-now { margin-left: .4rem; color: var(--sp-muted); font-size: var(--sp-fs-sm); font-weight: 400; }
+.sp .sp-glance td { white-space: nowrap; }
+.sp-refs { font-size: var(--sp-fs-sm); }
+.sp-refs li { margin-bottom: .35rem; }
 .sp-methods .sp-section:first-child { margin-top: 0; }
 @media print { .sp-toc { display: none; } }
 /* end content pages */

@@ -3,7 +3,8 @@
 {% block main %}
 <div class="sp-doc">
 <p class="sp-lead">How to score a list, read its results and use what you find. The rules behind the scores are on
-  <a href="{% url 'snpportal:methods' %}">Methods</a>, the data on <a href="{% url 'snpportal:about_data' %}">Data</a>.</p>
+  <a href="{% url 'snpportal:methods' %}">Methods</a>, why they are as they are on <a href="{% url 'snpportal:scoring' %}">How
+  scores are made</a>, the data on <a href="{% url 'snpportal:about_data' %}">Data</a>.</p>
 <nav class="sp-toc" aria-label="On this page"><span>On this page</span>
   <a href="#quick-start">Quick start</a><a href="#words">Words used</a><a href="#colours">Colour key</a><a href="#faq">Questions</a><a href="#formats">Input formats</a>
   <a href="#search">Search</a><a href="#exports">Exports</a><a href="#privacy">Privacy</a></nav>
@@ -28,7 +29,7 @@
     <dd>How much functional evidence a SNP has: the sum of the weights of its evidence, over all 27 conditions, so a SNP
       has the same score everywhere. You can choose the weights (Weights, in the Table). 0 = no evidence found, which is
       not evidence of no effect. {% if example %}For example, {{ example }}.{% endif %}
-      <a href="{% url 'snpportal:methods' %}#weights">All the weights</a></dd>
+      <a href="{% url 'snpportal:scoring' %}">How scores are made</a>: the evidence, the literature and our tests.</dd>
     <dt id="w-tier">Score band</dt>
     <dd>Scores are coloured by band:{% for tier, range, note in tiers %} <span class="sp-badge sp-tier-{{ tier }}">{{ tier|band }}</span>{% endfor %}
       (the strongest first). You can set where each band starts, next to the weights{% if shares %}; left blank with
