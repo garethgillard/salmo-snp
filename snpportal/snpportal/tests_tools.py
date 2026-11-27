@@ -98,6 +98,9 @@ class ToolsTest(SimpleTestCase):
         info = jobs.read_json(path.with_suffix(".json"))
         self.assertEqual(len(picked), info["summary"]["n_selected"])
         self.assertTrue(len(picked) == 60 or info["summary"]["binding"])
+        added = self.client.post(reverse("snpportal:panel_add", args=[self.key]), {"panel": h})  # the picker's own Add button
+        self.assertIn(f"panel={h}&tab=panel&added={len(picked)}", added.url)
+        self.assertIn("picked automatically: ", self.client.get(reverse("snpportal:design_panel")).content.decode())
         self.assertTrue(all(r["selection_reason"] in tools.REASONS for r in picked))
         by_chrom = {}
         for r in picked:
@@ -124,10 +127,12 @@ class ToolsTest(SimpleTestCase):
         self.assertNotIn(h, heading)  # named by its markers, never by a hash
 
     def test_design_panel(self):
-        table = self.client.get(self.url, {"tab": "table", "tier": "1-2"}).content.decode()  # the Table keeps the selection
-        n = int(re.search(r"Add to Design panel \(([\d,]+)\)", table).group(1).replace(",", ""))
+        self.client.get(self.url, {"tab": "table", "tier": "1-2"})  # the Table keeps the selection
+        export = self.client.get(self.url, {"tab": "export"}).content.decode()  # where Add to Design panel is (G, 2026-11-27)
+        n = int(re.search(r"Add your Table selection \(([\d,]+) SNPs\)", export).group(1).replace(",", ""))
         added = self.client.post(reverse("snpportal:panel_add", args=[self.key]))  # the cart: the whole selection
-        self.assertIn(f"added={n}", added.url)
+        self.assertIn(f"tab=export&added={n}", added.url)
+        self.assertIn(f"{n:,} SNPs added to your Design panel", self.client.get(added.url).content.decode())
         cookie = added.cookies[panel.COOKIE]
         self.assertTrue(cookie["httponly"])
         page = self.client.get(reverse("snpportal:design_panel")).content.decode()

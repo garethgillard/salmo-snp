@@ -1,10 +1,25 @@
 {% load snpportal_tags %}
-{% comment %}Export tab, on the page (no frame): which SNPs (a choice, applied on change, when there is more than one: the
-   Table selection, its panels or all SNPs; else a line saying it), the automatic marker picker (?tab=panel, which is
-   not the Design panel page), then a download row per file, each vendor row with its own counts and checks. Downloads
-   are files: never boosted.{% endcomment %}
+{% comment %}Export tab, on the page (no frame). First the Design panel's two ways in (G, 2026-11-27): add the Table
+   selection as it is (a POST), or open the automatic picker (?tab=panel), whose own button adds its markers; SNP lists
+   only. Then the downloads: which SNPs (a choice, applied on change, when there is more than one: the Table selection,
+   the picker's panels or all SNPs; else a line saying it), a row per file, each vendor row with its own counts and
+   checks. Downloads are files: never boosted.{% endcomment %}
 <section class="sp-export sp-small" aria-labelledby="export-h">
   <h2 id="export-h" class="visually-hidden">Export</h2>
+  {% if not exports.sv %}<div class="sp-topanel" id="to-panel">
+    <h3>Add to your Design panel</h3>
+    {% if exports.added %}<div class="sp-status sp-status-ok" role="status">{% icon 'check' %} {{ exports.added|thousands }} SNPs added to your Design panel. <a href="{% url 'snpportal:design_panel' %}">Open the Design panel</a></div>
+    {% elif exports.panel_error %}<div class="sp-status sp-status-warn" role="status">{% icon 'warn' %} {{ exports.panel_error }}</div>{% endif %}
+    <div class="sp-ways">
+      <form method="post" action="{{ exports.panel_add }}">{% csrf_token %}
+        <button class="btn btn-sm btn-primary" type="submit">{% if exports.filtered %}Add your Table selection ({{ exports.selected|thousands }} SNPs){% else %}Add all {{ exports.selected|thousands }} SNPs{% endif %}</button>
+        <p>The SNPs you choose yourself: filter the Table and untick the rows to leave out first.</p></form>
+      {% if not exports.gwas %}<div><a class="btn btn-sm btn-outline-primary" href="{{ exports.panel_link }}" hx-boost="true">Pick markers automatically</a>
+        <p>A spread of markers from {% if exports.filtered %}your selection{% else %}these SNPs{% endif %} by tier, spacing and assay check, for the
+          purpose and size you set; then add them.</p></div>{% endif %}
+    </div>
+  </div>
+  <h3>Download</h3>{% endif %}
   {% if not exports.gwas %}<form method="get" hx-get="{% url 'snpportal:results' key %}" hx-trigger="change" hx-push-url="true" class="sp-export-scope">
     <input type="hidden" name="tab" value="export"><input type="hidden" name="trait" value="{{ exports.trait }}">
     {% for name, value in exports.hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
@@ -13,7 +28,6 @@
       {% for value, label, checked in exports.scopes %}<label class="form-check-label text-nowrap"><input class="form-check-input" type="radio" name="scope" value="{{ value }}"{% if checked %} checked{% endif %}> {{ label }}</label>{% endfor %}
       <noscript><button class="btn btn-sm btn-outline-secondary" type="submit">Apply</button></noscript>
     </fieldset>{% else %}<p class="mb-0">All {{ exports.n|thousands }} SNPs of the list</p>{% endif %}
-    {% if not exports.sv %}<a class="ms-auto" href="{{ exports.panel_link }}" hx-boost="true" title="The panel designer: picks a spread of markers from these SNPs by tier, spacing and assay check">Pick markers automatically</a>{% endif %}
   </form>{% endif %}
   <div class="table-responsive"><table class="table table-sm align-middle mb-2">
     <tbody>{% for label, notes, href in exports.rows %}<tr>

@@ -639,11 +639,11 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("RNA, ATAC and ChIP from salmobase", "#g-assays .sp-grp-h")],
      "shot": {"path": "locus/?r=25:28983861-29008860", "width": 1280, "crop": [".sp-trk-chr", "#g-assays .sp-grp-h"]}},
     {"slug": "panel", "title": "Build a genotyping panel",
-     "text": "Add to Design panel on the Table brings its selection to the Design panel. Compare the panel with your chip, "
-             "drop SNPs by hand and download KASP, Illumina or Axiom files.",
+     "text": "On a result's Export tab, add your Table selection to the Design panel, or pick markers automatically and add "
+             "those. Compare the panel with your chip, drop SNPs by hand and download KASP, Illumina or Axiom files.",
      "alt": "The Design panel holding the known-loci example, compared with the synthetic demo chip: its source, the chip "
             "comparison, the downloads, the assay check and the panel along the genome.",
-     "callouts": [("Selections added from the Table", "section[aria-labelledby=src-h] table"),
+     "callouts": [("What you added from your results", "section[aria-labelledby=src-h] table"),
                   ("Compared with the chip you use", "section[aria-labelledby=chip-h] .sp-kpis"),
                   ("Vendor files", "section[aria-labelledby=dl-h] form"),
                   ("Ready to genotype?", "section[aria-labelledby=glance-h]")],

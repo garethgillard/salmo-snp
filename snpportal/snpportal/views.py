@@ -399,7 +399,8 @@ def no_store(listed, response):
 
 
 def mine(request):
-    """This browser's results that still exist, newest first, for the Score page: [{key, name, n, when, state, url}]."""
+    """This browser's results that still exist, newest first, for the Score page and the Design panel's picker links:
+    [{key, name, n, when, state, url, kind}]."""
     out = []
     for key in _mine_keys(request):
         try:
@@ -408,7 +409,7 @@ def mine(request):
             job = None
         if job:
             out.append({"key": key, "name": job.get("label") or "Results", "n": job.get("n_rows"), "when": job.get("created_utc"),
-                        "unit": "SVs" if job.get("input_kind") == "sv" else "SNPs",
+                        "unit": "SVs" if job.get("input_kind") == "sv" else "SNPs", "kind": job.get("input_kind") or "snps",
                         "state": job.get("state"), "url": reverse("snpportal:results", args=[key]),
                         "current": not out})  # the one opened last
     return out

@@ -1,5 +1,6 @@
-"""Design panel (/snp/panel/): a curated SNP panel built from Table selections of any results ('Add to panel' on the
-Table copies its whole selection: the cart), compared with an existing chip (the usual case: SNPs to add to it),
+"""Design panel (/snp/panel/): a curated SNP panel built from Table selections of any results ('Add to Design panel'
+on the Export tab copies the whole selection: the cart) and the markers the automatic picker chose (its own Add
+button; G, 2026-11-27), compared with an existing chip (the usual case: SNPs to add to it),
 checked and exported as vendor files.
 
 It belongs to one browser: its folder (results/panel-<uuid>) is named by an HttpOnly cookie, never by a URL, and
@@ -32,7 +33,7 @@ from snpscore import placement
 from snpscore.formats import lit
 
 from . import figures, jobs, results, tools
-from .views import UploadToResults, accepted_suffix, finished, private
+from .views import UploadToResults, accepted_suffix, finished, mine, private
 
 COOKIE = "snpportal_panel"
 BIN = 250_000  # the figure's marks: one per 250 kb, coloured by the best tier in it
@@ -114,24 +115,29 @@ def holds(request, snp):
 
 @private
 def add(request, key):
-    """POST from the Table: copy the whole selection of results `key` (its rows, with their tiers for all
-    conditions) into this browser's panel, starting one if needed, and go back to the Table."""
+    """POST from the Export tab: copy the whole selection of results `key` (its rows, with their tiers for all
+    conditions) into this browser's panel, starting one if needed; with `panel` (the picker's hash), the markers the
+    automatic picker chose instead (G, 2026-11-27). Then back to that page, which says how many were added."""
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
     job = finished(key)
     jd = jobs.folder(key)
+    picked = tools._saved(jd, request.POST.get("panel"))  # a panel the picker designed, or None
     query = results.selection(jd)
     req = results.selection_request(query)
-    back = f"{reverse('snpportal:results', args=[key])}?{query + '&' if query else ''}tab=table"
+    back = f"{reverse('snpportal:results', args=[key])}?" + (f"panel={picked['hash']}&tab=panel" if picked else
+                                                               f"{query + '&' if query else ''}tab=export")
     if job.get("input_kind") == "sv":  # panels are SNP markers; SVs have no probe flanks
         return redirect(f"{back}&panel_error=sv")
     con, types, where, _ = results.open_result(req, key, write=True)
-    n = con.execute(f"SELECT count(*) FROM v {where}").fetchone()[0]
+    chosen = (f"(SELECT source_row AS file_row_number FROM read_parquet({lit(jd / 'panels' / (picked['hash'] + '.parquet'))}))"
+              if picked else f"(SELECT file_row_number FROM v {where})")
+    n = con.execute(f"SELECT count(*) FROM {chosen}").fetchone()[0]
     cap = int(jobs.setting("SNPPORTAL_MAX_PANEL_SNPS", 50_000))
     if not n or n > cap:
         return redirect(f"{back}&panel_error={'empty' if not n else 'many'}")
     rows = jd / f".panel-rows-{uuid.uuid4().hex}.parquet"
-    con.execute(f"COPY (SELECT file_row_number FROM v {where}) TO '{rows}' (FORMAT parquet)")
+    con.execute(f"COPY {chosen} TO '{rows}' (FORMAT parquet)")
     con.close()
     d = _folder(request)
     if d is not None and jobs.read_json(d / "panel.json").get("release") not in (None, job.get("release")):
@@ -143,8 +149,10 @@ def add(request, key):
         _copy(jd, rows, d / f"source_{i}.parquet", i)
     finally:
         rows.unlink(missing_ok=True)
-    s["sources"].append({"id": i, "job": str(key), "label": job.get("label") or "Results", "n": n, "selection": query,
-                         "filters": [label for _, label, _ in results.filters(req, types, jobs.weights(jd), jd)],
+    s["sources"].append({"id": i, "job": str(key), "label": job.get("label") or "Results", "n": n,
+                         "selection": f"panel={picked['hash']}" if picked else query, "tab": "panel" if picked else "table",
+                         "filters": [f"picked automatically: {tools.panel_name(picked)}"] if picked else
+                         [label for _, label, _ in results.filters(req, types, jobs.weights(jd), jd)],
                          "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers")), "added_utc": jobs.utc()})
     s["next"] = i + 1
     jobs._write_json(d / "panel.json", s)
@@ -256,7 +264,9 @@ def page(request):
     """/snp/panel/: the sources, the panel at a glance, the chip comparison, the assay check, the SNP list and the
     downloads; an empty panel says how to fill it."""
     d = _folder(request)
-    ctx = {"nav": "panel", "title": "Design panel", "error": request.GET.get("error"), "local": jobs.local()}
+    ctx = {"nav": "panel", "title": "Design panel", "error": request.GET.get("error"), "local": jobs.local(),
+           "pickers": [(r["name"], f"{r['url']}?tab=panel") for r in mine(request)  # the automatic picker, for each SNP list
+                       if r["state"] == "done" and r["kind"] not in ("gwas", "sv")][:5]}
     if jobs.local():  # saved projects (I7): the save form offers their names
         from . import projects
         ctx["projects"] = projects.everything()
@@ -270,7 +280,7 @@ def page(request):
     chip = jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}
     synthetic = any(x.get("synthetic") for x in s["sources"]) or bool(chip.get("synthetic"))
     ctx.update(sources=[{**x, "url": f"{reverse('snpportal:projects')}#{x['project']}" if x.get("project") else
-                         f"{reverse('snpportal:results', args=[x['job']])}?{x['selection'] + '&' if x['selection'] else ''}tab=table"}
+                         f"{reverse('snpportal:results', args=[x['job']])}?{x['selection'] + '&' if x['selection'] else ''}tab={x.get('tab', 'table')}"}
                         for x in s["sources"]],
                meta=("Only" if jobs.keep_seconds() is None  # a local install keeps it: the page doesn't repeat that
                      else f"Deleted after {jobs.utc((d / 'created').stat().st_mtime + jobs.keep_seconds())} · only") + " this browser can open it",

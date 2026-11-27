@@ -671,6 +671,8 @@ def panel(request, key, job):
         "rows": _listed(con, info, d, trait, key, LISTED if every else SHOWN), "n_rows": s["n_selected"], "listed": LISTED,
         "show_all": None if every or s["n_selected"] <= SHOWN else "?" + more.urlencode(),
         "export_link": "?" + urlencode({"tab": "export", "trait": trait, "scope": f"panel-{pv['hash']}"}),
+        "hash": pv["hash"], "add_url": reverse("snpportal:panel_add", args=[key]), **results.panel_status(request.GET),
+        "back": "?" + urlencode({"tab": "export", "trait": trait}),
         "reset": "?" + urlencode({"tab": "panel", "trait": trait, **({"purpose": p["purpose"]} if p.get("purpose") else {})}),
         "purposes": [("", "General", "The release's design defaults", not p.get("purpose"))] + [
             (k, x.get("label") or k, x.get("help") or "", k == p.get("purpose")) for k, x in snp_panel.presets(weights).items()],
@@ -1040,15 +1042,15 @@ def exports(request, key, job):
         wanted = "panel-" + _design(con, view, d, trait, old["params"], weights, chip)["hash"]
     scopes = []  # (value, label, SNPs, relation, a synthetic chip contributes)
     total = con.execute("SELECT count(*) FROM r").fetchone()[0]
+    picked = f"(SELECT * FROM {view} WHERE {' AND '.join(f'({sql})' for _, _, sql in conds)})" if conds else view
+    selected = con.execute(f"SELECT count(*) FROM {picked}").fetchone()[0] if conds else total  # what Add to Design panel copies
     if gwas:
         rows = ", ".join(str(int(r)) for r in credible_rows(request, key)) or "NULL"
         rel = f"(SELECT * FROM {view} WHERE file_row_number IN ({rows}))"
         scopes.append(("credible", "Credible-set SNPs", con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0], rel, False))
     else:
         if conds:
-            rel = f"(SELECT * FROM {view} WHERE {' AND '.join(f'({sql})' for _, _, sql in conds)})"
-            scopes.append(("filtered", "Table selection", con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0], rel,
-                           view == "vc" and chip.get("synthetic")))
+            scopes.append(("filtered", "Table selection", selected, picked, view == "vc" and chip.get("synthetic")))
         panels = recent_panels(d, trait, (wanted or "")[6:] if (wanted or "").startswith("panel-") else None)
         names = [panel_name(x) for x in panels]
         for info in panels:  # two panels with the same name get their times
@@ -1102,4 +1104,7 @@ def exports(request, key, job):
         "scopes": [(v, f"{lab} ({k:,})" if v != "credible" else lab, v == value) for v, lab, k, _, _ in scopes], "gwas": gwas, "sv": sv,
         "trait": trait, "hidden": sorted(chosen.items()), "rows": rows, "more": more, "n": n,
         "synthetic": bool(chip_synthetic) and not _synthetic(job), "panel_link": "?" + urlencode({"tab": "panel", "trait": trait}),
+        # the Design panel's two ways in (G, 2026-11-27): the Table selection as it is, or markers the picker chooses
+        "selected": selected, "filtered": bool(conds), "panel_add": reverse("snpportal:panel_add", args=[key]),
+        **results.panel_status(request.GET),
     }}

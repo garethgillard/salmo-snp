@@ -1,6 +1,6 @@
 {% extends 'snpportal/base_portal.html' %}
 {% load snpportal_tags %}
-{% comment %}Design panel (panel.py): the sources (Table selections added with 'Add to panel'), the comparison with an
+{% comment %}Design panel (panel.py): the sources (Table selections and automatically picked markers, added on a result's Export tab), the comparison with an
    existing chip, the panel at a glance, its SNPs along the genome, the downloads and the SNP list. One browser's only
    (a cookie), deleted 24 hours after it was started. Every change is a POST to panel/change/.{% endcomment %}
 {% block main %}
@@ -9,12 +9,14 @@
   {% if not sources %}
   <section class="sp-prose" aria-labelledby="empty-h">
     <h2 id="empty-h">Your panel is empty</h2>
-    <ol class="sp-small mb-2">
-      <li>Score a SNP list, or open results you scored.</li>
-      <li>On the Table, filter down to the SNPs you want to genotype.</li>
-      <li>Click <strong>Add to Design panel</strong>: the whole selection comes here. Repeat with other selections or results.</li>
-      <li>Here, compare the panel with the chip you use, check the assays and download the vendor files.</li>
-    </ol>
+    <p class="sp-small mb-1">Fill it from a scored SNP list, on its Export tab, in either of two ways:</p>
+    <ul class="sp-small mb-2">
+      <li><strong>Add your Table selection</strong>: filter the Table down to the SNPs you want to genotype, then add them all.</li>
+      <li><strong>Pick markers automatically</strong>: a spread of markers by tier, spacing and assay check, for the purpose and
+        size you set; then add the markers it picks.</li>
+    </ul>
+    {% if pickers %}<p class="sp-small mb-2">Pick markers from {% for name, url in pickers %}<a href="{{ url }}">{{ name }}</a>{% if not forloop.last %} &middot; {% endif %}{% endfor %}</p>{% endif %}
+    <p class="sp-small mb-2">Then, here: compare the panel with the chip you use, check the assays and download the vendor files.</p>
     <p class="sp-small sp-muted mb-0">{% if local %}The panel is kept in this browser only, until you clear it.{% else %}The panel is kept in this browser only and is deleted 24 hours after you start it. To keep
       it longer, download its TSV and score that file again later.{% endif %}</p>
     <p class="mt-2 mb-0"><a class="btn btn-sm btn-primary" href="{% url 'snpportal:current' %}">Go to your results</a></p>
@@ -34,6 +36,8 @@
     </table></div>
     {% if n %}<p class="sp-small mb-0"><strong>{{ n|thousands }}</strong> SNPs in the panel{% if several %}; {{ several|thousands }} in more than one source{% endif %}.
       Tiers here count all 27 conditions, so sources scored for other conditions compare.</p>{% endif %}
+    <p class="sp-small sp-muted mt-2 mb-0">Add more on a result's Export tab: a Table selection, or markers picked automatically{% if pickers %}
+      (pick from {% for name, url in pickers %}<a href="{{ url }}">{{ name }}</a>{% if not forloop.last %} &middot; {% endif %}{% endfor %}){% endif %}.</p>
   </section>
   {% if n %}
     <section class="sp-card" aria-labelledby="chip-h">

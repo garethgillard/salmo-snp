@@ -1,13 +1,18 @@
 {% load snpportal_tags %}
-{% comment %}Panel tab: a compact designer (the rest under 'Advanced settings', open when any is changed), the panel with
-   its key numbers, figure and first markers, the Assay readiness card and a closed chip comparison. The designer is a
-   POST form (must-include ids are the user's SNP names: never in a URL), redirected to this tab with the panel's hash;
-   each parameter set is saved once in the job folder. It designs from, and compares with the chip, the Table's
-   selection (results.selection). Card, file and figure links leave the page and are not boosted.{% endcomment %}
+{% comment %}Panel tab, the automatic marker picker (opened from the Export tab and the Design panel page): a compact
+   designer (the rest under 'Advanced settings', open when any is changed), the panel with its key numbers and the
+   button that adds its markers to the Design panel (G, 2026-11-27), figure and first markers, the Assay readiness card
+   and a closed chip comparison. The designer is a POST form (must-include ids are the user's SNP names: never in a
+   URL), redirected to this tab with the panel's hash; each parameter set is saved once in the job folder. It designs
+   from, and compares with the chip, the Table's selection (results.selection). Card, file and figure links leave the
+   page and are not boosted.{% endcomment %}
 <div class="sp-stack">
-  <p class="sp-small mb-0" hx-boost="true">Designs from your Table selection: <strong>{{ designer.selection.n|thousands }}</strong> of {{ designer.selection.total|thousands }} SNPs
+  <p class="sp-small mb-0" hx-boost="true"><a href="{{ designer.back }}">&larr; Export</a> &middot; Picks markers from your Table selection:
+    <strong>{{ designer.selection.n|thousands }}</strong> of {{ designer.selection.total|thousands }} SNPs
     {% if designer.selection.filters %}({{ designer.selection.filters|join:" · " }}){% else %}(the whole list: no filters){% endif %} &middot;
     <a href="{{ designer.selection.table }}">change it in the Table &rarr;</a></p>
+  {% if designer.added %}<div class="sp-status sp-status-ok mb-0" role="status">{% icon 'check' %} {{ designer.added|thousands }} markers added to your Design panel. <a href="{% url 'snpportal:design_panel' %}">Open the Design panel</a></div>
+  {% elif designer.panel_error %}<div class="sp-status sp-status-warn mb-0" role="status">{% icon 'warn' %} {{ designer.panel_error }}</div>{% endif %}
   <section class="sp-card" id="designer" aria-labelledby="designer-h">
     <h2 id="designer-h" class="visually-hidden">Panel designer</h2>
     {% if designer.purposes|length > 1 %}<p class="sp-small mb-2" hx-boost="true">Purpose:
@@ -23,7 +28,7 @@
         {% if designer.assay and not designer.mix %}<label title="Panels never take SNPs that fail the assay check; SNPs not checked are kept unless Pass only">Assay
           <select class="form-select form-select-sm" name="assay">{% for value, label, selected in designer.assay %}<option value="{{ value }}"{% if selected %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>{% endif %}
         <label>Must include <input class="form-control form-control-sm sp-gene" type="text" name="must" value="{{ designer.must }}" placeholder="SNP ids" title="SNP ids, separated by spaces or commas (up to {{ designer.max_must }})"></label>
-        <button class="btn btn-sm btn-primary" type="submit">Design panel</button>
+        <button class="btn btn-sm btn-outline-primary" type="submit">Pick markers</button>
       </div>
       <p class="sp-muted mb-1">Picks the best-scoring SNPs that pass the assay filter, spread over every chromosome.</p>
       <details class="sp-more"{% if designer.n_advanced %} open{% endif %}><summary>Advanced settings{% if designer.n_advanced %} ({{ designer.n_advanced }} active){% endif %}</summary>
@@ -42,7 +47,9 @@
 
   <section class="sp-card" aria-labelledby="panel-h">
     <div class="sp-card-head"><h2 id="panel-h">{{ designer.name }}</h2>
-      <a class="ms-auto sp-small" href="{{ designer.export_link }}" hx-boost="true">Export this panel &rarr;</a></div>
+      <a class="ms-auto sp-small" href="{{ designer.export_link }}" hx-boost="true">Export these markers &rarr;</a>
+      {% if designer.n_rows %}<form method="post" action="{{ designer.add_url }}">{% csrf_token %}<input type="hidden" name="panel" value="{{ designer.hash }}">
+        <button class="btn btn-sm btn-primary" type="submit">Add {{ designer.n_rows|thousands }} markers to the Design panel</button></form>{% endif %}</div>
     {% if designer.short %}<div class="sp-status sp-status-warn" role="status">&#9888; {{ designer.short }}</div>{% endif %}
     {% if designer.missing %}<div class="sp-status sp-status-warn" role="status">&#9888; Must-include ids not in this list: {{ designer.missing|join:", " }}</div>{% endif %}
     <p class="sp-small mb-0">{{ designer.line }}</p>

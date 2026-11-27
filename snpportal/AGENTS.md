@@ -106,7 +106,10 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   "SNPs" into "SVs" on an SV job's pages (not "published SNP", "SNP chip", the site's name). No panels, vendor files or
   priors for SVs.
 - Results tabs: Overview | Table | Export; GWAS jobs: Association | Overview | Table | Export. Tiers always count all 27
-  conditions (no trait picker); the curated panel is its own page (Design panel, `panel.py`; `?tab=panel` is unlinked).
+  conditions (no trait picker); the curated panel is its own page (Design panel, `panel.py`). Two ways fill it, side by
+  side at the top of the Export tab (G, 2026-11-27): Add your Table selection, or Pick markers automatically (the
+  picker, `?tab=panel`, not in the tab bar: Export stays highlighted), whose own Add button sends its markers as a
+  source. The Table links to Export; the Design panel page links the picker for each of the browser's SNP lists.
   View state lives in whitelisted GET parameters (GWAS links keep the fine-mapping settings); derived files are
   cached in the job folder by a hash of their parameters (`panels/<hash>.parquet`, `loci/<hash>.parquet`), so the
   same URL gives the same file. User SNP names (must-include ids) are POSTed, never put in a URL.

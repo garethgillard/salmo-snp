@@ -103,7 +103,8 @@ class ResultsTest(SimpleTestCase):
         page = self.client.get(self.url + "?tab=table").content.decode()
         n = self.summary["n_rows"]
         self.assertIn("2 left out", page)
-        self.assertIn(f"Add to Design panel ({n - 2:,})", page)  # the selection leaves the unticked rows out
+        self.assertIn(f"Add your Table selection ({n - 2:,} SNPs)", self.client.get(self.url + "?tab=export").content.decode())  # the
+        # selection (Export's Add to Design panel) leaves the unticked rows out
         self.assertEqual(page.count('class=" sp-out"'), 0)  # out of the table too, unless asked
         self.assertEqual(self.client.get(self.url + "?tab=table&picked=all").content.decode().count('class=" sp-out"'), 2)  # all: dimmed
         self.assertIn('id="dd-pick"', page)

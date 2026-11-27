@@ -742,13 +742,6 @@ def table(request, key, job=None):
     return {
         "total": total, "matching": matching, "first": (page - 1) * size + 1 if matching else 0,
         "last": min(page * size, matching), "chosen": chosen, "query": urlencode({"trait": chosen["trait"], **settings}),
-        "added": int(get("added")) if get("added", "").isdecimal() else None,
-        "panel_error": {"empty": "No SNPs in this selection to add.",
-                        "many": f"Narrow the selection to at most {int(jobs.setting('SNPPORTAL_MAX_PANEL_SNPS', 50_000)):,} SNPs to add it to the panel.",
-                        "release": "Your Design panel holds SNPs scored with another release: clear it, or save it as a project "
-                                   "version, before adding these.",
-                        "sv": "Panels hold SNP markers: structural variants can't be added.",
-                        }.get(get("panel_error", "")),
         "dds": dds, "pick": pick, "n_selected": n_every - n_out, "n_out": n_out, "sv": is_sv(types),  # SVs: no panels
         "fit": not custom_cols, "tkey": table_key(rows, conditions),
         "shown_tiers": [(x, k) for x, k in shown_tiers if x is not None and k],
@@ -764,7 +757,7 @@ def table(request, key, job=None):
         "prev": link(page=page - 1) if page > 1 else None, "next": link(page=page + 1) if page < pages else None,
         "sizes": [(s, link(size=str(s) if s != PAGE_SIZE else None, page=None), s == size) for s in PAGE_SIZES],
         "download": f"{reverse('snpportal:download', args=[key])}?{filtered}" if selection_conds else None,
-        "vendor": f"?{urlencode({'tab': 'export', 'scope': 'filtered', **chosen})}" if selection_conds and not gwas else None,
+        "to_export": f"?{urlencode({'tab': 'export', **({'scope': 'filtered'} if selection_conds and not gwas else {}), **chosen})}",  # files, Design panel
         "snp": snp, "drawer": _drawer(request, key, job, snp, link, here, picks_out, _steps(con, src, where, order, ids, snp, page, size, pages, matching))
         if snp is not None else None,
     }
@@ -1335,6 +1328,18 @@ def keep_selection(d, query):
 def selection_request(query):
     """A stand-in request whose GET is a saved selection, for filters()."""
     return SimpleNamespace(GET=QueryDict(query))
+
+
+def panel_status(get):
+    """What Add to Design panel answered, on the page it returns to (the Export tab, or the picker's): {added: SNPs
+    added or None, panel_error: why none were, or None}."""
+    errors = {"empty": "No SNPs in this selection to add.",
+              "many": f"Narrow the selection to at most {int(jobs.setting('SNPPORTAL_MAX_PANEL_SNPS', 50_000)):,} SNPs to add it to the panel.",
+              "release": "Your Design panel holds SNPs scored with another release: clear it, or save it as a project "
+                         "version, before adding these.",
+              "sv": "Panels hold SNP markers: structural variants can't be added."}
+    added = get.get("added", "")
+    return {"added": int(added) if added.isdecimal() else None, "panel_error": errors.get(get.get("panel_error", ""))}
 
 
 def table_link(trait="all"):

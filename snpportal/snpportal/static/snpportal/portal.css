@@ -569,6 +569,11 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-export td:last-child { width: 1%; text-align: right; }
 .sp-export-scope { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.5rem; margin-bottom: .75rem; }
 .sp-export-scope fieldset { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1.25rem; margin: 0; }
+.sp-export h3 { margin: 0 0 .6rem; font-size: var(--sp-fs-md); font-weight: 600; }
+/* the Design panel's two ways in, side by side: a button, then a line on what it does (G, 2026-11-27) */
+.sp-topanel { margin-bottom: 1.75rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--sp-line); }
+.sp-ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: .75rem 2rem; max-width: 52rem; }
+.sp-ways p { margin: .35rem 0 0; color: var(--sp-ink-2); }
 @media print {
   .sp-bc i, .sp-as, .sp-box { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .sp-results thead { position: static; }
