@@ -576,6 +576,13 @@ def expires(key):
     return None if keep is None else (folder(key) / "job.json").stat().st_mtime + keep
 
 
+def deleted_after(key):
+    """'Deleted after <time>' for a result page's meta line on a server; None on a local install, where the Score page
+    says once that results stay until deleted (G, 2026-11-27: the pages don't repeat it)."""
+    when = expires(key)
+    return None if when is None else f"Deleted after {utc(when)}"
+
+
 # ---- creating and running jobs ----
 
 def executor():

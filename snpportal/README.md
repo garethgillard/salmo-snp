@@ -268,15 +268,16 @@ GenBank accession such as `CM003303.1:28656101`: the Ssal_v3.1 variant of the rs
 genes by Ensembl id or name, catalogue name, NCBI LOC symbol (only where Ensembl's description cites the NCBI gene id:
 about 1,700 of 59,000 genes), ortholog symbol or description. Help documents rs-ID-only uploads (`#format-rsid`).
 
-Locus browser groups, top to bottom: Genes and variants (your SNPs, published loci, molQTL leads, genes), Public SNPs
-(a combined row with a segment per dataset at each site; opened, one row per dataset with height = MAF: the 504-fish
-panel, its 12 AQUA-FAANG fish, the Synchrosmolt parents; colours in `palette.SNP_SETS`), TF motifs (public SNPs in
-robust peaks that change a motif match: ticks, the two largest changes enlarged in wedges below them, and from 150 bp
-every changed motif's logo over the reference sequence; windows go down to 60 bp), Predicted allele effects (in a
-release with score layers, such as the gill ChromBPNet model's: one row per model and a tick per scored SNP, its
-height the score's rank; up and red where the alt allele is predicted more accessible, down and blue where less,
-as the ChromBPNet scorer's own browser track colours them; `palette.EFFECTS`), Regulatory elements, Chromatin
-states, Functional assays and Other annotation. The AQUA-FAANG rows come from the release's tracks.yaml plus
+Locus browser groups, top to bottom: Genes and variants (your SNPs, published loci, genes), Public SNPs (a combined
+row with a segment per dataset at each site; opened, one row per dataset with height = MAF: the 504-fish panel, its 12
+AQUA-FAANG fish, the Synchrosmolt parents; colours in `palette.SNP_SETS`), Predicted allele effects (in a release
+with score layers, such as the gill ChromBPNet model's: one row per model and a tick per scored SNP, its height the
+score's rank; up and red where the alt allele is predicted more accessible, down and blue where less, as the
+ChromBPNet scorer's own browser track colours them; `palette.EFFECTS`), Regulatory elements, Chromatin states,
+Functional assays, TF motifs (public SNPs in robust peaks that change a motif match: ticks, the two largest changes
+enlarged in wedges below them, and from 150 bp every changed motif's logo over the reference sequence; windows go
+down to 60 bp) and Other annotation (Ensembl regulatory, GERP constrained, pike alignment, molQTL leads; G,
+2026-11-27). The AQUA-FAANG rows come from the release's tracks.yaml plus
 `snpportal/lib/tracks_added.yaml`: tracks published after the release (salmon gill ATAC-seq of 2026, gill states and
 peaks, the ImmunoMap), added to a registry of the same hub that lacks them (`snpdata tracks --added-since
 <release>/tracks.yaml` writes it); `lib/tracks.UNUSED` leaves out the libraries the AQUA-FAANG README says weren't used.

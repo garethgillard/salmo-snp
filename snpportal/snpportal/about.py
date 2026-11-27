@@ -413,6 +413,28 @@ def tier_rules(w):
     return out + [(len(cuts) + 1, f"below {cuts[-1]}", "no evidence found (not evidence of no effect)")] if cuts else []
 
 
+def colour_key(w):
+    """Help's colour key (G, 2026-11-27): [(heading, [(swatch classes, text on the swatch, meaning)], (url, text) or
+    None)], in palette.py's colours through the classes that colour the Table and the cards (chromatin states in the
+    viewer's palette)."""
+    from . import browser, results
+    edge = lambda cls, fill: f"{cls} sp-edge" if palette.edge(fill) else cls  # noqa: E731 (white fills get an outline)
+    states = {}
+    for name in palette.ABBR:  # one swatch per colour and short name: Flanking up- and downstream share theirs
+        states.setdefault(palette.STATES[name], []).append(name)
+    return [
+        ("Tiers", [(edge(f"sp-tier-{t}", palette.TIERS[t][0]), t, f"score {scores}" + (f": {note}" if note else ""))
+                   for t, scores, note in tier_rules(w)], None),
+        ("Chromatin states", [(edge(f"st-{names[0]}", fill), abbr, " / ".join(n.replace("_", " ") for n in names))
+                              for (fill, abbr), names in states.items()] + [("sp-edge", "", "no peak")],
+         (reverse("snpportal:methods") + "#states", "What each counts as")),
+        ("Gene region", [(edge(f"sp-region-{k}", fill), "", results.REGION_LABELS[k]) for k, fill in palette.REGIONS.items()], None),
+        ("Tissues", [(cls, "", label) for cls, label in browser.tissue_legend()], None),
+        ("Predicted allele effects", [("sp-effect-up", "", "up: the alt allele predicted more accessible"),
+                                      ("sp-effect-down", "", "down: less accessible")], None),
+        ("Assay check", [(edge(f"sp-assay-{k}", fill), "", k.replace("_", " ")) for k, fill in palette.ASSAY.items()], None)]
+
+
 def tier_of(score, w):
     """The tier of a score under weights.yaml's cut-offs."""
     cuts = list((w or {}).get("tiers") or [])
@@ -488,7 +510,7 @@ def help_page(request):
         ASSEMBLY_WARNING = 0.10
     w = jobs.weights() or {}
     return render(request, "snpportal/help.html", {
-        "nav": "help", "title": "Help", "formats": FORMATS, "tiers": tier_rules(w), "example": tier_example(w),
+        "nav": "help", "title": "Help", "formats": FORMATS, "tiers": tier_rules(w), "example": tier_example(w), "key": colour_key(w),
         "window": (jobs.manifest().get("catalog") or {}).get("window") or 50_000,
         "aliases": [(name, ", ".join(names)) for name, names in formats.ALIASES.items()],
         "chrom_aliases": chrom_aliases("25"), "assembly_share": f"{ASSEMBLY_WARNING:.0%}",

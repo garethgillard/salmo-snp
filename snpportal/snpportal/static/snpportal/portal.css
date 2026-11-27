@@ -56,7 +56,7 @@
 .sp .sp-links a { display: inline-flex; align-items: center; gap: .4rem; height: var(--sp-nav-h); padding: 0 .6rem;
   border-bottom: 2px solid transparent; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); text-decoration: none; }
 .sp .sp-links a:hover { color: var(--sp-ink); border-bottom-color: var(--sp-line-2); }
-.sp .sp-links a[aria-current="page"] { color: var(--sp-accent); border-bottom-color: var(--sp-accent); font-weight: 600; }
+.sp .sp-links a[aria-current="page"] { color: var(--sp-accent); border-bottom-color: var(--sp-accent); }
 .sp-count:not(:empty) { padding: 0 .4rem; border-radius: 1rem; background: var(--sp-grey-100); color: var(--sp-ink);
   font-size: var(--sp-fs-xs); font-weight: 600; line-height: 1.5; }
 .sp-search { display: flex; gap: .3rem; margin-left: auto; }
@@ -67,9 +67,9 @@
   font-size: var(--sp-fs-sm); cursor: pointer; }
 .sp-species button + button { border-left: 1px solid var(--sp-line-2); }
 .sp-species button:hover { color: var(--sp-ink); background: var(--sp-grey-50); }
-.sp-species button[aria-pressed="true"] { background: var(--sp-grey-100); color: var(--sp-ink); font-weight: 600; }
+.sp-species button[aria-pressed="true"] { background: var(--sp-grey-100); color: var(--sp-ink); }
 @media (max-width: 1279.98px) { .sp .sp-links a { padding: 0 .45rem; } .sp-search input { width: 9rem; } }
-@media (max-width: 1099.98px) { .sp-links a > span:not(.sp-count) { display: none; } }  /* icons, with their titles */
+@media (max-width: 1099.98px) { .sp-links a > span:not(.sp-count) { display: none; } .sp-search input { width: 12rem; } }  /* icons, with their titles */
 @media (max-width: 767.98px) {
   .sp-nav { position: static; }
   .sp-nav .sp-wrap { gap: 0 .25rem; }
@@ -200,7 +200,7 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp .nav-tabs .nav-link { margin-bottom: -1px; padding: .5rem 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
   background: none; color: var(--sp-ink-2); font-weight: 500; text-decoration: none; }
 .sp .nav-tabs .nav-link:hover { border-bottom-color: var(--sp-line-2); color: var(--sp-ink); }
-.sp .nav-tabs .nav-link.active { border-bottom-color: var(--sp-ink); background: none; color: var(--sp-ink); font-weight: 600; }
+.sp .nav-tabs .nav-link.active { border-bottom-color: var(--sp-ink); background: none; color: var(--sp-ink); }  /* same weight: no shift */
 /* keyboard focus: a 2px accent ring, 3:1 or more against white and the greys */
 .sp a:focus-visible, .sp button:focus-visible, .sp input:focus-visible, .sp select:focus-visible,
 .sp textarea:focus-visible, .sp summary:focus-visible, .sp [tabindex]:focus-visible {
@@ -531,7 +531,6 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-facts-shown { margin-top: 0; color: var(--sp-ink-2); }
 .sp-facts-shown .sp-fact { color: var(--sp-ink-2); }
 .sp-facts-shown .sp-fact-muted { color: var(--sp-muted); }
-.sp-facts-h { margin-right: .5rem; color: var(--sp-muted); }
 .sp-caveats { margin: .5rem 0 .6rem; padding: .4rem .7rem; list-style: none; }
 .sp-caveats li { display: flex; align-items: baseline; gap: .4rem; }
 .sp-caveats .sp-i { position: relative; top: .15em; }
@@ -683,6 +682,8 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-kl-index ol ol { margin-top: .2rem; padding-left: .75rem; border-left: 1px solid var(--sp-line); columns: 2; column-gap: 2.5rem; }
 .sp .sp-kl-index a { color: var(--sp-ink); text-decoration: none; }
 .sp .sp-kl-index a:hover { color: var(--sp-link); text-decoration: underline; }
+.sp .sp-kl-index a.on { color: var(--sp-accent); font-weight: 600; }  /* the part and trait you are reading (portal.js) */
+.sp-kl-lead { margin-bottom: 1.5rem; }
 .sp-kl-index, .sp-kl-part, .sp-kl-trait { scroll-margin-top: calc(var(--sp-nav-h) + 1rem); }
 .sp-kl-part + .sp-kl-part { margin-top: 2.75rem; padding-top: 1.5rem; border-top: 1px solid var(--sp-line); }
 .sp-kl-part > h2, .sp-kl-trait > h3 { display: flex; align-items: baseline; gap: .5rem; }
@@ -701,6 +702,7 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
   .sp-kl-index > ol > li { margin-bottom: .6rem; }
   .sp-kl-index ol ol { columns: 1; }
   .sp-kl-up { display: none; }  /* the contents stay in view */
+  .sp:has(.sp-kl) .sp-page-header, .sp-kl-lead { margin-left: 15rem; }  /* title and lead line up with the tables */
 }
 @media (max-width: 575.98px) { .sp-kl-index ol ol { columns: 1; } }
 @media print { .sp-kl-up { display: none; } .sp-kl { display: block; } .sp-kl-index { position: static; } }
@@ -776,6 +778,7 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-blegend i { display: inline-block; width: 9px; height: 9px; margin-right: 4px; vertical-align: -1px; border: 1px solid var(--sp-grey-500); }
 .sp-blegend i.sp-tbg { background: currentColor; }
 .sp-blegend-lab { color: var(--sp-muted); }
+.sp-blegend > a { margin-left: auto; }  /* the link to Help's colour key, at the right end */
 .sp-assay-slot { padding-left: 200px; }
 .sp .sp-spin { width: .8rem; height: .8rem; margin-right: 5px; border-width: .15em; vertical-align: -.1em; color: var(--sp-ink-2); }
 /* the mouse line (portal.js sets --sp-x and --sp-pos on .sp-tracks): through every track on the axis, its base on the ruler */
@@ -828,6 +831,14 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-terms dt { font-weight: 600; }
 .sp-terms dd { margin: 0; }
 @media (max-width: 575.98px) { .sp dl.sp-terms { display: block; } .sp-terms dd { margin: .1rem 0 .8rem; } }
+/* the colour key (Help #colours): a swatch, then what it means; the swatches' colours are palette.py's classes */
+.sp-key dd { display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; }
+.sp-key dd > span { white-space: nowrap; }
+.sp-sw { display: inline-block; min-width: 1.1rem; height: 1.1rem; margin-right: .35rem; padding: 0 .25rem; border: 1px solid transparent;
+  border-radius: .2rem; font-size: var(--sp-fs-xs); font-weight: 600; line-height: calc(1.1rem - 2px); text-align: center;
+  vertical-align: -.2rem; }
+.sp-sw.sp-tbg { background: currentColor; }
+.sp-sw.sp-edge { border-color: var(--sp-grey-500); }
 /* a plain reference table: as wide as its content, a line under the head, links in ink */
 .sp .sp-plain { width: auto; max-width: 100%; margin-bottom: .75rem; font-size: var(--sp-fs-sm); }
 .sp .sp-plain > :not(caption) > * > * { padding: .4rem 1.5rem .4rem 0; vertical-align: top; }

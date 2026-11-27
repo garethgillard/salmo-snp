@@ -9,6 +9,6 @@
   <p class="mb-1">The shape of the profile changes more than at {{ jsd_percentile }}% of them (Jensen-Shannon distance {{ jsd }}).
     Where the more accessible allele ranks among the model's predictions over its own peaks: {{ quantile }} (near 0: nothing
     peak-like here; near 1: like its strongest peaks). A large change in an accessible place is the strongest prediction.</p>
-  <p class="sp-muted mb-1">A model's prediction of {{ model.what }}, not a measurement, and not counted in the tier. {{ model.label }} {{ p.version }}, the
+  <p class="sp-muted mb-1">A model's prediction of {{ model.what }}, not a measurement. {{ model.label }} {{ p.version }}, the
     fold {{ p.fold }} model, which never saw chromosome {{ p.chrom }} in training; run {% if local %}on this computer{% else %}on this server{% endif %} for this SNP alone.
     {{ model.citation }}. Licence: {{ model.licence }}.</p>{% endif %}

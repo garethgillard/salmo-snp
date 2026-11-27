@@ -16,7 +16,7 @@ WHITE, BLACK = "#FFFFFF", "#000000"
 
 # Tier -> (fill, text). Sequential blues, the number is always printed. Tier 2 is darker than the roadmap's #3182BD,
 # which gives white text only 4.1:1.
-TIERS = {1: ("#08519C", WHITE), 2: ("#2171B5", WHITE), 3: ("#C6DBEF", BLACK), 4: ("#F0F0F0", BLACK)}
+TIERS = {1: ("#08306B", WHITE), 2: ("#2171B5", WHITE), 3: ("#C6DBEF", BLACK), 4: ("#F0F0F0", BLACK)}
 
 # ChromHMM state -> (colour, abbreviation shown in every cell and legend). Two palettes (G to choose, PROVISIONAL): the
 # portal's own, and AQUA-FAANG's itemRgb colours (chromatin-state-annotations/annotation_reports/state_annotations.tsv,
@@ -125,6 +125,9 @@ STATUS = {
     "fail": ("#B2182B", "#FDECEE", "#B2182B"),
     "not_checked": ("#495057", "#F1F3F5", "#ADB5BD"),
 }
+# The assay check (Overview bar): pass white, warn a soft yellow-orange, fail a muted red: a warning signal that does
+# not pull the eye from the data (G, 2026-11-27). Black text on each.
+ASSAY = {"pass": WHITE, "warn": "#F2C46D", "fail": "#D9695F", "not_checked": GREY[100]}
 PROVISIONAL = ("#212529", WHITE)  # outlined dark: text/border, fill
 SYNTHETIC = ("#6A3D9A", "#7B4FAB", WHITE)  # stripe 1, stripe 2, text
 
@@ -184,5 +187,9 @@ def _css(active):
         rules.append(f".sp-set-{name}{{background:{colour}}}")
     for name, colour in EFFECTS.items():
         rules.append(f".sp-effect-{name}{{background:{colour}}}")
+    for name, colour in REGIONS.items():  # the colour key's swatches (Help)
+        rules.append(f".sp-region-{name}{{background:{colour}}}")
+    for name, colour in ASSAY.items():
+        rules.append(f".sp-assay-{name}{{background:{colour}}}")
     root = ":root{" + ";".join(f"--sp-{k}:{v}" for k, v in props.items()) + "}"
     return "\n".join([root] + rules)

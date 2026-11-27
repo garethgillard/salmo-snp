@@ -647,3 +647,26 @@
   document.addEventListener("htmx:afterSettle", align);
   window.addEventListener("resize", align);
 })();
+
+/* Known loci: the contents mark the part (and the trait) you are reading as you scroll (G, 2026-11-27): the last
+   section whose top has passed just under the top bar. */
+(function () {
+  "use strict";
+  var index = document.querySelector(".sp-kl-index");
+  if (!index) return;
+  var links = Array.prototype.slice.call(index.querySelectorAll('a[href^="#"]'));
+  var targets = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); });
+  var queued = false;
+  function mark() {
+    queued = false;
+    var current = -1;
+    targets.forEach(function (t, i) { if (t && t.getBoundingClientRect().top <= 90) current = i; });
+    links.forEach(function (a) { a.classList.remove("on"); });
+    if (current < 0) return;
+    links[current].classList.add("on");
+    var part = links[current].parentElement.parentElement.closest("li");  // a trait's own part (SNPs) stays marked too
+    if (part && part.firstElementChild) part.firstElementChild.classList.add("on");
+  }
+  window.addEventListener("scroll", function () { if (!queued) { queued = true; window.requestAnimationFrame(mark); } }, { passive: true });
+  mark();
+})();

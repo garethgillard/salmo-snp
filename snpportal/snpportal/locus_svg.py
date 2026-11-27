@@ -94,11 +94,13 @@ class Axis:
 
 def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=None, hmm=None, chosen=(),
           mark=None, gene_url=None, width=WIDTH, gutter=GUTTER, compact=False, synthetic=False, uid="lc", gwas=None, legend_on=True,
-          lanes=None, heading=True):
+          lanes=None, heading=True, ncbi=None, ncbi_url=None):
     """The locus figure. data: lib.locus.locus() dict. snps: [{pos, id, tier, tier_score, title, url}] (the user's
     SNPs, drawn at render time). signal: {title, start, rung, rows: [{track, label, values or None}], note, scale}.
     hmm: [{condition, segments or None}] to draw the genome-wide ChromHMM segmentation instead of states in peaks.
     chosen: preset conditions (highlighted). mark: a 1-based position to mark. gene_url(gene_id) links genes.
+    ncbi: NCBI RefSeq gene models (lib.locus.ncbi_genes), drawn first as in the locus browser, Ensembl's under them;
+    ncbi_url(gene_id) links them.
     gwas: a GWAS job's regional association lane, drawn on top (see gwas_lane). legend_on=False leaves the legend out
     (the landing page's thumbnail). lanes: the optional lanes to draw ('published', 'molqtl', 'regbuild', 'gerp',
     'variants'), None = all. heading=False leaves the title line out (it stays the SVG's <title>)."""
@@ -169,8 +171,11 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
         legend["molQTL leads (first tissue)"] = [(f'<path d="M6 0 l5 9 l-10 0z" fill="{palette.TISSUES.get(t, G[700])}"/>', t) for t in tissues]
         y += 28
 
-    # gene models
-    y = _genes(body, ax, data.get("genes", []), y, gene_url, 4 if compact else 8, lane_label)
+    # gene models: NCBI RefSeq first where the release has them, as the locus browser's default lane (G, 2026-11-27)
+    if ncbi is not None:
+        y = _genes(body, ax, ncbi, y, ncbi_url, 4 if compact else 8, lane_label, "NCBI RefSeq")
+    y = _genes(body, ax, data.get("genes", []), y, gene_url, 4 if compact else 8, lane_label,
+               name="Genes" if ncbi is None else "Ensembl genes")
     if any(g["label"].startswith("~") for g in data.get("genes", [])):
         legend.setdefault("Genes", []).append(("", "~NAME = unnamed in Ensembl 116, named by its human (else zebrafish) ortholog"))
 
@@ -337,12 +342,12 @@ def _legend(body, groups, y, width, gutter):
     return y
 
 
-def _genes(body, ax, genes, y, gene_url, max_rows, lane_label, source="Ensembl 116", what="genes"):
+def _genes(body, ax, genes, y, gene_url, max_rows, lane_label, source="Ensembl 116", what="genes", name="Genes"):
     """Gene models packed into at most max_rows rows (labels dropped when that does not fit), '+N more' after. A gene
     dict may carry dup = {text, url, title}: its Ss4R duplicate, linked after the label (the locus browser's). A model
     without UTR parts (NCBI's) draws its exons thin and its CDS thick."""
     if not genes:
-        lane_label("Genes", y + 12)
+        lane_label(name, y + 12, source)
         body.append(_t(ax.left, y + 12, EMPTY, TEXT, G[700]))
         return y + 20
 
@@ -370,7 +375,7 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label, source="Ensembl 1
     labels = not hidden
     if hidden:
         placed, hidden, n = pack(False)
-    lane_label("Genes", y + 12, source)
+    lane_label(name, y + 12, source)
     for row, g in placed:
         yy = y + row * 27 + (13 if labels else 4)
         coding = g.get("biotype") == "protein_coding"
@@ -417,7 +422,9 @@ def _genes(body, ax, genes, y, gene_url, max_rows, lane_label, source="Ensembl 1
 
 
 def _chromatin(body, ax, data, y, chosen, hmm, compact, gutter, uid, lane_label):
-    """27 condition rows, grouped by tissue (embryo stages last). Returns (y, states present, conditions marked)."""
+    """A row per condition, grouped by tissue (embryo stages last); with states inside peaks, only the conditions with a
+    peak in the window, the others counted under them (the locus browser folds them; G, 2026-11-27). Returns (y,
+    states present, conditions marked)."""
     conditions = data.get("conditions") or []
     rows = {r["condition"]: r["segments"] for r in hmm} if hmm is not None else None
     h, gap = (5, 1) if compact else (11, 2)  # as the locus browser's condition rows: 11 px text beside an 11 px row
@@ -425,6 +432,11 @@ def _chromatin(body, ax, data, y, chosen, hmm, compact, gutter, uid, lane_label)
                "inside robust peaks" if hmm is None else "genome-wide")
     y += 28
     chosen = set(chosen) if len(set(chosen) & set(conditions)) < len(conditions) else set()  # 'all': nothing to point out
+    left_out = 0
+    if rows is None:
+        found = {c for p in data.get("peaks", []) for c, state in p["states"].items() if state}
+        left_out = sum(c not in found for c in conditions)
+        conditions = [c for c in conditions if c in found]
     present, last_group, first_y = set(), None, y
     for c in conditions:
         group, label = condition_label(c)
@@ -464,6 +476,10 @@ def _chromatin(body, ax, data, y, chosen, hmm, compact, gutter, uid, lane_label)
                 body.append(f'<rect x="{x:.1f}" y="{y}" width="{w:.1f}" height="{h}" fill="{fill}"{_edge(fill)}>'
                             f"<title>{escape(name)}: {escape(state.replace('_', ' '))} ({abbr}) · peak {escape(p['id'])}</title></rect>")
         y += h + gap
+    if left_out:
+        body.append(_t(ax.left, y + 10, f"+{left_out} condition{'s' * (left_out != 1)} with no peak here (not drawn)"
+                       if conditions else f"No robust peak here in any of the {left_out} conditions", TEXT, G[700]))
+        y += 16
     if rows is not None:  # robust peaks outlined over the segmentation
         for p in data.get("peaks", []):
             x, w = ax.span(p["start"], p["end"])

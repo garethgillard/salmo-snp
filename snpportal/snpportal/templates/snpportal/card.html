@@ -20,7 +20,7 @@
   <p class="sp-facts">{% for text, cls, tip, key, url in ev.facts %}{% if key != 'gene' and cls != 'muted' and key not in 'summit pike molqtl scores' %}{% if url %}<a class="sp-fact" href="{{ url }}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</a>{% else %}<span class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</span>{% endif %}{% endif %}{% endfor %}
     {% if panel.sources %}<span class="sp-fact" title="Your Design panel holds this SNP ({{ panel.sources|join:', ' }})">in your Design panel</span>{% endif %}
     {% for text, cls, tip, key, url in ev.facts %}{% if key != 'gene' and cls == 'muted' and key not in 'summit pike molqtl scores' %}<span class="sp-fact sp-fact-muted"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</span>{% endif %}{% endfor %}</p>
-  {% if ev.shown_only %}<p class="sp-facts sp-facts-shown"><span class="sp-facts-h">Shown, not counted:</span>{% for text, cls, tip, key, url in ev.facts %}{% if key in 'summit pike molqtl scores' %}<span class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</span>{% endif %}{% endfor %}</p>{% endif %}
+  {% if ev.shown_only %}<p class="sp-facts sp-facts-shown">{% for text, cls, tip, key, url in ev.facts %}{% if key in 'summit pike molqtl scores' %}<span class="sp-fact{% if cls %} sp-fact-{{ cls }}{% endif %}"{% if tip %} title="{{ tip }}"{% endif %}>{{ text }}</span>{% endif %}{% endfor %}</p>{% endif %}
   {% if ev.caveats %}<ul class="sp-status sp-status-warn sp-caveats" aria-label="Caveats">{% for text in ev.caveats %}<li>{% icon 'warn' %} {{ text }}</li>{% endfor %}</ul>{% endif %}
 
   {% if ev.mini or ev.no_peak or ev.molqtl or locus_url %}<details class="sp-cs" id="cs-locus" open><summary><h3 class="sp-cs-h">Functional evidence at the locus</h3>
@@ -35,7 +35,7 @@
       <tbody>{% for f in ev.molqtl.features %}<tr><td class="text-nowrap"><span class="sp-tissue-{{ f.tissue }}" aria-hidden="true">&#9679;</span> {{ f.tissue }}</td><td>{{ f.kind }}</td>
         <td>{% if f.url %}<a href="{{ f.url }}">{{ f.feature }}</a>{% else %}{{ f.feature }}{% endif %}</td><td class="sp-num">{{ f.bf }}</td><td class="sp-num">{{ f.pi }}</td></tr>{% endfor %}</tbody>
     </table></div>
-    <p class="sp-muted mb-2">Low power: not fine-mapped, not counted in tiers, no direction implied. {{ ev.molqtl.citation }}{% if ev.molqtl.licence %} Licence: {{ ev.molqtl.licence }}.{% endif %}</p>{% endif %}
+    <p class="sp-muted mb-2">Low power: not fine-mapped, no direction implied. {{ ev.molqtl.citation }}{% if ev.molqtl.licence %} Licence: {{ ev.molqtl.licence }}.{% endif %}</p>{% endif %}
   </details>{% endif %}
 
   {% if ev.motifs %}<details class="sp-cs" id="cs-motif" open><summary><h3 class="sp-cs-h">TF motifs</h3>
@@ -44,8 +44,7 @@
     <p class="sp-muted mb-2">Logos on the + strand, letter height = information content; the SNP's column is outlined.{% if ev.motifs.more %} {{ ev.motifs.more }} more motif{{ ev.motifs.more|pluralize }} in Details.{% endif %} Predicted binding, not proof of it.</p>
   </details>{% endif %}
 
-  {% if predict %}<details class="sp-cs" id="cs-predict" open><summary><h3 class="sp-cs-h">Predicted allele effect</h3>
-      <span class="sp-cs-note" title="A sequence model, run for this SNP when you ask: what it predicts with each allele">shown, not counted</span></summary>
+  {% if predict %}<details class="sp-cs" id="cs-predict" open><summary><h3 class="sp-cs-h">Predicted allele effect</h3></summary>
     {% for m in predict %}<div id="predict-{{ m.name }}" class="sp-predict">{% if m.missing %}<p class="sp-muted mb-1">{{ m.label }} ({{ m.what }}) {{ m.missing }}</p>
       {% else %}<button type="button" class="btn btn-sm btn-outline-secondary" hx-get="{{ m.url }}" hx-target="#predict-{{ m.name }}" hx-swap="innerHTML"
               hx-select="unset" hx-select-oob="unset" hx-push-url="false" hx-indicator="#predict-busy-{{ m.name }}" hx-disabled-elt="this">Predict with {{ m.label }}</button>

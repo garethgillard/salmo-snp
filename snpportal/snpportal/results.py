@@ -1161,9 +1161,8 @@ def _fig_summary(c, link, desc):
         groups.append({"title": "Near a known locus", "note": f"within {window / 1000:g} kb of a published locus" if window else "",
                        "parts": [("near one", near, palette.GREY[700], href(known="1")), ("not near", n - near, palette.GREY[200], None)]})
     if s.get("assay") and c["job"].get("input_kind") != "gwas":
-        greys = {"pass": palette.GREY[300], "warn": palette.GREY[500], "fail": palette.GREY[900], "not_checked": palette.GREY[100]}
-        groups.append({"title": "Assay check", "note": "probe flanks for genotyping assays",  # data, not a status: in greys
-                       "parts": [(k.replace("_", " "), s["assay"].get(k, 0), greys[k], href(assay=k)) for k in ASSAY]})
+        groups.append({"title": "Assay check", "note": "probe flanks for genotyping assays",  # palette.ASSAY: white to red
+                       "parts": [(k.replace("_", " "), s["assay"].get(k, 0), palette.ASSAY[k], href(assay=k)) for k in ASSAY]})
     for g in groups:
         g["parts"] = [p for p in g["parts"] if p[1]]
         if g.get("background"):

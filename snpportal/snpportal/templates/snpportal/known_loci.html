@@ -5,7 +5,9 @@
    suit it: SNPs by trait; structural variants; gene regions and QTL windows. Every heading links back to the contents.{% endcomment %}
 {% block main %}
 {% if snp_groups or svs or regions %}
-<p class="sp-lead">{{ counts.entries }} published entries for {{ counts.traits }} traits: {{ summary }}.{% if counts.alleles %} Effect alleles are stated for {{ counts.alleles }}, on the
+
+
+<p class="sp-lead sp-kl-lead">{{ counts.entries }} published entries for {{ counts.traits }} traits: {{ summary }}.{% if counts.alleles %} Effect alleles are stated for {{ counts.alleles }}, on the
   Ssal_v3.1 forward strand.{% endif %} Your SNPs within {% widthratio counts.window 1000 1 %} kb of one get a known-locus badge{% if counts.svs %},
   and your structural variants within {% widthratio counts.window 1000 1 %} kb of any entry{% endif %}.</p>
 

@@ -326,14 +326,15 @@ class PortalTest(SimpleTestCase):
         self.assertFalse(stray.exists())
 
     def test_local_install_keeps_results(self):
-        """salmo-snp serve (SNPPORTAL_LOCAL): the pages say the results stay on this computer, nothing expires and the
-        cleanup deletes nothing, however old."""
+        """salmo-snp serve (SNPPORTAL_LOCAL): the Score page says once that the results stay on this computer (the
+        result pages don't repeat it), nothing expires and the cleanup deletes nothing, however old."""
         key = self.key(self.upload())
         with override_settings(SNPPORTAL_LOCAL=True):
             self.assertContains(self.client.get(reverse("snpportal:upload")), "Running on this computer")
             page = self.client.get(reverse("snpportal:results", args=[key]))
-            self.assertContains(page, "Kept on this computer until you delete it")
+            self.assertNotContains(page, "Kept on this computer")
             self.assertNotContains(page, "Deleted after")
+            self.assertNotContains(self.client.get(reverse("snpportal:report", args=[key])), "deleted after")
             self.assertContains(self.client.get(reverse("snpportal:help")), "never\n      leave it")
             old = time.time() - 365 * 86400
             os.utime(self.results / key / "job.json", (old, old))

@@ -138,7 +138,7 @@ def summary(head, groups, title, desc="", synthetic=False, width=580):
         for name, n, fill, href in g["parts"]:
             w = width * n / total
             out.append(_rect(x, y, w, 26, fill, f"{g['title']}: {name}, {n:,} SNP{'' if n == 1 else 's'} ({share_label(n, total)})",
-                             href, f' stroke="{palette.WHITE}"'))
+                             href, f' stroke="{palette.edge(fill) or palette.WHITE}"'))
             if w > 11.5 * len(f"{n:,}") + 8:  # room for the number at a phone's size too
                 out.append(_text(x + w / 2, y + 17.5, f"{n:,}", "middle", fill=palette.text_on(fill), font_weight=600,
                                  pointer_events="none", **ph))

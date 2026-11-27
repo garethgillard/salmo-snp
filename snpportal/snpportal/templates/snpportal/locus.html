@@ -48,11 +48,12 @@
       <header class="sp-grp-h"><h3 title="AQUA-FAANG RNA-seq, ATAC-seq and ChIP-seq signal, read live from salmobase">Functional assays</h3><span class="sp-grp-note">mean of replicates &middot; combined tracks stack the tissue means</span>
         <button type="button" class="sp-tog" aria-expanded="{% if assays_open %}true{% else %}false{% endif %}" aria-controls="m-assays"><span class="sp-when-closed">{{ assays|length }} assays</span><span class="sp-when-open">Collapse</span>{% icon 'chevron-down' %}</button></header>
       <div class="sp-more-rows" id="m-assays">
-        <div class="sp-trk"><div class="sp-trk-lab"></div><div class="sp-blegend">{% for cls, label in tissue_legend %}<span><i class="{{ cls }}"></i>{{ label }}</span>{% endfor %}</div></div>
+        <div class="sp-trk"><div class="sp-trk-lab"></div><div class="sp-blegend">{% for cls, label in tissue_legend %}<span><i class="{{ cls }}"></i>{{ label }}</span>{% endfor %}<a href="{% url 'snpportal:help' %}#colours" hx-boost="false">Colour key</a></div></div>
         {% for name, title in assays %}<div class="sp-assay-slot" hx-get="{% url 'snpportal:locus_assay' %}?{{ query }}&amp;assay={{ name }}" hx-trigger="{% if assays_open %}load{% else %}sp-open once{% endif %}" hx-swap="outerHTML">
           <p class="sp-small sp-muted mb-1"><span class="spinner-border sp-spin" aria-hidden="true"></span>Loading {{ title }}&hellip;</p></div>{% endfor %}
       </div>
     </section>
+    {% if motifs %}{% include 'snpportal/_browser_group.html' with g=motifs %}{% endif %}
     {% include 'snpportal/_browser_group.html' with g=other %}
   </div>
   {% endif %}

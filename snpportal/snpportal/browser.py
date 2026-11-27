@@ -44,7 +44,7 @@ ASSAYS = {"RNA": ("RNA-seq", "expression; + strand up, &#8722; down; conditions 
           "CTCF": ("ChIP-seq CTCF", "insulators")}
 SKIP_TISSUES = {"Sperm"}  # sperm ChIP is left out (salmobase answers 403 for its files)
 GROUPS = ("genes", "public", "peaks", "hmm", "assays", *ASSAYS)  # the groups ?open= may list
-NCBI_GENE = "https://www.ncbi.nlm.nih.gov/gene/{}"  # NCBI isoforms link to their gene there
+NCBI_GENE = locus.NCBI_GENE
 ISOFORM_ROWS = 40  # rows of the expanded isoform tracks before '+N more transcripts: zoom in'
 EMPTY = locus_svg.EMPTY  # what every empty lane says
 TEXT = locus_svg.TEXT  # the smallest text drawn in a track, as the HTML labels beside it
@@ -311,17 +311,6 @@ def genes_group(request, s, ax, data, open_=()):
         h = locus_svg._published(body, ax, data["known"], 0, noop, {})
         rows.append(row("Known loci", trk(h, "".join(body)), title="Published loci of the known-loci catalogue; filled: the "
                         "effect allele is stated"))
-    if data.get("molqtl"):
-        body, a, b = [], *s.get("shown", (s["start"], s["end"]))
-        for m in data["molqtl"]:
-            x = ax.x(m["pos"] - 0.5)
-            tissue = (m.get("tissues") or "").split(",")[0]
-            body.append(f'<path d="M{x:.1f} 2 l5 9 l-10 0z" fill="{palette.TISSUES.get(tissue, G[700])}" stroke="{G[900]}" '
-                        f'stroke-width="0.5"><title>{escape(m.get("title") or "")}</title></path>')
-        if not any(a < m["pos"] <= b for m in data["molqtl"]):  # only beyond the edges, shown when the tracks move
-            body.append(empty(4, 11))
-        rows.append(row("molQTL leads", trk(14, "".join(body)), "12 fish", title="nf-RASQUAL lead SNPs of eQTLs and caQTLs "
-                        "in 12 fish, coloured by their first tissue; shown, never counted"))
     duplicates(data.get("genes", []))
     gene_page = lambda gid: reverse("snpportal:gene", args=[gid])  # noqa: E731
     ensembl = []
@@ -729,6 +718,17 @@ def other_group(s, ax, data):
         rows.append(row("Aligns to pike", trk(14, pike or empty(4, 11)),
                         title="Sequence that aligns to northern pike (AQUA-FAANG salmon-trout-pike alignment, gaps of up to "
                               "50 bp closed)"))
+    if data.get("molqtl"):  # with the other annotation (G, 2026-11-27), not beside the user's SNPs
+        body, a, b = [], *s.get("shown", (s["start"], s["end"]))
+        for m in data["molqtl"]:
+            x = ax.x(m["pos"] - 0.5)
+            tissue = (m.get("tissues") or "").split(",")[0]
+            body.append(f'<path d="M{x:.1f} 2 l5 9 l-10 0z" fill="{palette.TISSUES.get(tissue, G[700])}" stroke="{G[900]}" '
+                        f'stroke-width="0.5"><title>{escape(m.get("title") or "")}</title></path>')
+        if not any(a < m["pos"] <= b for m in data["molqtl"]):  # only beyond the edges, shown when the tracks move
+            body.append(empty(4, 11))
+        rows.append(row("molQTL leads", trk(14, "".join(body)), "12 fish", title="nf-RASQUAL lead SNPs of eQTLs and caQTLs "
+                        "in 12 fish, coloured by their first tissue; shown, never counted"))
     return group("other", "Other annotation", "", rows)
 
 
@@ -791,7 +791,7 @@ def context(request, s, layout):
     prefix = f"snpportal:{(info.get('sha256') or 'release')[:12]}"
     deadline = float(jobs.setting("SNPPORTAL_SIGNAL_DEADLINE", 4.0))
     notes = []
-    groups = [tracks_group(request, v, ax), genes_group(request, v, ax, data, open_), public_group(v, ax, data, open_), motifs_group(v, ax, data),
+    groups = [tracks_group(request, v, ax), genes_group(request, v, ax, data, open_), public_group(v, ax, data, open_),
               scores_group(v, ax, data),
               peaks_group(v, ax, data, cfg, prefix, deadline, open_, notes),
               hmm_group(v, ax, data, cfg, prefix, deadline, open_, notes)]
@@ -801,7 +801,8 @@ def context(request, s, layout):
         synthetic = synthetic or bool(job.get("synthetic_input") or job.get("synthetic_layers"))
     a, b = s["start"] + 1, s["end"]
     ctx.update(
-        chromosome=chromosome(s), ruler=ruler(ax, v), groups=[g for g in groups if g], other=other_group(v, ax, data), notes=notes,
+        chromosome=chromosome(s), ruler=ruler(ax, v), groups=[g for g in groups if g], notes=notes,
+        motifs=motifs_group(v, ax, data), other=other_group(v, ax, data),  # after the Functional assays (G, 2026-11-27)
         synthetic=synthetic, moves=moves(s, open_), query=query(s, open_), limits=(sl.MIN_WINDOW, sl.MAX_WINDOW), assays=[(k, v[0]) for k, v in ASSAYS.items()],
         assays_open="assays" in open_, tissue_legend=tissue_legend(), size_text=locus_svg.fmt_bp(s.get("size") or 0),
         width_text=locus_svg.fmt_bp(s["end"] - s["start"]), truncated=data.get("truncated"),

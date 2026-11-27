@@ -5,7 +5,7 @@
 <p class="sp-lead">How to score a list, read its results and use what you find. The rules behind the tiers are on
   <a href="{% url 'snpportal:methods' %}">Methods</a>, the data on <a href="{% url 'snpportal:about_data' %}">Data</a>.</p>
 <nav class="sp-toc" aria-label="On this page"><span>On this page</span>
-  <a href="#quick-start">Quick start</a><a href="#words">Words used</a><a href="#faq">Questions</a><a href="#formats">Input formats</a>
+  <a href="#quick-start">Quick start</a><a href="#words">Words used</a><a href="#colours">Colour key</a><a href="#faq">Questions</a><a href="#formats">Input formats</a>
   <a href="#search">Search</a><a href="#exports">Exports</a><a href="#privacy">Privacy</a></nav>
 
 <section class="sp-section" id="quick-start" aria-labelledby="quick-start-h"><h2 id="quick-start-h">Quick start</h2>
@@ -36,7 +36,7 @@
       one embryo stage. The tiers count all 27.</dd>
     <dt id="w-state">Chromatin state</dt>
     <dd>What the chromatin is doing at a SNP in one condition, such as Active enhancer or Active TSS, known only inside a
-      robust ATAC peak. Active states count the most. <a href="{% url 'snpportal:methods' %}#states">The states and their colours</a></dd>
+      robust ATAC peak. Active states count the most. <a href="#colours">Their colours</a></dd>
     <dt id="w-known">Known locus</dt>
     <dd>A published SNP, gene region or structural variant from the <a href="{% url 'snpportal:known_loci' %}">Known loci</a>
       catalogue, marked &#9733;. Your SNPs within {{ window|thousands }} bp of one are marked too.</dd>
@@ -51,14 +51,21 @@
     <a href="{% url 'snpportal:methods' %}#glossary">glossary on Methods</a>.</p>
 </section>
 
+<section class="sp-section" id="colours" aria-labelledby="colours-h"><h2 id="colours-h">Colour key</h2>
+  <p>A colour means the same on every page, table and figure.</p>
+  <dl class="sp-terms sp-key">{% for heading, items, link in key %}<dt>{{ heading }}</dt>
+    <dd>{% for cls, text, label in items %}<span><span class="sp-sw {{ cls }}">{{ text }}</span>{{ label }}</span>{% endfor %}{% if link %}<a href="{{ link.0 }}">{{ link.1 }}</a>{% endif %}</dd>{% endfor %}</dl>
+</section>
+
 <section class="sp-section sp-faq" id="faq" aria-labelledby="faq-h"><h2 id="faq-h">Questions</h2>
   <details id="conditions"><summary>Why don't tiers change when I filter by tissue?</summary>
     <p>Tiers always count all 27 conditions, so a SNP has the same tier in the Overview, its card, the Design panel and
       every download. The Table's Chromatin filter only picks rows: SNPs inside a robust ATAC peak (or, if you choose, an
       active state) in at least one of the conditions you tick.</p></details>
   <details id="states"><summary>What do the chromatin colours mean?</summary>
-    <p>Each colour is one AQUA-FAANG chromatin state. <a href="{% url 'snpportal:methods' %}#states">Methods</a> lists them
-      with what each counts as, next to the tiers and the evidence weights.</p></details>
+    <p>Each colour is one AQUA-FAANG chromatin state, named in the <a href="#colours">colour key</a>.
+      <a href="{% url 'snpportal:methods' %}#states">Methods</a> says what each counts as, next to the tiers and the
+      evidence weights.</p></details>
   <details id="my-results"><summary>Where are my results?</summary>
     <p>The <a href="{% url 'snpportal:upload' %}">Score</a> page lists the results this browser opened, newest first, until
       they are deleted ({% if local %}with Delete: this copy runs on your computer and keeps them until then{% else %}{{ keep_hours }} hours after scoring, or Delete{% endif %}).

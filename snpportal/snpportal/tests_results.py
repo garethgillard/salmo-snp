@@ -456,7 +456,7 @@ class ResultsTest(SimpleTestCase):
         self.assertEqual(page, again)
         for text in (f"the alt allele {alt} is predicted", f"<strong>less accessible</strong> than {ref}", "log2 fold change -0.21",
                      "43.2 &rarr; 37.4 predicted Tn5 cuts in the 1,000 bp", "99.2% of 100,000 random public SNPs (top 1%)",
-                     "&gt;99.9% of them", "not counted in the tier", "on this server for this SNP alone"):
+                     "&gt;99.9% of them", "on this server for this SNP alone"):
             self.assertIn(text, page)
         self.assertEqual(len(svgs(page)), 1)  # the two predicted profiles, a valid SVG
         self.assertIn(palette.EFFECTS["down"], page)

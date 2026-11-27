@@ -243,6 +243,8 @@ class ExploreTest(SimpleTestCase):
         self.assertIn("unknown_rsid", help_page)
         self.assertIn("ssa25", help_page)
         self.assertIn("error 111", help_page)  # vendor rules moved here from the Export tab
+        self.assertIn('<span class="sp-sw st-Active_TSS">TSS</span>Active TSS', help_page)  # the colour key, which figures link
+        self.assertIn('<span class="sp-sw sp-assay-warn"></span>warn', help_page)
         methods = self.client.get(reverse("snpportal:methods")).content.decode()
         for anchor in ("state-Active_TSS", "term-active", "tiers", "glossary", "g-blacklist"):  # definitions live on Methods
             self.assertIn(f'id="{anchor}"', methods)

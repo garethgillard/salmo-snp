@@ -94,6 +94,7 @@ class LocusTest(SimpleTestCase):
         page = self.get(f"{reverse('snpportal:locus')}?{VGLL3}")
         for group in ("genes", "public", "motifs", "peaks", "hmm", "assays", "other"):  # track groups, closed by default
             self.assertIn(f'class="sp-grp" id="g-{group}"' if group != "assays" else 'class="sp-grp sp-sec" id="g-assays"', page)
+        self.assertLess(page.index('id="g-assays"'), page.index('id="g-motifs"'))  # TF motifs after the assays (G, 2026-11-27)
         self.assertRegex(page, r'<line x1="([\d.]+)" x2="\1" y1="12" y2="30"')  # the centre position's tick on the ruler
         self.assertIn("ENSSSAG00000053708", page)  # the vgll3 gene model, black, with its Ss4R duplicate linked
         self.assertRegex(page, r">(← )?vgll3( →)?</text>")
@@ -170,6 +171,8 @@ class LocusTest(SimpleTestCase):
         root = ET.fromstring(response.content.decode())  # standalone and valid XML
         self.assertIn("manifest sha256", root.find("{http://www.w3.org/2000/svg}desc").text)
         self.assertNotIn("<a href", response.content.decode())  # no links in a downloaded file
+        svg = response.content.decode()  # the figure (gene pages, downloads): the browser's default gene lane first
+        self.assertLess(svg.index(">NCBI RefSeq</text>"), svg.index(">Ensembl genes</text>"))
 
     def test_tiles_cached_and_never_keyed_by_user_positions(self):
         bbi.clear_caches()

@@ -272,8 +272,8 @@ def page(request):
     ctx.update(sources=[{**x, "url": f"{reverse('snpportal:projects')}#{x['project']}" if x.get("project") else
                          f"{reverse('snpportal:results', args=[x['job']])}?{x['selection'] + '&' if x['selection'] else ''}tab=table"}
                         for x in s["sources"]],
-               meta=("Kept until you clear it" if jobs.keep_seconds() is None
-                     else f"Deleted after {jobs.utc((d / 'created').stat().st_mtime + jobs.keep_seconds())}") + " · only this browser can open it",
+               meta=("Only" if jobs.keep_seconds() is None  # a local install keeps it: the page doesn't repeat that
+                     else f"Deleted after {jobs.utc((d / 'created').stat().st_mtime + jobs.keep_seconds())} · only") + " this browser can open it",
                chip=chip, chip_demo=(jobs.release() / "demo" / "chip_demo_SYNTHETIC.tsv").is_file(),
                chip_flank=placement.describe(chip["flank"]) if chip.get("flank") else None,
                chip_error=tools.CHIP_ERRORS.get(request.GET.get("chip_error"), "").format(cap=f"{tools.chip_cap():,}") or None)

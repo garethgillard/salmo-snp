@@ -5,7 +5,7 @@
 <figure class="sp-card sp-figure" id="fig-{{ fig.name }}">
   <div class="sp-card-head">
     <h2>{{ fig.title }}</h2>
-    <details class="sp-info"><summary aria-label="What does this figure show?" title="What does this figure show?">{% icon 'info' %}</summary><p>{{ fig.info }}</p></details>
+    <details class="sp-info"><summary aria-label="What does this figure show?" title="What does this figure show?">{% icon 'info' %}</summary><p>{{ fig.info }} <a href="{% url 'snpportal:help' %}#colours" hx-boost="false">Colour key</a></p></details>
     <details class="sp-dlmenu" hx-boost="false">{# never boost file links: htmx would swap the file into the page #}
       <summary aria-label="Download {{ fig.title }}" title="Download">{% icon 'download' %}</summary>
       <div class="sp-dlmenu-items">

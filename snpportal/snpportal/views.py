@@ -294,7 +294,7 @@ def results(request, key):
     context = {"nav": "score", "job": job, "key": key, "tab": tab, "gwas": gwas, "sv": sv,
                "title": " · ".join(x for x in [label + (" (synthetic data)" if synthetic and "synthetic" not in label.lower() else ""),
                                                f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None] if x),
-               "meta": f"Deleted after {jobs.utc(jobs.expires(key))}" if jobs.expires(key) else "Kept on this computer until you delete it",
+               "meta": jobs.deleted_after(key),
                "synthetic": synthetic}
     if job["state"] == "done":
         d = jobs.folder(key)

@@ -50,6 +50,7 @@ VARIANT = re.compile(r"^(\w{1,40})-(\d{1,10})(?:-([ACGTNacgtn]{1,50})-([ACGTNacg
 JBROWSE = ("https://salmobase.org/jbrowse/?assembly=Ssal_v3.1&loc={chrom}:{start}..{end}"
            "&tracks=Ssal_v3.1-Ensembl-FeatureTrack,Ssal_v3.1-NCBI-FeatureTrack")
 ENSEMBL = "https://www.ensembl.org/Salmo_salar/Location/View?r={chrom}:{start}-{end}"
+NCBI_GENE = "https://www.ncbi.nlm.nih.gov/gene/{}"  # NCBI RefSeq genes and isoforms link to their gene there
 MOLQTL_KINDS = {"e": "eQTL (gene expression)", "ca": "caQTL (chromatin accessibility)"}
 MOLQTL = re.compile(r"^(\w+) (ca|e) (\S+) \(BF ([^,]+), pi ([^)]+)\)$")  # one feature of molqtl_features
 _TILES = LocMemCache("snpportal-tiles", {"TIMEOUT": 7 * 86400, "OPTIONS": {"MAX_ENTRIES": 5000}})
@@ -293,6 +294,7 @@ def draw(request, s, download=False, show=FULL):
         data, title=title, caption=caption if download else "", desc=f"{title}. {caption}", snps=snps,
         snp_note=f"tiers: {s['trait'].replace('_', ' ')}" if snps else "", signal=signal, hmm=hmm, chosen=chosen, mark=s["mark"],
         gene_url=None if download else (lambda gid: reverse("snpportal:gene", args=[gid])), compact=s["compact"],
+        ncbi=sl.ncbi_genes(jobs.release(), s["chrom"], s["start"], s["end"]), ncbi_url=None if download else NCBI_GENE.format,
         width=COMPACT_WIDTH if s["compact"] else locus_svg.WIDTH, gutter=118 if s["compact"] else locus_svg.GUTTER, synthetic=synthetic,
         gwas=gwas, lanes=None if show is FULL else show, heading=download)
     return svg, notes, synthetic

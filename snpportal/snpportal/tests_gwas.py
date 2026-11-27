@@ -152,6 +152,9 @@ class GwasTest(SimpleTestCase):
         self.assertNotIn("format=loci", html)
         results = self.client.get(reverse("snpportal:results", args=[self.key]))  # GWAS jobs open on Association
         self.assertTrue(results.url.startswith(reverse("snpportal:association", args=[self.key])))
+        self.assertIn("Deleted after", html)
+        with override_settings(SNPPORTAL_LOCAL=True):  # a local install keeps it: the page doesn't say when it goes
+            self.assertNotContains(self.client.get(self.page), "Deleted after")
 
     def test_trait_sd_check_and_methods_text(self):
         """The trait SD defaults to the one se, N and af imply (as snpscore gwas); one far from it is flagged in the QC

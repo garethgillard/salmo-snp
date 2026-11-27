@@ -25,8 +25,8 @@ def asset(path):
 # whose shapes these reuse; the rest drawn to match). Icons name places (the nav) and label icon-only controls; actions
 # are words. {% icon 'search' %} is decorative (aria-hidden); {% icon 'search' 'Search' %} names itself for screen readers.
 ICONS = {
-    "brand": '<path d="M8 3c0 5 8 4 8 9s-8 4-8 9"/><path d="M16 3c0 5-8 4-8 9s8 4 8 9"/><path d="M9.5 6h5M9.5 18h5"/>'
-             '<circle cx="12" cy="12" r="1.9" fill="currentColor"/>',
+    "brand": '<path d="M12 17.5s-5.6-5.2-5.6-9.4a5.6 5.6 0 0 1 11.2 0c0 4.2-5.6 9.4-5.6 9.4z"/>'
+             '<circle cx="12" cy="8.1" r="2" fill="currentColor"/><path d="M3.5 21h17"/>',  # a pin on a line: a SNP's place
     "score": '<path d="M4 6.5h16M4 12h11M4 17.5h6"/>',
     "panel": '<path d="M10 6.5h10M10 12h10M10 17.5h10"/><path d="M4 6.5l1.2 1.2L7.5 5.4M4 12l1.2 1.2 2.3-2.3M4 17.5l1.2 1.2'
              ' 2.3-2.3"/>',

@@ -184,7 +184,7 @@
         <td title="{{ r.position }}">{{ r.snp }}{% if r.alleles %} <span class="sp-muted">&middot; {{ r.alleles }}</span>{% endif %}</td>
         <td>{{ r.gene }}</td><td>{{ r.region }}</td>
         <td class="sp-ctr">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
-        <td><span class="sp-as sp-as-{{ r.assay.1 }}"><span aria-hidden="true">{{ r.assay.0 }}</span> {{ r.assay.2 }}</span>{% if r.lore %} <span class="sp-as sp-as-warn">LORe</span>{% endif %}</td>
+        <td><span class="sp-as sp-as-{{ r.assay.1 }}">{% if r.assay.1 == 'warn' %}{% icon 'warn' %} {% elif r.assay.1 == 'fail' %}{% icon 'fail' %} {% endif %}{{ r.assay.2 }}</span>{% if r.lore %} <span class="sp-as sp-as-warn">LORe</span>{% endif %}</td>
         <td class="sp-num">{% if r.maf %}{% if r.maf.1 %}<span class="sp-as sp-as-warn" title="Below the panel designer's minimum MAF · {{ r.maf.2 }}">{{ r.maf.0 }}</span>{% else %}<span title="{{ r.maf.2 }}">{{ r.maf.0 }}</span>{% endif %}{% endif %}</td>
         <td>{% if r.close %}<span class="sp-as sp-as-warn">{{ r.close }}</span>{% endif %}</td>
         {% if uniqueness %}<td class="sp-num">{% if r.paralog %}<span{% if r.paralog.1 %} class="sp-as sp-as-warn"{% endif %} title="{{ r.paralog.2 }}">{{ r.paralog.0 }}</span>{% endif %}</td>{% endif %}

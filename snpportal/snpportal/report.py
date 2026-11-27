@@ -102,6 +102,6 @@ def report(request, key):
         "release": f"{m.get('version') or job.get('release')} ({m.get('assembly') or job.get('assembly', 'Ssal_v3.1')})",
         "provenance": [f"Release {job.get('release')} ({job.get('assembly', 'Ssal_v3.1')}); manifest {(job.get('manifest_sha256') or '')[:12]}; "
                        f"weights {(job.get('weights_sha256') or 'none')[:12]}; input {(job.get('input_sha256') or 'n/a')[:12]}",
-                       f"snpscore {job.get('snpscore_version')}; DuckDB {job.get('duckdb_version')}; job created {job.get('created_utc')}; "
-                       f"deleted after {jobs.utc(jobs.expires(key))}",
+                       f"snpscore {job.get('snpscore_version')}; DuckDB {job.get('duckdb_version')}; job created {job.get('created_utc')}"
+                       + (f"; {gone[0].lower()}{gone[1:]}" if (gone := jobs.deleted_after(key)) else ""),
                        command.replace("equivalent command: ", "Equivalent command: ")]})

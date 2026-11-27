@@ -273,7 +273,7 @@ def known_loci(request):
     said = [f"{n:,} {word}{'' if n == 1 else 's'}" for n, word in ((len(parts["snp"]), "SNP"), (len(parts["sv"]), "structural variant"),
             (len(parts["region"]) - n_qtl, "gene region"), (n_qtl, "QTL window")) if n]  # what there is, e.g. no '0 SNPs' for trout
     return render(request, "snpportal/known_loci.html", {
-        "nav": "known", "title": "Known loci", "snp_groups": by_trait(parts["snp"]), "n_snps": len(parts["snp"]),
+        "nav": "known", "title": "Known loci", "snp_groups": by_trait(sorted(parts["snp"], key=where)), "n_snps": len(parts["snp"]),
         "summary": " and ".join([", ".join(said[:-1]), said[-1]]) if len(said) > 1 else "".join(said),
         "svs": sorted(parts["sv"], key=where), "regions": sorted(parts["region"], key=where),
         "has_ss4r": bool(_file("ss4r")), "counts": catalogue_counts(rows)})
