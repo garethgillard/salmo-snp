@@ -148,6 +148,17 @@ SV_METHODS = (
     "span rather than at their breakpoints is PROVISIONAL.")
 
 
+def _citation_parts(citation):
+    """A layer citation's '; '-separated parts, but not inside brackets: 'genotypes (NMBU; unpublished)' stays whole."""
+    out, depth, start = [], 0, 0
+    for i, ch in enumerate(citation):
+        depth += (ch == "(") - (ch == ")")
+        if depth == 0 and citation.startswith("; ", i):
+            out.append(citation[start:i])
+            start = i + 2
+    return out + [citation[start:]]
+
+
 def methods_text(manifest, weights, preset="all", release_dir=None, finemap=None, sv=False):
     """Paste-ready methods paragraphs (annotation layers, tiers, assay QC; with `finemap`, the GWAS settings used as
     gwas.settings() returns them and gwas.json 'finemap' records them, a loci and fine-mapping paragraph) and the
@@ -222,11 +233,12 @@ def methods_text(manifest, weights, preset="all", release_dir=None, finemap=None
                 .replace("Each SNP was given", "Each structural variant was given", 1) for t in text
                 if not t.startswith(("Coding consequences", "Assay designability"))]
         text.insert(2, SV_METHODS)
-    parts = {p.strip() for l in layers if l.get("citation") for p in l["citation"].split("; ")}
+    parts = {p.strip() for l in layers if l.get("citation") for p in _citation_parts(l["citation"])}
     refs = [REFERENCES["gerp"] if p.startswith("Ensembl Compara") and "GERP" in p else p if "doi:" in p
             else f"{p} (DOI to add)" for p in parts]
     refs = sorted(set(refs) | ({REFERENCES["gerp"]} if any(l["name"] == "gerp" for l in layers) else set())
-                  | ({REFERENCES["wakefield"]} if finemap else set()))
+                  | ({REFERENCES["wakefield"]} if finemap else set()), key=str.casefold)
+    refs = [r for r in refs if not any(r != o and r in o for o in refs)]  # a paper another entry cites in full: once
     catalog = Path(release_dir) / manifest["catalog"]["file"] if release_dir and manifest.get("catalog") else None
     if catalog and catalog.exists():
         rows = list(csv.DictReader(io.StringIO(catalog.read_text()), delimiter="\t"))

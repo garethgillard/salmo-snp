@@ -101,7 +101,7 @@ def bar(parts, title, desc="", synthetic=False, marks=None):
     for i, (name, n, fill, href) in enumerate(parts):
         w = width * n / total
         label = f"{name}: {n:,} ({share_label(n, total)})"
-        body.append(_rect(x, 0, w, 28, fill, label, href, f' stroke="{palette.WHITE}"'))
+        body.append(_rect(x, 0, w, 28, fill, label, href, f' stroke="{palette.edge(fill) or palette.WHITE}"'))  # white: outlined
         if marks and w > 24:
             body.append(_text(x + w / 2, 18.5, marks[i], "middle", fill=palette.text_on(fill), font_weight=600,
                               pointer_events="none", **{"class": "sp-lg"}))

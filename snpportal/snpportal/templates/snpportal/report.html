@@ -1,20 +1,22 @@
 {% extends 'snpportal/base_portal.html' %}
 {% load snpportal_tags %}
 {% comment %}Printable report of a job (report.py): the caveat, upload warnings, the summary, top SNPs, a panel, a figure, a methods
-   summary with references and the provenance (portal.css /* report */ sets A4). Links point at the results page.{% endcomment %}
+   summary with references and the provenance (portal.css /* report */ sets A4). Sections with a hairline above, not boxes,
+   so that the table and the references flow across the page break and the report fills two pages (G, 2026-11-27: 'nice
+   and practical'); a figure or a table row is never split. Links point at the results page.{% endcomment %}
 {% block main %}
-<div class="sp-report sp-stack">
-  <p class="sp-noprint sp-small sp-muted mb-0"><button type="button" class="btn btn-sm btn-primary" onclick="window.print()">Print or save as PDF</button>
+<div class="sp-report">
+  <p class="sp-noprint sp-small sp-muted"><button type="button" class="btn btn-sm btn-primary" onclick="window.print()">Print or save as PDF</button>
     Two A4 pages; choose &lsquo;Save as PDF&rsquo; in the print dialog for a PDF.</p>
   <p class="sp-caveat" role="note">Prototype scoring:
     tiers rank annotated evidence, not proven effects; rules are provisional.</p>
 
   {% if warnings %}<div class="sp-status sp-status-warn" role="note">{% icon 'warn' %} Upload warnings: {{ warnings|join:"; " }}</div>{% endif %}
-  {% if summary %}<figure class="sp-card sp-figure" id="fig-{{ summary.name }}"><h2>{{ summary.title }}</h2>{{ summary.svg }}</figure>{% endif %}
+  {% if summary %}<figure class="sp-rsec sp-rfig" id="fig-{{ summary.name }}"><h2>{{ summary.title }}</h2>{{ summary.svg }}</figure>{% endif %}
 
-  <section class="sp-card" aria-labelledby="top-h">
-    <div class="sp-card-head"><h2 id="top-h">Top {{ top.rows|length }} SNPs</h2>
-      <a class="ms-auto sp-small sp-noprint" href="{{ table_url }}">All {{ top.matching|thousands }} in the table</a></div>
+  <section class="sp-rsec" aria-labelledby="top-h">
+    <div class="sp-rsec-h"><h2 id="top-h">Top {{ top.rows|length }} SNPs</h2>
+      <a class="sp-small sp-noprint" href="{{ table_url }}">All {{ top.matching|thousands }} in the table</a></div>
     <p class="sp-small sp-muted mb-1">{% if top.gwas %}Ordered by p.{% else %}Ordered by tier, then score.{% endif %}{% if top.ties %} {{ top.ties }}{% endif %}{% if filters %}
       Filters: {% for k, v in filters.items %}{{ k }}={{ v }}{% if not forloop.last %}, {% endif %}{% endfor %} ({{ top.matching|thousands }} SNPs match).{% endif %}</p>
     {% if top.rows %}<div class="table-responsive"><table class="table table-sm sp-small mb-0">
@@ -34,17 +36,16 @@
     {% else %}<p class="sp-small sp-muted mb-0">No SNPs match these filters.</p>{% endif %}
   </section>
 
-  {% if panel %}<section class="sp-card" aria-labelledby="panel-h">
-    <div class="sp-card-head"><h2 id="panel-h">Panel: {{ panel.name }}</h2><a class="ms-auto sp-small sp-noprint" href="{{ panel.url }}">Panel tab</a></div>
+  {% if panel %}<section class="sp-rsec" aria-labelledby="panel-h">
+    <div class="sp-rsec-h"><h2 id="panel-h">Panel: {{ panel.name }}</h2><a class="sp-small sp-noprint" href="{{ panel.url }}">Open the picker</a></div>
     {% if panel.short %}<div class="sp-status sp-status-warn" role="status">{% icon 'warn' %} {{ panel.short }}</div>{% endif %}
     <p class="sp-small mb-0">{{ panel.line }}</p>
     {% if panel.params %}<p class="sp-small sp-muted mb-0">Designed with: {{ panel.params }}.</p>{% endif %}
   </section>{% endif %}
 
-  {% if figs %}<div class="sp-stack">{% for fig in figs %}<figure class="sp-card sp-figure" id="fig-{{ fig.name }}">
-    <h2>{{ fig.title }}</h2>{{ fig.svg }}</figure>{% endfor %}</div>{% endif %}
+  {% for fig in figs %}<figure class="sp-rsec sp-rfig" id="fig-{{ fig.name }}"><h2>{{ fig.title }}</h2>{{ fig.svg }}</figure>{% endfor %}
 
-  <section class="sp-card sp-report-text" aria-labelledby="methods-h">
+  <section class="sp-rsec sp-report-text" aria-labelledby="methods-h">
     <h2 id="methods-h">Methods</h2>
     <p class="sp-small">SNPs were annotated with snpscore against release {{ release }}: AQUA-FAANG chromatin states in 27
       conditions, Ensembl 116 genes, GERP constrained elements, the Ensembl regulatory build and public allele frequencies.
@@ -53,10 +54,10 @@
       of one base scores as a SNP at that base); coding consequences, TF motif changes and the assay check need a single base
       and are left out.{% endif %} The rules are provisional. Full methods: <a href="{{ methods_url }}">{{ methods_url }}</a></p>
     {% if refs %}<h3>References</h3>
-    <ul class="sp-small mb-0">{% for r in refs %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+    <ul class="sp-report-refs">{% for r in refs %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
   </section>
 
-  <section class="sp-card sp-report-text" aria-labelledby="prov-h">
+  <section class="sp-rsec" aria-labelledby="prov-h">
     <h2 id="prov-h">Provenance</h2>
     <ul class="sp-report-prov">{% for line in provenance %}<li>{{ line }}</li>{% endfor %}</ul>
   </section>

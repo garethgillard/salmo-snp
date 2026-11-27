@@ -624,7 +624,7 @@ def assay_readiness(con, types, synthetic, link):
             s["assay_reasons"].setdefault(reason, {})[status] = k
     n = sum(counts.values())
     statuses = [st for st in ("pass", "warn", "fail", "not_checked") if st in counts or st != "not_checked"]
-    parts = [(st.replace("_", " "), counts.get(st, 0), palette.STATUS[results.ASSAY[st][1]][2], link(assay=st)) for st in statuses]
+    parts = [(st.replace("_", " "), counts.get(st, 0), palette.ASSAY[st], link(assay=st)) for st in statuses]  # as the Overview's
     svg = figures.bar(parts, "Assay readiness", "SNPs per assay status of the probe-flank check", synthetic)
     line = " · ".join(f"{counts.get(st, 0):,} {st.replace('_', ' ')}" + (f" ({results.pct(counts.get(st, 0), n)})" if st == "pass" else "")
                       for st in statuses)

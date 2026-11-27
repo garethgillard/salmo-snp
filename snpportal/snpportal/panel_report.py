@@ -14,7 +14,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 
-from . import jobs, panel, tools
+from . import jobs, panel, results, tools
 from .lib import export as snp_export
 from .lib import panel as snp_panel
 from .views import private
@@ -55,7 +55,8 @@ def build(d, title, note=None, previous=None, synthetic=False):
            "settings": snp_panel.settings(jobs.weights())}
     out["tiers"] = sorted(con.execute("SELECT tier, count(*) FROM p WHERE tier IS NOT NULL GROUP BY 1").fetchall()) if "tier" in types else []
     if "region_class" in types:
-        out["regions"] = con.execute("SELECT coalesce(region_class, 'intergenic'), count(*) FROM p GROUP BY 1 ORDER BY 2 DESC, 1").fetchall()
+        out["regions"] = [(results.CLASS_LABELS.get(c, c.replace("_", " ")), k) for c, k in con.execute(  # 3′ UTR, not three_prime_UTR
+            "SELECT coalesce(region_class, 'intergenic'), count(*) FROM p GROUP BY 1 ORDER BY 2 DESC, 1").fetchall()]
     out["known"] = con.execute("SELECT count(*) FROM p WHERE known_locus IS NOT NULL").fetchone()[0] if "known_locus" in types else None
     out["mafs"] = [("Public panel", _maf_bins(con, "public_af_maf"))] if "public_af_maf" in types else []
     pops = panel.populations(d)

@@ -109,3 +109,4 @@ def test_methods_text_describes_finemapping(release):
     methods = export.methods_text(release / "manifest.json", WEIGHTS, "maturation", finemap=given)
     assert "Wakefield 2009" in methods and "trait SD 1 (given)" in methods and "doi:10.1002/gepi.20359" in methods
     assert "Wakefield" not in export.methods_text(release / "manifest.json", WEIGHTS, "maturation")
+    assert export._citation_parts("A (NMBU; unpublished); B") == ["A (NMBU; unpublished)", "B"]  # a reference stays whole

@@ -291,6 +291,7 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
   .sp-scroll { max-height: none; overflow: visible; border: 0; }
   .sp a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .75em; }
   .sp a[href^="https://doi.org/"]::after { content: none; }  /* 'doi:...' already names it */
+  .sp svg a { text-decoration: none; }  /* a figure's links (legend items, chromosomes) print as plain labels */
   .sp-state, .sp-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   /* evidence card page and variant page (not the table's drawer): one A4 page. Text scales with the root size; closed
      sections don't print; a card taller than the page flows on instead of leaving page 1 empty. */
@@ -646,21 +647,36 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 }
 /* end tour */
 
-/* == report (P3.5): printable report of a job; two A4 pages (key numbers, top SNPs and the tier bar, then the genome map,
-   methods, references and provenance) == */
+/* == report (P3.5, I12): the printable job and panel reports, two A4 pages. Sections with a hairline above, not boxes,
+   so that tables and references flow across the page break; a figure or a table row is never split (G, 2026-11-27) == */
+.sp-report > * + * { margin-top: 1.25rem; }
+.sp-rsec { padding-top: .9rem; border-top: 1px solid var(--sp-line); }
+.sp-rsec > h2, .sp-rsec-h h2 { margin-bottom: .5rem; font-size: var(--sp-fs-lg); }
+.sp-rsec > h3 { margin: .9rem 0 .35rem; font-size: var(--sp-fs-md); }
+.sp-rsec-h { display: flex; align-items: baseline; gap: 1rem; }
+.sp-rsec-h > a { margin-left: auto; }
+.sp-rfig > svg { display: block; width: 100%; max-width: 46rem; height: auto; }
 .sp-report-text p, .sp-report-text li { max-width: 62rem; }
+.sp-report-side > .sp-rsec + .sp-rsec { margin-top: 1rem; }  /* the panel report's right column */
+.sp-report .sp-kpis { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }  /* one row */
+.sp-report .sp-kpi { padding: 0; border: 0; }
+.sp-report-refs { margin: 0; padding-left: 1.1rem; font-size: var(--sp-fs-xs); }
+.sp-report-refs li { margin-bottom: .15rem; }
 .sp-report-prov { margin: 0; padding: 0; list-style: none; font-family: var(--sp-mono); font-size: var(--sp-fs-xs); overflow-wrap: anywhere; }
 @media print {
   @page { size: A4 portrait; margin: 11mm 11mm 12mm; }
   html:has(.sp-report) { font-size: 8.5pt; }  /* every rem in the report scales with it */
   .sp:has(.sp-report) .sp-main { padding: 0; }
   .sp:has(.sp-report) .sp-crumbs { display: none; }
-  .sp-report.sp-stack > * + * { margin-top: .6rem; }
+  .sp-report > * + * { margin-top: .7rem; }
+  .sp-report .sp-rsec { padding-top: .45rem; border-color: var(--sp-grey-500); break-inside: auto; }
+  .sp-report h2, .sp-report h3, .sp-rsec-h { break-after: avoid; }
+  .sp-report .sp-rfig, .sp-report tr, .sp-report .sp-kpis { break-inside: avoid; }
+  .sp-report thead { display: table-header-group; }  /* a table that runs on repeats its head */
+  .sp-report .sp-rfig > svg { max-width: 58%; }  /* figures shrink with the text (8.5pt root), leaving page 2 room */
+  .sp-report #fig-ideogram > svg { max-width: 48%; }  /* the genome map: mostly white */
+  .sp-report-refs { columns: 2; column-gap: 1.5rem; font-size: 6.5pt; }
   .sp-report .sp-status { margin: 0; padding: .3rem .6rem; }
-  .sp-report .sp-kpis { grid-template-columns: repeat(4, 1fr); gap: .4rem; }
-  .sp-report .sp-kpi { padding: .3rem .5rem; }
-  .sp-report .sp-card { padding: .5rem .6rem; }
-  .sp-report .sp-figure svg { max-width: 80%; }  /* figures shrink with the text (8.5pt root), leaving page 2 room */
   .sp-report .sp-info { display: none; }
   .sp-report a[href^="http"]::after { content: none; }  /* the methods link prints its URL as its text */
   .sp-report .table > :not(caption) > * > * { padding: .1rem .3rem; }
