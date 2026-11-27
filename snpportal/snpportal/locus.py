@@ -187,7 +187,7 @@ def user_snps(request, s, link=True):
         alleles = f" {ref}>{alt}" if ref else f" {kind or 'SV'}" if end is not None else ""
         where = f"{pos:,}-{end:,}" if end is not None else f"{pos:,}"
         out.append({"row": row, "pos": pos, "end": end, "id": sid, "tier": tier, "tier_score": score,
-                    "title": f"{sid or '(no id)'} · {s['chrom']}:{where}{alleles} · tier {tier} (score {score}): {evidence or 'no evidence'}",
+                    "title": f"{sid or '(no id)'} · {s['chrom']}:{where}{alleles} · score {score}: {evidence or 'no evidence'}",
                     "url": f"{reverse('snpportal:card', args=[s['key'], row])}?{urlencode({'trait': s['trait'], **s.get('gwas', {})})}" if link else None})
     return out
 
@@ -292,7 +292,7 @@ def draw(request, s, download=False, show=FULL):
     title = f"Chromosome {s['chrom']}: {s['start'] + 1:,}-{s['end']:,} ({locus_svg.fmt_bp(width)})"
     svg = locus_svg.locus(
         data, title=title, caption=caption if download else "", desc=f"{title}. {caption}", snps=snps,
-        snp_note=f"tiers: {s['trait'].replace('_', ' ')}" if snps else "", signal=signal, hmm=hmm, chosen=chosen, mark=s["mark"],
+        snp_note="colour and height = score" if snps else "", signal=signal, hmm=hmm, chosen=chosen, mark=s["mark"],
         gene_url=None if download else (lambda gid: reverse("snpportal:gene", args=[gid])), compact=s["compact"],
         ncbi=sl.ncbi_genes(jobs.release(), s["chrom"], s["start"], s["end"]), ncbi_url=None if download else NCBI_GENE.format,
         width=COMPACT_WIDTH if s["compact"] else locus_svg.WIDTH, gutter=118 if s["compact"] else locus_svg.GUTTER, synthetic=synthetic,
@@ -306,7 +306,7 @@ def provenance(info, cfg):
             f"{(info.get('sha256') or '')[:12]} · Ensembl 116, AQUA-FAANG, Ensembl Compara GERP, 504-fish panel variants, "
             "nf-RASQUAL molQTL, published associations (catalog/known_loci.tsv)\n"
             f"Signal read live from salmobase.org bigWigs listed in tracks.yaml{f' ({when})' if when else ''}; default "
-            "track sets and tier rules are PROVISIONAL.")
+            "track sets and score weights are PROVISIONAL.")
 
 
 @private
@@ -545,7 +545,7 @@ def facts(snp, ev, states, chosen, active_states):
         out.append(chip(text.replace(" · ", ", "), "", summit[1], "summit"))  # the facts line separates facts with dots
     if g("pike") and "pike" not in fired:
         out.append(chip("aligns to pike", "", "Sequence that aligns to northern pike, the closest relative without the salmonid genome "
-                        "duplication (AQUA-FAANG salmon-trout-pike alignment): display only, not counted in tiers", "pike"))
+                        "duplication (AQUA-FAANG salmon-trout-pike alignment): not counted unless you give it a weight", "pike"))
     if ev.get("known"):
         k = ev["known"]
         out.append(chip(f"★ {k['id']}" if not g("known_locus_dist") and ev.get("sv") else "★ published SNP" if not g("known_locus_dist")
@@ -553,7 +553,7 @@ def facts(snp, ev, states, chosen, active_states):
                         f"Known locus {k['id']}" + (f" ({k['trait']})" if k["trait"] else "") + (": inside this SV" if ev.get("sv") and not g("known_locus_dist") else ""),
                         "known"))
     if g("molqtl"):
-        out.append(chip("molQTL lead", "", f"{(g('molqtl_tissues') or '').replace(',', ', ')}: display only, not counted in tiers", "molqtl"))
+        out.append(chip("molQTL lead", "", f"{(g('molqtl_tissues') or '').replace(',', ', ')}: not counted unless you give it a weight", "molqtl"))
     for s in results.row_scores(snp):  # I15: per-variant scores (DeepFARM, ...), 'not scored' outside a model's set
         label, text, tip = results.score_text(s)
         out.append(chip(f"{label} {text}".replace(" · ", ", "), "" if s["score"] is not None else "muted", tip, "scores"))

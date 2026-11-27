@@ -152,7 +152,7 @@ def locus(data, *, title="", desc="", caption="", snps=(), snp_note="", signal=N
                    f'<circle cx="{x:.1f}" cy="{y + 40 - h:.1f}" r="4" fill="{fill}" stroke="{G[900]}" stroke-width="0.6">'
                    f'<title>{escape(s.get("title") or "")}</title></circle>') if not s.get("end") else sv_bar(ax, s, y + 40, h, fill, 7)
             body.append(f'<a href="{escape(s["url"])}">{dot}</a>' if s.get("url") else dot)
-        legend["Tiers"] = [(_swatch(palette.TIERS[t][0], round_=True), f"tier {t}") for t in sorted({s.get("tier") or 4 for s in snps})]
+        legend["Score"] = [(_swatch(palette.TIERS[t][0], round_=True), f"score {figures.bands()[t]}") for t in sorted({s.get("tier") or 4 for s in snps})]
         y += 46
 
     # published associations (the known-loci catalogue): diamonds by evidence kind, filled when the effect allele is stated
@@ -567,10 +567,10 @@ def score_blocks(parts, cutoffs, score, synthetic=False, unit=66, width=590):
         cx = c * u - 2
         body.append(f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="14" y2="42" stroke="{palette.WHITE}" stroke-width="3" stroke-opacity="0.6"/>'  # seen on dark blocks
                     f'<line x1="{cx:.1f}" x2="{cx:.1f}" y1="12" y2="44" stroke="{G[900]}" stroke-dasharray="3 2"/>'
-                    + _t(cx, 10, f"T{i + 1}", TEXT, G[700], "middle").replace("</text>", f"<title>tier {i + 1}: {c} points or more</title></text>"))
+                    + _t(cx, 10, f"{c}+", TEXT, G[700], "middle").replace("</text>", f"<title>score {c} or more</title></text>"))
     body += words + [_t(span * u + 8, 33, f"= {score}", 14, G[900], "start", "700")]  # just after the bar
     desc = "; ".join(p[3] for p in parts) or "no evidence counted"
-    return figures.svg(round(span * u + 50), 46, f"Score {score}", f"{desc}. Weights and tier cut-offs are provisional.", "".join(body), synthetic)
+    return figures.svg(round(span * u + 50), 46, f"Score {score}", f"{desc}. Weights and score bands are provisional.", "".join(body), synthetic)
 
 
 GRID = {"cw": 62, "ch": 22, "gap": 4, "left": 72, "top": 18}  # the tiles: cell size, gap, label column, header row

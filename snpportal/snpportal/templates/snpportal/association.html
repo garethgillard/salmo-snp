@@ -48,8 +48,8 @@
         <td class="sp-num">{{ x.p }}</td>
         <td class="sp-num">{% if x.beta is not None %}{{ x.beta|floatformat:3 }} ({{ x.se|floatformat:3 }}){% else %}&ndash;{% endif %}</td>
         <td class="sp-num">{{ x.n_snps|thousands }} ({{ x.n_significant|thousands }})</td>
-        <td>{% if x.top %}{% include 'snpportal/_badges.html' with kind='tier' value=x.top.tier short=1 %} <a href="{{ x.top.card }}">{{ x.top.id }}</a>
-          {% if x.top_f %}&rarr; {% include 'snpportal/_badges.html' with kind='tier' value=x.top_f.tier short=1 %} <a href="{{ x.top_f.card }}">{{ x.top_f.id }}</a> <span class="sp-muted">(functional)</span>{% endif %}
+        <td>{% if x.top %}{% include 'snpportal/_badges.html' with kind='tier' value=x.top.tier %} <a href="{{ x.top.card }}">{{ x.top.id }}</a>
+          {% if x.top_f %}&rarr; {% include 'snpportal/_badges.html' with kind='tier' value=x.top_f.tier %} <a href="{{ x.top_f.card }}">{{ x.top_f.id }}</a> <span class="sp-muted">(functional)</span>{% endif %}
           {% else %}<span class="sp-muted">n/a</span>{% endif %}</td>
         <td{% if x.gene_tip %} title="{{ x.gene_tip }}"{% endif %}>{{ x.gene|default_if_none:"" }}</td>
         <td class="sp-num text-nowrap">{% if x.fm.n %}{{ x.fm.size_uniform }} &rarr; {{ x.fm.size_functional }}{% else %}<span class="sp-muted">n/a</span>{% endif %}</td>

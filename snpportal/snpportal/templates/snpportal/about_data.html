@@ -5,7 +5,7 @@
   <a href="{% url 'snpportal:methods' %}">Methods</a>.</p>
 <p class="sp-small" id="facts">{{ built }}: {{ facts }}.</p>
 {% if release.synthetic %}<div class="sp-status sp-status-warn" role="note">&#9888; Synthetic layers in this release:
-  {{ release.synthetic|join:", " }}. They never count in tiers.</div>{% endif %}
+  {{ release.synthetic|join:", " }}. They never count in scores.</div>{% endif %}
 
 <section class="sp-section" aria-labelledby="layers-h">
   <h2 id="layers-h">Annotation layers</h2>

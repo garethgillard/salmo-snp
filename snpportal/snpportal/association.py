@@ -44,7 +44,7 @@ FIELDS = {  # URL parameter -> (finemap setting, lowest, highest); the window is
     "prior_sd": ("prior_sd", 0.01, 5), "lam": ("functional_lambda", 0, 3), "trait_sd": ("trait_sd", 1e-9, 1e9)}
 LABELS = {"sig": ("Significant p", ""), "sugg": ("Suggestive p", ""), "window": ("Window ± kb", ""),  # the closed settings form
           "prior_sd": ("Prior effect SD", "W = SD squared, on the standardised scale"),
-          "lam": ("Functional λ", "prior proportional to exp(λ × tier score); 0 = uniform"),
+          "lam": ("Functional λ", "prior proportional to exp(λ × score); 0 = uniform"),
           "trait_sd": ("Trait SD", "betas are divided by this; default: the SD that se, N and allele frequency imply, else 1 "
                                    "(a standardised trait)")}
 CAP = 60  # -log10 p drawn at most this high; stronger points are triangles at the top
@@ -344,7 +344,7 @@ def manhattan_svg(points, sizes, lines, leads, title, desc, synthetic=False):
             last = mid
     body += labels
     body.append(figures._text((left + width - right) / 2, height - 8, "chromosome (Ssal_v3.1)", "middle", font_size=11, fill=G[700]))
-    body.append(figures._legend([(palette.TIERS[1][0], "tier 1"), (palette.TIERS[2][0], "tier 2 (p <= 0.01, drawn on top)"),
+    body.append(figures._legend([(palette.TIERS[1][0], f"score {figures.bands()[1]}"), (palette.TIERS[2][0], f"score {figures.bands()[2]} (p <= 0.01, drawn on top)"),
                                  (palette.WHITE, "diamond: locus lead, opens its regional plot")], left + 4, 6))
     return figures.svg(width, height, title, desc, "".join(body), synthetic)
 
@@ -411,7 +411,7 @@ def pip_svg(panels, title, desc, synthetic=False):
         for label, tier, pu, pf in sorted(p["rows"], key=lambda r: -(r[1] or 4)):
             fill = palette.TIERS.get(tier or 4, palette.TIERS[4])[0]
             stroke = fill if (tier or 4) <= 2 else G[500]
-            tip = f"{label}: tier {tier}, PIP {pu:.3f} uniform -> {pf:.3f} functional"
+            tip = f"{label}: score band {figures.bands().get(tier, '–')}, PIP {pu:.3f} uniform -> {pf:.3f} functional"
             body.append(f'<g><title>{escape(tip)}</title><line x1="{xa}" y1="{sy(pu):.1f}" x2="{xb}" y2="{sy(pf):.1f}" stroke="{stroke}" stroke-width="1.6"/>'
                         f'<circle cx="{xa}" cy="{sy(pu):.1f}" r="3.5" fill="{fill}" stroke="{G[900]}" stroke-width="0.6"/>'
                         f'<circle cx="{xb}" cy="{sy(pf):.1f}" r="3.5" fill="{fill}" stroke="{G[900]}" stroke-width="0.6"/></g>')
@@ -430,15 +430,15 @@ def pip_svg(panels, title, desc, synthetic=False):
 
 FIGURES = {  # name -> (title, definition)
     "manhattan": ("Manhattan plot", "-log10 p of every SNP along the genome. SNPs with p > 0.01 are thinned to the strongest per "
-                  "50 kb; tier 1-2 SNPs are drawn on top in tier colours. Lines: genome-wide significance, "
+                  "50 kb; SNPs scoring 3 or more are drawn on top in their band's colour. Lines: genome-wide significance, "
                   "Bonferroni and suggestive thresholds (conventions, not rules for salmon). Diamonds mark locus leads: click "
                   "one for its regional plot."),
-    "qq": ("QQ plot by tier", "Observed against expected -log10 p per tier, each thinned to about 2,000 "
-           "quantiles, with lambda_GC = median(z^2)/0.4549 per tier. Grey band: 95% interval of the expected order "
-           "statistics for all SNPs. A tier lifting off the diagonal earlier than others is enriched for association, but "
-           "tiers differ in size and allele frequency."),
+    "qq": ("QQ plot by score band", "Observed against expected -log10 p per score band, each thinned to about 2,000 "
+           "quantiles, with lambda_GC = median(z^2)/0.4549 per band. Grey band: 95% interval of the expected order "
+           "statistics for all SNPs. A band lifting off the diagonal earlier than others is enriched for association, but "
+           "bands differ in size and allele frequency."),
     "pip": ("How the functional prior shifts PIPs", "Posterior inclusion probability (PIP) of each SNP in either 95% "
-            "credible set, under a uniform prior (left) and a functional prior proportional to exp(lambda x tier_score) "
+            "credible set, under a uniform prior (left) and a functional prior proportional to exp(lambda x score) "
             "(right), per locus. Wakefield approximate Bayes factors with one causal variant per locus and no LD."),
 }
 
@@ -460,7 +460,7 @@ def figure_data(a, name, job, key, link=True):
     if name == "qq":
         strata = sg.qq(con, "g", "tier")
         band = next(iter(sg.qq(con, "g", "'all'").values()), {}).get("band", [])
-        labels = {t: f"tier {t}" for t in palette.TIERS}
+        labels = {t: f"score {b}" for t, b in figures.bands().items()}
         svg = qq_svg(strata, {t: palette.TIERS[t][0] for t in palette.TIERS}, labels, band, FIGURES[name][0], desc, synthetic)
         rows = [(labels.get(k, k), round(e, 4), round(o, 4)) for k, s in strata.items() for e, o in s["points"]]
         return svg, ["stratum", "expected_neglog10p", "observed_neglog10p"], rows
@@ -677,11 +677,11 @@ def lane(a, chrom, start, end, key, locus_id=None, link=True):
     for row, pos, nlp, tier, sid, ref, alt, region_class, pu, pf, cs in rows:
         kind = "lead" if lead and pos == lead["lead"] else "coding" if region_class in ("CDS", "splice_region") else ""
         pips = f" · PIP {pu:.3f} uniform, {pf:.3f} functional" if pu is not None else ""
-        title = (f"{sid or '(no id)'} · {chrom}:{pos:,}" + (f" {ref}>{alt}" if ref and alt else "") + f" · p {sg.p_text(nlp)} · tier {tier}"
+        title = (f"{sid or '(no id)'} · {chrom}:{pos:,}" + (f" {ref}>{alt}" if ref and alt else "") + f" · p {sg.p_text(nlp)} · score band {figures.bands().get(tier, '–')}"
                  + (f" · {region_class.replace('_', ' ')}" if region_class else "") + pips + (" · in the 95% credible set" if cs else ""))
         points.append({"pos": pos, "neglog10p": nlp, "tier": tier, "kind": kind, "cs": bool(cs), "title": title,
                        "url": card_url(key, row, a) if link else None})
-    return {"points": points, "significant": -math.log10(a["cfg"]["significant"]), "note": "No LD used: colours are tiers, not r²"}
+    return {"points": points, "significant": -math.log10(a["cfg"]["significant"]), "note": "No LD used: colours are score bands, not r²"}
 
 
 def browser_lane(request, key, chrom, start, end, link=True):
@@ -750,7 +750,7 @@ def region(request, key):
             else f"Region {chrom}:{start + 1:,}-{end:,}")
     body, h = locus_svg.gwas_figure(data, chrom, start, end, head if download else "", height=250)
     inner_h = float(re.search(r'height="([\d.]+)"', inner).group(1))
-    desc = (f"{head}. -log10 p of the job's SNPs coloured by tier for trait {a['trait']}; diamond: lead; triangles: CDS or "
+    desc = (f"{head}. -log10 p of the job's SNPs coloured by score band for trait {a['trait']}; diamond: lead; triangles: CDS or "
             "splice; dark ring: 95% credible set under the functional prior. No LD is used. Below: genes, published loci, "
             f"the trait's chromatin rows and GERP. Release {job.get('release')}, job created {job.get('created_utc')}; "
             "thresholds, priors and track sets PROVISIONAL" + ("; SYNTHETIC test data." if synthetic else "."))

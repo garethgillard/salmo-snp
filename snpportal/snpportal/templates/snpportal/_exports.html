@@ -15,7 +15,7 @@
         <button class="btn btn-sm btn-primary" type="submit">{% if exports.filtered %}Add your Table selection ({{ exports.selected|thousands }} SNPs){% else %}Add all {{ exports.selected|thousands }} SNPs{% endif %}</button>
         <p>The SNPs you choose yourself: filter the Table and untick the rows to leave out first.</p></form>
       {% if not exports.gwas %}<div><a class="btn btn-sm btn-outline-primary" href="{{ exports.panel_link }}" hx-boost="true">Pick markers automatically</a>
-        <p>A spread of markers from {% if exports.filtered %}your selection{% else %}these SNPs{% endif %} by tier, spacing and assay check, for the
+        <p>A spread of markers from {% if exports.filtered %}your selection{% else %}these SNPs{% endif %} by score, spacing and assay check, for the
           purpose and size you set; then add them.</p></div>{% endif %}
     </div>
   </div>

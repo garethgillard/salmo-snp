@@ -14,7 +14,7 @@
 <figure class="sp-card sp-figure" id="fig-region" aria-label="Regional association plot">
   <div class="sp-card-head">
     <details class="sp-info"><summary aria-label="What does this figure show?" title="What does this figure show?">{% icon 'info' %}</summary>
-      <p>Top: -log10 p of your summary statistics, coloured by tier for the trait; a diamond marks the lead, triangles CDS or
+      <p>Top: -log10 p of your summary statistics, coloured by score band; a diamond marks the lead, triangles CDS or
         splice-region SNPs, a dark ring the 95% credible set under the functional prior. Click a point for its evidence card.
         Below, on the same axis: genes, published loci, the trait&rsquo;s chromatin states and GERP constraint.</p></details>
     <details class="sp-dlmenu" hx-boost="false">
@@ -32,12 +32,12 @@
   <h2 id="cs-h">95% credible set, uniform and functional prior</h2>
   <p class="sp-small sp-muted">One causal variant, no LD: PIPs depend on the prior SD and &lambda;.</p>
   {% if credible %}<div class="sp-scroll"><table class="table table-sm sp-small sp-table mb-0">
-    <thead><tr><th scope="col">SNP</th><th scope="col" class="sp-num">p</th><th scope="col">Tier</th>
+    <thead><tr><th scope="col">SNP</th><th scope="col" class="sp-num">p</th><th scope="col">Score</th>
       <th scope="col" class="sp-num">PIP uniform &rarr; functional</th><th scope="col">In set</th></tr></thead>
     <tbody>{% for r in credible %}<tr>
       <td class="sp-mono"><a href="{{ r.card }}">{{ r.id }}</a>{% if r.alleles %} <span class="sp-muted">{{ r.alleles }}</span>{% endif %}</td>
       <td class="sp-num">{{ r.p }}</td>
-      <td>{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}</td>
+      <td>{% include 'snpportal/_badges.html' with kind='tier' value=r.tier %}</td>
       <td class="sp-num">{{ r.pip_u|floatformat:3 }} &rarr; {{ r.pip_f|floatformat:3 }}</td>
       <td>{{ r.set }}</td>
     </tr>{% endfor %}</tbody>

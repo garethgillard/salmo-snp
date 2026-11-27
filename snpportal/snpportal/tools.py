@@ -48,7 +48,7 @@ EXCLUDE = {  # panel exclusion checkbox = a result column -> label
     "flank_variants": "public variants within 35 bp", "near_chip": "near a chip marker (within W)"}
 REASONS = {"must_include": ("must include", "One of your must-include ids"),  # selection_reason -> (label, tooltip)
            "backbone": ("backbone", "The best SNP in its genome bin, so every chromosome is covered"),
-           "functional": ("functional", "Tier 1–3, by design score"), "fill": ("fill", "Tier 4, by design score")}
+           "functional": ("functional", "Score 1 or more, by design score"), "fill": ("fill", "Score 0, by design score")}
 BINDING = {"min_spacing": "the minimum spacing", "min_spacing_cm": "the minimum spacing in cM", "max_per_gene": "the per-gene cap",
            "max_per_element": "the per-element cap"}
 CM_MAPS = {"mean": "sex-averaged", "female": "female", "male": "male"}  # lib.panel.CM_MAPS
@@ -254,8 +254,8 @@ def _fig_coverage(c, link, desc):
     ident = "id::VARCHAR" if "id" in _columns(c["con"], p["rel"]) else "NULL::VARCHAR"  # lists without ids have no id column
     rows = c["con"].execute(f"""SELECT chrom, pos // {BIN} * {BIN} AS b, min(tier), count(*), min(panel_rank), min(pos), any_value({ident})
                                 FROM {p['rel']} GROUP BY ALL ORDER BY ALL""").fetchall()
-    marks = [(chrom, b, b + BIN, _tier_fill(t), f"rank {rank}: {name or f'{chrom}:{pos:,}'}, tier {t}" if n == 1 else
-              f"{chrom}:{b / 1e6:.2f}–{(b + BIN) / 1e6:.2f} Mb: {n} markers (best tier {t})") for chrom, b, t, n, rank, pos, name in rows]
+    marks = [(chrom, b, b + BIN, _tier_fill(t), f"rank {rank}: {name or f'{chrom}:{pos:,}'}, score band {figures.bands().get(t, '–')}" if n == 1 else
+              f"{chrom}:{b / 1e6:.2f}–{(b + BIN) / 1e6:.2f} Mb: {n} markers (best score band {figures.bands().get(t, '–')})") for chrom, b, t, n, rank, pos, name in rows]
     ends = c["con"].execute(f"SELECT chrom, count(*), max(pos) FROM {p['rel']} GROUP BY 1").fetchall()
     counts = {chrom: n for chrom, n, _ in ends}
     gap = p["gap_bp"]
@@ -276,16 +276,16 @@ def _fig_chip(c, link, desc):
     density = [(chrom, mb * 1_000_000, (mb + 1) * 1_000_000, n / top, f"{chrom}:{mb}–{mb + 1} Mb: {n:,} chip markers")
                for chrom, mb, n in chip["density"]]
     marks = [(chrom, b, b + BIN, _tier_fill(t), f"{chrom}:{b / 1e6:.2f}–{(b + BIN) / 1e6:.2f} Mb: {n:,} novel functional SNPs "
-              f"(best tier {t})") for chrom, b, t, n in res["novel_bins"]]
+              f"(best score band {figures.bands().get(t, '–')})") for chrom, b, t, n in res["novel_bins"]]
     gaps = [(g["chrom"], g["start"], g["end"], f"Chip gap {g['chrom']}:{g['start']:,}–{g['end']:,} ({_bp(g['size'])})"
-             + (f"; best SNP {g['filler']['chrom']}:{g['filler']['pos']:,}, tier {g['filler']['tier']} ({g['filler']['source']})"
+             + (f"; best SNP {g['filler']['chrom']}:{g['filler']['pos']:,}, score band {figures.bands().get(g['filler']['tier'], '–')} ({g['filler']['source']})"
                 if g["filler"] else "; no SNP to fill it")) for g in res["gaps"]]
     counts, ends = {}, {}
     for chrom, mb, n in chip["density"]:
         counts[chrom], ends[chrom] = counts.get(chrom, 0) + n, max(ends.get(chrom, 0), mb * 1_000_000 + 1)
     href = (lambda chrom, a, b: link(chrom=chrom, start=a, end=b)) if link else None
     legend = [(figures.mix(palette.GREY[200], palette.GREY[700], 0.6), "chip markers per Mb"),
-              (palette.TIERS[1][0], "novel functional, tier 1"), (palette.TIERS[2][0], "tier 2"),
+              (palette.TIERS[1][0], f"novel functional, score {figures.bands()[1]}"), (palette.TIERS[2][0], f"score {figures.bands()[2]}"),
               _gap_legend(f"chip gap > {res['summary']['gap_bp'] / 1e6:g} Mb")]
     svg = coverage(_chroms(c["d"], ends.items()), marks, f"Chip coverage and novel functional SNPs, {c['preset']}",
                    desc, c["synthetic"], gaps, density, counts, legend, href)
@@ -296,11 +296,11 @@ def _fig_chip(c, link, desc):
 
 FIGURES = {  # name -> (card title, (i) definition, builder(context, link or None, desc) -> (svg, header, rows) or None)
     "panel-coverage": ("Panel markers along the genome", "Chromosomes to scale (Ssal_v3.1). A tick per marker (per 250 kb "
-                       "when they are close), coloured by tier; the number on the right is the markers per chromosome. "
+                       "when they are close), coloured by score band; the number on the right is the markers per chromosome. "
                        "Highlighted: gaps longer than the threshold under Advanced settings. Click a gap to list the SNPs "
                        "in it.", _fig_coverage),
     "chip-coverage": ("Chip coverage and new functional SNPs", "Top lane: the chip's markers per 1 Mb (darker = more). "
-                      "Ticks: your tier 1–2 SNPs with no chip marker nearby (novel functional). Highlighted: chip gaps "
+                      "Ticks: your SNPs scoring 3 or more with no chip marker nearby (novel functional). Highlighted: chip gaps "
                       "over 1 Mb. Click a gap to list your SNPs in it.", _fig_chip),
 }
 
@@ -566,7 +566,7 @@ def panel_line(s):
     """The panel's key numbers in one line: tier 1-2 and assay-pass shares, median spacing, largest gap."""
     n = s["n_selected"]
     tiers, assay, gaps = s.get("tiers", {}), s.get("assay_status") or {}, s.get("largest_gaps") or []
-    parts = [f"{results.pct(int(tiers.get('1', 0)) + int(tiers.get('2', 0)), n)} tier 1–2"]  # the heading names the markers
+    parts = [f"{results.pct(int(tiers.get('1', 0)) + int(tiers.get('2', 0)), n)} score {figures.cuts()[1]}+"]  # the heading names the markers
     if assay:
         parts.append(f"{results.pct(assay.get('pass', 0), n - assay.get('not_checked', 0) - assay.get('null', 0))} assay pass")
     parts.append(f"median spacing {_bp((s.get('spacing') or {}).get('median'))}")
@@ -754,8 +754,8 @@ def _chip_context(request, key, job, d, trait, con, weights, chip, link):
                       "rows left out" if chip.get("rejected") else "all on chromosomes 1–29"},
                      {"value": f"{s['shared']:,}", "label": "shared", "note": f"{results.pct(s['shared'], s['total'])} of your SNPs are on the chip"},
                      {"value": f"{s['novel_functional']:,}", "label": "novel functional",
-                      "note": f"tier 1–2, no chip marker within {_bp(s['window_bp'])}"},
-                     {"value": f"{s['other']:,}", "label": "other", "note": "near the chip, or tier 3–4"},
+                      "note": f"score {figures.cuts()[1]}+, no chip marker within {_bp(s['window_bp'])}"},
+                     {"value": f"{s['other']:,}", "label": "other", "note": f"near the chip, or score below {figures.cuts()[1]}"},
                      {"value": f"{s['gaps']:,}", "label": "chip gaps", "note": f"over {_bp(s['gap_bp'])}"}], fig=fig)
     return out
 
@@ -1076,7 +1076,7 @@ def exports(request, key, job):
     rows = []  # (label, [notes], download URL or None)
     if gwas:
         gwas_url = reverse("snpportal:association_download", args=[key])
-        rows = [("Fine-mapping (TSV)", ["Every SNP in a locus with tier score and PIP under both priors."],
+        rows = [("Fine-mapping (TSV)", ["Every SNP in a locus with its score and PIP under both priors."],
                  f"{gwas_url}?{urlencode({'trait': trait, **settings, 'format': 'finemap'})}" if n else None),
                 ("Loci (TSV)", ["One row per locus: lead SNP, p, credible-set sizes."], f"{gwas_url}?{urlencode({'trait': trait, **settings, 'format': 'loci'})}"),
                 ("Loci (BED)", ["The locus windows, for genome browsers."], f"{gwas_url}?{urlencode({'trait': trait, **settings, 'format': 'bed'})}"),

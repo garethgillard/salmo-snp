@@ -235,7 +235,7 @@ def _figure(con, d, chip, res, synthetic):
     """The panel along the genome (a mark per 250 kb, coloured by the best tier), with the chip's markers per Mb
     above it and its gaps highlighted when there is a chip."""
     rows = con.execute(f"SELECT chrom, pos // {BIN} * {BIN}, min(tier), count(*) FROM p GROUP BY ALL ORDER BY ALL").fetchall()
-    marks = [(c, b, b + BIN, tools._tier_fill(t), f"{c}:{b / 1e6:.2f}–{(b + BIN) / 1e6:.2f} Mb: {n:,} SNPs (best tier {t})")
+    marks = [(c, b, b + BIN, tools._tier_fill(t), f"{c}:{b / 1e6:.2f}–{(b + BIN) / 1e6:.2f} Mb: {n:,} SNPs (best score band {figures.bands().get(t, '–')})")
              for c, b, t, n in rows]
     counts = dict(con.execute("SELECT chrom, count(*) FROM p GROUP BY 1").fetchall())
     density, gaps = None, []
@@ -250,7 +250,7 @@ def _figure(con, d, chip, res, synthetic):
                    tools._gap_legend(f"chip gap > {res['summary']['gap_bp'] / 1e6:g} Mb")]
     ends = con.execute("SELECT chrom, max(pos) FROM p GROUP BY 1").fetchall()
     return tools.coverage(tools._chroms(d, ends) if (d / "manifest.json").exists() else _chroms(ends), marks,
-                          "Panel SNPs along the genome", "Panel SNPs per 250 kb, coloured by tier (all conditions)"
+                          "Panel SNPs along the genome", "Panel SNPs per 250 kb, coloured by score band (all conditions)"
                           + ("; the chip's markers per Mb above, chip gaps highlighted" if chip else ""),
                           synthetic, gaps, density, counts, legend)
 
@@ -307,7 +307,7 @@ def page(request):
         cs = res["summary"]
         on = con.execute("SELECT count(*) FILTER (WHERE on_chip), count(*) FILTER (WHERE NOT on_chip) FROM p").fetchone()
         ctx["compare"] = [(f"{cs['chip_snps']:,}", "chip markers"), (f"{on[0]:,}", "already on the chip"),
-                          (f"{on[1]:,}", "not on the chip"), (f"{cs['novel_functional']:,}", f"tier 1–2 with no chip marker within {tools._bp(cs['window_bp'])}"),
+                          (f"{on[1]:,}", "not on the chip"), (f"{cs['novel_functional']:,}", f"score {figures.cuts()[1]}+ with no chip marker within {tools._bp(cs['window_bp'])}"),
                           (f"{cs['gaps']:,}", f"chip gaps over {tools._bp(cs['gap_bp'])}")]
         ctx["chips"] = [{**c, "flank_text": " ".join(placement.describe(c["flank"])) if c.get("flank") else None} for c in chips(d)]
         if ctx["chips"]:

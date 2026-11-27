@@ -2,7 +2,7 @@
 {% load snpportal_tags %}
 {% block main %}
 <div class="sp-doc">
-<p class="sp-lead">How to score a list, read its results and use what you find. The rules behind the tiers are on
+<p class="sp-lead">How to score a list, read its results and use what you find. The rules behind the scores are on
   <a href="{% url 'snpportal:methods' %}">Methods</a>, the data on <a href="{% url 'snpportal:about_data' %}">Data</a>.</p>
 <nav class="sp-toc" aria-label="On this page"><span>On this page</span>
   <a href="#quick-start">Quick start</a><a href="#words">Words used</a><a href="#colours">Colour key</a><a href="#faq">Questions</a><a href="#formats">Input formats</a>
@@ -12,7 +12,7 @@
   <ol class="sp-steps-list">
     <li><a href="{% url 'snpportal:upload' %}">Score</a> a list: a file, pasted positions, genes or regions, structural
       variants or GWAS results, or try an example. The Score page lists the results this browser opened.</li>
-    <li>Read the Overview: how many SNPs are in each tier, where they lie in genes, and which are near a known locus.</li>
+    <li>Read the Overview: how many SNPs are in each score band, where they lie in genes, and which are near a known locus.</li>
     <li>Filter the Table on its columns, and click a SNP to see its evidence card.</li>
     <li>Add the SNPs you want to your <a href="{% url 'snpportal:design_panel' %}">Design panel</a>, compare it with your chip
       and download vendor files.</li>
@@ -24,16 +24,17 @@
 
 <section class="sp-section" id="words" aria-labelledby="words-h"><h2 id="words-h">Words used</h2>
   <dl class="sp-terms">
-    <dt id="w-tier">Tier</dt>
-    <dd>How much functional evidence a SNP has, from 1 (the strongest) to 4 (no evidence found, which is not evidence of
-      no effect). Tiers always count all 27 conditions, so a SNP has the same tier everywhere.</dd>
     <dt id="w-score">Score</dt>
-    <dd>The number behind the tier: the sum of the weights of a SNP's evidence.
-      {% for tier, range, note in tiers %}{% if forloop.first %}Tier {{ tier }} is a score of {{ range }}{% elif forloop.last %} and tier {{ tier }} {{ range }}.{% else %}, tier {{ tier }} {{ range }}{% endif %}{% endfor %}
-      {% if example %}For example, {{ example }}.{% endif %} <a href="{% url 'snpportal:methods' %}#weights">All the weights</a></dd>
+    <dd>How much functional evidence a SNP has: the sum of the weights of its evidence, over all 27 conditions, so a SNP
+      has the same score everywhere. You can choose the weights (Weights, in the Table). 0 = no evidence found, which is
+      not evidence of no effect. {% if example %}For example, {{ example }}.{% endif %}
+      <a href="{% url 'snpportal:methods' %}#weights">All the weights</a></dd>
+    <dt id="w-tier">Score band</dt>
+    <dd>Scores are coloured by band:{% for tier, range, note in tiers %} <span class="sp-badge sp-tier-{{ tier }}">{{ tier|band }}</span>{% endfor %}
+      (the strongest first; your weights never move the bands' edges).</dd>
     <dt id="w-condition">Condition</dt>
     <dd>One AQUA-FAANG sample group: a tissue of fish of one maturity and sex, head kidney after one immune treatment, or
-      one embryo stage. The tiers count all 27.</dd>
+      one embryo stage. Scores count all 27.</dd>
     <dt id="w-state">Chromatin state</dt>
     <dd>What the chromatin is doing at a SNP in one condition, such as Active enhancer or Active TSS, known only inside a
       robust ATAC peak. Active states count the most. <a href="#colours">Their colours</a></dd>
@@ -58,13 +59,13 @@
 </section>
 
 <section class="sp-section sp-faq" id="faq" aria-labelledby="faq-h"><h2 id="faq-h">Questions</h2>
-  <details id="conditions"><summary>Why don't tiers change when I filter by tissue?</summary>
-    <p>Tiers always count all 27 conditions, so a SNP has the same tier in the Overview, its card, the Design panel and
+  <details id="conditions"><summary>Why don't scores change when I filter by tissue?</summary>
+    <p>Scores always count all 27 conditions, so a SNP has the same score in the Overview, its card, the Design panel and
       every download. The Table's Chromatin filter only picks rows: SNPs inside a robust ATAC peak (or, if you choose, an
       active state) in at least one of the conditions you tick.</p></details>
   <details id="states"><summary>What do the chromatin colours mean?</summary>
     <p>Each colour is one AQUA-FAANG chromatin state, named in the <a href="#colours">colour key</a>.
-      <a href="{% url 'snpportal:methods' %}#states">Methods</a> says what each counts as, next to the tiers and the
+      <a href="{% url 'snpportal:methods' %}#states">Methods</a> says what each counts as, next to the score bands and the
       evidence weights.</p></details>
   <details id="my-results"><summary>Where are my results?</summary>
     <p>The <a href="{% url 'snpportal:upload' %}">Score</a> page lists the results this browser opened, newest first, until
@@ -102,9 +103,9 @@
     <p>In salmon the ImmunoMap (six fish per treatment; Naseer et al. 2025,
       <a href="https://doi.org/10.1101/gr.280579.125" rel="noreferrer">Genome Research</a>) has states from its own
       six-state model, whose three combined labels have their own colours, and gill ATAC-seq was re-made in 2026 (weaker
-      than the other tissues; gill states from their own model); both count in the tiers from release 2026-11-20. In
+      than the other tissues; gill states from their own model); both count in the scores from release 2026-11-20. In
       trout the ImmunoMap (INRAE) has states for PBS and for Vibrio, from one model each, and none for poly I:C; they
-      count in the tiers from release trout-2026-11-25. Hover a row's name in the browser for its details.</p></details>
+      count in the scores from release trout-2026-11-25. Hover a row's name in the browser for its details.</p></details>
   <details id="predicted-effects"><summary>What are the predicted allele effects (ChromBPNet)?</summary>
     <p>A ChromBPNet model learns from one tissue's ATAC-seq reads how DNA sequence shapes open chromatin, and then predicts
       the accessibility around a SNP twice, once with each allele. The score is the size of the predicted change (the
@@ -115,7 +116,7 @@
       own peaks: a SNP outside that set shows 'not scored', which is not a low score. Any SNP's card can also run the
       model for that SNP alone ('Predict with ChromBPNet Gill': a second or two, where this portal runs), and then shows
       the predicted signal with each allele. These are a model's predictions, not measurements, and they do not count in
-      the tiers.</p></details>
+      the scores.</p></details>
 </section>
 
 <section class="sp-section sp-faq" id="formats" aria-labelledby="formats-h"><h2 id="formats-h">Input formats</h2>

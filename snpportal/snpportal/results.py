@@ -112,7 +112,8 @@ CARD_SQL = "SELECT * FROM v WHERE file_row_number = ?"  # the card reads one row
 COLUMNS = {
     "tier": ("Tier", "1 = strongest functional evidence, in any of the 27 conditions; 4 = no evidence found (not evidence of no effect)",
              ("tier",), [("tier", True), ("tier_score", False)]),
-    "score": ("Score", "Tier score: the summed weights of the SNP's evidence (its card lists them)", ("tier_score",),
+    "score": ("Score", "The sum of the weights of the SNP's evidence (its card lists them), in its band's colour: "
+                       f"{' · '.join(figures.bands().values())}; 0 = no evidence found (not evidence of no effect)", ("tier_score",),
               [("tier_score", False)]),
     "id": ("SNP", "SNP id, its position (Ssal_v3.1, 1-based) when the id doesn't say it, and alleles (ref > alt): "
            "click for its card", (), [("length(chrom)", True), ("chrom", True), ("pos", True)]),
@@ -133,7 +134,7 @@ COLUMNS = {
                   ("chromatin",), []),
     "known": ("Known locus", "A published locus of the known-loci catalogue within the window: this SNP, or one nearby (how "
               "far); 'caveat': hover for it", ("known_locus",), [("known_locus_dist", True)]),
-    "molqtl": ("molQTL", "Lead SNP of an eQTL (e) or caQTL (ca) in 12 fish; display only, never counted in tiers",
+    "molqtl": ("molQTL", "Lead SNP of an eQTL (e) or caQTL (ca) in 12 fish; not counted unless you give it a weight (Weights)",
                ("molqtl",), [("molqtl_best_bf", True)]),
     "gerp": ("GERP", "GERP constrained-element score (65 fish)", ("gerp_score",), [("gerp_score", True)]),
     "pike": ("Pike", "Sequence that aligns to northern pike, the closest relative without the salmonid genome duplication "
@@ -154,11 +155,11 @@ COLUMNS = {
     "ref_check": ("Ref. check", "Input ref allele against the Ssal_v3.1 genome", ("ref_check",), [("ref_check", True)]),
 }  # in display order: the score, the SNP, where it is, what it is, then genotyping
 NUMERIC = ("score", "size", "p", "beta", "pip", "gerp", "maf", "cm")  # right-aligned, header and cells
-DEFAULT_COLUMNS = ("tier", "score", "id", "size", "gene", "region", "chromatin", "known", "maf", "assay", "flags")
+DEFAULT_COLUMNS = ("score", "id", "size", "gene", "region", "chromatin", "known", "maf", "assay", "flags")
 FILTER_COLUMNS = {"tier": "tier", "max_tier": "tier", "term": "score", "min_score": "score", "chrom": "id", "region": "region", "gene": "gene",
                   "tissue": "chromatin", "maturity": "chromatin", "sex": "chromatin", "act": "chromatin", "known": "known",
                   "molqtl": "molqtl", "min_maf": "maf", "max_maf": "maf", "assay": "assay", "hide_lore": "assay", "track": "id"}  # hide_*: flags
-GWAS_COLUMNS = ("tier", "score", "id", "p", "beta", "pip", "gene", "region", "chromatin")
+GWAS_COLUMNS = ("score", "id", "p", "beta", "pip", "gene", "region", "chromatin")
 EXPORT_COLUMNS = {  # Table column -> the result columns a TSV of it holds: what the Table shows, not all 95 columns (G,
     # 2026-11-27, from users); {score} is each score layer; chromatin_states puts the 27 conditions' states in one column
     "tier": ("tier",), "score": ("tier_score", "tier_evidence"), "size": ("end", "length", "svtype", "svlen"),
@@ -178,6 +179,7 @@ KEPT = ("on_chip", "dist_to_chip", "near_chip", "novel_functional",  # and ends 
         "selection_reason", "panel_rank", "design_score", "selection_purpose")  # comparison's, a picked panel's
 EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt", "end", "svtype", "length"), "size": ("svtype", "svlen"), "tier": ("tier_score", "tier_evidence", "tier_terms", "coding_hgvsp", "known_locus",
                                                                 "known_locus_dist"), "known": ("known_locus_dist",),
+         "score": ("tier", "tier_evidence", "tier_terms", "coding_hgvsp", "known_locus", "known_locus_dist"),  # its band's colour, why
          "gene": ("gene_ortholog_human", "gene_distance", "genes", "n_genes"),
          "region": ("gene_distance", "coding_consequence", "coding_hgvsp", "coding_transcript", "coding_note", "region_classes"),
          "beta": ("se",), "pip": ("pip_functional",),
@@ -323,7 +325,7 @@ def filters(request, types, weights, d=None):
     tiers = sorted({t for x in picks(request, "tier") or [{"1": "1", "2": "1-2", "3": "1-3"}.get(get("max_tier", ""), "")]
                     for t in TIER_SETS.get(x, [x]) if t in TIER_SETS["1-4"]})  # max_tier, 1-2: older links
     if tiers and len(tiers) < 4 and "tier" in types:
-        out.append(({"tier": ",".join(tiers)}, f"Tier {tier_text(tiers)}", f"tier IN ({', '.join(tiers)})"))
+        out.append(({"tier": ",".join(tiers)}, "Score " + ", ".join(figures.bands()[int(t)] for t in tiers), f"tier IN ({', '.join(tiers)})"))
     regions = [x for x in consequences(picks(request, "region"), types)]
     if regions:  # any of them
         out.append(({"region": ",".join(regions)}, "Gene region: " + ", ".join(CONSEQUENCE_FILTERS[x][0] for x in regions),
@@ -590,7 +592,7 @@ def table(request, key, job=None):
     get = request.GET.get
     summary = jobs.read_json(jobs.folder(key) / "summary.json")
     maf, maf_source = jobs.maf_sql(types)
-    available = [k for k, (_, _, needs, _) in COLUMNS.items() if not needs or any(c in types for c in needs)]
+    available = [k for k, (_, _, needs, _) in COLUMNS.items() if k != "tier" and (not needs or any(c in types for c in needs))]
     default = [k for k in (GWAS_COLUMNS if gwas else DEFAULT_COLUMNS) if k in available]
     picked = [k for k in available if k == "id" or k in request.GET.getlist("col")] if get("cols") else default  # the SNP always
     custom_cols = set(picked) != set(default)  # the chooser sends every ticked column: short URLs for the default
@@ -599,7 +601,7 @@ def table(request, key, job=None):
     picked, shown = shown, [k for k in available if k in shown or k in on]  # filters sit on their columns: a filtered one shows
     sort = get("sort", "")
     explicit = sort in available and bool(COLUMNS[sort][3])
-    sort = sort if explicit else ("p" if gwas and "p" in available else "tier" if "tier" in available else "")
+    sort = sort if explicit else ("p" if gwas and "p" in available else "score" if "score" in available else "")
     desc = get("desc") == "1"
     size = int(get("size")) if get("size", "").isdecimal() and int(get("size")) in PAGE_SIZES else PAGE_SIZE
 
@@ -682,17 +684,12 @@ def table(request, key, job=None):
            sex=[("", "any", not sex)] + [(x, x.lower(), x == sex) for x in jobs.SEXES],
            levels=[(k, label, tip, k == level) for k, (label, tip) in ACTIVITY.items()], column="chromatin",
            reset=link(tissue=None, maturity=None, sex=None, act=None, page=None) if choice else None)
-    if "tier" in types:
-        counts = dict(tier_counts)
-        dd("list", "tier", "Tier", f"{tier_text(ticked['tier'])}" if ticked["tier"] else "any", bool(ticked["tier"]),
-           "1 = strongest functional evidence, in any of the 27 conditions; 4 = no evidence found", name="tier", any="Any tier",
-           column="tier",
-           options=[(str(x), f"Tier {x}", str(x) in ticked["tier"], f"{counts.get(x, 0):,}") for x in (1, 2, 3, 4)])
-    if weights and "tier_terms" in types:
-        low = int(chosen["min_score"]) if "min_score" in chosen else 0
-        top = con.execute(f"SELECT max(tier_score) FROM {view}").fetchone()[0] or 0
-        dd("score", "score", "Score", f"≥ {low}" if low else "any", bool(low), "SNPs with at least this score", column="score",
-           low=low, top=top)
+    if "tier" in types:  # the score's bands, on the Score column (G, 2026-11-27: no tier numbers)
+        counts, names = dict(tier_counts), figures.bands()
+        dd("list", "tier", "Score", ", ".join(names[int(x)] for x in ticked["tier"]) if ticked["tier"] else "any",
+           bool(ticked["tier"]), "The score's band, over all 27 conditions; 0 = no evidence found (not evidence of no effect)",
+           name="tier", any="Any score", column="score",
+           options=[(str(x), names[x], str(x) in ticked["tier"], f"{counts.get(x, 0):,}") for x in (1, 2, 3, 4)])
     if "region_class" in types:
         offered = consequences(CONSEQUENCE_FILTERS, types)
         dd("list", "region", "Gene region", ", ".join(CONSEQUENCE_FILTERS[x][0] for x in ticked["region"]) or "any",
@@ -1097,7 +1094,7 @@ def top(request, key, job, n):
         tied = con.execute(f"SELECT count(*) FROM v {where} {'AND' if where else 'WHERE'} {cut}").fetchone()[0]
         shown = sum(r["tier"] == t and r["score"] == s for r in rows)
         if tied > shown:
-            at = "the top score" if (rows[0]["tier"], rows[0]["score"]) == (t, s) else f"tier {t}, score {s}"
+            at = "the top score" if (rows[0]["tier"], rows[0]["score"]) == (t, s) else f"score {s}"
             ties = f"{shown} of {tied:,} SNPs tied at {at} are shown; ties in list order."
     return {"rows": rows, "matching": matching, "ties": ties, "gwas": gwas, "chosen": chosen, "columns": set(types)}
 
@@ -1141,7 +1138,7 @@ def background_regions(bg):
 
 
 def _tier_segments(counts, total, label, href):
-    return [(counts.get(str(t), 0), palette.TIERS[t][0], f"{label}, tier {t}: {counts.get(str(t), 0):,} SNPs ({pct(counts.get(str(t), 0), total)})",
+    return [(counts.get(str(t), 0), palette.TIERS[t][0], f"{label}, score {figures.bands()[t]}: {counts.get(str(t), 0):,} SNPs ({pct(counts.get(str(t), 0), total)})",
              href(t) if href else None) for t in (1, 2, 3, 4) if counts.get(str(t))]
 
 
@@ -1157,13 +1154,13 @@ def _fig_summary(c, link, desc):
     public = _shares((bg.get("tiers") or {}).get(trait))
     chroms = len([k for k, v in (s.get("chrom_tiers", {}).get(trait) or {}).items() if sum(v.values())])
     head = [(f"{n:,}", "SNPs scored", f"on {chroms} chromosome{'' if chroms == 1 else 's'}" if chroms else "", None),
-            (f"{top2:,}", "in tier 1–2", f"{figures.share_label(top2, n)} of the list"  # whole percentages, as the legends
+            (f"{top2:,}", f"score {figures.cuts()[1]}+", f"{figures.share_label(top2, n)} of the list"  # whole percentages, as the legends
              + (f"\n{figures.share_label(public.get('1', 0) + public.get('2', 0), 1)} of public sites" if public else ""),
              href(tier="1-2"))]
     if c.get("loci"):
         head.append((f"{c['loci'][0]:,}", "loci", "on the Association tab", c["loci"][1]))
-    names = {t: f"Tier {t}" for t in (1, 2, 3, 4)}
-    groups = [{"title": "Tier", "note": "1 = strongest, 4 = no evidence found" + (" · thin bar: public sites" if public else ""),
+    names = {t: f"Score {b}" for t, b in figures.bands().items()}
+    groups = [{"title": "Score", "note": "the sum of the evidence weights; 0 = no evidence found" + (" · thin bar: public sites" if public else ""),
                "parts": [(names[t], int(tiers.get(str(t), 0)), palette.TIERS[t][0], href(tier=str(t))) for t in (1, 2, 3, 4)],
                "background": [(names[t], public.get(str(t), 0), palette.TIERS[t][0]) for t in (1, 2, 3, 4)] if public else None}]
     regions, region_bg = s.get("region_tiers", {}).get(trait) or {}, background_regions(bg)
@@ -1241,7 +1238,7 @@ def _fig_regions(c, link, desc):
                      "note": f"{sum(k.values()):,} ({pct(sum(k.values()), n)})"})
         tsv += [(g, t, k.get(str(t), 0), f"{bg[g]:.5f}" if g in bg else "") for t in (1, 2, 3, 4)]
     legend = [(palette.TIERS[t][0], figures.TIER_NAMES[t]) for t in (1, 2, 3, 4)] + ([(palette.GREY[900], "background share")] if bg else [])
-    svg = figures.hbars(rows, "Gene region by tier", desc, c["synthetic"], legend)
+    svg = figures.hbars(rows, "Gene region by score", desc, c["synthetic"], legend)
     return svg, ["region", "tier", "snps", "background_share"], tsv
 
 
@@ -1258,7 +1255,7 @@ def _fig_terms(c, link, desc):
         rows.append({"label": label, "href": link(term=term) if link else None, "note": f"{sum(k.values()):,} ({pct(sum(k.values()), n)})",
                      "segments": _tier_segments(k, n, label, (lambda t, term=term: link(term=term, tier=str(t))) if link else None)})
         tsv += [(term, weights.get(term, ""), t, k.get(str(t), 0)) for t in (1, 2, 3, 4)]
-    svg = figures.hbars(rows, "Evidence behind the tiers", desc, c["synthetic"],
+    svg = figures.hbars(rows, "Evidence behind the scores", desc, c["synthetic"],
                         [(palette.TIERS[t][0], figures.TIER_NAMES[t]) for t in (1, 2, 3, 4)])
     return svg, ["term", "weight", "tier", "snps"], tsv
 
@@ -1290,21 +1287,21 @@ def _fig_maf(c, link, desc):
 
 
 FIGURES = {  # name -> (card title, (i) definition, builder(context, link or None, desc) -> (svg, header, rows) or None)
-    "summary": ("Summary", "How the SNPs scored, counted over all 27 conditions (tier 1 = strongest functional evidence, tier "
-                "4 = no evidence found, not evidence of no effect), where they fall relative to genes, how many are near a "
+    "summary": ("Summary", "How the SNPs scored, counted over all 27 conditions (a score is the sum of a SNP's evidence weights, shown "
+                "in bands; 0 = no evidence found, not evidence of no effect), where they fall relative to genes, how many are near a "
                 "published locus and how they did in the assay design check. Thin bars: the same split for the release's "
                 "public sites, for comparison.",
                 _fig_summary),
     "ideogram": ("Where the SNPs are", "Chromosomes to scale (Ssal_v3.1). Each 1 Mb bin holding SNPs is shaded: blue when "
-                 "some are in tier 1–2 (darker = more of them), grey when none are. On the right: each chromosome's SNPs "
-                 "and, as a bar, its tier 1–2 SNPs.", _fig_ideogram),
+                 f"some score {figures.cuts()[1]} or more (darker = more of them), grey when none do. On the right: each chromosome's "
+                 f"SNPs and, as a bar, those scoring {figures.cuts()[1]} or more.", _fig_ideogram),
     "conditions": ("Active chromatin per condition", "Share of the SNPs in an active chromatin state in each of the 27 "
                    "AQUA-FAANG conditions; × = fold over a background of public sites, when the release has one. "
                    "Click a cell to list those SNPs.", _fig_conditions),
-    "regions": ("Gene region by tier", "SNPs per gene region class (Ensembl 116), split by tier; the black tick is "
+    "regions": ("Gene region by score", "SNPs per gene region class (Ensembl 116), split by score band; the black tick is "
                 "the share expected from a background of public sites. Click a bar to list those SNPs.", _fig_regions),
-    "terms": ("Evidence behind the tiers", "For each evidence term (its weight in brackets), the SNPs it applies to, split "
-              "by the tier they end in. A SNP can have several terms.", _fig_terms),
+    "terms": ("Evidence behind the scores", "For each evidence term (its weight in brackets), the SNPs it applies to, split "
+              "by the score band they end in. A SNP can have several terms.", _fig_terms),
     "maf": ("Minor allele frequency", "MAF from your maf or af column when the list has one, else 504 public fish (wild "
             "and farmed, pooled; your strain can differ). Light bars: below 0.05. Black ticks: the count expected from a "
             "background of public sites. Click a bar to list those SNPs.", _fig_maf),
@@ -1357,7 +1354,7 @@ def selection_request(query):
 def table_columns(d, types, gwas=False):
     """The Table columns a job's saved selection shows: its Columns choice, else the defaults."""
     q = QueryDict(selection(d))
-    available = [k for k, (_, _, needs, _) in COLUMNS.items() if not needs or any(c in types for c in needs)]
+    available = [k for k, (_, _, needs, _) in COLUMNS.items() if k != "tier" and (not needs or any(c in types for c in needs))]
     if q.get("cols"):
         return [k for k in available if k == "id" or k in q.getlist("col")]
     return [k for k in (GWAS_COLUMNS if gwas else DEFAULT_COLUMNS) if k in available]

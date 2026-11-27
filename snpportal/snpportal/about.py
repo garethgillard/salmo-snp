@@ -67,7 +67,7 @@ GLOSSARY = [  # (anchor, term, definition)
      "Inversions count over their whole span (provisional)."),
     ("motif", "TF motif change", "One allele of a SNP in a robust ATAC peak matches a transcription factor motif "
      "(JASPAR 2024, p < 1e-5) and the other doesn't, at least 4 bits apart; motifs are predicted binding, not proof of it."),
-    ("synthetic", "Synthetic", "Built from synthetic test data: not real results, never counted in tiers."),
+    ("synthetic", "Synthetic", "Built from synthetic test data: not real results, never counted in scores."),
 ]
 FORMATS = [  # (anchor, format, what is read, example built from the published vgll3 SNP)
     ("vcf", "VCF (.vcf, .vcf.gz)", "CHROM, POS, ID, REF and ALT only: genotype columns are never read or stored.",
@@ -121,7 +121,7 @@ LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall
     "synchrosmolt_af": ("Allele frequencies in the Synchrosmolt parents, whole-genome sequenced", "Synchrosmolt (NMBU)"),
     "motif": ("TF motif changes at SNPs in robust ATAC peaks (879 vertebrate motifs)", "JASPAR 2024"),
     "chrombpnet_gill": ("Predicted effect of the alt allele on gill ATAC-seq accessibility (a ChromBPNet model's "
-                        "prediction; shown, not counted in tiers)", "salmo-chrombpnet (NMBU)"),
+                        "prediction; shown, not counted in scores)", "salmo-chrombpnet (NMBU)"),
     "axiom": ("SNPs on the Axiom array of the Complex Gill Disease study, with frequencies in 1,710 fish", "ENA PRJEB107807"),
     "molqtl": ("molQTL lead SNPs in 12 fish (display only)", "nf-RASQUAL"),
     "cm": ("Genetic map position (cM)", "Brekke et al."),
@@ -131,7 +131,7 @@ LAYERS = {  # layer -> (what it is, source) for the Data page; other layers fall
 BENCH_SETS = [("known_loci", "Known loci", palette.GREY[900], "diamond"), ("molqtl:ca", "caQTL leads", palette.GREY[500], "square"),
               ("molqtl:e", "eQTL leads", palette.ACCENT, "circle")]
 BENCH_FEATURES = [("chromatin", "ATAC peak"), ("evidence = active", "Active state"), ("region_class = CDS", "CDS"),
-                  ("evidence = utr", "UTR"), ("gerp", "GERP constrained"), ("tier <= 2", "Tier 1\u20132")]
+                  ("evidence = utr", "UTR"), ("gerp", "GERP constrained"), ("tier <= 2", f"Score {figures.cuts()[1]}+")]
 BENCH_AXIS = (1 / 8, 64)  # enrichment axis (log2); intervals beyond it end in an arrow
 ENA = "https://www.ebi.ac.uk/ena/browser/view/{}"
 AQUAFAANG_PROJECTS = [  # (atlas, assay, ENA project); docs/RESEARCH.md section 6
@@ -203,7 +203,7 @@ def data(request):
         files.append((c.get("file", "catalog/known_loci.tsv"), f"Known-loci catalogue; uploads within {c.get('window', 0):,} bp get a badge",
                       c.get("rows"), c.get("sha256"), None, None))
     for name, sha in (m.get("files") or {}).items():
-        files.append((name, {"weights.yaml": "Tier rules", "tracks.yaml": "Signal track registry"}.get(name, ""),
+        files.append((name, {"weights.yaml": "Scoring rules", "tracks.yaml": "Signal track registry"}.get(name, ""),
                       None, sha, None, None))
     if (jobs.release() / "pool" / "pool.parquet").exists():
         files.append(("pool/pool.parquet", "Public variants annotated with this release (gene pages, candidate lists)", None, None, None, None))
@@ -387,9 +387,9 @@ def methods(request):
                        "fairer test; leads from 12 fish carry winner's curse. Intervals assume simple random sampling.",
                "svg_url": f"{base}?download=benchmark.svg", "tsv_url": f"{base}?download=benchmark_figure.tsv"}
     cuts = list(w.get("tiers") or [])
-    tiers = [(i + 1, f"tier_score {c} or more" if i == 0 else f"tier_score {c} to {cuts[i - 1] - 1}") for i, c in enumerate(cuts)]
+    tiers = [(i + 1, f"score {c} or more" if i == 0 else f"score {c} to {cuts[i - 1] - 1}") for i, c in enumerate(cuts)]
     if cuts:
-        tiers.append((len(cuts) + 1, f"tier_score below {cuts[-1]}: no evidence found (not evidence of no effect)"))
+        tiers.append((len(cuts) + 1, f"score below {cuts[-1]}: no evidence found (not evidence of no effect)"))
     active, weak = w.get("active_states") or [], w.get("weak_states") or []
     states = [(name, palette.state(name)[2], STATE_MODELS.get(name, "BodyMap and DevMap"),
                "active" if name in active else "weak" if name in weak else "") for name in palette.STATES]
@@ -423,7 +423,7 @@ def colour_key(w):
     for name in palette.ABBR:  # one swatch per colour and short name: Flanking up- and downstream share theirs
         states.setdefault(palette.STATES[name], []).append(name)
     return [
-        ("Tiers", [(edge(f"sp-tier-{t}", palette.TIERS[t][0]), t, f"score {scores}" + (f": {note}" if note else ""))
+        ("Score bands", [(edge(f"sp-tier-{t}", palette.TIERS[t][0]), figures.bands()[t], f"score {scores}" + (f": {note}" if note else ""))
                    for t, scores, note in tier_rules(w)], None),
         ("Chromatin states", [(edge(f"st-{names[0]}", fill), abbr, " / ".join(n.replace("_", " ") for n in names))
                               for (fill, abbr), names in states.items()] + [("sp-edge", "", "no peak")],
@@ -448,8 +448,8 @@ def tier_example(w):
     a, c = weights.get("active") or 0, weights.get("constrained") or 0
     if not (a and c and (w or {}).get("tiers")):
         return ""
-    return (f"an active chromatin state alone scores {a} (tier {tier_of(a, w)}); with a conserved element as well, "
-            f"{a} + {c} = {a + c} (tier {tier_of(a + c, w)})")
+    return (f"an active chromatin state alone scores {a} (band {figures.bands()[tier_of(a, w)]}); with a conserved element as well, "
+            f"{a} + {c} = {a + c} (band {figures.bands()[tier_of(a + c, w)]})")
 
 
 def _flat(value):
@@ -486,8 +486,8 @@ def methods_text(m, w):
             + (" and allele frequencies of the 504-fish reference panel" if "public_af" in layers else "")
             + ". Each SNP's tier_score is the sum of the weights of its evidence over all conditions, and tiers "
               "are cut-offs on that score (rules in weights.yaml, sha256 given in each download; PROVISIONAL)."
-            + (f" Model predictions of each alt allele's effect ({', '.join(scores)}) are reported beside the tiers"
-               + ("." if counted else " and are not part of the tier score.") if scores else ""))
+            + (f" Model predictions of each alt allele's effect ({', '.join(scores)}) are reported beside the scores"
+               + ("." if counted else " and are not part of the score.") if scores else ""))
     return [text], []
 
 

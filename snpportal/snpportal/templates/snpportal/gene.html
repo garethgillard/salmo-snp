@@ -61,11 +61,11 @@
       </form></div>{% endif %}
   </div>
   <p class="sp-gene-sum sp-small"><span title="{{ public_source }}{% if source == 'annotated now' %}, annotated now: this release has no public pool{% endif %}">{{ n_rows|thousands }} public SNPs in {{ window_text }}</span>
-    {% for t, n in tiers %}{% if t %}<span class="sp-badge sp-tier-{{ t }}">Tier {{ t }}: {{ n|thousands }}</span>{% endif %}{% endfor %}
+    {% for t, n in tiers %}{% if t %}<span class="sp-badge sp-tier-{{ t }}">{{ t|band }}: {{ n|thousands }}</span>{% endif %}{% endfor %}
     {% if known %}<span class="sp-gene-known"><span aria-hidden="true">&#9733;</span> nearest known locus of every SNP here: {{ known }}</span>{% endif %}</p>
   {% if rows %}
   <div class="sp-scroll"><table class="table table-sm table-hover sp-table sp-gene-table mb-0">
-    <thead><tr>{% if "tier" in names %}<th scope="col">Tier</th>{% endif %}{% if "id" in names %}<th scope="col">SNP</th>{% endif %}<th scope="col">Position</th><th scope="col">Alleles</th>
+    <thead><tr>{% if "tier" in names %}<th scope="col">Score</th>{% endif %}{% if "id" in names %}<th scope="col">SNP</th>{% endif %}<th scope="col">Position</th><th scope="col">Alleles</th>
       {% if "gene_id" in names %}<th scope="col" title="The nearest gene, and how far when the SNP is outside it">Gene</th>{% endif %}
       {% if "region_class" in names %}<th scope="col">Gene region</th>{% endif %}
       {% if "chromatin_summary" in names %}<th scope="col">Chromatin</th>{% endif %}
@@ -73,7 +73,7 @@
       {% if "tier" in names %}<th scope="col">Evidence</th>{% endif %}
       {% if "known_locus" in names %}<th scope="col">Known locus</th>{% endif %}</tr></thead>
     <tbody>{% for r in rows %}<tr>
-      {% if "tier" in names %}<td>{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}</td>{% endif %}
+      {% if "tier" in names %}<td>{% include 'snpportal/_badges.html' with kind='tier' value=r.tier score=r.tier_score %}</td>{% endif %}
       {% if "id" in names %}<td>{{ r.id|default_if_none:"" }}</td>{% endif %}
       <td class="sp-nowrap"><a href="{{ r.url }}">{{ r.chrom }}:{{ r.pos|thousands }}</a></td>
       <td>{{ r.ref|default_if_none:"" }}{% if r.alt %}&gt;{{ r.alt }}{% endif %}</td>

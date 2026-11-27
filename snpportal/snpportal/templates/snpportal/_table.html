@@ -1,5 +1,5 @@
 {% load snpportal_tags %}
-{% comment %}Table tab. One toolbar line (the count, the tiers of the rows shown, Clear filters; the TSV, a link to the Export
+{% comment %}Table tab. One toolbar line (the count, the score bands of the rows shown, Clear filters; the TSV, a link to the Export
    tab, where vendor files and Add to Design panel are, Weights (the evidence weights: a POST form after the table,
    which rescores the whole result) and Columns; G, 2026-11-27), a one-line key (the Chromatin cells' states, ~NAME), then the table. Each filter sits on its column: a funnel
    button in the header (_dd.html), its choice under the column's name; a hidden column has no filter (show it with
@@ -15,7 +15,7 @@
 
 <div class="sp-tablebar">
   <span role="status">{% if matching == total %}Showing {{ first|thousands }}&ndash;{{ last|thousands }} of {{ total|thousands }} SNPs{% else %}{% if matching %}{{ first|thousands }}&ndash;{{ last|thousands }} of {{ matching|thousands }} shown{% else %}None shown{% endif %} <span class="sp-muted">(filtered from {{ total|thousands }} SNPs)</span>{% endif %}{% if n_out %} <span class="sp-muted">&middot; {{ n_out|thousands }} left out</span>{% endif %}</span>
-  {% for tier, n in shown_tiers %}<span class="sp-badge sp-tier-{{ tier }}" title="SNPs of tier {{ tier }} in this table">Tier {{ tier }}: {{ n|thousands }}</span>{% endfor %}
+  {% for tier, n in shown_tiers %}<span class="sp-badge sp-tier-{{ tier }}" title="SNPs scoring {{ tier|band }} in this table">{{ tier|band }}: {{ n|thousands }}</span>{% endfor %}
   {% if clear %}<a class="sp-clear" href="{{ clear }}" hx-boost="true">Clear filters</a>{% endif %}
   <span class="spinner-border sp-spin htmx-indicator" id="tf-busy" role="status" aria-label="Loading"></span>
   <span class="sp-tablebar-end">
@@ -64,7 +64,7 @@
         {% elif col == 'beta' %}<td class="sp-num">{{ r.beta }}</td>
         {% elif col == 'pip' %}<td class="sp-num">{{ r.pip }}</td>
         {% elif col == 'tier' %}<td class="sp-ctr" title="{{ r.evidence|default:'no evidence found' }}">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
-        {% elif col == 'score' %}<td class="sp-num">{{ r.score|default_if_none:"" }}</td>
+        {% elif col == 'score' %}<td class="sp-num" title="{{ r.evidence|default:'no evidence found' }}">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier score=r.score %}{% endif %}</td>
         {% elif col == 'known' %}<td class="sp-clip sp-known">{% if r.known %}<span title="{% if r.end %}{% if r.known_dist == 0 %}This SV overlaps{% else %}This SV is {{ r.known_dist|thousands }} bp from{% endif %} the known locus{% elif r.known_dist == 0 %}This SNP is the published SNP{% else %}{{ r.known_dist|thousands }} bp from the published SNP{% endif %} {{ r.known }}{% if r.caveat %}; caveat: {{ r.caveat }}{% endif %}"><span aria-hidden="true">&#9733;</span> {% if r.known_dist == 0 and not r.end %}this SNP{% elif r.known_dist == 0 %}{{ r.known }} <span class="sp-muted">inside</span>{% else %}{{ r.known }} <span class="sp-muted">{{ r.known_where }}</span>{% endif %}{% if r.caveat %} <span class="sp-muted">&middot; caveat</span>{% endif %}</span>{% endif %}</td>
         {% elif col == 'gene' %}<td class="sp-clip sp-gene" title="{{ r.gene_tip }}">{{ r.gene }}{% if r.gene_more %} <span class="sp-muted">+{{ r.gene_more }}</span>{% endif %}{% if r.distance %} <span class="sp-muted">{{ r.distance }}</span>{% endif %}</td>
         {% elif col == 'region' %}<td{% if r.region_tip %} title="{{ r.region_tip }}"{% endif %}>{{ r.region }}</td>
@@ -99,7 +99,7 @@
   <div class="sp-drawer-body">
     <div class="sp-card-bar">
       <div class="sp-card-name">
-        <h2 id="drawer-h">{% if drawer.ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=drawer.ev.tier %} {% endif %}{{ drawer.ev.title }}{% if drawer.ev.gene %}
+        <h2 id="drawer-h">{% if drawer.ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=drawer.ev.tier score=drawer.ev.score %} {% endif %}{{ drawer.ev.title }}{% if drawer.ev.gene %}
           <span class="sp-muted">&middot;</span> <a href="{{ drawer.ev.gene.url }}"{% if drawer.ev.gene.tip %} title="{{ drawer.ev.gene.tip }}"{% endif %}>{% if drawer.ev.gene.named %}<em>{{ drawer.ev.gene.label }}</em>{% else %}{{ drawer.ev.gene.label }}{% endif %}</a>{% endif %}</h2>
         <p class="sp-card-where">{{ drawer.ev.place }}{% if drawer.ev.alleles %} &middot; {{ drawer.ev.alleles }}{% endif %}
           <button type="button" class="sp-iconbtn" data-copy="{{ drawer.ev.spec }}" title="Copy {{ drawer.ev.spec }}" aria-label="Copy {{ drawer.ev.spec }}">{% icon 'copy' %}</button></p>
@@ -120,7 +120,7 @@
   {% if drawer.locus_url %}<div class="sp-locus-pane" hidden>
     <div class="sp-locus-bar">
       <button type="button" class="btn btn-sm btn-primary" data-back title="Back to the card (Esc)">Back to the card</button>
-      <span class="sp-locus-what">{% if drawer.ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=drawer.ev.tier %} {% endif %}<strong>{{ drawer.ev.title }}</strong>{% if drawer.ev.gene %} &middot; <em>{{ drawer.ev.gene.label }}</em>{% endif %} <span class="sp-muted">in the locus browser</span></span>
+      <span class="sp-locus-what">{% if drawer.ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=drawer.ev.tier score=drawer.ev.score %} {% endif %}<strong>{{ drawer.ev.title }}</strong>{% if drawer.ev.gene %} &middot; <em>{{ drawer.ev.gene.label }}</em>{% endif %} <span class="sp-muted">in the locus browser</span></span>
       <a class="ms-auto sp-small" href="{{ drawer.locus_url }}" target="_blank" rel="noopener">Open in a new tab {% icon 'external' %}</a>
     </div>
     <iframe class="sp-locus-frame" title="Locus browser around {{ drawer.ev.title }}" data-src="{{ drawer.locus_url }}&amp;embed=1"></iframe>

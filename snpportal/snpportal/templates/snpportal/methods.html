@@ -1,12 +1,12 @@
 {% extends 'snpportal/base_portal.html' %}
 {% load snpportal_tags %}
 {% block main %}
-<p class="sp-caveat sp-small" role="note">Prototype: tiers rank annotated evidence, not proven effects. The rules and thresholds
+<p class="sp-caveat sp-small" role="note">Prototype: scores rank annotated evidence, not proven effects. The rules and thresholds
   below are provisional and under review.</p>
 
 <div class="sp-methods">
     <section class="sp-section" id="tiers" aria-labelledby="t-h">
-      <h2 id="t-h">Tiers</h2>
+      <h2 id="t-h">Score bands</h2>
       <table class="table table-sm sp-small sp-plain mb-1">
         <tbody>{% for tier, rule in tiers %}<tr><td>{% include 'snpportal/_badges.html' with kind='tier' value=tier %}</td><td>{{ rule }}</td></tr>{% endfor %}</tbody>
       </table>
@@ -18,7 +18,7 @@
     </section>
     <section class="sp-section" id="weights" aria-labelledby="w-h">
       <h2 id="w-h">Evidence weights</h2>
-      <p class="sp-small sp-muted mt-1">A SNP's tier_score is the sum of the weights of its evidence, counted over all 27 conditions.</p>
+      <p class="sp-small sp-muted mt-1">A SNP's score is the sum of the weights of its evidence, counted over all 27 conditions; users can set their own weights (Weights, in the Table).</p>
       <table class="table table-sm sp-small mb-0">
         <thead><tr><th scope="col">Evidence</th><th scope="col" class="sp-num">Weight</th><th scope="col">Fires when</th></tr></thead>
         <tbody>{% for name, value, text in weights %}<tr id="term-{{ name }}"><th scope="row" class="fw-normal sp-mono">{{ name }}</th>
@@ -29,10 +29,10 @@
     </section>
     <section class="sp-section" id="presets" aria-labelledby="p-h">
       <h2 id="p-h">Conditions</h2>
-      <p class="sp-small mt-1 mb-0">Tiers count chromatin activity in all 27 conditions: tissues (brain, gonad, liver, muscle;
+      <p class="sp-small mt-1 mb-0">Scores count chromatin activity in all 27 conditions: tissues (brain, gonad, liver, muscle;
         immature or mature, female or male), gill (2026; immature female and male, mature male), head kidney after
         immune stimulation (the ImmunoMap: PBS, poly I:C, Vibrio) and the 5 embryo stages. The Table's Chromatin filter then keeps SNPs in a robust
-        ATAC peak (or an active state) in the conditions you pick, without changing any tier. The portal names sample
+        ATAC peak (or an active state) in the conditions you pick, without changing any score. The portal names sample
         conditions only, never a phenotype.</p>
     </section>
     <section class="sp-section" id="states" aria-labelledby="s-h">
@@ -63,7 +63,7 @@
       strongest first, by distance only (no LD). Each locus is fine-mapped assuming one causal variant and no LD: Wakefield
       approximate Bayes factors with W = {{ finemap.prior_sd }}&sup2; on the standardised scale (betas divided by a trait SD of
       {{ finemap.trait_sd }}; without se, V = 1/(2N&middot;af&middot;(1&minus;af))). The uniform prior gives every SNP the same
-      weight; the functional prior &pi; &prop; exp({{ finemap.functional_lambda }} &times; tier_score) over all 27 conditions.
+      weight; the functional prior &pi; &prop; exp({{ finemap.functional_lambda }} &times; score) over all 27 conditions.
       {% widthratio finemap.coverage 1 100 %}% credible sets in descending PIP.</p>
     <p class="sp-small mb-0">Alleles are turned to the Ssal_v3.1 reference (alt = effect allele) using the genome, else the
       504-fish panel sites; p values are read as text, so p = 1e-400 stays 400 on the &minus;log10 scale.</p>

@@ -12,12 +12,33 @@ Conventions every figure follows:
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 from html import escape
 
 from . import palette
 
 FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif"
-TIER_NAMES = {1: "tier 1", 2: "tier 2", 3: "tier 3", 4: "tier 4 (no evidence)"}
+
+
+@lru_cache(maxsize=1)
+def cuts():
+    """The score cut-offs between the bands: the installed weights.yaml's tiers (5, 3, 1)."""
+    import snpscore
+    return tuple((snpscore.load_weights() or {}).get("tiers") or (5, 3, 1))
+
+
+def bands(c=None):
+    """{tier: its score band}, '5+', '3–4', '1–2', '0' for cut-offs 5, 3, 1 (G, 2026-11-27: the pages show a score in
+    its band's colour, never a tier number; the data keep the tier). `c`: a job's cut-offs, else weights.yaml's."""
+    c, out, top = list(c or cuts()), {}, None
+    for i, x in enumerate(c):
+        out[i + 1] = f"{x}+" if top is None else f"{x}–{top - 1}" if top - 1 > x else f"{x}"
+        top = x
+    out[len(c) + 1] = "0" if c[-1] == 1 else f"below {c[-1]}"
+    return out
+
+
+TIER_NAMES = {t: f"score {b}" + (" (no evidence)" if t == 4 else "") for t, b in bands().items()}
 STAGE_LABELS = {"LateBlastulation": "Blastula", "MidGastrulation": "Gastrula", "EarlySomitogenesis": "E somit.",  # the one
                 "MidSomitogenesis": "M somit.", "LateSomitogenesis": "L somit."}  # short name of each embryo stage
 TISSUE_NAMES = {"HeadKidney": "Head kidney"}  # tissue keys of the condition names, as pages write them
@@ -182,7 +203,7 @@ def ideogram(chroms, bins, chrom_tiers, title, desc="", synthetic=False, link=No
     md = {"class": "sp-md"}  # portal.css enlarges these on phones, where the figure is drawn at about half size
     parts = [_text(left - 6, 12, "Mb", "end", fill=palette.GREY[700], font_size=11),
              _text(cx, 26, "SNPs", "end", fill=palette.GREY[700], font_size=11, **md),
-             _text(bx, 26, "tier 1–2", fill=palette.GREY[700], font_size=11, **md)]
+             _text(bx, 26, f"score {cuts()[1]}+", fill=palette.GREY[700], font_size=11, **md)]
     for mb in range(0, int(longest / 1e6) + 1, 20):
         x = left + mb * 1e6 * scale
         parts.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="16" y2="{top + len(chroms) * row - 4}" stroke="{palette.GREY[200]}"/>'
@@ -197,14 +218,14 @@ def ideogram(chroms, bins, chrom_tiers, title, desc="", synthetic=False, link=No
         k = top12[chrom]
         if k:
             parts.append(_rect(bx, y + 2, max(1.0, bar_w * k / most_chrom), 8, palette.TIERS[2][0],
-                               f"Chromosome {chrom}: {k:,} of {total:,} SNPs in tier 1–2", link and link(chrom, None, None, "1-2")))
+                               f"Chromosome {chrom}: {k:,} of {total:,} SNPs score {cuts()[1]}+", link and link(chrom, None, None, "1-2")))
         parts.append(_text(bx + bar_w + number_w, y + 9.5, f"{k:,}", "end", font_size=11.5, fill=palette.GREY[900 if k else 500], **md))
     w = max(1e6 * scale, 2.5)  # a lone SNP's bin stays visible
     for chrom, b, *n in sorted(bins, key=lambda x: x[2] + x[3]):  # blue bins over grey ones
         if chrom not in y_of:
             continue
         k = n[0] + n[1]
-        tip = (f"{chrom}:{b}-{b + 1} Mb: {sum(n):,} SNPs (" + ", ".join(f"tier {t}: {m:,}" for t, m in zip((1, 2, 3, 4), n) if m) + ")")
+        tip = (f"{chrom}:{b}-{b + 1} Mb: {sum(n):,} SNPs (" + ", ".join(f"score {bands()[t]}: {m:,}" for t, m in zip((1, 2, 3, 4), n) if m) + ")")
         parts.append(_rect(left + b * 1e6 * scale, y_of[chrom] + 1, w, 10, shade(k) if k else IDEOGRAM_OTHER, tip,
                            link and link(chrom, int(b * 1e6), int((b + 1) * 1e6), None)))
     for chrom, mb, n in chip or ():
@@ -215,13 +236,13 @@ def ideogram(chroms, bins, chrom_tiers, title, desc="", synthetic=False, link=No
     steps = sorted({1, most_bin} | ({round(math.sqrt(most_bin))} if most_bin > 3 else set()))
     ph = {"class": "sp-ph"}  # a legend line each, spaced for a phone's enlarged text
     legend = [f'<rect x="{left}" y="{y}" width="12" height="12" fill="{IDEOGRAM_OTHER}" stroke="{palette.GREY[500]}"/>'
-              + _text(left + 18, y + 10.5, "SNPs, none in tier 1–2", font_size=12, **ph)]
+              + _text(left + 18, y + 10.5, f"SNPs, none scoring {cuts()[1]}+", font_size=12, **ph)]
     y += 22
     x = left
     for s in steps:  # the scale, then what it counts
         legend.append(f'<rect x="{x}" y="{y}" width="12" height="12" fill="{shade(s)}"/>' + _text(x + 18, y + 10.5, f"{s:,}", font_size=12, **ph))
         x += 34 + 12 * len(f"{s:,}")
-    legend.append(_text(x, y + 10.5, "tier 1–2 SNPs per Mb", font_size=12, **ph))
+    legend.append(_text(x, y + 10.5, f"SNPs scoring {cuts()[1]}+ per Mb", font_size=12, **ph))
     parts += legend
     if chip:
         y += 22

@@ -305,7 +305,7 @@ def genes_group(request, s, ax, data, open_=()):
             dot = (f'<line x1="{x:.1f}" x2="{x:.1f}" y1="40" y2="{40 - h:.1f}" stroke="{G[500]}"/>'
                    f'<circle cx="{x:.1f}" cy="{40 - h:.1f}" r="4" fill="{fill}" stroke="{G[900]}" stroke-width="0.6"><title>{escape(p["title"])}</title></circle>')
             body.append(f'<a href="{escape(p["url"])}">{dot}</a>' if p.get("url") else dot)
-        rows.append(row("Your SNPs", trk(44, "".join(body)), "colour = tier, height = score"))
+        rows.append(row("Your SNPs", trk(44, "".join(body)), "colour and height = score"))
     if data.get("known"):
         body = []
         h = locus_svg._published(body, ax, data["known"], 0, noop, {})
@@ -445,7 +445,7 @@ def peaks_group(s, ax, data, cfg, prefix, deadline, open_, notes):
     note = "robust ATAC peaks, coloured by their strongest chromatin state"
     extra = [short(c) for c in found if c not in conditions]  # rows of newer tracks that this release's tiers don't count
     if extra:
-        note += (f" · Combined: the {len(conditions)} conditions the tiers count; shown only: "
+        note += (f" · Combined: the {len(conditions)} conditions the scores count; shown only: "
                  + (", ".join(extra) if len(extra) <= 6 else f"{len(extra)} other rows"))
     return group("peaks", "Regulatory elements", note,
                  [row("Combined", trk(33, "".join(body)), f"n/{len(conditions)}: conditions with the peak")],

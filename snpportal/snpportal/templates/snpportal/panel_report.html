@@ -7,7 +7,7 @@
 <div class="sp-report">
   <p class="sp-noprint sp-small sp-muted"><button type="button" class="btn btn-sm btn-primary" onclick="window.print()">Print or save as PDF</button>
     Choose &lsquo;Save as PDF&rsquo; in the print dialog for a PDF.</p>
-  <p class="sp-caveat" role="note">Prototype scoring: tiers rank annotated evidence, not proven effects;
+  <p class="sp-caveat" role="note">Prototype scoring: scores rank annotated evidence, not proven effects;
     rules and design thresholds are provisional.{% if r.synthetic %} Made from SYNTHETIC test data.{% endif %}</p>
 
   <section class="sp-rsec" aria-labelledby="what-h">
@@ -16,7 +16,7 @@
     <div class="sp-kpis">
       <div class="sp-kpi"><b>{{ r.n|thousands }}</b><span>SNPs</span></div>
       <div class="sp-kpi"><b>{{ r.chroms|length }}</b><span>chromosomes</span></div>
-      {% for tier, k in r.tiers %}{% if tier <= 2 %}<div class="sp-kpi"><b>{{ k|thousands }}</b><span>tier {{ tier }}</span></div>{% endif %}{% endfor %}
+      {% for tier, k in r.tiers %}{% if tier <= 2 %}<div class="sp-kpi"><b>{{ k|thousands }}</b><span>score {{ tier|band }}</span></div>{% endif %}{% endfor %}
       {% if r.known is not None %}<div class="sp-kpi"><b>{{ r.known|thousands }}</b><span>near a known locus</span></div>{% endif %}
     </div>
     {% if r.previous %}<p class="sp-small mb-0 mt-2">Since version {{ r.previous.version }}: {{ r.previous.added|thousands }} SNPs added,
@@ -58,13 +58,13 @@
   </section>{% endif %}
   {% if r.regions %}<section class="sp-rsec" aria-labelledby="fn-h">
     <h2 id="fn-h">Functional content</h2>
-    <p class="sp-small mb-1">{% for tier, k in r.tiers %}<span class="sp-badge sp-tier-{{ tier }}">Tier {{ tier }}: {{ k|thousands }}</span> {% endfor %}</p>
+    <p class="sp-small mb-1">{% for tier, k in r.tiers %}<span class="sp-badge sp-tier-{{ tier }}">{{ tier|band }}: {{ k|thousands }}</span> {% endfor %}</p>
     <p class="sp-small mb-0">{% for name, k in r.regions %}{{ name }} {{ k|thousands }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
   </section>{% endif %}
   {% if r.chip %}<section class="sp-rsec" aria-labelledby="chip-h">
     <h2 id="chip-h">Compared with {{ r.chip.label|lower }}</h2>
     <p class="sp-small mb-0">{{ r.chip.markers|thousands }} chip markers. {{ r.chip.on|thousands }} panel SNPs are on the chip and
-      {{ r.chip.new|thousands }} are not; {{ r.chip.novel|thousands }} tier 1–2 SNPs have no chip marker within {{ r.chip.window }};
+      {{ r.chip.new|thousands }} are not; {{ r.chip.novel|thousands }} SNPs scoring 3 or more have no chip marker within {{ r.chip.window }};
       the chip has {{ r.chip.gaps|thousands }} gaps over {{ r.chip.gap }}.{% if r.chip.others %} Also compared with: {{ r.chip.others|join:", " }}.{% endif %}</p>
   </section>{% endif %}
     </div>

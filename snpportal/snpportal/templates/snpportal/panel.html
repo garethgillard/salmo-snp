@@ -12,7 +12,7 @@
     <p class="sp-small mb-1">Fill it from a scored SNP list, on its Export tab, in either of two ways:</p>
     <ul class="sp-small mb-2">
       <li><strong>Add your Table selection</strong>: filter the Table down to the SNPs you want to genotype, then add them all.</li>
-      <li><strong>Pick markers automatically</strong>: a spread of markers by tier, spacing and assay check, for the purpose and
+      <li><strong>Pick markers automatically</strong>: a spread of markers by score, spacing and assay check, for the purpose and
         size you set; then add the markers it picks.</li>
     </ul>
     {% if pickers %}<p class="sp-small mb-2">Pick markers from {% for name, url in pickers %}<a href="{{ url }}">{{ name }}</a>{% if not forloop.last %} &middot; {% endif %}{% endfor %}</p>{% endif %}
@@ -35,7 +35,7 @@
         <td><form method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}<button class="btn btn-sm btn-link p-0" type="submit" name="remove" value="{{ s.id }}">Remove</button></form></td></tr>{% endfor %}</tbody>
     </table></div>
     {% if n %}<p class="sp-small mb-0"><strong>{{ n|thousands }}</strong> SNPs in the panel{% if several %}; {{ several|thousands }} in more than one source{% endif %}.
-      Tiers here count all 27 conditions, so sources scored for other conditions compare.</p>{% endif %}
+      Scores here count all 27 conditions, so sources scored for other conditions compare.</p>{% endif %}
     <p class="sp-small sp-muted mt-2 mb-0">Add more on a result's Export tab: a Table selection, or markers picked automatically{% if pickers %}
       (pick from {% for name, url in pickers %}<a href="{{ url }}">{{ name }}</a>{% if not forloop.last %} &middot; {% endif %}{% endfor %}){% endif %}.</p>
   </section>
@@ -71,7 +71,7 @@
     <section class="sp-card" aria-labelledby="upgrade-h">
       <h2 id="upgrade-h">Upgrade {{ chip.label|lower }}</h2>
       <p class="sp-small mb-2">A new version of the chip: its markers that pass the QC{% if populations %} in {{ populations.0.label }}{% endif %}, then the
-        panel's SNPs not on it, those in the chip's gaps first, then by tier, until it has the size you give.{% if not populations %} Add your population
+        panel's SNPs not on it, those in the chip's gaps first, then by score, until it has the size you give.{% if not populations %} Add your population
         (genotypes) to drop markers that fail call rate or HWE.{% endif %}</p>
       <form method="get" action="#upgrade-h" class="d-flex flex-wrap gap-2 align-items-center sp-small">
         <input type="hidden" name="upgrade" value="1">
@@ -144,7 +144,7 @@
     {% if n %}<div class="col-lg-6 d-flex flex-column gap-3">
     <section class="sp-card" aria-labelledby="glance-h">
       <h2 id="glance-h">At a glance</h2>
-      <p class="sp-small mb-2">{% for tier, k in tiers %}<span class="sp-badge sp-tier-{{ tier }}">Tier {{ tier }}: {{ k|thousands }}</span> {% endfor %}</p>
+      <p class="sp-small mb-2">{% for tier, k in tiers %}<span class="sp-badge sp-tier-{{ tier }}">{{ tier|band }}: {{ k|thousands }}</span> {% endfor %}</p>
       {% if readiness %}<div class="sp-figure">{{ readiness.svg }}</div><p class="sp-small sp-muted mb-0">{{ readiness.line }}</p>{% endif %}
     </section>
   <figure class="sp-card sp-figure" id="fig-panel"><div class="sp-card-head"><h2>Panel SNPs along the genome</h2></div>{{ fig }}</figure>
@@ -158,7 +158,7 @@
         <caption class="sp-small">Functional columns count the markers that are public sites{% if not matrix.pool %} (needs the public pool){% endif %};
           the last columns, each one's markers within {{ matrix.window }} of a marker of that chip.</caption>
         <thead><tr><th scope="col"></th><th scope="col" class="sp-num">Markers</th><th scope="col" class="sp-num">Per Mb</th><th scope="col" class="sp-num">Median spacing</th>
-          <th scope="col" class="sp-num">Gaps</th>{% if matrix.pool %}<th scope="col" class="sp-num">Public</th><th scope="col" class="sp-num">Tier 1–2</th><th scope="col" class="sp-num">CDS</th>
+          <th scope="col" class="sp-num">Gaps</th>{% if matrix.pool %}<th scope="col" class="sp-num">Public</th><th scope="col" class="sp-num">Score 3+</th><th scope="col" class="sp-num">CDS</th>
           <th scope="col" class="sp-num">MAF ≥ 0.05</th>{% endif %}{% for label in matrix.labels %}<th scope="col" class="sp-num">Near {{ label }}</th>{% endfor %}</tr></thead>
         <tbody>{% for r in matrix.rows %}<tr><th scope="row">{{ r.label }}</th><td class="sp-num">{{ r.markers|thousands }}</td><td class="sp-num">{{ r.per_mb|default_if_none:"" }}</td>
           <td class="sp-num">{% if r.median_kb is not None %}{{ r.median_kb }} kb{% endif %}</td><td class="sp-num">{{ r.gaps|thousands }}</td>
@@ -178,7 +178,7 @@
           <a class="btn {% if new_only %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="?chip=new{% if order == 'genome' %}&amp;order=genome{% endif %}#list-h">Not on the chip</a></span>{% endif %}</span></div>
     <div class="table-responsive"><table class="table table-sm sp-table sp-small sp-results mb-1">
       <thead><tr><th scope="col" class="sp-pickcol" title="Ticked: in the panel. Click a box to drop its SNP, or to put it back">Keep</th><th scope="col">SNP</th><th scope="col">Gene</th><th scope="col">Gene region</th>
-        <th scope="col" class="sp-ctr">Tier</th><th scope="col">Assay</th><th scope="col" class="sp-num">{% if populations %}MAF ({{ populations.0.label }}){% else %}MAF{% endif %}</th>
+        <th scope="col" class="sp-ctr">Score</th><th scope="col">Assay</th><th scope="col" class="sp-num">{% if populations %}MAF ({{ populations.0.label }}){% else %}MAF{% endif %}</th>
         <th scope="col" title="Another panel SNP closer than the panel designer's minimum spacing">Too close</th>{% if uniqueness %}<th scope="col" class="sp-num" title="Probe uniqueness: the cleaner flank's best match in the Ss4R duplicate">Duplicate</th>{% endif %}{% if chip %}<th scope="col">Chip</th>{% endif %}<th scope="col">Sources</th></tr></thead>
       <tbody>{% for r in rows %}<tr{% if r.dropped %} class="sp-out"{% endif %}>
         <td class="sp-pickcol"><form method="post" action="{% url 'snpportal:panel_change' %}">{% csrf_token %}
@@ -187,7 +187,7 @@
             title="{% if r.dropped %}Dropped: click to put it back{% else %}In the panel: click to drop it{% endif %}" aria-label="{% if r.dropped %}Put it back into the panel{% else %}Drop it from the panel{% endif %}"><span class="sp-box" aria-hidden="true">{% if not r.dropped %}{% icon 'check' %}{% endif %}</span></button></form></td>
         <td title="{{ r.position }}">{{ r.snp }}{% if r.alleles %} <span class="sp-muted">&middot; {{ r.alleles }}</span>{% endif %}</td>
         <td>{{ r.gene }}</td><td>{{ r.region }}</td>
-        <td class="sp-ctr">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier short=1 %}{% endif %}</td>
+        <td class="sp-ctr">{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier score=r.tier_score %}{% endif %}</td>
         <td><span class="sp-as sp-as-{{ r.assay.1 }}">{% if r.assay.1 == 'warn' %}{% icon 'warn' %} {% elif r.assay.1 == 'fail' %}{% icon 'fail' %} {% endif %}{{ r.assay.2 }}</span>{% if r.lore %} <span class="sp-as sp-as-warn">LORe</span>{% endif %}</td>
         <td class="sp-num">{% if r.maf %}{% if r.maf.1 %}<span class="sp-as sp-as-warn" title="Below the panel designer's minimum MAF · {{ r.maf.2 }}">{{ r.maf.0 }}</span>{% else %}<span title="{{ r.maf.2 }}">{{ r.maf.0 }}</span>{% endif %}{% endif %}</td>
         <td>{% if r.close %}<span class="sp-as sp-as-warn">{{ r.close }}</span>{% endif %}</td>

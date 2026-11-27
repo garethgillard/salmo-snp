@@ -120,3 +120,13 @@ def asis(text):
     """User text (a track's name) as the user wrote it, also on another species' pages (mytracks.asis)."""
     from snpportal import mytracks
     return mytracks.asis(text)
+
+
+@register.filter
+def band(tier):
+    """A tier's score band as the pages name it: '5+', '3–4', '1–2' or '0' (figures.bands; G, 2026-11-27)."""
+    from .. import figures
+    try:
+        return figures.bands().get(int(tier), "")
+    except (TypeError, ValueError):
+        return ""

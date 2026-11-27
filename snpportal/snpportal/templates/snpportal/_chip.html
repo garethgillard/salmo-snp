@@ -12,11 +12,11 @@
     {% if chip.gaps %}<h3>Largest chip gaps</h3>
     <div class="sp-scroll">
       <table class="table table-sm sp-table mb-0">
-        <thead><tr><th scope="col">Gap</th><th scope="col" class="sp-num">Length</th><th scope="col">Best SNP to fill it</th><th scope="col">Tier</th><th scope="col">From</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead>
+        <thead><tr><th scope="col">Gap</th><th scope="col" class="sp-num">Length</th><th scope="col">Best SNP to fill it</th><th scope="col">Score</th><th scope="col">From</th><th scope="col"><span class="visually-hidden">Action</span></th></tr></thead>
         <tbody>{% for g in chip.gaps %}<tr>
           <td class="sp-mono">{{ g.chrom }}:{{ g.start|thousands }}–{{ g.end|thousands }}</td><td class="sp-num">{{ g.size_text }}</td>
           {% if g.filler %}<td class="sp-mono">{% if g.card %}<a href="{{ g.card }}">{{ g.filler.id|default:g.filler.pos }}</a>{% else %}{{ g.filler.chrom }}:{{ g.filler.pos|thousands }}{% endif %}</td>
-          <td>{% if g.filler.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=g.filler.tier short=1 %}{% endif %}</td>
+          <td>{% if g.filler.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=g.filler.tier %}{% endif %}</td>
           <td>{% if g.filler.source == 'pool' %}public sites{% else %}your list{% endif %}</td>
           {% else %}<td class="sp-muted">none in your list or the public sites</td><td></td><td></td>{% endif %}
           <td><a href="{{ g.table }}" hx-boost="true">your SNPs here</a></td>
@@ -29,7 +29,7 @@
     </form>
   {% else %}
     <p class="sp-small sp-muted mt-2">Upload the chip's SNP list (manifest, PLINK .bim/.map, VCF or a chrom/pos table on Ssal_v3.1) to see
-      which of your SNPs it has, the tier 1–2 SNPs it misses and its largest gaps. It is deleted with these results.</p>
+      which of your SNPs it has, the SNPs scoring 3 or more it misses and its largest gaps. It is deleted with these results.</p>
     <form method="post" action="{{ chip.url }}" enctype="multipart/form-data" class="d-flex flex-wrap align-items-center gap-2 sp-small" hx-boost="false">{% csrf_token %}
       <input type="hidden" name="trait" value="{{ trait }}">
       <label for="chip-file" class="visually-hidden">Chip file</label>

@@ -13,7 +13,7 @@
    closed). Parts render only when their columns exist.{% endcomment %}
 {% if hx and crumbs %}{% include 'snpportal/_crumbs.html' with oob=1 %}{% endif %}
 <div id="card-body" class="sp-small">
-  {% if not heading %}<p class="sp-card-id">{% if ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier %}{% endif %}
+  {% if not heading %}<p class="sp-card-id">{% if ev.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=ev.tier score=ev.score %}{% endif %}
     {% if ev.gene %}<a href="{{ ev.gene.url }}"{% if ev.gene.tip %} title="{{ ev.gene.tip }}"{% endif %}>{% if ev.gene.named %}<em>{{ ev.gene.label }}</em>{% else %}{{ ev.gene.label }}{% endif %}</a>{% endif %}
     <span class="sp-card-where">{{ ev.place }}{% if ev.alleles %} &middot; {{ ev.alleles }}{% endif %}</span><button type="button" class="sp-iconbtn" data-copy="{{ ev.spec }}" title="Copy {{ ev.spec }}" aria-label="Copy {{ ev.spec }}">{% icon 'copy' %}</button></p>{% endif %}
   {% if ev.blocks %}<div class="sp-score"><h3 class="sp-cs-h sp-score-h">Score</h3><div class="sp-figure">{{ ev.blocks }}</div></div>{% endif %}

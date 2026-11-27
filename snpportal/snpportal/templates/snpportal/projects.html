@@ -20,8 +20,8 @@
     {% for title, rows, n in diff.tables %}
     <h3 class="h6 mt-2">{{ title }} ({{ n|thousands }})</h3>
     {% if rows %}<div class="table-responsive"><table class="table table-sm sp-table sp-small mb-1">
-      <thead><tr><th scope="col">Tier</th><th scope="col">SNP</th><th scope="col">Position</th><th scope="col">Gene</th><th scope="col">Region</th><th scope="col">Assay</th></tr></thead>
-      <tbody>{% for r in rows %}<tr><td>{{ r.tier|default_if_none:"" }}</td><td>{{ r.id|default_if_none:"" }}</td><td>{{ r.chrom }}:{{ r.pos|thousands }} {{ r.ref|default_if_none:"" }}{% if r.alt %}&gt;{{ r.alt }}{% endif %}</td>
+      <thead><tr><th scope="col">Score</th><th scope="col">SNP</th><th scope="col">Position</th><th scope="col">Gene</th><th scope="col">Region</th><th scope="col">Assay</th></tr></thead>
+      <tbody>{% for r in rows %}<tr><td>{% if r.tier %}{{ r.tier|band }}{% endif %}</td><td>{{ r.id|default_if_none:"" }}</td><td>{{ r.chrom }}:{{ r.pos|thousands }} {{ r.ref|default_if_none:"" }}{% if r.alt %}&gt;{{ r.alt }}{% endif %}</td>
         <td>{{ r.gene_name|default_if_none:"" }}</td><td>{{ r.region_class|default_if_none:"" }}</td><td>{{ r.assay_status|default_if_none:"" }}</td></tr>{% endfor %}</tbody>
     </table></div>{% else %}<p class="sp-small sp-muted mb-1">None.</p>{% endif %}
     {% endfor %}

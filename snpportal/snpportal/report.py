@@ -91,7 +91,7 @@ def report(request, key):
         "nav": "score", "job": job, "key": key, "title": f"Report · {job.get('label') or 'results'}", "trait": trait,
         "crumbs": [("Score SNPs", reverse("snpportal:upload")), ("Results", f"{base}?{urlencode({'trait': trait, **filters})}"),
                    ("Report", None)],
-        "meta": " · ".join(x for x in [f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None, f"tiers for {label}",
+        "meta": " · ".join(x for x in [f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None, f"scores for {label}",
                                        f"printed {jobs.utc()}"] if x),
         "actions": [{"label": "Back to the results", "url": f"{base}?{urlencode({'trait': trait, **filters})}"}],
         "warnings": ov["warnings"], "summary": ov["figs"].get(FIGURES[0]), "figs": [ov["figs"][n] for n in FIGURES[1:] if n in ov["figs"]], "panel": panel(request, key, d),

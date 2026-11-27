@@ -1,7 +1,8 @@
-{% comment %}One badge. {% include 'snpportal/_badges.html' with kind='tier' value=2 %}; kinds: tier (short=1 prints the
-   number only), flag (value = text), evidence (value = text, cls = missense|gwas|marker|region|allele|caveat,
+{% load snpportal_tags %}
+{% comment %}One badge. {% include 'snpportal/_badges.html' with kind='tier' value=2 score=4 %}; kinds: tier (a score in its band's
+   colour, else the band: 5+, 3–4, 1–2, 0; G, 2026-11-27: no tier numbers), flag (value = text), evidence (value = text, cls = missense|gwas|marker|region|allele|caveat,
    tip = tooltip). Colours come from palette.py. No PROVISIONAL or SYNTHETIC badges: a synthetic job's
    title says so.{% endcomment %}
-{% if kind == 'tier' %}<span class="sp-badge sp-tier-{{ value }}" title="{% if value == 4 %}Tier 4: no evidence found (not evidence of no effect){% else %}Tier {{ value }}: 1 = strongest functional evidence, 4 = no evidence found{% endif %}">{% if short %}{{ value }}{% else %}Tier {{ value }}{% endif %}</span>
+{% if kind == 'tier' %}<span class="sp-badge sp-tier-{{ value }}" title="{% if score is not None and score != '' %}Score {{ score }}, band {{ value|band }}{% else %}Score {{ value|band }}{% endif %}{% if value == 4 %}: no evidence found (not evidence of no effect){% endif %}">{% if score is not None and score != '' %}{{ score }}{% else %}{{ value|band }}{% endif %}</span>
 {% elif kind == 'flag' %}<span class="sp-badge sp-badge-flag">{{ value }}</span>
 {% elif kind == 'evidence' %}<span class="sp-badge sp-ev sp-ev-{{ cls }}"{% if tip %} title="{{ tip }}"{% endif %}>{{ value }}</span>{% endif %}

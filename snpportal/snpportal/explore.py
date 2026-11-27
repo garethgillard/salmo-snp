@@ -361,7 +361,7 @@ def provenance(what, trait=None):
     if trait:
         lines.append(f"preset {trait}; tier rules PROVISIONAL (prototype weights, under review)")
     if info["synthetic"]:
-        lines.append(f"SYNTHETIC layers in this release (never counted in tiers): {', '.join(info['synthetic'])}")
+        lines.append(f"SYNTHETIC layers in this release (never counted in scores): {', '.join(info['synthetic'])}")
     return ["# " + line for line in lines]
 
 
@@ -486,7 +486,7 @@ def gene(request, gene_id):
         "tiers": sorted(tiers.items(), key=lambda kv: kv[0] or 9),
         "window": window, "window_text": "{}:{:,}-{:,}".format(*window), "flank": flank, "flanks": FLANKS, "trait": trait,
         "sort": sort, "query": urlencode(query),
-        "sorts": [(k, label) for k, label in [("tier", "tier"), ("pos", "position"), ("maf", "minor allele frequency")]
+        "sorts": [(k, label) for k, label in [("tier", "score"), ("pos", "position"), ("maf", "minor allele frequency")]
                   if SORTS[k][0] in names], "public_af": jobs.PUBLIC_AF})
 
 
@@ -589,12 +589,12 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
     # Elements are CSS selectors or 'text=<exact text>'; a list is their union, and a leading 'row' stretches it across
     # the crop.
     {"slug": "overview", "title": "Find SNPs with functional evidence",
-     "text": "Each SNP gets a tier from 1 (strongest) to 4 (no evidence found, not evidence of no effect), counted over all "
+     "text": "Each SNP gets a score, the sum of its evidence weights, shown in bands from 5+ to 0 (no evidence found), counted over all "
              "27 AQUA-FAANG sample conditions. Results open with an overview of the whole list.",
-     "alt": "Overview of the known-loci example: key numbers, SNPs per tier, gene region, known loci and assay check, and "
+     "alt": "Overview of the known-loci example: key numbers, SNPs per score band, gene region, known loci and assay check, and "
             "where the SNPs fall in the genome.",
      "callouts": [("Click a number or bar to list those SNPs", "#fig-summary svg a[href$='tier=1-2']"),
-                  ("Tier: 1 strongest, 4 no evidence found", ["#fig-summary svg a[href$='&tier=1']", "#fig-summary svg a[href$='&tier=4']"]),
+                  ("Score bands: 5+ strongest, 0 no evidence found", ["#fig-summary svg a[href$='&tier=1']", "#fig-summary svg a[href$='&tier=4']"]),
                   ("Where they fall in the genome", "#fig-ideogram"),
                   ("Then filter the Table, or export", "#results .nav-tabs")],
      "shot": {"path": "results/{snps}/", "width": 1200, "crop": [".nav-tabs", "#fig-summary", "#fig-ideogram"]}},
@@ -610,7 +610,7 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
      "shot": {"path": "", "width": 1200, "crop": [".sp-lead", "section[aria-label='Your data']", ".sp-try", ".sp-mine-box"]}},
     {"slug": "table", "title": "Filter, then open a SNP",
      "text": "Every column has its own filter; Chromatin keeps SNPs in a peak in the tissues you pick, without changing "
-             "any tier. Filters stay in the link, and a click on a SNP opens its evidence card.",
+             "any score. Filters stay in the link, and a click on a SNP opens its evidence card.",
      "alt": "The Table of the known-loci example with the Chromatin column's filter open: tissue, maturity, sex, and a "
             "robust ATAC peak or an active state.",
      "callouts": [("Filter on any column, Chromatin too", "#dd-active .sp-dd-panel"),
@@ -619,12 +619,12 @@ TOUR = [  # One slide each: a title (<= 6 words), text (<= 2 sentences, <= 40 wo
                   ("Add the selection to your panel", "button[form=add-panel]")],
      "shot": {"path": "results/{snps}/?tab=table", "width": 1200, "click": "#dd-active > summary",
               "wait": "#dd-active[open] .sp-dd-panel", "crop": [".nav-tabs", "#dd-active .sp-dd-panel", "tr[data-card]:nth-child(14)"]}},
-    {"slug": "card", "title": "See why it got its tier",
-     "text": "The score adds up the SNP's evidence as blocks, each as wide as its points, against the tier cut-offs. "
+    {"slug": "card", "title": "See why it got its score",
+     "text": "The score adds up the SNP's evidence as blocks, each as wide as its points, against the band cut-offs. "
              "Below come its peak and chromatin state per condition, any TF motifs it changes, and how it works as a marker.",
      "alt": "The evidence card of akap11 Val214Met beside the Table: score blocks for an active state and a missense "
             "change, a mini locus browser with the chromatin state per condition, and the marker check.",
-     "callouts": [("What earned the score; dashed lines: tier cut-offs", "#card-body .sp-score svg"),
+     "callouts": [("What earned the score; dashed lines: band cut-offs", "#card-body .sp-score svg"),
                   ("Open the full locus browser", "#cs-locus .sp-cs-act"),
                   ("Its peak: chromatin state per condition", "#cs-locus svg svg"),
                   ("As a marker: assay check, GC and MAF", "#cs-marker > summary")],

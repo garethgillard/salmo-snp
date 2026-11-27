@@ -13,7 +13,7 @@
     <p class="sp-small">A BED file of your own regions on {{ assembly }}: chromosome, start and end, then optionally a name, score, strand and
       colour (the ninth column, itemRgb). The track is drawn at the top of the <a href="{% url 'snpportal:locus' %}">Locus browser</a>, each
       interval's name shows when the mouse is over it, and the results Table can keep only the SNPs inside it. Tracks are never scored:
-      no tier, Overview or card changes.</p>
+      no score, Overview or card changes.</p>
     <form class="sp-bctl" method="post" action="{% url 'snpportal:track_add' %}" enctype="multipart/form-data">{% csrf_token %}
       <input class="form-control form-control-sm w-auto" type="file" name="file" accept=".bed,.gz,.txt" required aria-label="BED file">
       <input class="form-control form-control-sm w-auto" type="text" name="name" maxlength="80" placeholder="Name (the file's, if empty)" aria-label="Track name" autocomplete="off">
