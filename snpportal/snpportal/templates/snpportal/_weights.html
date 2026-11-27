@@ -1,0 +1,9 @@
+{% comment %}The evidence weights (G, 2026-11-27): a whole number per kind of evidence the release has, 0 = not counted, each
+   filled with its current weight and naming its default when it differs. A SNP's score is the sum of the weights of
+   its evidence. Context: weights {terms: [(term, name, weight, default)], max}, prefix (for the ids), form (the id of
+   the form the inputs belong to, when they sit outside it, as in the Table's toolbar).{% endcomment %}
+<div class="sp-weights">
+  {% for term, name, value, default in weights.terms %}<label class="sp-weight" for="{{ prefix }}-w-{{ term }}"><span>{{ name }}{% if value != default %} <span class="sp-muted">(default {{ default }})</span>{% endif %}</span>
+    <input class="form-control form-control-sm" type="number" id="{{ prefix }}-w-{{ term }}" name="w_{{ term }}" value="{{ value }}" min="0" max="{{ weights.max }}" step="1" inputmode="numeric"{% if form %} form="{{ form }}"{% endif %}></label>
+  {% endfor %}
+</div>

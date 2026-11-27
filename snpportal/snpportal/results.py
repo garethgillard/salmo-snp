@@ -1095,9 +1095,16 @@ def summary_of(d):
     return s
 
 
-def background():
-    """The release's public background (pool/background.json from `snpscore pool`), or {} when it has no pool."""
-    return jobs.read_json(jobs.release() / "pool" / "background.json")
+def background(d=None):
+    """The release's public background (pool/background.json from `snpscore pool`), or {} when it has no pool. For a
+    job scored with the user's own weights, its tiers under those weights (public_tiers.json, jobs.public_tiers), or
+    none: never the default weights' beside the user's."""
+    bg = jobs.read_json(jobs.release() / "pool" / "background.json")
+    if bg and d is not None and jobs.custom_weights(d):
+        own = jobs.read_json(d / "public_tiers.json") if (d / "public_tiers.json").exists() else {}
+        mine = own.get("tiers") if own.get("weights_sha256") == jobs.sha256(d / "weights.yaml") else None
+        bg = {**bg, "tiers": {**(bg.get("tiers") or {}), "all": mine} if mine else {}}
+    return bg
 
 
 def _shares(values):
@@ -1290,7 +1297,7 @@ OPEN = ("summary", "ideogram")  # side by side on the Overview (GWAS jobs: condi
 
 def _figure_context(key, job, trait, summary, d):
     return {"key": key, "job": job, "trait": trait, "preset": jobs.trait_label(trait), "s": summary, "weights": jobs.weights(d),
-            "manifest": jobs.manifest(d), "background": {} if job.get("input_kind") == "sv" else background(),  # public SNPs: not SVs' peers
+            "manifest": jobs.manifest(d), "background": {} if job.get("input_kind") == "sv" else background(d),  # public SNPs: not SVs' peers
             "synthetic": bool(job.get("synthetic_input") or job.get("synthetic_layers")),
             "chip": jobs.read_json(d / "chip.json") if (d / "chip.parquet").exists() else {}}
 
@@ -1334,10 +1341,12 @@ def panel_status(get):
     """What Add to Design panel answered, on the page it returns to (the Export tab, or the picker's): {added: SNPs
     added or None, panel_error: why none were, or None}."""
     errors = {"empty": "No SNPs in this selection to add.",
-              "many": f"Narrow the selection to at most {int(jobs.setting('SNPPORTAL_MAX_PANEL_SNPS', 50_000)):,} SNPs to add it to the panel.",
+              "many": f"Narrow the selection to at most {int(jobs.setting('SNPPORTAL_MAX_PANEL_SNPS', jobs.MAX_PANEL_SNPS)):,} SNPs to add it to the panel.",
               "release": "Your Design panel holds SNPs scored with another release: clear it, or save it as a project "
                          "version, before adding these.",
-              "sv": "Panels hold SNP markers: structural variants can't be added."}
+              "sv": "Panels hold SNP markers: structural variants can't be added.",
+              "full": f"With these your Design panel would hold more than {int(jobs.setting('SNPPORTAL_MAX_PANEL_SNPS', jobs.MAX_PANEL_SNPS)):,} "
+                      "SNPs, its limit: remove a source there, or narrow the selection."}
     added = get.get("added", "")
     return {"added": int(added) if added.isdecimal() else None, "panel_error": errors.get(get.get("panel_error", ""))}
 

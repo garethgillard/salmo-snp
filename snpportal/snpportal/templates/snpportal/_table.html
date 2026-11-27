@@ -1,12 +1,13 @@
 {% load snpportal_tags %}
 {% comment %}Table tab. One toolbar line (the count, the tiers of the rows shown, Clear filters; the TSV, a link to the Export
-   tab, where vendor files and Add to Design panel are (G, 2026-11-27), Columns), a one-line key (the Chromatin cells' states, ~NAME), then the table. Each filter sits on its column: a funnel
+   tab, where vendor files and Add to Design panel are, Weights (the evidence weights: a POST form after the table,
+   which rescores the whole result) and Columns; G, 2026-11-27), a one-line key (the Chromatin cells' states, ~NAME), then the table. Each filter sits on its column: a funnel
    button in the header (_dd.html), its choice under the column's name; a hidden column has no filter (show it with
    Columns), and a filtered column always shows. The form #tf holds them all and applies them on change; sort links and
    pages stay on this page (htmx swaps #results). The Keep column's box takes a row out of the selection or puts it back
    (a link; x in the card). A click on a row opens its card beside the table (?snp=; over the page below 992 px). Every
    control is a plain link or GET form, so it all works without JavaScript.{% endcomment %}
-<form method="get" class="sp-small" id="tf" hx-get="{% url 'snpportal:results' key %}" hx-trigger="change, submit" hx-push-url="true"
+<form method="get" class="sp-small" id="tf" hx-get="{% url 'snpportal:results' key %}" hx-trigger="change[!target.form || target.form.id=='tf'], submit" hx-push-url="true"
       hx-indicator="#tf-busy" aria-label="Filter the SNPs">
   <input type="hidden" name="tab" value="table">
   {% for name, value in hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
@@ -20,6 +21,13 @@
   <span class="sp-tablebar-end">
     {% if download and matching %}<a href="{{ download }}">Download these {{ n_selected|thousands }} (TSV)</a>{% endif %}
     {% if n_selected %}<a href="{{ to_export }}" hx-boost="true" title="Vendor files and other downloads{% if not sv %}, or add these SNPs to your Design panel{% endif %}">{% if sv %}Export{% else %}Export or add to Design panel{% endif %} &rarr;</a>{% endif %}
+    {% if weights.terms %}<details class="sp-dd" id="dd-weights"><summary class="btn btn-sm btn-outline-secondary">Weights{% if weights.custom %}: yours{% endif %}</summary>
+      <div class="sp-dd-panel sp-dd-right sp-dd-weights"><div class="sp-dd-head"><span>Evidence weights</span>{% if weights.custom %}<button class="btn btn-link btn-sm p-0" type="submit" form="weights-form" name="reset" value="1">Defaults</button>{% endif %}</div>
+        <p class="sp-dd-note">A SNP's score adds up the weights of its evidence; 0 = not counted. Rescoring changes the whole result: Overview, Table, cards and downloads.</p>
+        {% include 'snpportal/_weights.html' with prefix='t' form='weights-form' %}
+        <button class="btn btn-sm btn-primary mt-2" type="submit" form="weights-form">Rescore</button>
+      </div>
+    </details>{% endif %}
     <details class="sp-dd" id="dd-cols"><summary class="btn btn-sm btn-outline-secondary">Columns</summary>
       <div class="sp-dd-panel sp-dd-right"><div class="sp-dd-head"><span>Columns to show</span>{% if columns_default %}<a href="{{ columns_default }}" hx-boost="true">Default</a>{% endif %}</div>
         <fieldset class="sp-dd-list"><legend class="visually-hidden">Columns to show</legend><input type="hidden" name="cols" value="1">
@@ -118,3 +126,4 @@
     <iframe class="sp-locus-frame" title="Locus browser around {{ drawer.ev.title }}" data-src="{{ drawer.locus_url }}&amp;embed=1"></iframe>
   </div>{% endif %}
 </aside>{% endif %}
+{% if weights.terms %}<form id="weights-form" method="post" action="{{ weights.url }}">{% csrf_token %}<input type="hidden" name="next" value="table"></form>{% endif %}

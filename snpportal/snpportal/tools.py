@@ -763,7 +763,7 @@ def _chip_context(request, key, job, d, trait, con, weights, chip, link):
 def chip_cap():
     """Most chip markers read: SNPPORTAL_MAX_CHIP_SNPS (MAX_CHIP), never more than SNPPORTAL_MAX_SNPS. Reading 1M rows
     takes about a second, so the chip is read in the request; longer lists are refused (a small .gz can hold billions)."""
-    return min(int(jobs.setting("SNPPORTAL_MAX_CHIP_SNPS", MAX_CHIP)), int(jobs.setting("SNPPORTAL_MAX_SNPS", 3_000_000)))
+    return min(int(jobs.setting("SNPPORTAL_MAX_CHIP_SNPS", MAX_CHIP)), int(jobs.setting("SNPPORTAL_MAX_SNPS", jobs.MAX_SNPS)))
 
 
 def _chip_redirect(key, trait, error=None):

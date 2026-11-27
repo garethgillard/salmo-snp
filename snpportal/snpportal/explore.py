@@ -567,7 +567,8 @@ def candidate_job(request):
         if len(rows) > MAX_CANDIDATES:
             raise jobs.InputError(f"These windows hold more than {MAX_CANDIDATES:,} public variants. Use fewer or shorter intervals.")
         label = "Public variants in " + ", ".join(labels)
-        key = jobs.create_from_rows(rows, label if len(label) <= 120 else label[:117] + "...", trait)
+        key = jobs.create_from_rows(rows, label if len(label) <= 120 else label[:117] + "...", trait,
+                                    weights=jobs.parse_weights(request.POST))  # the form's evidence weights
     except jobs.InputError as e:
         return score_page(request, str(e), 400, tab="regions", targets=text)
     except jobs.QueueFull:

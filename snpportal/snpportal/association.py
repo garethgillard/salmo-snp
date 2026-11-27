@@ -108,12 +108,13 @@ def _score(request):
     preset = "all"  # tiers (and the functional prior) always count all 27 conditions
     example, upload = request.POST.get("example"), request.FILES.get("sumstats")
     try:
+        weights = jobs.parse_weights(request.POST)  # the form's evidence weights: the functional prior follows them
         if example:
             found = views.examples().get(example) if example.startswith("gwas_") else None
             if found is None:
                 raise jobs.InputError("That example is not part of this release.")
             key = jobs.create(found["path"], found["suffix"], "gwas", preset, "Example: synthetic maturation GWAS",
-                              synthetic=found["synthetic"], move=False)
+                              synthetic=found["synthetic"], move=False, weights=weights)
         elif upload:
             suffix = suffix_of(upload.name)
             if suffix is None:
@@ -121,7 +122,7 @@ def _score(request):
                                       "GCTA-fastGWA, PLINK2 .glm, regenie, BOLT-LMM or GEMMA output.")
             if not upload.size:
                 raise jobs.InputError("The uploaded file is empty.")
-            key = jobs.create(Path(upload.path), suffix, "gwas", preset, "Uploaded GWAS summary statistics")
+            key = jobs.create(Path(upload.path), suffix, "gwas", preset, "Uploaded GWAS summary statistics", weights=weights)
         else:
             raise jobs.InputError("Choose a summary-statistics file or the GWAS example.")
     except jobs.InputError as e:

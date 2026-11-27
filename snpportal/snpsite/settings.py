@@ -54,7 +54,7 @@ SNPPORTAL_LOCAL = os.environ.get("SNPPORTAL_LOCAL") == "1"  # salmo-snp serve: n
 # where a sequence model's files are kept once fetched (the card's Predict button); default: models/ beside the results
 SNPPORTAL_MODELS_DIR = os.environ.get("SNPPORTAL_MODELS_DIR", "")
 SNPPORTAL_MAX_UPLOAD_MB = 300  # checked on Content-Length before the body is read
-SNPPORTAL_MAX_SNPS = 3_000_000
+SNPPORTAL_MAX_SNPS = 5_000_000  # G, 2026-11-27 (users): 5M SNPs, the 300 MB limit kept
 SNPPORTAL_DUCKDB_THREADS = int(os.environ.get("SNPPORTAL_DUCKDB_THREADS", 2))  # per job; deploy/nrec.sh sizes them to the VM
 SNPPORTAL_DUCKDB_MEMORY = os.environ.get("SNPPORTAL_DUCKDB_MEMORY", "2GB")
 SNPPORTAL_STATE_PALETTE = os.environ.get("SNPPORTAL_STATE_PALETTE", "portal")  # or 'aquafaang' (AQUA-FAANG itemRgb); G to choose

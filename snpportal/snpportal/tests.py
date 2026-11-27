@@ -325,6 +325,38 @@ class PortalTest(SimpleTestCase):
         self.assertFalse((self.results / old).exists())
         self.assertFalse(stray.exists())
 
+    def test_own_weights(self):
+        """G, 2026-11-27: a list is scored with the Score page's evidence weights; the Table's Weights control rescores
+        the whole result (tiers, summary, a note on every tab, the downloads' provenance); Defaults puts the job's own
+        file back byte for byte; a weight out of range changes nothing."""
+        self.assertIn('name="w_active"', self.client.get(reverse("snpportal:upload")).content.decode())  # the Score page's fold
+        with open(FIXTURE / "snps.vcf", "rb") as f:
+            key = self.key(self.client.post(reverse("snpportal:upload"), {"snps": f, "w_active": "0"}))
+        d, url, rescore = self.results / key, reverse("snpportal:results", args=[key]), reverse("snpportal:rescore", args=[key])
+        self.assertEqual(jobs.read(key)["weights_custom"], {"active": [0, 3]})
+
+        def weights_used():  # the weight of every term that fired, and whether each score is their sum
+            rows = duckdb.sql(f"SELECT tier_score__all, list_transform(tier_terms__all, lambda x: [x.term, x.weight::VARCHAR]) "
+                              f"FROM read_parquet('{d / 'tiers.parquet'}')").fetchall()
+            return ({t: int(w) for _, terms in rows for t, w in terms},
+                    all(s == sum(int(w) for _, w in terms) for s, terms in rows))
+        used, summed = weights_used()
+        self.assertEqual((used.get("active"), summed), (0, True))
+        table = self.client.get(url, {"tab": "table"}).content.decode()
+        self.assertIn("Scored with your own weights: Active in a condition 0 (default 3)", table)
+        self.assertIn("Weights: yours", table)
+        original = (d / "weights.default.yaml").read_bytes()
+        self.client.post(rescore, {"reset": "1", "next": "table"})  # Defaults
+        self.assertEqual(((d / "weights.yaml").read_bytes(), jobs.read(key)["weights_custom"]), (original, {}))
+        self.assertEqual(weights_used()[0].get("active"), 3)
+        self.assertNotIn("Scored with your own weights", self.client.get(url, {"tab": "overview"}).content.decode())
+        self.assertIn("weights_error=1", self.client.post(rescore, {"w_pike": "2", "w_motif": "12"}).url)  # 12: out of range
+        self.assertEqual((d / "weights.yaml").read_bytes(), original)
+        self.client.post(rescore, {"w_constrained": "4", "next": "export"})
+        self.assertEqual(weights_used()[0].get("constrained"), 4)
+        tsv = b"".join(self.client.get(reverse("snpportal:download", args=[key]), {"format": "tsv"}).streaming_content).decode()
+        self.assertIn("# your own weights: GERP constrained 4 (default 2)", tsv)
+
     def test_local_install_keeps_results(self):
         """salmo-snp serve (SNPPORTAL_LOCAL): the Score page says once that the results stay on this computer (the
         result pages don't repeat it), nothing expires and the cleanup deletes nothing, however old."""

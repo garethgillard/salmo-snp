@@ -13,6 +13,7 @@ urlpatterns = [
     path("panel/report/", panel_report.report, name="panel_report"),
     path("panel/count/", panel.count, name="panel_count"),
     path("results/<uuid:key>/add-to-panel/", panel.add, name="panel_add"),
+    path("results/<uuid:key>/weights/", views.rescore, name="rescore"),
     # saved design projects (local installs only): versions, diff, downloads, export and import
     path("panel/save/", projects.save_view, name="panel_save"),
     path("projects/", projects.page, name="projects"),

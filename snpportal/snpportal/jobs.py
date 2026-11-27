@@ -35,6 +35,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import duckdb
+import yaml
 from django.conf import settings
 
 import snpscore
@@ -556,6 +557,8 @@ def status(key):
     return job
 
 
+MAX_SNPS = 5_000_000  # SNPs a list may have (SNPPORTAL_MAX_SNPS; G, 2026-11-27, from users: 5M, the 300 MB file limit kept)
+MAX_PANEL_SNPS = 150_000  # SNPs a Design panel may hold (SNPPORTAL_MAX_PANEL_SNPS; G, 2026-11-27, from users)
 FOREVER = 10 * 365 * 86400  # cookie lifetime on a local install, where results and panels stay until deleted
 
 
@@ -621,9 +624,10 @@ def position_choices():
 
 
 def create(src, suffix, input_kind="snps", preset="all", label="", input_format=None, synthetic=False, move=True,
-           positions=None):
+           positions=None, weights=None):
     """Make a job from the input file `src` (moved into the job folder, or copied if move=False) and queue it.
-    `positions` (a position_choices value): the input's positions are on another assembly. Returns the key. Raises QueueFull before
+    `positions` (a position_choices value): the input's positions are on another assembly. `weights` {term: weight}:
+    the user's own evidence weights (parse_weights) over the release's. Returns the key. Raises QueueFull before
     creating anything when MAX_QUEUED jobs are already waiting."""
     if executor() is not None and len(_queued) >= MAX_QUEUED:
         raise QueueFull()
@@ -633,6 +637,8 @@ def create(src, suffix, input_kind="snps", preset="all", label="", input_format=
     for kept in (release() / "manifest.json", snpscore.score.WEIGHTS):  # the job keeps the data and rules it was scored with
         if kept.exists():
             shutil.copyfile(kept, d / kept.name)
+    if weights:
+        set_weights(d, weights)
     (os.replace if move else shutil.copyfile)(src, d / f"input{suffix}")
     lock_down(d)
     now = time.time()
@@ -645,6 +651,7 @@ def create(src, suffix, input_kind="snps", preset="all", label="", input_format=
         "release": snapshot.get("version"), "assembly": snapshot.get("assembly", "Ssal_v3.1"),
         "manifest_sha256": sha256(d / "manifest.json") if (d / "manifest.json").exists() else None,
         "weights_sha256": sha256(d / "weights.yaml") if (d / "weights.yaml").exists() else None,
+        **({"weights_custom": custom_weights(d)} if weights else {}),
         "snpscore_version": _version("snpscore"), "duckdb_version": duckdb.__version__,
         "created": now, "created_utc": utc(now), "started": None, "heartbeat": now, "timings": {},
         "error_code": None, "error": None, **({"positions": positions} if positions and positions in dict(position_choices()) else {}),
@@ -654,27 +661,28 @@ def create(src, suffix, input_kind="snps", preset="all", label="", input_format=
     return key
 
 
-def submit(key):
-    """Queue a created job on the pool, or run it now when SNPPORTAL_WORKERS = 0."""
+def submit(key, step=None):
+    """Queue a created job on the pool, or run it now when SNPPORTAL_WORKERS = 0. `step`: what to run (_run: score
+    it; _retier: tier it again with new weights)."""
     pool = executor()
     if pool is None:
-        run(key)
+        run(key, step)
     else:
         _queued.add(str(key))
-        pool.submit(run, key)
+        pool.submit(run, key, step)
 
 
-def run(key):
-    """Annotate a job's input, precompute tiers for every preset and write summary.json. Runs on the pool (or
-    inline), reading the release the job was created with (I17); never raises: failures end in state 'failed' with
-    an error_code and a message for the user."""
+def run(key, step=None):
+    """Annotate a job's input, precompute tiers for every preset and write summary.json (or `step`). Runs on the pool
+    (or inline), reading the release the job was created with (I17); never raises: failures end in state 'failed'
+    with an error_code and a message for the user."""
     try:
         own = release_for(read_json(folder(key) / "job.json").get("release"))
     except ValueError:
         own = None
     token = _current.set(own or _current.get())
     try:
-        _run(key)
+        (step or _run)(key)
     finally:
         _current.reset(token)
 
@@ -702,11 +710,13 @@ def _run(key):
         gwas = job.get("input_kind") == "gwas"
         if gwas:  # GWAS summary statistics (P7.1): sumstats.parquet + gwas.json; annotate gets their positions and alleles
             from snpscore import gwas as sumstats
-            src = sumstats.prepare(src, release(), d, max_snps=int(setting("SNPPORTAL_MAX_SNPS", 3_000_000)), **limits())
+            src = sumstats.prepare(src, release(), d, max_snps=int(setting("SNPPORTAL_MAX_SNPS", MAX_SNPS)), **limits())
         _annotate(src, d, progress)
         src.unlink(missing_ok=True)
         progress("tiers")
         n = precompute(d)
+        if custom_weights(d):  # scored with the user's own weights: the public background's tiers under them too
+            public_tiers(d)
         validation, extra = read_json(d / "validation.json"), {}
         if gwas:  # gwas.parquet: the statistics with alleles turned to Ssal_v3.1, joined to the result's rows
             progress("association")
@@ -748,7 +758,7 @@ def _annotate(src, d, progress):
     supports them (else the portal counts rows itself); its <stem>.validation.json and <stem>.rejects.tsv (when
     written) become validation.json and rejects.tsv."""
     params = inspect.signature(snpscore.annotate).parameters
-    cap = int(setting("SNPPORTAL_MAX_SNPS", 3_000_000))
+    cap = int(setting("SNPPORTAL_MAX_SNPS", MAX_SNPS))
     job = read_json(d / "job.json")
     if job.get("input_kind") == "sv":  # structural variants: each scored by what it overlaps
         try:
@@ -794,8 +804,10 @@ def precompute(d):
             con.execute(f"CREATE VIEW c{i} AS SELECT * EXCLUDE ({', '.join(picked)}), "
                         + ", ".join(f"{c} AS {ident(r)}" for c, r in zip(picked, renamed)) + f" FROM ({sql})")
             view, cols, stored = f"c{i}", [c for c in cols if c not in TIER_COLUMNS] + renamed, stored + renamed
+        tmp = d / f".tiers-{uuid.uuid4().hex}.parquet"  # replaced in one step: a rescore never shows half a file
         con.execute(f"COPY (SELECT file_row_number, {', '.join(map(ident, stored))} FROM {view}) "
-                    f"TO '{d / 'tiers.parquet'}' (FORMAT parquet)")
+                    f"TO '{tmp}' (FORMAT parquet)")
+        os.replace(tmp, d / "tiers.parquet")
     _write_json(d / "summary.json", summarise(con, d, columns, w))
     return n
 
@@ -928,6 +940,159 @@ def scored_sql(table, w, columns, preset, d):
     return snpscore.scored(table, w, columns, preset)
 
 
+# ---- the user's own weights (G, 2026-11-27): a weight per kind of evidence, 0 = not counted, chosen on the Score page
+# or in the Table; the tier cut-offs, state lists and rules stay weights.yaml's. A job keeps the weights it was first
+# scored with as weights.default.yaml and its own in weights.yaml, which every page, download and report reads.
+
+WEIGHT_TERMS = (  # (weights.yaml term, the release layer it needs, its name on the pages), in the controls' order
+    ("active", "chromatin", "Active in a condition"),
+    ("weak", "chromatin", "Weak state, active in none"),
+    ("coding", "region", "CDS: protein change or unknown"),
+    ("synonymous", "region", "CDS: synonymous"),
+    ("splice", "region", "Splice region"),
+    ("utr", "region", "UTR"),
+    ("constrained", "gerp", "GERP constrained"),
+    ("regbuild", "regbuild", "Ensembl regulatory, no peak"),
+    ("motif", "motif", "TF motif change in a peak"),
+    ("summit", "summit", "Near a strong ATAC summit"),
+    ("pike", "pike", "Aligns to pike"),
+    ("molqtl", "molqtl", "molQTL lead"),
+)
+MAX_WEIGHT = 9
+
+
+def weight_terms(where=None):
+    """[(term, name, weight, default)] a user can set for a job folder (else the current release): the weights.yaml
+    terms whose layer the release has. The default is the weight the job was first scored with."""
+    w = (weights(where) or {}).get("weights") or {}
+    first = (_file("weights", Path(where) / "weights.default.yaml") or {}).get("weights") if where else None
+    layers = {layer["name"] for layer in manifest(where).get("layers", [])}
+    return [(t, name, w[t], (first or w).get(t, w[t])) for t, layer, name in WEIGHT_TERMS if t in w and layer in layers]
+
+
+def parse_weights(post, where=None):
+    """{term: weight} from a form's w_<term> fields where they differ from the defaults (weight_terms); blank fields
+    keep the default. Raises InputError unless each is a whole number from 0 to MAX_WEIGHT."""
+    out = {}
+    for term, name, _, default in weight_terms(where):
+        value = str(post.get(f"w_{term}") or "").strip()
+        if not value:
+            continue
+        if not value.isdecimal() or int(value) > MAX_WEIGHT:
+            raise InputError(f"Weight of '{name}': a whole number from 0 to {MAX_WEIGHT}.")
+        if int(value) != default:
+            out[term] = int(value)
+    return out
+
+
+def set_weights(d, chosen):
+    """Job folder d's weights.yaml: the weights it was first scored with (weights.default.yaml, kept at the first
+    change) with `chosen` {term: weight} over them; {} puts the defaults back byte for byte. True when it changed."""
+    default, now = d / "weights.default.yaml", d / "weights.yaml"
+    if not default.exists():
+        if not chosen:
+            return False
+        shutil.copyfile(now, default)
+    w = snpscore.load_weights(default)
+    before = (snpscore.load_weights(now) or {}).get("weights")
+    w["weights"].update({t: int(v) for t, v in chosen.items() if t in w["weights"]})
+    if w["weights"] == before:
+        return False
+    if chosen:
+        fd, tmp = tempfile.mkstemp(dir=d, prefix=".tmp-")
+        with os.fdopen(fd, "w") as f:
+            f.write("# The user's own weights (snpportal), over weights.default.yaml\n" + yaml.safe_dump(w, sort_keys=False))
+        os.replace(tmp, now)
+    else:
+        shutil.copyfile(default, now)
+    return True
+
+
+def custom_weights(d):
+    """{term: [weight, default]} where job folder d's weights differ from those it was first scored with; {} if none."""
+    if not (d / "weights.default.yaml").exists():
+        return {}
+    now = (snpscore.load_weights(d / "weights.yaml") or {}).get("weights") or {}
+    first = (snpscore.load_weights(d / "weights.default.yaml") or {}).get("weights") or {}
+    return {t: [now[t], first.get(t)] for t in now if now[t] != first.get(t)}
+
+
+def weights_text(custom):
+    """'Aligns to pike 1 (default 0) · ...' for a job's custom_weights."""
+    names = {t: name for t, _, name in WEIGHT_TERMS}
+    return " · ".join(f"{names.get(t, t)} {v} (default {first})" for t, (v, first) in custom.items())
+
+
+def rescore(key, chosen):
+    """Tier finished job `key` again with the user's weights {term: weight} ({}: its defaults), on the pool like a
+    scoring run, so its pages show progress meanwhile. False when the job already has these weights."""
+    d = folder(key)
+    previous = (d / "weights.yaml").read_bytes()
+    if not set_weights(d, chosen):
+        return False
+    (d / ".weights.previous").write_bytes(previous)
+    update(key, state="queued", stage="queued", heartbeat=time.time())
+    submit(key, _retier)
+    return True
+
+
+def _retier(key):
+    """rescore()'s run: drops what was made from the old tiers (designed panels, GWAS loci, chip comparisons), writes
+    tiers.parquet and summary.json again and, for weights other than the defaults, the public background's tiers
+    under them (public_tiers.json). On a failure the job goes back to its earlier weights and says so."""
+    key = str(key)
+    with _lock:
+        _queued.discard(key)
+        _running.add(key)
+    d, t0 = folder(key), time.time()
+    try:
+        if update(key, state="running", stage="tiers", started=t0, heartbeat=t0) is None:
+            return
+        for cache in ("panels", "loci"):
+            shutil.rmtree(d / cache, ignore_errors=True)
+        chip = read_json(d / "chip.json")
+        if chip.pop("results", None) is not None:
+            _write_json(d / "chip.json", chip)
+        (d / "public_tiers.json").unlink(missing_ok=True)
+        try:
+            n = precompute(d)
+            custom = custom_weights(d)
+            if custom:
+                public_tiers(d)
+            error = None
+        except Exception as e:  # noqa: BLE001 - the earlier weights and tiers come back; the page says so
+            log.error("rescore_failed job_ref=%s exception=%s", job_ref(key), type(e).__name__)
+            os.replace(d / ".weights.previous", d / "weights.yaml")
+            n, custom = precompute(d), custom_weights(d)
+            error = "Scoring with these weights failed, so the results keep their earlier weights."
+        (d / ".weights.previous").unlink(missing_ok=True)
+        update(key, state="done", stage="done", n_rows=n, weights_sha256=sha256(d / "weights.yaml"),
+               weights_custom=custom, weights_error=error)
+        log.info("job_rescored job_ref=%s n_rows=%s seconds=%.1f", job_ref(key), n, time.time() - t0)
+    finally:
+        with _lock:
+            _running.discard(key)
+        try:
+            lock_down(d)
+        except FileNotFoundError:
+            pass
+
+
+def public_tiers(d):
+    """public_tiers.json: the tier counts of the release's public background (its pool) under job folder d's own
+    weights, so the Overview compares like with like (2 to 3 s for 3.4M sites); nothing without a pool."""
+    pool = release() / "pool" / "pool.parquet"
+    if not pool.exists():
+        return
+    con = connect([pool.parent, d], d)
+    columns = [c for c, in con.execute(f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet({lit(str(pool))}))").fetchall()]
+    sql = scored_sql(f"read_parquet({lit(str(pool))})", weights(d), columns, "all", d)
+    counts = dict(con.execute(f"SELECT tier, count(*) FROM ({sql}) GROUP BY 1").fetchall())
+    n = sum(counts.values()) or 1
+    _write_json(d / "public_tiers.json", {"weights_sha256": sha256(d / "weights.yaml"),
+                                          "tiers": {str(t): {"n": k, "share": round(k / n, 6)} for t, k in sorted(counts.items())}})
+
+
 def ident(name):
     """Quote a column name for DuckDB SQL."""
     return '"' + str(name).replace('"', '""') + '"'
@@ -970,7 +1135,7 @@ def _version(package):
         return None
 
 
-def create_from_rows(rows, label, preset="all", kind="from_rows", input_format="rows", synthetic=False):
+def create_from_rows(rows, label, preset="all", kind="from_rows", input_format="rows", synthetic=False, weights=None):
     """Make a job from rows of (chrom, pos, id, ref, alt), e.g. a gene or interval candidate list. Returns the key."""
     fd, tmp = tempfile.mkstemp(dir=results_dir(), prefix=".rows-", suffix=".tsv")
     try:
@@ -978,7 +1143,7 @@ def create_from_rows(rows, label, preset="all", kind="from_rows", input_format="
             f.write("chrom\tpos\tid\tref\talt\n")
             for row in rows:
                 f.write("\t".join("" if v is None else str(v).replace("\t", " ") for v in row) + "\n")
-        return create(Path(tmp), ".tsv", kind, preset, label, input_format, synthetic)
+        return create(Path(tmp), ".tsv", kind, preset, label, input_format, synthetic, weights=weights)
     finally:
         Path(tmp).unlink(missing_ok=True)
 
@@ -1044,7 +1209,7 @@ def parse_sv_paste(text, limit):
     return rows
 
 
-def create_from_sv_rows(rows, label, preset="all", input_format="paste"):
+def create_from_sv_rows(rows, label, preset="all", input_format="paste", weights=None):
     """Make an SV job from rows of (chrom, start, end, svtype, id), 1-based and inclusive. Returns the key."""
     fd, tmp = tempfile.mkstemp(dir=results_dir(), prefix=".rows-", suffix=".tsv")
     try:
@@ -1052,7 +1217,7 @@ def create_from_sv_rows(rows, label, preset="all", input_format="paste"):
             f.write("chrom\tstart\tend\tsvtype\tid\n")
             for row in rows:
                 f.write("\t".join("" if v is None else str(v).replace("\t", " ") for v in row) + "\n")
-        return create(Path(tmp), ".tsv", "sv", preset, label, input_format)
+        return create(Path(tmp), ".tsv", "sv", preset, label, input_format, weights=weights)
     finally:
         Path(tmp).unlink(missing_ok=True)
 
@@ -1113,6 +1278,8 @@ def provenance(job, trait=None, filters=None):
         f"conditions {trait_label(trait)}; filters: {', '.join(f'{k}={v}' for k, v in (filters or {}).items()) or 'none'}",
         "tier rules PROVISIONAL (prototype weights, under review)",
     ]
+    if job.get("weights_custom"):  # the user's own weights (G, 2026-11-27)
+        lines.insert(-1, "your own weights: " + weights_text(job["weights_custom"]) + "; tiers at the default cut-offs")
     if job.get("synthetic_input") or job.get("synthetic_layers"):
         lines.append("SYNTHETIC: built from synthetic test data, not real results")
     cli = cli_trait(trait)

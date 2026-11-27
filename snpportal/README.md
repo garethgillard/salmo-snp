@@ -421,7 +421,7 @@ chip SNP on the chromosome), `near_chip` (<= window_bp) and `novel_functional` (
 novel_functional, other (the three add up to total), chip_snps, window_bp, gap_bp, gaps} and `gaps` [{chrom, start,
 end, size, filler: {chrom, pos, id, tier, source: list | pool} or None}] for chip gaps over gap_bp (design
 `chip_window` 10 kb and `chip_gap` 1 Mb). `read_chip(path, release, out, max_snps=CHIP_MAX)` reads any input layout
-through the aliases into chrom, pos, id, and stops with InputError past `max_snps` rows (3,000,000).
+through the aliases into chrom, pos, id, and stops with InputError past `max_snps` rows (5,000,000).
 
 `snpportal.lib.export`: `provenance(manifest, weights, meta)` -> '# ' lines (release, manifest and weights sha256,
 versions, preset, filters, panel, PROVISIONAL rules, SYNTHETIC when synthetic data contributes, the equivalent

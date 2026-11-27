@@ -135,6 +135,8 @@ class ToolsTest(SimpleTestCase):
         self.assertIn(f"{n:,} SNPs added to your Design panel", self.client.get(added.url).content.decode())
         cookie = added.cookies[panel.COOKIE]
         self.assertTrue(cookie["httponly"])
+        with override_settings(SNPPORTAL_MAX_PANEL_SNPS=n + 1):  # the limit counts what the panel holds (G: 150,000)
+            self.assertIn("panel_error=full", self.client.post(reverse("snpportal:panel_add", args=[self.key])).url)
         page = self.client.get(reverse("snpportal:design_panel")).content.decode()
         self.assertIn(f"<strong>{n:,}</strong> SNPs in the panel", page)
         self.assertIn("Tier 1, 2", page)  # the source's selection

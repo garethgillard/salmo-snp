@@ -133,15 +133,21 @@ def add(request, key):
     chosen = (f"(SELECT source_row AS file_row_number FROM read_parquet({lit(jd / 'panels' / (picked['hash'] + '.parquet'))}))"
               if picked else f"(SELECT file_row_number FROM v {where})")
     n = con.execute(f"SELECT count(*) FROM {chosen}").fetchone()[0]
-    cap = int(jobs.setting("SNPPORTAL_MAX_PANEL_SNPS", 50_000))
+    cap = int(jobs.setting("SNPPORTAL_MAX_PANEL_SNPS", jobs.MAX_PANEL_SNPS))
     if not n or n > cap:
         return redirect(f"{back}&panel_error={'empty' if not n else 'many'}")
-    rows = jd / f".panel-rows-{uuid.uuid4().hex}.parquet"
-    con.execute(f"COPY {chosen} TO '{rows}' (FORMAT parquet)")
-    con.close()
     d = _folder(request)
     if d is not None and jobs.read_json(d / "panel.json").get("release") not in (None, job.get("release")):
         return redirect(f"{back}&panel_error=release")  # I17: a panel holds SNPs of one release
+    if d is not None:  # at most `cap` SNPs in the panel (G, 2026-11-27: 150,000), counting these as new
+        held, rel = _open(d)
+        have = held.execute("SELECT count(*) FROM p").fetchone()[0] if rel is not None else 0
+        held.close()
+        if have + n > cap:
+            return redirect(f"{back}&panel_error=full")
+    rows = jd / f".panel-rows-{uuid.uuid4().hex}.parquet"
+    con.execute(f"COPY {chosen} TO '{rows}' (FORMAT parquet)")
+    con.close()
     d = d or _new()
     s = jobs.read_json(d / "panel.json")
     i = s["next"]

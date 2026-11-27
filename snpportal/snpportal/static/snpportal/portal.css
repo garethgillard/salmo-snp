@@ -410,6 +410,18 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-dd-note { max-width: 18rem; margin: .2rem 0 0; color: var(--sp-ink-2); font-size: var(--sp-fs-xs); }
 .sp-dd-tip { max-width: 18rem; margin: 0; padding-bottom: .3rem; border-bottom: 1px solid var(--sp-line); color: var(--sp-ink-2); font-size: var(--sp-fs-xs); }
 
+/* the evidence weights (G, 2026-11-27): the Score page's fold and the Table's Weights control; a name, then its number */
+.sp-weights { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .3rem 1.75rem; }
+.sp .sp-weight { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: 0; font-size: var(--sp-fs-sm); }
+.sp-weight input { flex: none; width: 3.75rem; text-align: right; }
+.sp-weights-fold { margin-top: .75rem; }
+.sp-weights-fold .sp-hint { margin: .25rem 0 .6rem; }
+.sp-dd-weights { width: 23rem; }
+.sp-dd-weights .sp-weights { grid-template-columns: 1fr; }
+.sp-weights-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem; margin: .75rem 0 0; color: var(--sp-ink-2);
+  font-size: var(--sp-fs-sm); }
+.sp-weights-note .sp-i { position: relative; top: .15em; }
+
 /* the Table: a toolbar line, a key line, the table, the pager */
 .sp-tablebar { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-bottom: .45rem; }
 .sp-tablebar-end { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; margin-left: auto; }
