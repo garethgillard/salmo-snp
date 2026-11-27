@@ -751,15 +751,21 @@ def table(request, key, job=None):
         way = ("ascending" if sorts[0][1] != desc else "descending") if on and sorts else ""  # the arrow says the real order
         headers.append((k, label, tip, href, way, on_column.get(k),
                         "sp-num" if k in NUMERIC else "sp-ctr" if k == "tier" else ""))
-    shown_tiers = tier_counts if not ticked["tier"] else \
-        [(x, k) for x, k in tier_counts if str(x) in ticked["tier"]]  # the tiers of the rows the table shows
+    on = set(ticked["tier"]) or {str(x) for x, _ in tier_counts}  # G, 2026-11-27: each band a chip, on or off; all on at first
+    band_chips = []
+    for x, k in tier_counts:
+        if x is None or not k:
+            continue
+        rest = on ^ {str(x)}  # this chip switched; the tier filter goes when every band is on again
+        href = None if not rest else link(tier=None if rest >= {str(t) for t, _ in tier_counts if t is not None} else ",".join(sorted(rest)), page=None)
+        band_chips.append((x, k, href, str(x) in on))
     filtered = urlencode(chosen)
     return {
         "total": total, "matching": matching, "first": (page - 1) * size + 1 if matching else 0,
         "last": min(page * size, matching), "chosen": chosen, "query": urlencode({"trait": chosen["trait"], **settings}),
         "dds": dds, "pick": pick, "n_selected": n_every - n_out, "n_out": n_out, "sv": is_sv(types),  # SVs: no panels
         "fit": not custom_cols, "tkey": table_key(rows, conditions),
-        "shown_tiers": [(x, k) for x, k in shown_tiers if x is not None and k],
+        "band_chips": band_chips,
 
         "gene": chosen.get("gene", "") if any(c in types for c in ("gene_name", "gene_id")) else None,
         "start": chosen.get("start", ""), "end": chosen.get("end", ""),
@@ -772,7 +778,6 @@ def table(request, key, job=None):
         "prev": link(page=page - 1) if page > 1 else None, "next": link(page=page + 1) if page < pages else None,
         "sizes": [(s, link(size=str(s) if s != PAGE_SIZE else None, page=None), s == size) for s in PAGE_SIZES],
         "download": f"{reverse('snpportal:download', args=[key])}?{filtered}" if selection_conds else None,
-        "to_export": f"?{urlencode({'tab': 'export', **({'scope': 'filtered'} if selection_conds and not gwas else {}), **chosen})}",  # files, Design panel
         "snp": snp, "drawer": _drawer(request, key, job, snp, link, here, picks_out, _steps(con, src, where, order, ids, snp, page, size, pages, matching))
         if snp is not None else None,
     }
@@ -1151,17 +1156,13 @@ def _fig_summary(c, link, desc):
     if not tiers:
         return None
     n, href = s.get("n_rows") or sum(tiers.values()), link or (lambda **_: None)
-    top2 = int(tiers.get("1", 0)) + int(tiers.get("2", 0))
     public = _shares((bg.get("tiers") or {}).get(trait))
     chroms = len([k for k, v in (s.get("chrom_tiers", {}).get(trait) or {}).items() if sum(v.values())])
-    head = [(f"{n:,}", "SNPs scored", f"on {chroms} chromosome{'' if chroms == 1 else 's'}" if chroms else "", None),
-            (f"{top2:,}", f"score {figures.cuts()[1]}+", f"{figures.share_label(top2, n)} of the list"  # whole percentages, as the legends
-             + (f"\n{figures.share_label(public.get('1', 0) + public.get('2', 0), 1)} of public sites" if public else ""),
-             href(tier="1-2"))]
+    head = [(f"{n:,}", "SNPs scored", f"on {chroms} chromosome{'' if chroms == 1 else 's'}" if chroms else "", None)]  # the bands below say the rest
     if c.get("loci"):
         head.append((f"{c['loci'][0]:,}", "loci", "on the Association tab", c["loci"][1]))
     names = {t: f"Score {b}" for t, b in figures.bands().items()}
-    groups = [{"title": "Score", "note": "the sum of the evidence weights; 0 = no evidence found" + (" · thin bar: public sites" if public else ""),
+    groups = [{"title": "Score", "note": "the sum of the evidence weights" + (" · thin bar: public sites" if public else ""),
                "parts": [(names[t], int(tiers.get(str(t), 0)), palette.TIERS[t][0], href(tier=str(t))) for t in (1, 2, 3, 4)],
                "background": [(names[t], public.get(str(t), 0), palette.TIERS[t][0]) for t in (1, 2, 3, 4)] if public else None}]
     regions, region_bg = s.get("region_tiers", {}).get(trait) or {}, background_regions(bg)
@@ -1176,7 +1177,7 @@ def _fig_summary(c, link, desc):
         groups.append({"title": "Near a known locus", "note": f"within {window / 1000:g} kb of a published locus" if window else "",
                        "parts": [("near one", near, palette.GREY[700], href(known="1")), ("not near", n - near, palette.GREY[200], None)]})
     if s.get("assay") and c["job"].get("input_kind") != "gwas":
-        groups.append({"title": "Assay check", "note": "probe flanks for genotyping assays",  # palette.ASSAY: white to red
+        groups.append({"title": "Assay check", "note": "probe flanks for genotyping assays", "outline": True,  # palette.ASSAY: white to red
                        "parts": [(k.replace("_", " "), s["assay"].get(k, 0), palette.ASSAY[k], href(assay=k)) for k in ASSAY]})
     for g in groups:
         g["parts"] = [p for p in g["parts"] if p[1]]

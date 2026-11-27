@@ -1,7 +1,7 @@
 {% load snpportal_tags %}
-{% comment %}Table tab. One toolbar line (the count, the score bands of the rows shown, Clear filters; the TSV, a link to the Export
-   tab, where vendor files and Add to Design panel are, Weights (the evidence weights: a POST form after the table,
-   which rescores the whole result) and Columns; G, 2026-11-27), a one-line key (the Chromatin cells' states, ~NAME), then the table. Each filter sits on its column: a funnel
+{% comment %}Table tab. One toolbar line (the count; a chip per score band, each switching its SNPs on or off; Clear filters;
+   the TSV, Weights (the evidence weights: a POST form after the table, which rescores the whole result) and Columns;
+   G, 2026-11-27), then the table; the Chromatin colours and ~NAME are explained by (i) icons in their column titles. Each filter sits on its column: a funnel
    button in the header (_dd.html), its choice under the column's name; a hidden column has no filter (show it with
    Columns), and a filtered column always shows. The form #tf holds them all and applies them on change; sort links and
    pages stay on this page (htmx swaps #results). The Keep column's box takes a row out of the selection or puts it back
@@ -15,15 +15,15 @@
 
 <div class="sp-tablebar">
   <span role="status">{% if matching == total %}Showing {{ first|thousands }}&ndash;{{ last|thousands }} of {{ total|thousands }} SNPs{% else %}{% if matching %}{{ first|thousands }}&ndash;{{ last|thousands }} of {{ matching|thousands }} shown{% else %}None shown{% endif %} <span class="sp-muted">(filtered from {{ total|thousands }} SNPs)</span>{% endif %}{% if n_out %} <span class="sp-muted">&middot; {{ n_out|thousands }} left out</span>{% endif %}</span>
-  {% for tier, n in shown_tiers %}<span class="sp-badge sp-tier-{{ tier }}" title="SNPs scoring {{ tier|band }} in this table">{{ tier|band }}: {{ n|thousands }}</span>{% endfor %}
+  {% for tier, n, href, on in band_chips %}{% if href %}<a class="sp-badge sp-tier-{{ tier }} sp-band{% if not on %} sp-band-off{% endif %}" href="{{ href }}" hx-boost="true" role="button" aria-pressed="{% if on %}true{% else %}false{% endif %}"
+     title="{{ n|thousands }} SNPs score {{ tier|band }}: click to {% if on %}hide{% else %}show{% endif %} them">{{ tier|band }}: {{ n|thousands }}</a>{% else %}<span class="sp-badge sp-tier-{{ tier }} sp-band" title="{{ n|thousands }} SNPs score {{ tier|band }}: the only band shown">{{ tier|band }}: {{ n|thousands }}</span>{% endif %}{% endfor %}
   {% if clear %}<a class="sp-clear" href="{{ clear }}" hx-boost="true">Clear filters</a>{% endif %}
   <span class="spinner-border sp-spin htmx-indicator" id="tf-busy" role="status" aria-label="Loading"></span>
   <span class="sp-tablebar-end">
     {% if download and matching %}<a href="{{ download }}">Download these {{ n_selected|thousands }} (TSV)</a>{% endif %}
-    {% if n_selected %}<a href="{{ to_export }}" hx-boost="true" title="Vendor files and other downloads{% if not sv %}, or add these SNPs to your Design panel{% endif %}">{% if sv %}Export{% else %}Export or add to Design panel{% endif %} &rarr;</a>{% endif %}
     {% if weights.terms %}<details class="sp-dd" id="dd-weights"><summary class="btn btn-sm btn-outline-secondary">Weights{% if weights.custom %}: yours{% endif %}</summary>
       <div class="sp-dd-panel sp-dd-right sp-dd-weights"><div class="sp-dd-head"><span>Evidence weights and score bands</span>{% if weights.custom %}<button class="btn btn-link btn-sm p-0" type="submit" form="weights-form" name="reset" value="1">Defaults</button>{% endif %}</div>
-        <p class="sp-dd-note">A SNP's score adds up the weights of its evidence; 0 = not counted. Rescoring changes the whole result: Overview, Table, cards and downloads. <a href="{% url 'snpportal:scoring' %}">Why these weights?</a></p>
+        <p class="sp-dd-note">A SNP's score adds up the weights of its evidence. Rescoring changes the whole result. <a href="{% url 'snpportal:scoring' %}">Why these weights?</a></p>
         {% include 'snpportal/_weights.html' with prefix='t' form='weights-form' %}
         <button class="btn btn-sm btn-primary mt-2" type="submit" form="weights-form">Rescore</button>
       </div>
@@ -43,13 +43,13 @@
 </div>{% endif %}
 
 {% if matching %}
-{% if tkey.states or tkey.tilde %}<p class="sp-tkey">{% if tkey.states %}<span><b>Chromatin</b>{% for cls, label in tkey.states %} <span class="sp-tkey-sw"><i class="{{ cls }}"></i>{{ label }}</span>{% endfor %} <span class="sp-tkey-sw"><i></i>no peak</span></span>{% endif %}
-  {% if tkey.tilde %}<span><b>~NAME</b> a gene unnamed in Ensembl, named by its human ortholog</span>{% endif %}</p>{% endif %}
 <div class="sp-scroll{% if fit %} sp-fit{% endif %}">
   <table class="table table-sm table-hover sp-table sp-results sp-snps mb-0">
     <thead hx-boost="true">
       <tr><th scope="col" class="sp-pickcol"><span class="sp-th"><span title="Ticked: kept in the selection, which Add to Design panel, Export and the downloads take. Click a box to leave its SNP out, or to put it back">Keep</span>
         {% if pick.views %}{% include 'snpportal/_dd.html' with dd=pick col=1 %}{% endif %}</span></th>{% for key, label, tip, url, order, dd, align in headers %}<th scope="col" class="sp-col-{{ key }}{% if align %} {{ align }}{% endif %}"{% if order %} aria-sort="{{ order }}"{% endif %}><span class="sp-th">{% if url %}<a href="{{ url }}" title="{{ tip }}">{{ label }}{% if order == 'ascending' %} &#9650;{% elif order %} &#9660;{% endif %}</a>{% else %}<span title="{{ tip }}">{{ label }}</span>{% endif %}
+        {% if key == 'chromatin' and tkey.states %}<span class="sp-tip" tabindex="0" aria-label="Chromatin colour key">{% icon 'info' %}<span class="sp-tip-box" role="tooltip">{% for cls, label in tkey.states %}<span class="sp-tkey-sw"><i class="{{ cls }}"></i>{{ label }}</span>{% endfor %}<span class="sp-tkey-sw"><i></i>no peak</span></span></span>{% endif %}
+        {% if key == 'gene' and tkey.tilde %}<span class="sp-tip" tabindex="0" aria-label="About ~NAME">{% icon 'info' %}<span class="sp-tip-box" role="tooltip"><b>~NAME</b>: a gene unnamed in Ensembl, named by its human ortholog</span></span>{% endif %}
         {% if dd %}{% include 'snpportal/_dd.html' with col=1 right=forloop.last %}{% endif %}</span>{% if dd.on %}<span class="sp-colf-val" title="{{ dd.summary }}">{{ dd.summary }}</span>{% endif %}{% if key == 'chromatin' and tkey.groups %}<span class="sp-bc sp-bc-head" aria-hidden="true">{% for short, name, n in tkey.groups %}<span class="sp-bc-n{{ n }}" title="{{ name }}">{{ short }}</span>{% endfor %}</span>{% endif %}</th>{% endfor %}</tr>
     </thead>
     <tbody>

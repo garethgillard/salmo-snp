@@ -149,7 +149,7 @@ class ResultsTest(SimpleTestCase):
         rows = re.findall(r'font-size="13" font-weight="600" class="sp-ph">([^<]*)</text>', summary)
         self.assertEqual(rows, ["Score", "Gene region", "Near a known locus"] + ["Assay check"] * ("assay_status" in self.columns))
         self.assertNotIn("for all conditions", summary)  # tiers always count them all: no qualifier
-        self.assertIn('href="?tab=table&amp;trait=all&amp;tier=1-2"', summary)  # every part lists its SNPs, Active in reset
+        self.assertIn('href="?tab=table&amp;trait=all&amp;tier=1"', summary)  # every part lists its SNPs, Active in reset
         self.assertNotIn("PROVISIONAL", re.sub(r"<svg .*?</svg>", "", page, flags=re.S))  # no badges
         self.assertNotIn('class="sp-caveat', page)  # no prototype line on the pages
         self.assertEqual('id="qc" open' in page, results.qc_problem(jobs.read_json(self.d / "validation.json")))  # one QC line
@@ -323,10 +323,11 @@ class ResultsTest(SimpleTestCase):
         self.assertIn('<summary class="sp-colf on" title="Filter Gene region: protein-changing, synonymous, coding (effect unknown), splice site or region, 5′ UTR, 3′ UTR"', both)
         self.assertEqual(int(re.search(r"of ([\d,]+) shown", both).group(1).replace(",", "")),
                          self.direct("region_class IN ('CDS', 'splice_region') OR region_class LIKE '%UTR'"))
-        tiers = re.findall(r'<span class="sp-badge sp-tier-(\d)" title="[^"]*">[^<:]+: ([\d,]+)', both)  # the shown rows' score bands
-        self.assertEqual(sum(int(n.replace(",", "")) for _, n in tiers), int(re.search(r"of ([\d,]+) shown", both).group(1).replace(",", "")))
+        chip = r'class="sp-badge sp-tier-(\d) sp-band( sp-band-off)?"[^>]*>[^<:]+: ([\d,]+)'  # a chip per score band, on or off
+        tiers = re.findall(chip, both)
+        self.assertEqual(sum(int(n.replace(",", "")) for _, _, n in tiers), int(re.search(r"of ([\d,]+) shown", both).group(1).replace(",", "")))
         one = self.client.get(self.url + "?tab=table&region=coding&region=UTR&tier=1").content.decode()
-        self.assertEqual({t for t, _ in re.findall(r'<span class="sp-badge sp-tier-(\d)" title="[^"]*">[^<:]+: ([\d,]+)', one)}, {"1"})
+        self.assertEqual({t for t, off, _ in re.findall(chip, one) if not off}, {"1"})  # the others greyed, a click away
 
         by_maf = self.client.get(self.url + "?tab=table&sort=maf&desc=1").content.decode()
         first = float(re.search(r'<td class="sp-num">(0\.\d\d)</td>', by_maf).group(1))

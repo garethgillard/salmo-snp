@@ -56,6 +56,7 @@ ICONS = {
     "line": '<path d="M12 3v18M3.5 12h4M16.5 12h4M5.5 10l-2 2 2 2M18.5 10l2 2-2 2"/>',
     "play": '<circle cx="12" cy="12" r="8.5"/><path d="M10 8.5l5 3.5-5 3.5z"/>',
     "plus": '<path d="M12 5.5v13M5.5 12h13"/>',
+    "edit": '<path d="M14.5 5.5l4 4L9 19H5v-4z"/><path d="M12.5 7.5l4 4"/>',
 }
 
 

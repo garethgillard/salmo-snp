@@ -1,6 +1,6 @@
 {% load snpportal_tags %}
 {% comment %}Overview tab: the whole list at a glance (upload warnings; the summary of key numbers and how the SNPs split
-   beside where they are, or for GWAS jobs the active chromatin per condition; one caption; 'More charts', named by what
+   beside where they are, or for GWAS jobs the active chromatin per condition; 'More charts', named by what
    it holds, and the upload check as fold rows, the check open by itself on any problem). The SNPs themselves are on the
    Table tab. Every number, bar and bin links to the Table tab with its filter.{% endcomment %}
 <div class="sp-stack">
@@ -11,7 +11,6 @@
       {% if figs.ideogram %}<div class="col-xl-6">{% include 'snpportal/_figure.html' with fig=figs.ideogram %}</div>
       {% elif figs.conditions %}<div class="col-xl-6">{% include 'snpportal/_figure.html' with fig=figs.conditions %}</div>{% endif %}
     </div>
-    <p class="sp-caption">Click a number, a bar or a chromosome bin to list those SNPs in the Table.</p>
   </div>
 
   <div>

@@ -403,9 +403,10 @@ def results(request, key):
     tab = tab if tab in TABS and not ((gwas or sv) and tab == "panel") else "overview"
     synthetic = bool(job.get("synthetic_input") or job.get("synthetic_layers"))
     label = job.get("label") or "Results"
-    context = {"nav": "score", "job": job, "key": key, "tab": tab, "gwas": gwas, "sv": sv,
-               "title": " · ".join(x for x in [label + (" (synthetic data)" if synthetic and "synthetic" not in label.lower() else ""),
-                                               f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else None] if x),
+    name = label + (" (synthetic data)" if synthetic and "synthetic" not in label.lower() else "")
+    n_text = f"{job['n_rows']:,} SNPs" if job.get("n_rows") is not None else ""
+    context = {"nav": "score", "job": job, "key": key, "tab": tab, "gwas": gwas, "sv": sv, "name": name, "n_text": n_text,
+               "title": " · ".join(x for x in [name, n_text] if x),
                "meta": jobs.deleted_after(key),
                "synthetic": synthetic, "weights": weights_context(key, job)}
     if job["state"] == "done":
@@ -422,13 +423,10 @@ def results(request, key):
         else:
             context.update(tools.exports(request, key, job))
         context["table_query"] = result_views.selection(d) or urlencode(settings)  # the Table tab returns to the selection
-        context["actions"] = [{"label": "Print report", "url": f"{reverse('snpportal:report', args=[key])}?{context['table_query']}"},
-                              {"label": "Score another list", "url": reverse("snpportal:upload")}]
-    context.setdefault("actions", []).append(  # renamed in a small dialog (portal.js data-rename)
-        {"label": "Rename", "url": reverse("snpportal:rename", args=[key]), "post": True, "rename": job.get("label") or "Results"})
-    context["actions"].append(
-        {"label": "Delete", "url": reverse("snpportal:delete", args=[key]), "post": True, "style": "btn-outline-danger",
-         "confirm": "Delete these results now? This can't be undone."})
+        context["report_url"] = f"{reverse('snpportal:report', args=[key])}?{context['table_query']}"  # printed from Export
+    else:  # running or failed: the standard header, with Delete (a finished result is deleted from the Score page's list)
+        context["actions"] = [{"label": "Delete", "url": reverse("snpportal:delete", args=[key]), "post": True,
+                               "style": "btn-outline-danger", "confirm": "Delete these results now? This can't be undone."}]
     response = render(request, "snpportal/results.html", context)
     response.set_cookie(CURRENT, str(key), max_age=24 * 3600, httponly=True, samesite="Lax")
     keep_mine(response, [str(key)] + [k for k in _mine_keys(request) if k != str(key)])  # the Score page lists it

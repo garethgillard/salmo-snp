@@ -91,7 +91,13 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   the species switch and the search box at the far right; no line under it. The footer: release, tour, Methods, How
   scores are made, citation, privacy, Run locally; at the right "© 2026 NMBU · Gareth Gillard". One fold pattern
   (`.sp-more`, `.sp-cs`: a title row, a chevron at the right); one tab style: no line under the row, the open tab
-  underlined in the accent.
+  underlined in ink (the Score page's input tabs in the accent).
+- A result (G, 2026-11-27): its name, a size smaller, with an edit icon (renames it), in one row with the tabs; no
+  buttons beside them (the report is printed from Export, results are deleted from the Score page's list). Overview:
+  one key number (SNPs scored), the bars, the assay check's boxes with a dark rim, the genome map's legend on one line.
+  Table: a chip per score band that switches its SNPs on or off (all on at first); the Chromatin colours and ~NAME
+  behind (i) icons in their column titles. Export in four labelled parts: Print a report, Add to your Design panel,
+  Pick markers automatically, then Download. The printed report fits one A4 page (the top 8 SNPs).
 - The Score page (G, 2026-11-27): the title, then one row of short example buttons (counts as 53k) and the tour link;
   the tabs SNPs, Structural variants, GWAS results, Genes or regions; each tab ends with Evidence weights (a fold, its
   chevron beside the title, 'custom' when they are not the defaults), a Name box (the date, or the chosen file's name;
@@ -118,7 +124,7 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   conditions (no trait picker); the curated panel is its own page (Design panel, `panel.py`). Two ways fill it, side by
   side at the top of the Export tab (G, 2026-11-27): Add your Table selection, or Pick markers automatically (the
   picker, `?tab=panel`, not in the tab bar: Export stays highlighted), whose own Add button sends its markers as a
-  source. The Table links to Export; the Design panel page links the picker for each of the browser's SNP lists.
+  source. The Design panel page links the picker for each of the browser's SNP lists.
   View state lives in whitelisted GET parameters (GWAS links keep the fine-mapping settings); derived files are
   cached in the job folder by a hash of their parameters (`panels/<hash>.parquet`, `loci/<hash>.parquet`), so the
   same URL gives the same file. User SNP names (must-include ids) are POSTed, never put in a URL.

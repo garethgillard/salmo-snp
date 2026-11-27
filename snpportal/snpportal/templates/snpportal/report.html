@@ -1,18 +1,19 @@
 {% extends 'snpportal/base_portal.html' %}
 {% load snpportal_tags %}
 {% comment %}Printable report of a job (report.py): the caveat, upload warnings, the summary, top SNPs, a panel, a figure, a methods
-   summary with references and the provenance (portal.css /* report */ sets A4). Sections with a hairline above, not boxes,
-   so that the table and the references flow across the page break and the report fills two pages (G, 2026-11-27: 'nice
-   and practical'); a figure or a table row is never split. Links point at the results page.{% endcomment %}
+   summary with references and the provenance (portal.css /* report */ sets A4). Sections with a hairline above, not boxes;
+   the two figures side by side, so that it all fits one page (G, 2026-11-27: "Try to get it to one page"); a figure or
+   a table row is never split. Links point at the results page.{% endcomment %}
 {% block main %}
 <div class="sp-report">
   <p class="sp-noprint sp-small sp-muted"><button type="button" class="btn btn-sm btn-primary" onclick="window.print()">Print or save as PDF</button>
-    Two A4 pages; choose &lsquo;Save as PDF&rsquo; in the print dialog for a PDF.</p>
+    One A4 page; choose &lsquo;Save as PDF&rsquo; in the print dialog for a PDF.</p>
   <p class="sp-caveat" role="note">Prototype scoring:
     scores rank annotated evidence, not proven effects; rules are provisional.</p>
 
   {% if warnings %}<div class="sp-status sp-status-warn" role="note">{% icon 'warn' %} Upload warnings: {{ warnings|join:"; " }}</div>{% endif %}
-  {% if summary %}<figure class="sp-rsec sp-rfig" id="fig-{{ summary.name }}"><h2>{{ summary.title }}</h2>{{ summary.svg }}</figure>{% endif %}
+  {% if summary or figs %}<div class="sp-report-figs">{% if summary %}<figure class="sp-rsec sp-rfig" id="fig-{{ summary.name }}"><h2>{{ summary.title }}</h2>{{ summary.svg }}</figure>{% endif %}
+    {% for fig in figs %}<figure class="sp-rsec sp-rfig" id="fig-{{ fig.name }}"><h2>{{ fig.title }}</h2>{{ fig.svg }}</figure>{% endfor %}</div>{% endif %}
 
   <section class="sp-rsec" aria-labelledby="top-h">
     <div class="sp-rsec-h"><h2 id="top-h">Top {{ top.rows|length }} SNPs</h2>
@@ -22,14 +23,14 @@
     {% if top.rows %}<div class="table-responsive"><table class="table table-sm sp-small mb-0">
       <thead><tr><th scope="col">SNP</th><th scope="col">Position</th>{% if top.gwas %}<th scope="col" class="sp-num">p</th>{% endif %}
         <th scope="col">Gene</th><th scope="col">Score</th><th scope="col">Evidence</th>
-        {% if 'known_locus' in top.columns %}<th scope="col">Known locus</th>{% endif %}{% if 'assay_status' in top.columns %}<th scope="col">Assay</th>{% endif %}</tr></thead>
+        {% if known_shown %}<th scope="col">Known locus</th>{% endif %}{% if 'assay_status' in top.columns %}<th scope="col">Assay</th>{% endif %}</tr></thead>
       <tbody>{% for r in top.rows %}<tr>
         <th scope="row" class="fw-normal"><a href="{{ r.url }}">{{ r.snp }}</a>{% if r.alleles %} <span class="sp-muted">&middot; {{ r.alleles }}</span>{% endif %}</th>
         <td class="sp-mono">{{ r.position }}</td>{% if top.gwas %}<td class="sp-num">{{ r.p }}</td>{% endif %}
         <td title="{{ r.gene_tip }}">{{ r.gene }}</td>
         <td>{% if r.tier %}{% include 'snpportal/_badges.html' with kind='tier' value=r.tier score=r.score %}{% endif %}</td>
         <td>{{ r.evidence|default:"no evidence found" }}</td>
-        {% if 'known_locus' in top.columns %}<td>{{ r.known }}{% if r.caveat %} ({{ r.caveat }}){% endif %}</td>{% endif %}
+        {% if known_shown %}<td>{{ r.known }}{% if r.caveat %} ({{ r.caveat }}){% endif %}</td>{% endif %}
         {% if 'assay_status' in top.columns %}<td>{% if r.assay %}{{ r.assay.2 }}{% endif %}</td>{% endif %}
       </tr>{% endfor %}</tbody>
     </table></div>
@@ -43,7 +44,6 @@
     {% if panel.params %}<p class="sp-small sp-muted mb-0">Designed with: {{ panel.params }}.</p>{% endif %}
   </section>{% endif %}
 
-  {% for fig in figs %}<figure class="sp-rsec sp-rfig" id="fig-{{ fig.name }}"><h2>{{ fig.title }}</h2>{{ fig.svg }}</figure>{% endfor %}
 
   <section class="sp-rsec sp-report-text" aria-labelledby="methods-h">
     <h2 id="methods-h">Methods</h2>

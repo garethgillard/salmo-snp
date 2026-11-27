@@ -155,7 +155,7 @@ def summary(head, groups, title, desc="", synthetic=False, width=580):
     """The Overview's summary, drawn to sit beside the ideogram: key numbers, then one stacked bar per way of grouping
     the SNPs, with its title and note above and a two-column legend of counts and shares below. head: [(number,
     label, note, href)], a note's lines split by '\\n'; groups: [{title, note, parts: [(name, n, fill, href)],
-    background: [(name, share, fill)] or None}]. A background is a thin bar under the SNPs' bar: the same split for
+    background: [(name, share, fill)] or None, outline: a dark rim on its boxes}]. A background is a thin bar under the SNPs' bar: the same split for
     public sites. Parts with an href link to the table filtered to them. Labels and legends have class sp-ph, which
     portal.css enlarges on phones (the figure is drawn at about half size there), so lines are spaced for that; the
     notes beside the titles (class sp-fnote) are left out there."""
@@ -174,10 +174,11 @@ def summary(head, groups, title, desc="", synthetic=False, width=580):
         out.append(_text(0, y, g["title"], font_size=13, font_weight=600, **ph)
                    + _text(width, y, g["note"], "end", font_size=12, fill=palette.GREY[700], **{"class": "sp-fnote"}))
         x, y = 0.0, y + 8
+        edge = f' stroke="{palette.GREY[900]}" stroke-width="0.75"' if g.get("outline") else None  # boxes with a dark rim
         for name, n, fill, href in g["parts"]:
             w = width * n / total
             out.append(_rect(x, y, w, 26, fill, f"{g['title']}: {name}, {n:,} SNP{'' if n == 1 else 's'} ({share_label(n, total)})",
-                             href, f' stroke="{palette.edge(fill) or palette.WHITE}"'))
+                             href, edge or f' stroke="{palette.edge(fill) or palette.WHITE}"'))
             if w > 11.5 * len(f"{n:,}") + 8:  # room for the number at a phone's size too
                 out.append(_text(x + w / 2, y + 17.5, f"{n:,}", "middle", fill=palette.text_on(fill), font_weight=600,
                                  pointer_events="none", **ph))
@@ -192,7 +193,8 @@ def summary(head, groups, title, desc="", synthetic=False, width=580):
             y += 9
         for i, (name, n, fill, href) in enumerate(g["parts"]):
             lx, ly = (i % 2) * width / 2, y + 12 + (i // 2) * line
-            out.append(_a(href, f'<rect x="{lx:.0f}" y="{ly}" width="12" height="12" fill="{fill}" stroke="{palette.GREY[500]}"/>'
+            out.append(_a(href, f'<rect x="{lx:.0f}" y="{ly}" width="12" height="12" fill="{fill}" '
+                                f'stroke="{palette.GREY[900 if g.get("outline") else 500]}"/>'
                                 + _text(lx + 18, ly + 10.5, f"{name}: {n:,} ({share_label(n, total)})", font_size=12, **ph)))
         y += 12 + (len(g["parts"]) + 1) // 2 * line + 26
     return svg(width, y - 22, title, desc, "".join(out), synthetic)
@@ -252,11 +254,11 @@ def ideogram(chroms, bins, chrom_tiers, title, desc="", synthetic=False, link=No
                                f"{chrom}:{mb}-{mb + 1} Mb: {n:,} {chip_label} markers"))
     y = top + len(chroms) * row + 8
     steps = sorted({1, most_bin} | ({round(math.sqrt(most_bin))} if most_bin > 3 else set()))
-    ph = {"class": "sp-ph"}  # a legend line each, spaced for a phone's enlarged text
+    ph = {"class": "sp-ph"}  # one legend line across the figure (G, 2026-11-27): the grey, then the blue scale
+    other = f"SNPs, none scoring {cuts()[1]}+"
     legend = [f'<rect x="{left}" y="{y}" width="12" height="12" fill="{IDEOGRAM_OTHER}" stroke="{palette.GREY[500]}"/>'
-              + _text(left + 18, y + 10.5, f"SNPs, none scoring {cuts()[1]}+", font_size=12, **ph)]
-    y += 22
-    x = left
+              + _text(left + 18, y + 10.5, other, font_size=12, **ph)]
+    x = left + 18 + 6.6 * len(other) + 28
     for s in steps:  # the scale, then what it counts
         legend.append(f'<rect x="{x}" y="{y}" width="12" height="12" fill="{shade(s)}"/>' + _text(x + 18, y + 10.5, f"{s:,}", font_size=12, **ph))
         x += 34 + 12 * len(f"{s:,}")

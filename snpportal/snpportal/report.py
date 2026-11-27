@@ -1,4 +1,4 @@
-"""Printable report of a finished job (P3.5), two A4 pages: the caveat line, the Overview's key numbers, the top 20
+"""Printable report of a finished job (P3.5), one A4 page: the caveat line, the Overview's key numbers, the top 8
 SNPs (ordered as the Overview's top list, with the table filters in the URL, if any), the panel of ?panel=<hash>, two
 figures, a short methods summary with references, and a 3-line provenance block. portal.css /* report */ lays it out;
 the browser's 'Save as PDF' makes the PDF. The numbers come from results.overview and results.top, so they match the
@@ -15,7 +15,7 @@ from django.utils.safestring import mark_safe
 from . import association, jobs, results, tools
 from .views import finished, private
 
-TOP = 20
+TOP = 8  # one A4 page (G, 2026-11-27: "Try to get it to one page")
 FIGURES = ("summary", "ideogram")  # the report's two figures, when their data exist: the summary first, at the top
 
 
@@ -96,6 +96,7 @@ def report(request, key):
         "actions": [{"label": "Back to the results", "url": f"{base}?{urlencode({'trait': trait, **filters})}"}],
         "warnings": ov["warnings"], "summary": ov["figs"].get(FIGURES[0]), "figs": [ov["figs"][n] for n in FIGURES[1:] if n in ov["figs"]], "panel": panel(request, key, d),
         "top": best, "filters": shown, "synthetic": synthetic,
+        "known_shown": "known_locus" in best.get("columns", ()) and any(r.get("known") for r in best.get("rows", ())),  # else no column
         "table_url": f"{base}?{urlencode({'tab': 'table', 'trait': trait, **filters})}",
         "methods_url": request.build_absolute_uri(reverse("snpportal:methods")), "refs": references(refs),
         "sv": job.get("input_kind") == "sv",

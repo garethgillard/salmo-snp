@@ -15,7 +15,7 @@ from django.urls import reverse
 import snpdata
 import snpscore
 
-from . import explore, jobs
+from . import explore, jobs, report as report_page
 
 SNPSCORE = Path(__file__).resolve().parents[2] / "snpscore"
 DATA = SNPSCORE.parent / "snpdata"  # layers.yaml, the fixture, prep/, the catalogue, data/ and release/
@@ -108,7 +108,7 @@ class TourTest(SimpleTestCase):
         results, report = reverse("snpportal:results", args=[key]), reverse("snpportal:report", args=[key])
         self.client.get(results, {"tab": "table", "trait": "maturation"})  # the Table keeps its selection
         overview = self.client.get(results)
-        self.assertContains(overview, report)  # the results header links the report
+        self.assertContains(self.client.get(results, {"tab": "export"}), report)  # the Export tab prints it (G, 2026-11-27)
         page = self.client.get(report, {"trait": "maturation"})
         self.assertEqual(page.status_code, 200)
         self.assertEqual(page["Cache-Control"], "no-store, private")
@@ -121,8 +121,8 @@ class TourTest(SimpleTestCase):
             ET.fromstring(svg)
         table = self.client.get(results, {"trait": "maturation", "tab": "table"}).content.decode()
         drawers = list(dict.fromkeys(re.findall(r"snp=(\d+)", table)))  # the table's rows, in order
-        self.assertEqual(card_rows(html, key), drawers[:20])
-        self.assertEqual(len(card_rows(html, key)), min(20, len(drawers)))
+        self.assertEqual(card_rows(html, key), drawers[:report_page.TOP])  # the top SNPs, as the Table orders them (one page: 8)
+        self.assertEqual(len(card_rows(html, key)), min(report_page.TOP, len(drawers)))
         self.assertEqual(card_rows(overview.content.decode(), key), [])  # the Overview lists no SNPs: the Table does
         self.assertIn("SNPs were annotated with snpscore", html)
         self.assertIn(jobs.read(key)["manifest_sha256"][:12], html)  # provenance, 12-character hashes
@@ -132,6 +132,6 @@ class TourTest(SimpleTestCase):
 
         filtered = self.client.get(report, {"trait": "maturation", "known": "1"}).content.decode()  # filters as the table
         known = self.client.get(results, {"trait": "maturation", "tab": "table", "known": "1"}).content.decode()
-        self.assertEqual(card_rows(filtered, key), list(dict.fromkeys(re.findall(r"snp=(\d+)", known)))[:20])
+        self.assertEqual(card_rows(filtered, key), list(dict.fromkeys(re.findall(r"snp=(\d+)", known)))[:report_page.TOP])
         self.assertIn("known=1", filtered)
         self.assertEqual(self.client.get(reverse("snpportal:report", args=["00000000-0000-0000-0000-000000000000"])).status_code, 404)

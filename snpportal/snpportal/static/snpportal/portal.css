@@ -95,6 +95,13 @@
 .sp-page-header { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin-bottom: 1.25rem; }
 .sp-page-header > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .9rem; }
 .sp-page-header h1 { margin: 0; }
+/* a finished result's header (G, 2026-11-27): the name, a size smaller, its edit icon, then the tabs in the same row */
+.sp-res-head { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem 1.5rem; margin-bottom: 1rem; }
+.sp .sp-res-head .nav-tabs { margin-bottom: 0; }
+.sp .sp-res-title { display: inline; margin: 0; font-size: var(--sp-fs-xl); }
+.sp-res-n { margin-left: .35rem; color: var(--sp-muted); font-size: var(--sp-fs-sm); font-weight: 400; }
+.sp-res-rename { display: inline-flex; margin: 0 0 0 -1.2rem; }  /* the edit icon close to the name */
+.sp-res-meta { margin-left: auto; }
 .sp-meta { margin: 0; color: var(--sp-muted); font-size: var(--sp-fs-sm); }
 .sp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-left: auto; }
 .sp-actions form { margin: 0; }
@@ -200,7 +207,8 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp .nav-tabs .nav-link { margin-bottom: -1px; padding: .5rem 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
   background: none; color: var(--sp-ink-2); font-weight: 500; text-decoration: none; }
 .sp .nav-tabs .nav-link:hover { border-bottom-color: var(--sp-line-2); color: var(--sp-ink); }
-.sp .nav-tabs .nav-link.active { border-bottom-color: var(--sp-accent); background: none; color: var(--sp-ink); }  /* same weight: no shift */
+.sp .nav-tabs .nav-link.active { border-bottom-color: var(--sp-ink); background: none; color: var(--sp-ink); }  /* same weight: no shift */
+.sp .sp-inputs .nav-tabs .nav-link.active { border-bottom-color: var(--sp-accent); }  /* the Score page's inputs: blue (G) */
 /* keyboard focus: a 2px accent ring, 3:1 or more against white and the greys */
 .sp a:focus-visible, .sp button:focus-visible, .sp input:focus-visible, .sp select:focus-visible,
 .sp textarea:focus-visible, .sp summary:focus-visible, .sp [tabindex]:focus-visible {
@@ -423,6 +431,7 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-dd-row { display: flex; align-items: center; gap: .5rem; }
 .sp-dd-foot { padding-top: .35rem; border-top: 1px solid var(--sp-line); }
 .sp-dd-head { display: flex; justify-content: space-between; gap: 1rem; padding-bottom: .3rem; border-bottom: 1px solid var(--sp-line); font-weight: 600; }
+.sp-dd-weights .sp-dd-head { padding-bottom: 0; border-bottom: 0; }  /* the Weights panel: no line under its title (G) */
 .sp-dd-panel { position: absolute; z-index: 7; display: grid; gap: .35rem; min-width: 14rem; margin-top: .25rem; padding: .6rem .75rem;
   border: 1px solid var(--sp-line-2); border-radius: .375rem; background: var(--sp-white); box-shadow: 0 4px 14px var(--sp-line); }
 .sp-dd-right { right: 0; }
@@ -454,9 +463,19 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-tablebar { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-bottom: .45rem; }
 .sp-tablebar-end { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; margin-left: auto; }
 .sp .sp-clear { color: var(--sp-ink-2); }
-.sp-tkey { display: flex; flex-wrap: wrap; gap: .25rem 1.75rem; margin: 0 0 .5rem; color: var(--sp-ink-2); font-size: var(--sp-fs-xs); }
-.sp-tkey b { margin-right: .2rem; color: var(--sp-ink); font-weight: 600; }
-.sp-tkey-sw { display: inline-flex; align-items: center; gap: .3rem; margin-left: .55rem; white-space: nowrap; }
+/* an (i) in a column title that shows a small key while hovered or focused (G, 2026-11-27: Chromatin's colours, ~NAME) */
+.sp-tip { position: relative; display: inline-flex; color: var(--sp-muted); cursor: help; }
+.sp-tip:hover, .sp-tip:focus { color: var(--sp-ink); outline: none; }
+.sp-tip-box { position: absolute; top: calc(100% + .35rem); left: -.5rem; z-index: 20; display: none; flex-wrap: wrap; gap: .3rem .9rem;
+  width: max-content; max-width: 22rem; padding: .55rem .7rem; border: 1px solid var(--sp-line-2); border-radius: .375rem;
+  background: var(--sp-white); box-shadow: 0 6px 20px var(--sp-grey-300); color: var(--sp-ink-2); font-size: var(--sp-fs-xs);
+  font-weight: 400; white-space: normal; text-align: left; }
+.sp-tip:hover .sp-tip-box, .sp-tip:focus .sp-tip-box, .sp-tip:focus-within .sp-tip-box { display: flex; }
+.sp-tip-box b { color: var(--sp-ink); font-weight: 600; }
+.sp-tkey-sw { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
+/* the Table's score-band chips: each switches its SNPs on or off; off ones greyed */
+.sp .sp-band { text-decoration: none; }
+.sp .sp-band-off { background: var(--sp-grey-100); border-color: var(--sp-line-2); color: var(--sp-muted); }
 .sp-pager { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .6rem; }
 .sp-results thead { position: sticky; top: 0; z-index: 2; }
 .sp-results thead th { position: static; }
@@ -615,9 +634,13 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-export-scope fieldset { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1.25rem; margin: 0; }
 .sp-export h3 { margin: 0 0 .6rem; font-size: var(--sp-fs-md); font-weight: 600; }
 /* the Design panel's two ways in, side by side: a button, then a line on what it does (G, 2026-11-27) */
-.sp-topanel { margin-bottom: 1.75rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--sp-line); }
-.sp-ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: .75rem 2rem; max-width: 52rem; }
-.sp-ways p { margin: .35rem 0 0; color: var(--sp-ink-2); }
+/* the Export tab's parts (G, 2026-11-27): report, Design panel and picker side by side, each a title, a line and its
+   button at the bottom; then, under a hairline, Download */
+.sp-ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.25rem 2.5rem; margin-bottom: 1.75rem; }
+.sp-way { display: flex; flex-direction: column; align-items: flex-start; margin: 0; }
+.sp-way p { flex: 1 0 auto; margin: 0 0 .75rem; color: var(--sp-ink-2); }
+.sp-way .btn { display: inline-flex; align-items: center; gap: .4rem; }
+.sp .sp-export-dl { padding-top: 1.25rem; border-top: 1px solid var(--sp-line); }
 @media print {
   .sp-bc i, .sp-as, .sp-box { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .sp-results thead { position: static; }
@@ -711,14 +734,18 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
   html:has(.sp-report) { font-size: 8.5pt; }  /* every rem in the report scales with it */
   .sp:has(.sp-report) .sp-main { padding: 0; }
   .sp:has(.sp-report) .sp-crumbs { display: none; }
-  .sp-report > * + * { margin-top: .7rem; }
-  .sp-report .sp-rsec { padding-top: .45rem; border-color: var(--sp-grey-500); break-inside: auto; }
+  .sp-report > * + * { margin-top: .5rem; }
+  .sp-report .sp-rsec { padding-top: .35rem; border-color: var(--sp-grey-500); break-inside: auto; }
   .sp-report h2, .sp-report h3, .sp-rsec-h { break-after: avoid; }
   .sp-report .sp-rfig, .sp-report tr, .sp-report .sp-kpis { break-inside: avoid; }
   .sp-report thead { display: table-header-group; }  /* a table that runs on repeats its head */
-  .sp-report .sp-rfig > svg { max-width: 58%; }  /* figures shrink with the text (8.5pt root), leaving page 2 room */
-  .sp-report #fig-ideogram > svg { max-width: 48%; }  /* the genome map: mostly white */
-  .sp-report-refs { columns: 2; column-gap: 1.5rem; font-size: 6.5pt; }
+  .sp-report-figs { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.5rem; align-items: start; }  /* one page */
+  .sp-report-figs > .sp-rfig { margin: 0; }
+  .sp-report .sp-rfig > svg { width: 100%; max-width: 100%; height: auto; max-height: 56mm; }
+  .sp-report-refs { padding: 0; font-size: 6pt; line-height: 1.35; }  /* one run-on paragraph, the references apart by dots */
+  .sp-report-refs li { display: inline; margin: 0; }
+  .sp-report-refs li + li::before { content: " · "; color: var(--sp-muted); }
+  .sp-report table { font-size: 7.5pt; }
   .sp-report .sp-status { margin: 0; padding: .3rem .6rem; }
   .sp-report .sp-info { display: none; }
   .sp-report a[href^="http"]::after { content: none; }  /* the methods link prints its URL as its text */

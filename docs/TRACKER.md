@@ -165,6 +165,17 @@ time, to stay inside the usage allowance). The research is done: [SCORING.md](SC
         onnxruntime) and checked live: Where things stand
   - [ ] Later (G, 2026-11-25): the gill score of every public and Synchrosmolt site (9,288,186; about 35
         GPU-hours); other tissues' models as they are released
+- [ ] S3g Gene regions from NCBI RefSeq as well as Ensembl (G, 2026-11-27: "For the gene region, this should be based
+      on the NCBI annotation (or a combination, check and fix)"; then "Leave the switch to NCBI as a task for the main
+      chat later"). Today the `region` layer (the Overview's Gene region bars, the Table's column, and the coding,
+      splice and UTR terms of the score) is built from Ensembl 116 alone; the Locus browser already shows RefSeq first.
+      Checked on release 2026-11-25's public pool (3,436,671 sites): CDS 73,579 by Ensembl, 64,906 by NCBI, 84,923 by
+      either; 11,345 CDS by NCBI only (4,056 of them intergenic and 3,823 intronic by Ensembl) and 20,017 by Ensembl
+      only; intergenic 1,258,631 by Ensembl, 1,531,354 by NCBI, 1,112,339 by both. So NCBI alone would lose Ensembl's
+      CDS; the likely fix is `region` from both annotations, each SNP the most severe class of either (snpdata
+      read_gff3_regions over two sources), in the next release built on Orion. It changes scores (more CDS, UTR and
+      splice SNPs), so it needs G's OK (a biology file) and the pool rebuilt; the page notes then say "Ensembl 116 and
+      NCBI RefSeq"
 - [ ] S3e Still to ask or get: allelic imbalance in the 12 fish from the Orion repository (the truth set the summit
       rule and the ChromBPNet scores need); the large gill eQTL set, if its authors share it
 - [ ] S4 G's decisions on the order of the evidence (DECISIONS #1, #2, #4, #5, #49, #50, #52, #54, #58), then weights.yaml and

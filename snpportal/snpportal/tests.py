@@ -143,8 +143,9 @@ class PortalTest(SimpleTestCase):
         self.assertContains(overview, 'id="fig-summary"')
         self.assertEqual(overview["Cache-Control"], "no-store, private")
         self.assertEqual(overview["Referrer-Policy"], "same-origin")
-        self.assertContains(overview, 'hx-select-oob="#sp-actions"')  # Download in the header follows preset switches
-        self.assertContains(overview, 'id="sp-actions"')
+        self.assertContains(overview, 'class="sp-res-head"')  # the name with its edit icon, in one row with the tabs
+        self.assertContains(overview, f'action="{reverse("snpportal:rename", args=[self.key(response)])}" data-rename')
+        self.assertNotContains(overview, ">Print report<")  # the report is printed from Export (G, 2026-11-27)
 
         self.assertContains(self.client.get(url + "?tab=panel"), "Panel designer")
         page = self.client.get(url + "?tab=table&sort=pos&desc=1&page=2")
@@ -152,7 +153,7 @@ class PortalTest(SimpleTestCase):
         for html in (overview, page):  # htmx would swap nothing into #results for a boosted file or other-page link
             self.assertEqual(boosted_links(html.content.decode()), {"?"})
         self.assertEqual(self.client.get(url + "?tab=table&page=²").status_code, 200)
-        self.assertContains(page, "SNPs scoring 5+ in this table")  # score bands, no tier numbers (G, 2026-11-27)
+        self.assertContains(page, "SNPs score 5+: click to hide them")  # score bands, no tier numbers, each a switch (G, 2026-11-27)
         filtered = self.client.get(url + "?tab=table&trait=maturation&max_tier=2&hide_lore=1")
         self.assertContains(filtered, "shown")
         form = filtered.content.decode().split('id="tf"')[1].split("</form>")[0]
@@ -249,7 +250,7 @@ class PortalTest(SimpleTestCase):
         job = jobs.read(self.key(chip))
         self.assertEqual((job["state"], job["label"], job["synthetic_input"]), ("done", "Example: SNP chip (synthetic)", True))
         page = self.client.get(chip.url).content.decode()  # synthetic: said once, in the title
-        self.assertIn("(synthetic)", page[page.index("<h1>"):page.index("</h1>")])
+        self.assertIn("(synthetic)", page[page.index('<h1 class="sp-res-title">'):page.index("</h1>")])
         self.assertNotIn("SYNTHETIC data", page)  # no badge (figures keep it in their <desc>, for downloads)
         response = self.client.post(reverse("snpportal:upload"), {"example": "known_loci"})
         self.assertEqual(response.status_code, 302)
