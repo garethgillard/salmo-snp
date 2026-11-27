@@ -87,21 +87,23 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   mono only for sequences and code.
 - Icons: one line set (salmo-cells' shapes), `{% icon 'name' %}` (snpportal_tags.ICONS). Icons name places and label
   icon-only controls; actions are words. ★ is the one known-locus mark.
-- The top bar (G, 2026-11-27): the push-pin mark (a pin in a track, an ATAC peak behind it), icon and label links, then
+- The top bar (G, 2026-11-27): the push-pin mark (a blue pin in a track, a warm grey ATAC peak behind it), icon and label links, then
   the species switch and the search box at the far right; no line under it. The footer: release, tour, Methods, How
   scores are made, citation, privacy, Run locally; at the right "© 2026 NMBU · Gareth Gillard". One fold pattern
   (`.sp-more`, `.sp-cs`: a title row, a chevron at the right); one tab style: no line under the row, the open tab
-  underlined in ink (the Score page's input tabs in the accent).
+  underlined in ink. Little space between the top bar and a page's title.
 - A result (G, 2026-11-27): its name, a size smaller, with an edit icon (renames it), in one row with the tabs; no
-  buttons beside them (the report is printed from Export, results are deleted from the Score page's list). Overview:
-  one key number (SNPs scored), the bars, the assay check's boxes with a dark rim, the genome map's legend on one line.
-  Table: a chip per score band that switches its SNPs on or off (all on at first); the Chromatin colours and ~NAME
+  buttons beside them (the report is printed from Export, results are deleted from the Score page's list); a tab
+  never scrolls the page down. Overview: no key number, the bars from the top, the assay check's boxes with a dark rim,
+  the genome map's legend on one line. Table: a chip per score band that switches its SNPs on or off (all on at first;
+  a hovered chip greys), the Score column narrow with the number centred; the Chromatin colours and ~NAME
   behind (i) icons in their column titles. Export in four labelled parts: Print a report, Add to your Design panel,
   Pick markers automatically, then Download. The printed report fits one A4 page (the top 8 SNPs).
-- The Score page (G, 2026-11-27): the title, then one row of short example buttons (counts as 53k) and the tour link;
-  the tabs SNPs, Structural variants, GWAS results, Genes or regions; each tab ends with Evidence weights (a fold, its
-  chevron beside the title, 'custom' when they are not the defaults), a Name box (the date, or the chosen file's name;
-  editable) and the Score button at the right (pixels drift in on hover). The weights and bands a browser scored with
+- The Score page (G, 2026-11-27): the title, then one row of short example buttons (counts as 53k) and the tour link
+  under them; the inputs in a narrower column, room before 'Your results'; the tabs SNPs, Structural variants, GWAS
+  results, Genes or regions; each tab ends with one row, a Name box (the date, or the chosen file's name; editable) and
+  the Score button at the right (on hover, square pixels leave its middle in waves), then Evidence weights (a fold, its
+  chevron beside the title, 'custom' when they are not the defaults). The weights and bands a browser scored with
   last are remembered (`snp_weights` cookie, views.remembered). Pasted positions convert from another assembly like a
   file's (Positions on, above the weights). Results are renamed from the Score page's list or the results page.
 - Words: one name per thing (Tier, SNP, position, Known locus, Design panel only for the panel page, condition, window

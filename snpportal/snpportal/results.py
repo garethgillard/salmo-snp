@@ -154,7 +154,7 @@ COLUMNS = {
               ("blacklist", "lore", "strand_ambiguous", "flank_variants"), []),
     "ref_check": ("Ref. check", "Input ref allele against the Ssal_v3.1 genome", ("ref_check",), [("ref_check", True)]),
 }  # in display order: the score, the SNP, where it is, what it is, then genotyping
-NUMERIC = ("score", "size", "p", "beta", "pip", "gerp", "maf", "cm")  # right-aligned, header and cells
+NUMERIC = ("size", "p", "beta", "pip", "gerp", "maf", "cm")  # right-aligned, header and cells (the score: centred, narrow)
 DEFAULT_COLUMNS = ("score", "id", "size", "gene", "region", "chromatin", "known", "maf", "assay", "flags")
 FILTER_COLUMNS = {"tier": "tier", "max_tier": "tier", "term": "score", "min_score": "score", "chrom": "id", "region": "region", "gene": "gene",
                   "tissue": "chromatin", "maturity": "chromatin", "sex": "chromatin", "act": "chromatin", "known": "known",
@@ -750,7 +750,7 @@ def table(request, key, job=None):
         href = link(sort=k, desc="1" if on and not desc else "", page=None) if sorts else None
         way = ("ascending" if sorts[0][1] != desc else "descending") if on and sorts else ""  # the arrow says the real order
         headers.append((k, label, tip, href, way, on_column.get(k),
-                        "sp-num" if k in NUMERIC else "sp-ctr" if k == "tier" else ""))
+                        "sp-num" if k in NUMERIC else "sp-ctr" if k in ("tier", "score") else ""))
     on = set(ticked["tier"]) or {str(x) for x, _ in tier_counts}  # G, 2026-11-27: each band a chip, on or off; all on at first
     band_chips = []
     for x, k in tier_counts:
@@ -1157,8 +1157,7 @@ def _fig_summary(c, link, desc):
         return None
     n, href = s.get("n_rows") or sum(tiers.values()), link or (lambda **_: None)
     public = _shares((bg.get("tiers") or {}).get(trait))
-    chroms = len([k for k, v in (s.get("chrom_tiers", {}).get(trait) or {}).items() if sum(v.values())])
-    head = [(f"{n:,}", "SNPs scored", f"on {chroms} chromosome{'' if chroms == 1 else 's'}" if chroms else "", None)]  # the bands below say the rest
+    head = []  # G, 2026-11-27: no key number above the bars (the title says how many SNPs)
     if c.get("loci"):
         head.append((f"{c['loci'][0]:,}", "loci", "on the Association tab", c["loci"][1]))
     names = {t: f"Score {b}" for t, b in figures.bands().items()}

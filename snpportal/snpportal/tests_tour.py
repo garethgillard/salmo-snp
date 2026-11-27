@@ -23,8 +23,8 @@ FIXTURE = DATA / "tests" / "fixture"
 TOUR_DIR = Path(__file__).resolve().parent / "static" / "snpportal" / "tour"
 
 
-def headline(html):  # the summary figure's key numbers
-    return re.findall(r'font-size="28" font-weight="600">([^<]*)</text>', html)
+def headline(html):  # the summary figure's score bands and their counts, as its legend prints them
+    return re.findall(r'>(Score [^<:]+: [\d,]+) \(', html)
 
 
 def card_rows(html, key):

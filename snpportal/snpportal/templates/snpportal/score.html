@@ -1,8 +1,8 @@
 {% extends 'snpportal/base_portal.html' %}
 {% load snpportal_tags %}
-{% comment %}The Score page, also the portal's home (/snp/): the title, then the release's examples (views.TRY) and the
-   tour link in one row; the inputs, one tab each (SNPs as a file or pasted lines, structural variants, GWAS results,
-   genes or regions), each ending with the evidence weights, the results' name and the Score button at the right;
+{% comment %}The Score page, also the portal's home (/snp/): the title, then the release's examples (views.TRY) and under
+   them the tour link; the inputs, one tab each (SNPs as a file or pasted lines, structural variants, GWAS results,
+   genes or regions), each ending with the results' name and the Score button at its right, then the evidence weights;
    beside them this browser's results (views.mine, each renamed or deleted here) and where results are kept (G's
    design notes, 2026-11-27).{% endcomment %}
 {% block main %}
@@ -11,10 +11,10 @@
     {% if ex.gwas %}<input type="hidden" name="trait" value="all">{% endif %}{% if ex.sv %}<input type="hidden" name="kind" value="sv">{% endif %}
     <button class="btn btn-sm btn-outline-secondary" type="submit" name="example" value="{{ ex.name }}" title="{{ ex.title }}: {{ ex.what }}">{{ ex.chip }}{% if ex.detail %} <span>{{ ex.detail }}</span>{% endif %}</button>
   </form>{% endfor %}{% endif %}
-  <span class="sp-home-tour">New here? <a href="{% url 'snpportal:tour' %}">Take the guided tour</a></span>
 </div>
+<p class="sp-home-tour">New here? <a href="{% url 'snpportal:tour' %}">Take the guided tour</a></p>
 <div class="row gy-4 align-items-start sp-home-row">
-<div class="col-lg-7">
+<div class="col-lg-6">
 {% if error %}<div class="sp-status sp-status-fail" role="alert"><strong>{% icon 'fail' %} {% if tab == 'gwas' %}Can't analyse these summary statistics.{% else %}Can't score this list.{% endif %}</strong> {{ error }}</div>{% endif %}
 
 {# one tab per input (?input= without JavaScript); each form posts to its own view, whose errors re-show its tab #}
@@ -39,8 +39,8 @@
       <p class="sp-hint" id="paste-help">Chromosome and position (optionally ref and alt), or an rs ID; up to {{ paste_lines|thousands }} lines &middot; <a href="{% url 'snpportal:help' %}#format-plain">Format help</a></p>
       {% if positions|length > 1 %}<p class="sp-hint sp-positions"><label for="positions">Positions on</label>
         <select class="form-select form-select-sm w-auto" id="positions" name="positions">{% for value, label in positions %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></p>{% endif %}
-      {% include 'snpportal/_weights_fold.html' with prefix='file' %}
       {% include 'snpportal/_score_button.html' with prefix='file' %}
+      {% include 'snpportal/_weights_fold.html' with prefix='file' %}
     </form>
     <form class="tab-pane{% if tab == 'sv' %} active{% endif %}" id="pane-sv" role="tabpanel" aria-labelledby="tab-sv" method="post" action="{% url 'snpportal:upload' %}" enctype="multipart/form-data">
       {% csrf_token %}<input type="hidden" name="kind" value="sv">
@@ -56,8 +56,8 @@
                 placeholder="25:28,996,001-28,997,000 DEL&#10;9 23837001 23839000 DUP my_dup"></textarea>
       <p class="sp-hint" id="sv-paste-help">chrom:start-end or chrom, start and end, then optionally a type and a name; up to
         {{ sv_lines|thousands }} lines</p>
-      {% include 'snpportal/_weights_fold.html' with prefix='sv' %}
       {% include 'snpportal/_score_button.html' with prefix='sv' %}
+      {% include 'snpportal/_weights_fold.html' with prefix='sv' %}
     </form>
     <form class="tab-pane{% if tab == 'gwas' %} active{% endif %}" id="pane-gwas" role="tabpanel" aria-labelledby="tab-gwas" method="post" action="{% url 'snpportal:gwas_score' %}" enctype="multipart/form-data">
       {% csrf_token %}
@@ -68,8 +68,8 @@
                  accept=".gz,.tsv,.txt,.csv,.tab,.fastGWA,.linear,.logistic,.hybrid,.regenie,.stats,.mlma,.assoc"></div>
       </div>
       <p class="sp-hint" id="gwas-help">fastGWA, PLINK2, regenie, BOLT-LMM or GEMMA output, or chrom, pos and p; up to {{ max_mb }} MB &middot; <a href="{% url 'snpportal:help' %}#format-gwas">Format help</a></p>
-      {% include 'snpportal/_weights_fold.html' with prefix='gwas' %}
       {% include 'snpportal/_score_button.html' with prefix='gwas' %}
+      {% include 'snpportal/_weights_fold.html' with prefix='gwas' %}
     </form>
     <form class="tab-pane{% if tab == 'regions' %} active{% endif %}" id="pane-regions" role="tabpanel" aria-labelledby="tab-regions" method="post" action="{% url 'snpportal:candidates' %}">
       {% csrf_token %}
@@ -81,15 +81,15 @@
         <select class="form-select form-select-sm w-auto" id="window" name="flank">
           {% for f in flanks %}<option value="{{ f }}"{% if f == flank %} selected{% endif %}>&plusmn; {{ f|thousands }} bp</option>{% endfor %}
         </select> <span>around each gene or position</span></p>
-      {% include 'snpportal/_weights_fold.html' with prefix='regions' %}
       {% include 'snpportal/_score_button.html' with prefix='regions' %}
+      {% include 'snpportal/_weights_fold.html' with prefix='regions' %}
     </form>
   </div>
 </section>
 </div>
 
 {# this browser's results (the cookie lists them), each opened, renamed or deleted here, and where they are kept #}
-<section class="col-lg-5 sp-mine-box" aria-labelledby="mine-h">
+<section class="col-lg-5 offset-lg-1 sp-mine-box" aria-labelledby="mine-h">
   <h2 id="mine-h">Your results</h2>
   {% if mine %}<ul class="sp-mine">{% for r in mine %}<li{% if r.current %} class="sp-mine-current"{% endif %}>
     <a class="sp-mine-name" href="{{ r.url }}">{{ r.name }}</a>

@@ -144,8 +144,7 @@ class ResultsTest(SimpleTestCase):
         self.assertTrue(all(f'id="fig-{name}"' in more for name in ("conditions", "regions", "terms", "maf")))
         self.assertNotIn('id="top-h"', page)  # an overview of the whole list: the SNPs themselves are on the Table tab
         summary = page[page.index('id="fig-summary"'):page.index('id="fig-ideogram"')]  # key numbers and how the SNPs split
-        self.assertIn(f'font-size="28" font-weight="600">{self.summary["n_rows"]:,}</text><text x="0.0" y="50.0" text-anchor="start" '
-                      'font-size="13" class="sp-ph">SNPs scored', summary)
+        self.assertNotIn('font-size="28"', summary)  # no key number: the bars from the top (G, 2026-11-27)
         rows = re.findall(r'font-size="13" font-weight="600" class="sp-ph">([^<]*)</text>', summary)
         self.assertEqual(rows, ["Score", "Gene region", "Near a known locus"] + ["Assay check"] * ("assay_status" in self.columns))
         self.assertNotIn("for all conditions", summary)  # tiers always count them all: no qualifier

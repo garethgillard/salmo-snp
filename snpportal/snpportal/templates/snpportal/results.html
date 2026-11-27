@@ -28,7 +28,7 @@
       <form class="sp-res-rename" method="post" action="{% url 'snpportal:rename' key %}" data-rename hx-boost="false">{% csrf_token %}
         <input type="hidden" name="label" value="{{ job.label|default:'Results' }}">
         <button class="sp-iconbtn" type="submit" title="Rename these results" aria-label="Rename these results">{% icon 'edit' %}</button></form>
-    <ul class="nav nav-tabs" hx-boost="true">
+    <ul class="nav nav-tabs" hx-boost="true" hx-swap="outerHTML show:window:top">{# a tab never scrolls the page down #}
       {% if gwas %}<li class="nav-item"><a class="nav-link" hx-boost="false" href="{% url 'snpportal:association' key %}?{{ query }}">Association</a></li>{% endif %}
       <li class="nav-item"><a class="nav-link{% if tab == 'overview' %} active{% endif %}"{% if tab == 'overview' %} aria-current="page"{% endif %} href="?{{ query }}&amp;tab=overview">Overview</a></li>
       <li class="nav-item"><a class="nav-link{% if tab == 'table' %} active{% endif %}"{% if tab == 'table' %} aria-current="page"{% endif %} href="?{{ table_query }}&amp;tab=table">Table</a></li>

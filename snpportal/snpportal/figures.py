@@ -168,7 +168,7 @@ def summary(head, groups, title, desc="", synthetic=False, width=580):
         for k, text in enumerate((note or "").split("\n") if note else ()):
             out.append(_text(x, 50 + line * (k + 1), text, font_size=12, fill=palette.GREY[700], **ph))
             bottom = max(bottom, k + 1)
-    y = 50 + line * bottom + 34
+    y = 50 + line * bottom + 34 if head else 16  # no key numbers: the bars start at the top
     for g in groups:
         total = sum(n for _, n, _, _ in g["parts"]) or 1
         out.append(_text(0, y, g["title"], font_size=13, font_weight=600, **ph)

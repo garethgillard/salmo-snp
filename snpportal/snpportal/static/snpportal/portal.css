@@ -52,6 +52,7 @@
 .sp .sp-brand { display: inline-flex; align-items: center; gap: .45rem; margin-right: .75rem; color: var(--sp-ink);
   font-size: var(--sp-fs-lg); font-weight: 600; text-decoration: none; }
 .sp-brand .sp-i { width: 1.45em; height: 1.45em; color: var(--sp-accent); }
+.sp-brand-peak { fill: var(--sp-grey-200); stroke: var(--sp-grey-300); }  /* the logo's ATAC peak, warm grey behind the pin (G) */
 .sp-links { display: flex; flex-wrap: wrap; list-style: none; margin: 0 auto 0 0; padding: 0; }  /* the species switch, then the search, at the right */
 .sp .sp-links a { display: inline-flex; align-items: center; gap: .4rem; height: var(--sp-nav-h); padding: 0 .6rem;
   border-bottom: 2px solid transparent; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); text-decoration: none; }
@@ -86,7 +87,7 @@
 .sp-foot-by { margin-left: auto; color: var(--sp-muted); }  /* © year, NMBU, the maintainer */
 
 /* == foundation: page header == */
-.sp-main { flex: 1 0 auto; padding: 1.5rem 0 1rem; }
+.sp-main { flex: 1 0 auto; padding: .75rem 0 1rem; }  /* close under the top bar (G) */
 .sp-crumbs { display: flex; flex-wrap: wrap; gap: .35rem; list-style: none; padding: 0; margin: 0 0 .35rem;
   font-size: var(--sp-fs-sm); color: var(--sp-muted); }
 .sp-crumbs li + li::before { content: "/"; margin-right: .35rem; color: var(--sp-line-2); }
@@ -208,7 +209,6 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
   background: none; color: var(--sp-ink-2); font-weight: 500; text-decoration: none; }
 .sp .nav-tabs .nav-link:hover { border-bottom-color: var(--sp-line-2); color: var(--sp-ink); }
 .sp .nav-tabs .nav-link.active { border-bottom-color: var(--sp-ink); background: none; color: var(--sp-ink); }  /* same weight: no shift */
-.sp .sp-inputs .nav-tabs .nav-link.active { border-bottom-color: var(--sp-accent); }  /* the Score page's inputs: blue (G) */
 /* keyboard focus: a 2px accent ring, 3:1 or more against white and the greys */
 .sp a:focus-visible, .sp button:focus-visible, .sp input:focus-visible, .sp select:focus-visible,
 .sp textarea:focus-visible, .sp summary:focus-visible, .sp [tabindex]:focus-visible {
@@ -329,35 +329,41 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp textarea.sp-paste { resize: vertical; font-family: var(--sp-mono); font-size: var(--sp-fs-sm); }
 .sp-hint { margin: .4rem 0 0; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
 .sp .sp-positions { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem; margin-top: .75rem; }
-.sp-name-row { display: flex; align-items: center; gap: .6rem; margin-top: 1rem; }
-.sp-name-row label { color: var(--sp-ink); font-size: var(--sp-fs-sm); font-weight: 600; }
-.sp-name-row input { max-width: 24rem; }
-.sp-go-row { display: flex; justify-content: flex-end; margin-top: .75rem; }
-/* the Score button: on hover, pixels drift in from both sides in waves (G asked for "something cool but easy"): two dot
-   grids in white, each faded towards the middle, moving inwards and bobbing; still for those who ask for less motion */
-.sp .sp-go { position: relative; padding: .45rem 2.25rem; overflow: hidden; font-weight: 600; isolation: isolate; }
-.sp-go::before, .sp-go::after { content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0; pointer-events: none;
-  background-image: radial-gradient(circle, var(--sp-white) .8px, transparent 1.3px),
-                    radial-gradient(circle, var(--sp-white) .6px, transparent 1.1px);
-  background-size: 7px 7px, 11px 11px; transition: opacity .3s; }
-.sp-go::before { -webkit-mask-image: linear-gradient(to right, var(--sp-ink), transparent 60%);
-  mask-image: linear-gradient(to right, var(--sp-ink), transparent 60%); }
-.sp-go::after { -webkit-mask-image: linear-gradient(to left, var(--sp-ink), transparent 60%);
-  mask-image: linear-gradient(to left, var(--sp-ink), transparent 60%); }
-.sp-go:hover::before, .sp-go:focus-visible::before { opacity: .6; animation: sp-waves-in 1.4s linear infinite; }
-.sp-go:hover::after, .sp-go:focus-visible::after { opacity: .6; animation: sp-waves-in 1.4s linear infinite reverse; }
-@keyframes sp-waves-in {  /* one full turn of each grid (28 = 4 x 7, 44 = 4 x 11 px), so the loop has no seam */
-  0% { background-position: 0 0, 0 4px; } 25% { background-position: 7px 2px, 11px 1px; }
-  50% { background-position: 14px 0, 22px 4px; } 75% { background-position: 21px -2px, 33px 7px; }
-  100% { background-position: 28px 0, 44px 4px; } }
+/* the end of each input: Name, its box, and the Score button at the right, in one row */
+.sp-go-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .6rem; margin-top: 1.25rem; }
+.sp-go-row label { color: var(--sp-ink); font-size: var(--sp-fs-sm); font-weight: 600; }
+.sp-go-row input { flex: 1 1 12rem; max-width: 22rem; }
+/* the Score button: on hover, square pixels leave its middle for both sides in waves (G asked for "something cool but
+   easy"): two grids of white squares, each half moving outwards and fading towards its edge, bobbing as they go;
+   still for those who ask for less motion */
+.sp .sp-go { position: relative; margin-left: auto; padding: .45rem 2.25rem; overflow: hidden; font-weight: 600; isolation: isolate; }
+.sp-go::before, .sp-go::after { content: ""; position: absolute; top: 0; bottom: 0; z-index: -1; width: 50%; opacity: 0;
+  pointer-events: none; transition: opacity .3s;
+  background-image: conic-gradient(at 3px 3px, transparent 75%, var(--sp-white) 0),
+                    conic-gradient(at 2px 2px, transparent 75%, var(--sp-white) 0);
+  background-size: 8px 8px, 12px 12px; }
+.sp-go::before { left: 0; -webkit-mask-image: linear-gradient(to left, var(--sp-ink), transparent);
+  mask-image: linear-gradient(to left, var(--sp-ink), transparent); }
+.sp-go::after { right: 0; -webkit-mask-image: linear-gradient(to right, var(--sp-ink), transparent);
+  mask-image: linear-gradient(to right, var(--sp-ink), transparent); }
+.sp-go:hover::before, .sp-go:focus-visible::before { opacity: .7; animation: sp-waves-left 1.2s linear infinite; }
+.sp-go:hover::after, .sp-go:focus-visible::after { opacity: .7; animation: sp-waves-right 1.2s linear infinite; }
+@keyframes sp-waves-left {  /* one full turn of each grid (32 = 4 x 8, 48 = 4 x 12 px): no seam in the loop */
+  0% { background-position: 0 0, 0 4px; } 25% { background-position: -8px 2px, -12px 1px; }
+  50% { background-position: -16px 0, -24px 4px; } 75% { background-position: -24px -2px, -36px 7px; }
+  100% { background-position: -32px 0, -48px 4px; } }
+@keyframes sp-waves-right {
+  0% { background-position: 0 0, 0 4px; } 25% { background-position: 8px 2px, 12px 1px; }
+  50% { background-position: 16px 0, 24px 4px; } 75% { background-position: 24px -2px, 36px 7px; }
+  100% { background-position: 32px 0, 48px 4px; } }
 @media (prefers-reduced-motion: reduce) { .sp-go::before, .sp-go::after { animation: none !important; } }
 /* under the title: 'Try' an example, and the tour at the row's end; short buttons, so the row stays one line */
-.sp-try { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: -.25rem 0 1.5rem; }
+.sp-try { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: -.25rem 0 .5rem; }
 .sp-try form { margin: 0; }
 .sp-try-h { margin-right: .25rem; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); font-weight: 600; }
 .sp .sp-try .btn { padding: .15rem .7rem; border-radius: 2rem; font-weight: 500; }
 .sp-try .btn span { margin-left: .2rem; color: var(--sp-ink-2); font-weight: 400; }
-.sp-home-tour { margin-left: auto; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
+.sp-home-tour { margin: 0 0 1.5rem; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }  /* under the examples, at the left */
 /* 'Your results': a plain list, the name and Delete on one line, the size and date under them; then where they are kept */
 .sp-mine-box h2 { margin: .35rem 0 .6rem; font-size: var(--sp-fs-lg); }
 .sp-mine-none { margin: 0; padding: .6rem 0; border-top: 1px solid var(--sp-line); color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
@@ -449,7 +455,7 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp .sp-cut { display: inline-flex; align-items: center; margin: 0; font-size: var(--sp-fs-sm); }
 .sp-cut input { width: 3.25rem; text-align: right; }
 .sp-cuts .sp-hint { flex-basis: 100%; margin: 0; }
-.sp-weights-fold { margin-top: .75rem; border-top: 0; }  /* no line above; the chevron beside the title, then 'custom' */
+.sp-weights-fold { margin-top: .5rem; border-top: 0; }  /* no line above; the chevron beside the title, then 'custom' */
 .sp-weights-fold > summary::after { order: 1; margin-left: 0; }
 .sp-weights-fold > summary .sp-fold-what { order: 2; }
 .sp-weights-fold .sp-hint { margin: .25rem 0 .6rem; }
@@ -475,7 +481,8 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp-tkey-sw { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
 /* the Table's score-band chips: each switches its SNPs on or off; off ones greyed */
 .sp .sp-band { text-decoration: none; }
-.sp .sp-band-off { background: var(--sp-grey-100); border-color: var(--sp-line-2); color: var(--sp-muted); }
+.sp .sp-results .sp-col-score { width: 1%; white-space: nowrap; }  /* the Score column: as narrow as its title, the number centred (G) */
+.sp .sp-band-off, .sp a.sp-band:not(.sp-band-off):hover { background: var(--sp-grey-100); border-color: var(--sp-line-2); color: var(--sp-muted); }  /* a hovered chip shows it would go */
 .sp-pager { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .6rem; }
 .sp-results thead { position: sticky; top: 0; z-index: 2; }
 .sp-results thead th { position: static; }

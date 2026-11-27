@@ -139,7 +139,7 @@ class PortalTest(SimpleTestCase):
         self.assertTrue(all(p.stat().st_mode & 0o777 == 0o600 for p in folder.iterdir()))
 
         overview = self.client.get(response.url)
-        self.assertContains(overview, "SNPs scored")
+        self.assertNotContains(overview, 'font-size="28"')  # no key number above the summary's bars (G, 2026-11-27)
         self.assertContains(overview, 'id="fig-summary"')
         self.assertEqual(overview["Cache-Control"], "no-store, private")
         self.assertEqual(overview["Referrer-Policy"], "same-origin")
