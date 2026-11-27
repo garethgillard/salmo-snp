@@ -218,7 +218,7 @@ class LocusTest(SimpleTestCase):
         self.assertIn(">missense</text>", blocks)  # as short as a chip
         self.assertNotIn(">score ", card)  # no score chip, and no consequence chip: the block says it
         self.assertNotIn(">missense · ", card)
-        self.assertIn(">T1<title>tier 1: 5 points or more</title>", blocks)  # the cut-offs the blocks reach
+        self.assertIn(">5+<title>Score 5 or more</title>", blocks)  # the bands' cut-offs the blocks reach
         self.assertEqual(card[:card.index("sp-locus-pane")].count('class="sp-badge sp-tier-'), 1)  # the tier once, beside the heading
         self.assertIn('class="sp-fact" title="Known locus vgll3_Met54Thr', card)  # the key facts
         mini = svg_of(card[card.index('id="cs-locus"'):])  # the mini locus browser, inline (no peak: no tiles under it)

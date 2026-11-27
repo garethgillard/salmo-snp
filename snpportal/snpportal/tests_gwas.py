@@ -189,7 +189,7 @@ class GwasTest(SimpleTestCase):
         significant = sorted(r["chrom"] for r in rows if r["significant"] == "True")
         self.assertEqual(significant, sorted(t["chrom"] for t in self.truth.values()))  # four planted loci, separate
         qq = self.client.get(f"{reverse('snpportal:association_figure', args=[self.key, 'qq'])}?trait=maturation&format=tsv").content.decode()
-        self.assertIn("tier 1", qq)
+        self.assertIn("score 5+", qq)
         bed = self.client.get(f"{reverse('snpportal:association_download', args=[self.key])}?format=bed").content.decode()
         self.assertEqual(len([x for x in bed.splitlines() if not x.startswith("#")]), len(rows))
         fm = self.client.get(f"{reverse('snpportal:association_download', args=[self.key])}?trait=maturation&format=finemap").content.decode()
@@ -210,7 +210,7 @@ class GwasTest(SimpleTestCase):
         self.assertLess(svg.index(causal), svg.index(">Genes</text>"))  # the association lane on top
         self.assertNotIn('fill-opacity="0.85"', svg)  # no ATAC rows: they stay in the locus browser
         self.assertNotIn(">Public variants</text>", svg)
-        self.assertIn("No LD used: colours are tiers, not r²", svg)
+        self.assertIn("No LD used: colours are score bands, not r²", svg)
         credible = html[html.index('id="credible"'):]
         self.assertIn(causal, credible)  # the credible-set SNPs under both priors, linked to their cards
         card = re.search(rf'href="(/snp/results/{self.key}/snp/\d+/\?trait=[^"]*)">{re.escape(causal)}<', credible).group(1)

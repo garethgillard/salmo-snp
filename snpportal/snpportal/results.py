@@ -162,7 +162,7 @@ FILTER_COLUMNS = {"tier": "tier", "max_tier": "tier", "term": "score", "min_scor
 GWAS_COLUMNS = ("score", "id", "p", "beta", "pip", "gene", "region", "chromatin")
 EXPORT_COLUMNS = {  # Table column -> the result columns a TSV of it holds: what the Table shows, not all 95 columns (G,
     # 2026-11-27, from users); {score} is each score layer; chromatin_states puts the 27 conditions' states in one column
-    "tier": ("tier",), "score": ("tier_score", "tier_evidence"), "size": ("end", "length", "svtype", "svlen"),
+    "tier": ("tier",), "score": ("tier", "tier_score", "tier_evidence"),  # the data keep the tier "size": ("end", "length", "svtype", "svlen"),
     "p": ("p", "neglog10p"), "beta": ("beta", "se"), "pip": ("pip_uniform", "pip_functional"),
     "gene": ("gene_name", "gene_id", "gene_distance", "gene_ortholog_human", "genes", "n_genes"),  # genes, n_genes: an SV's
     "region": ("region_class", "coding_consequence", "coding_hgvsp", "region_classes"),
@@ -748,7 +748,8 @@ def table(request, key, job=None):
                    + ". A grey tick: no peak")
         on = k == sort
         href = link(sort=k, desc="1" if on and not desc else "", page=None) if sorts else None
-        headers.append((k, label, tip, href, ("descending" if desc else "ascending") if on else "", on_column.get(k),
+        way = ("ascending" if sorts[0][1] != desc else "descending") if on and sorts else ""  # the arrow says the real order
+        headers.append((k, label, tip, href, way, on_column.get(k),
                         "sp-num" if k in NUMERIC else "sp-ctr" if k == "tier" else ""))
     shown_tiers = tier_counts if not ticked["tier"] else \
         [(x, k) for x, k in tier_counts if str(x) in ticked["tier"]]  # the tiers of the rows the table shows
@@ -1370,7 +1371,7 @@ def export_select(types, keys, scores=()):
         if name not in seen:
             seen.add(name)
             out.append(f"{expr} AS {jobs.ident(name)}" if expr else jobs.ident(name))
-    for name in IDENTITY:
+    for name in IDENTITY + (("end", "length", "svtype") if is_sv(types) else ()):  # an SV: its span as well
         if name in types:
             add(name)
     for key in keys:

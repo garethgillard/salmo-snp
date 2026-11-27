@@ -139,7 +139,7 @@ class ToolsTest(SimpleTestCase):
             self.assertIn("panel_error=full", self.client.post(reverse("snpportal:panel_add", args=[self.key])).url)
         page = self.client.get(reverse("snpportal:design_panel")).content.decode()
         self.assertIn(f"<strong>{n:,}</strong> SNPs in the panel", page)
-        self.assertIn("Tier 1, 2", page)  # the source's selection
+        self.assertIn("Score 5+, 3–4", page)  # the source's selection, by score band
         self.assertNotIn(cookie.value, page)  # the panel is named by its cookie only, never in a page or URL
         self.assertIn("Your panel is empty", Client().get(reverse("snpportal:design_panel")).content.decode())  # another browser
         self.assertEqual(Client().get(reverse("snpportal:panel_download"), {"format": "tsv"}).status_code, 404)

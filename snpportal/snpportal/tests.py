@@ -152,7 +152,7 @@ class PortalTest(SimpleTestCase):
         for html in (overview, page):  # htmx would swap nothing into #results for a boosted file or other-page link
             self.assertEqual(boosted_links(html.content.decode()), {"?"})
         self.assertEqual(self.client.get(url + "?tab=table&page=²").status_code, 200)
-        self.assertContains(page, "Tier 1:")
+        self.assertContains(page, "SNPs scoring 5+ in this table")  # score bands, no tier numbers (G, 2026-11-27)
         filtered = self.client.get(url + "?tab=table&trait=maturation&max_tier=2&hide_lore=1")
         self.assertContains(filtered, "shown")
         form = filtered.content.decode().split('id="tf"')[1].split("</form>")[0]
@@ -206,7 +206,7 @@ class PortalTest(SimpleTestCase):
         root = ET.fromstring(text)
         self.assertEqual(root.get("role"), "img")
         tsv = self.client.get(reverse("snpportal:figure", args=[key, "summary"]) + "?format=tsv&plain=1").content.decode()
-        self.assertEqual(sum(int(line.split("\t")[2]) for line in tsv.splitlines()[1:] if line.startswith("Tier\t")), n)
+        self.assertEqual(sum(int(line.split("\t")[2]) for line in tsv.splitlines()[1:] if line.startswith("Score\t")), n)
 
     def test_switching_preset_never_rescores_and_card_reads_one_row(self):
         url = self.upload().url

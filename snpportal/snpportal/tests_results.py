@@ -140,14 +140,14 @@ class ResultsTest(SimpleTestCase):
         for name in expected:
             self.assertIn(f'id="fig-{name}"', page)
         more = page[page.index('<span class="sp-fold-title">More charts</span>'):]  # analyst charts closed, after the two open ones
-        self.assertIn("Evidence behind the tiers", more[:400])  # the fold names what it holds
+        self.assertIn("Evidence behind the scores", more[:400])  # the fold names what it holds
         self.assertTrue(all(f'id="fig-{name}"' in more for name in ("conditions", "regions", "terms", "maf")))
         self.assertNotIn('id="top-h"', page)  # an overview of the whole list: the SNPs themselves are on the Table tab
         summary = page[page.index('id="fig-summary"'):page.index('id="fig-ideogram"')]  # key numbers and how the SNPs split
         self.assertIn(f'font-size="28" font-weight="600">{self.summary["n_rows"]:,}</text><text x="0.0" y="50.0" text-anchor="start" '
                       'font-size="13" class="sp-ph">SNPs scored', summary)
         rows = re.findall(r'font-size="13" font-weight="600" class="sp-ph">([^<]*)</text>', summary)
-        self.assertEqual(rows, ["Tier", "Gene region", "Near a known locus"] + ["Assay check"] * ("assay_status" in self.columns))
+        self.assertEqual(rows, ["Score", "Gene region", "Near a known locus"] + ["Assay check"] * ("assay_status" in self.columns))
         self.assertNotIn("for all conditions", summary)  # tiers always count them all: no qualifier
         self.assertIn('href="?tab=table&amp;trait=all&amp;tier=1-2"', summary)  # every part lists its SNPs, Active in reset
         self.assertNotIn("PROVISIONAL", re.sub(r"<svg .*?</svg>", "", page, flags=re.S))  # no badges
@@ -301,7 +301,7 @@ class ResultsTest(SimpleTestCase):
         headers = re.findall(r'<th scope="col"[^>]*><span class="sp-th">(?:<a [^>]*>|<span [^>]*>)([^<&]+)', page)
         self.assertEqual([h.strip() for h in headers], ["Keep"] + [results.COLUMNS[k][0] for k in results.DEFAULT_COLUMNS
                                                                 if k != "size"])  # the selector, then 9 (Size: SV jobs only)
-        self.assertIn('aria-sort="ascending"', page)  # tier, the default
+        self.assertIn('aria-sort="descending"', page)  # the score, the default: highest first
         head = page[page.index("<thead"):page.index("</thead>")]  # each filter on its column; the others above the table
         self.assertTrue(all(f'id="dd-{d}"' in head for d in ("tier", "region", "gene", "active", "assay")))  # active: Chromatin
         few = self.client.get(self.url + "?tab=table&cols=1&col=tier").content.decode()
@@ -315,7 +315,7 @@ class ResultsTest(SimpleTestCase):
         drawer = self.client.get(self.url + f"?tab=table&snp={row}").content.decode()
         self.assertIn('id="drawer"', drawer)
         self.assertIn('id="card-body"', drawer)  # the full card
-        self.assertIn("Tier ", drawer[drawer.index('id="drawer"'):])
+        self.assertRegex(drawer[drawer.index('id="drawer"'):], r'class="sp-badge sp-tier-\d" title="Score \d+, band ')  # the score, coloured
         self.assertIn('aria-current="true">100</a>', page)  # rows per page, under the table
         region = page[page.index('id="dd-region"'):]
         self.assertIn('<summary class="sp-colf" title="Filter Gene region"', region[:200])  # no region filter: a plain funnel
@@ -323,10 +323,10 @@ class ResultsTest(SimpleTestCase):
         self.assertIn('<summary class="sp-colf on" title="Filter Gene region: protein-changing, synonymous, coding (effect unknown), splice site or region, 5′ UTR, 3′ UTR"', both)
         self.assertEqual(int(re.search(r"of ([\d,]+) shown", both).group(1).replace(",", "")),
                          self.direct("region_class IN ('CDS', 'splice_region') OR region_class LIKE '%UTR'"))
-        tiers = re.findall(r'<span class="sp-badge sp-tier-(\d)" title="[^"]*">Tier \d: ([\d,]+)', both)  # the shown rows' tiers
+        tiers = re.findall(r'<span class="sp-badge sp-tier-(\d)" title="[^"]*">[^<:]+: ([\d,]+)', both)  # the shown rows' score bands
         self.assertEqual(sum(int(n.replace(",", "")) for _, n in tiers), int(re.search(r"of ([\d,]+) shown", both).group(1).replace(",", "")))
         one = self.client.get(self.url + "?tab=table&region=coding&region=UTR&tier=1").content.decode()
-        self.assertEqual({t for t, _ in re.findall(r'<span class="sp-badge sp-tier-(\d)" title="[^"]*">Tier \d: ([\d,]+)', one)}, {"1"})
+        self.assertEqual({t for t, _ in re.findall(r'<span class="sp-badge sp-tier-(\d)" title="[^"]*">[^<:]+: ([\d,]+)', one)}, {"1"})
 
         by_maf = self.client.get(self.url + "?tab=table&sort=maf&desc=1").content.decode()
         first = float(re.search(r'<td class="sp-num">(0\.\d\d)</td>', by_maf).group(1))
@@ -337,7 +337,7 @@ class ResultsTest(SimpleTestCase):
 
         chosen = self.client.get(self.url + "?tab=table&cols=1&col=gerp&col=bogus&col=score").content.decode()
         self.assertIn(">GERP</a>", chosen)
-        self.assertIn(">Score</a>", chosen)
+        self.assertIn(">Score &#9660;</a>", chosen)  # the default sort: highest score first, so a down arrow
         self.assertNotIn("sort=tier", chosen)
         self.assertIn("col=gerp", chosen)  # kept in the sort and page links
         layers = self.client.get(self.url + "?tab=table&cols=1&col=id&col=pike&col=summit&sort=summit").content.decode()  # 2026-11-24
