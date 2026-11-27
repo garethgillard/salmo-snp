@@ -236,8 +236,9 @@ def ss4r(ids):
 
 
 def known_loci(request):
-    """/snp/known-loci/?tab=<trait>: the published SNPs (and QTL intervals, under review) of the release catalogue, one
-    tab per trait, with evidence, effect and caveat, DOIs, gene and its Ss4R duplicate, variant and locus links."""
+    """/snp/known-loci/: the release catalogue as one document with a contents index: the published SNPs by trait, the
+    structural variants, then gene regions and QTL windows (under review), with evidence, effect and caveat, DOIs, gene
+    and its Ss4R duplicate, variant and locus links."""
     rows = catalogue()
     genes = gene_rows(sorted({r["ensembl_gene"] for r in rows if r.get("ensembl_gene")}))
     duplicates = ss4r(genes)
@@ -254,12 +255,33 @@ def known_loci(request):
             r["locus_url"] = search.locus_url(r["chrom"], a, b) if b - a < MAX_WINDOW else search.locus_url(r["chrom"], max(1, a - FLANK), a + FLANK)
         r["salmobase"] = SALMOBASE_GENE.format(r["ensembl_gene"]) if r.get("ensembl_gene") else None
         r["flags"] = [b for b in r["badges"] if b[0] == "caveat"]  # the evidence badge leads its cell; caveats get their own
-    groups = by_trait(rows)
-    tab = request.GET.get("tab")
+    # one document in three parts, each with its own columns: SNPs by trait, then structural variants and then gene
+    # regions and QTL windows, each one table with a Trait column, in trait order (G, 2026-11-27)
+    heading = {t: h for t, h, _ in by_trait(rows)}
+    order = {t: i for i, t in enumerate(heading)}
+    parts = {"snp": [], "sv": [], "region": []}
+    for r in rows:
+        part = "sv" if r["kind"] == "sv" else "region" if r["kind"] == "region" or r["interval"] else "snp"
+        r["trait_heading"] = heading.get(r.get("trait") or "other", r["trait_text"])
+        if (r.get("start") or "").isdecimal() and (r.get("end") or "").isdecimal():
+            r["size"] = span_text(int(r["end"]) - int(r["start"]) + 1)
+        r["svtype_text"] = SV_TYPES.get((r.get("svtype") or "").upper(), r.get("svtype") or "")
+        parts[part].append(r)
+    where = lambda r: (order.get(r.get("trait") or "other", len(order)), int(r["chrom"]) if (r.get("chrom") or "").isdigit() else 99,
+                       int(r.get("start") or r.get("pos") or 0) if (r.get("start") or r.get("pos") or "").isdecimal() else 0)
     return render(request, "snpportal/known_loci.html", {
-        "nav": "known", "title": "Known loci", "groups": groups, "has_ss4r": bool(_file("ss4r")),
-        "tab": tab if tab in [t for t, _, _ in groups] else groups[0][0] if groups else None,
-        "counts": catalogue_counts(rows)})
+        "nav": "known", "title": "Known loci", "snp_groups": by_trait(parts["snp"]), "n_snps": len(parts["snp"]),
+        "svs": sorted(parts["sv"], key=where), "regions": sorted(parts["region"], key=where),
+        "has_ss4r": bool(_file("ss4r")), "counts": catalogue_counts(rows)})
+
+
+SV_TYPES = {"INV": "inversion", "DUP": "duplication", "DEL": "deletion", "INS": "insertion", "CNV": "copy number",
+            "BND": "breakend"}  # VCF SVTYPE codes, in words on Known loci
+
+
+def span_text(bp):
+    """A span's length in words: 950 bp, 12.5 kb, 5.74 Mb."""
+    return f"{bp:,} bp" if bp < 1000 else f"{bp / 1000:.3g} kb" if bp < 1_000_000 else f"{bp / 1_000_000:.3g} Mb"
 
 
 # ---- candidate public variants ----

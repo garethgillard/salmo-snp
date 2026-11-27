@@ -1,0 +1,4 @@
+{# Known loci: a row's Locus cell (the name, 'under review' for a QTL window, Browse and the gene's public SNPs). #}
+<th scope="row" class="fw-normal">{{ r.locus }}{% if r.interval %} {% include 'snpportal/_badges.html' with kind='flag' value='under review' %}{% endif %}
+  <span class="sp-sub sp-loci-go">{% if r.locus_url %}<a href="{{ r.locus_url }}" title="Open this locus in the Locus browser">Browse</a>{% endif %}
+  {% if r.gene %}<a href="{% url 'snpportal:gene' r.gene.id %}#candidates" title="The public SNPs in and around this gene">Public SNPs</a>{% endif %}</span></th>

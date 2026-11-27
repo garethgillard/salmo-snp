@@ -1,0 +1,11 @@
+{% load snpportal_tags %}
+{# Known loci: the cells every part shares: the gene (SalmoBase, its Ss4R duplicate), evidence and effect, caveat, publication and notes. #}
+<td>{% if r.gene %}<a href="{% url 'snpportal:gene' r.gene.id %}">{{ r.gene.label }}</a>
+  <a class="sp-sub" href="{{ r.salmobase }}" rel="noreferrer noopener" target="_blank">SalmoBase {% icon 'external' %}</a>
+  {% if has_ss4r %}<span class="sp-sub"><abbr title="The gene's other copy from the salmonid whole-genome duplication (AQUA-FAANG salmon-trout clades)">Ss4R duplicate</abbr>:
+    {% for c in r.ss4r.copies %}<a href="{% url 'snpportal:gene' c.id %}" title="{{ c.id }}">{{ c.label }}</a> (chr{{ c.chrom }}){% if not forloop.last %}, {% endif %}{% empty %}<span title="No second copy in the AQUA-FAANG salmon-trout table">none</span>{% endfor %}{% if r.ss4r.copies and r.ss4r.class == 'LORe' %} &middot; <span title="Late rediploidisation: the two copies are nearly identical">LORe</span>{% endif %}</span>{% endif %}
+  {% else %}{{ r.ensembl_gene }}{% endif %}</td>
+<td class="sp-ev-cell">{% with b=r.badges.0 %}{% include 'snpportal/_badges.html' with kind='evidence' value=b.1 cls=b.0 tip=b.2 %}{% endwith %} {{ r.effect|default:"" }}</td>
+<td class="sp-cav-cell">{% for cls, text, tip in r.flags %}{% include 'snpportal/_badges.html' with kind='evidence' value=text cls=cls tip=tip %} {% endfor %}{{ r.caveat|default:"" }}</td>
+<td>{% for doi in r.dois %}<a class="sp-doi" href="https://doi.org/{{ doi }}" rel="noreferrer noopener" target="_blank">{{ doi }}</a>{% endfor %}
+  {% if r.note or r.icsasg_v2 %}<details><summary>Notes</summary>{% if r.note %}<p class="mb-1">{{ r.note }}</p>{% endif %}{% if r.icsasg_v2 %}<p class="mb-0">ICSASG_v2 position: <span class="sp-mono">{{ r.icsasg_v2 }}</span></p>{% endif %}</details>{% endif %}</td>

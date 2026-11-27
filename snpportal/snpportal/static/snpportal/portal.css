@@ -672,10 +672,38 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
 .sp .sp-ev-sv { border-color: var(--sp-grey-700); border-left-width: 4px; }
 .sp .sp-ev-allele { border-color: var(--sp-ok-border); background: var(--sp-ok-bg); color: var(--sp-ok-text); }
 .sp .sp-ev-caveat { border-color: var(--sp-warn-border); background: var(--sp-warn-bg); color: var(--sp-warn-text); }
-@media print {  /* every trait's table on paper, under its heading */
-  .sp-loci-tabs .tab-pane { display: block !important; }
-  .sp-loci-tabs h2.visually-hidden { position: static !important; width: auto !important; height: auto !important;
-    clip: auto !important; overflow: visible !important; margin: 1rem 0 .4rem !important; } }
+/* one document: a contents index (in columns at the top; a sticky column from 1500 px, where the page widens so the
+   tables keep their room), then the parts; anchors land below the sticky top bar */
+.sp-kl-index { margin: 0 0 1.75rem; padding-bottom: 1.1rem; border-bottom: 1px solid var(--sp-line); }
+.sp-kl-index h2 { margin: 0 0 .45rem; color: var(--sp-muted); font-size: var(--sp-fs-sm); font-weight: 600; }
+.sp-kl-index ol { margin: 0; padding: 0; list-style: none; }
+.sp-kl-index > ol { display: flex; flex-wrap: wrap; gap: .5rem 3rem; }
+.sp-kl-index li { padding: .1rem 0; font-size: var(--sp-fs-sm); }
+.sp-kl-index > ol > li > a { font-weight: 600; }
+.sp-kl-index ol ol { margin-top: .2rem; padding-left: .75rem; border-left: 1px solid var(--sp-line); columns: 2; column-gap: 2.5rem; }
+.sp .sp-kl-index a { color: var(--sp-ink); text-decoration: none; }
+.sp .sp-kl-index a:hover { color: var(--sp-link); text-decoration: underline; }
+.sp-kl-index, .sp-kl-part, .sp-kl-trait { scroll-margin-top: calc(var(--sp-nav-h) + 1rem); }
+.sp-kl-part + .sp-kl-part { margin-top: 2.75rem; padding-top: 1.5rem; border-top: 1px solid var(--sp-line); }
+.sp-kl-part > h2, .sp-kl-trait > h3 { display: flex; align-items: baseline; gap: .5rem; }
+.sp-kl-part > h2 { margin: 0 0 .35rem; }
+.sp-kl-trait { margin-top: 1.75rem; }
+.sp-kl-trait > h3 { margin: 0 0 .4rem; font-size: var(--sp-fs-lg); }
+.sp-kl-intro { max-width: var(--sp-measure); margin-bottom: .5rem; color: var(--sp-ink-2); font-size: var(--sp-fs-sm); }
+.sp .sp-kl-up { margin-left: auto; color: var(--sp-muted); font-size: var(--sp-fs-xs); font-weight: 400; text-decoration: none; }
+.sp .sp-kl-up:hover { color: var(--sp-link); text-decoration: underline; }
+@media (min-width: 1500px) {
+  .sp:has(.sp-kl) .sp-wrap { max-width: 1640px; }  /* the top bar and footer widen with the page, so their edges line up */
+  .sp-kl { display: grid; grid-template-columns: 12.5rem minmax(0, 1fr); gap: 2.5rem; align-items: start; }
+  .sp-kl-index { position: sticky; top: calc(var(--sp-nav-h) + 1.25rem); max-height: calc(100vh - var(--sp-nav-h) - 2.5rem);
+    margin: 0; padding: 0; overflow: auto; border: 0; }
+  .sp-kl-index > ol { display: block; }
+  .sp-kl-index > ol > li { margin-bottom: .6rem; }
+  .sp-kl-index ol ol { columns: 1; }
+  .sp-kl-up { display: none; }  /* the contents stay in view */
+}
+@media (max-width: 575.98px) { .sp-kl-index ol ol { columns: 1; } }
+@media print { .sp-kl-up { display: none; } .sp-kl { display: block; } .sp-kl-index { position: static; } }
 .sp-loci { font-size: var(--sp-fs-sm); }
 .sp-loci td, .sp-loci th { padding-top: .5rem; padding-bottom: .5rem; vertical-align: top; }
 .sp-loci thead th { color: var(--sp-ink-2); font-weight: 600; }

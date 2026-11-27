@@ -122,12 +122,15 @@ class ExploreTest(SimpleTestCase):
         self.assertContains(page, "Ss4R duplicate</abbr>", html=False)  # a column, from the AQUA-FAANG salmon-trout clades
         self.assertContains(page, f'href="{reverse("snpportal:gene", args=[VGLL3_CHR21])}" title="{VGLL3_CHR21}">vgll3</a> (chr21)', html=False)
         self.assertNotContains(page, 'id="ohnologs"')
-        for trait in ("age_at_maturity", "pd_resistance", "flesh_colour", "sex_determination"):  # one tab per trait
-            self.assertContains(page, f'id="tab-{trait}" href="?tab={trait}"', html=False)
-        self.assertContains(page, 'class="tab-pane active" id="pane-age_at_maturity"', html=False)  # the first trait
-        flesh = self.client.get(reverse("snpportal:known_loci"), {"tab": "flesh_colour"})  # ?tab= without JavaScript
-        self.assertContains(flesh, 'class="tab-pane active" id="pane-flesh_colour"', html=False)
-        self.assertNotContains(flesh, 'class="tab-pane active" id="pane-age_at_maturity"', html=False)
+        for trait in ("age_at_maturity", "pd_resistance", "flesh_colour"):  # one document: the SNPs by trait, in the contents
+            self.assertContains(page, f'href="#snps-{trait}"', html=False)
+            self.assertContains(page, f'id="snps-{trait}"', html=False)
+        html = page.content.decode()
+        self.assertIn('href="#svs"', html)  # then the structural variants and the gene regions, each one table
+        self.assertIn('href="#regions"', html)
+        self.assertLess(html.index('id="snps"'), html.index('id="svs"'))
+        self.assertIn(">inversion</td>", html)  # SVTYPE in words
+        self.assertNotIn("tab-pane", html)  # no tabs: the browser's Find and print see every entry
         self.assertContains(page, 'sp-ev sp-ev-missense" title="missense (candidate causal)"')
         self.assertContains(page, ">suggestive</span>")  # sea lice rows
         self.assertContains(page, "a cdh1 knockout had no major effect")  # each row's caveat stays visible
