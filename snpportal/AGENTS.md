@@ -91,6 +91,10 @@ tests are in `tests/`, the Django ones in `snpportal/tests*.py`.
   privacy, Run locally. One fold pattern (`.sp-more`, `.sp-cs`: a title row, a chevron at the right); one tab style.
 - Words: one name per thing (Tier, SNP, position, Known locus, Design panel only for the panel page, condition, window
   for the region around a gene, Print report).
+- G's answers on the overhaul (2026-11-27): one Score tab for SNPs, a file or pasted lines; the 'why this tier' bar
+  draws where a SNP is in a gene (CDS, synonymous, splice, UTR) in the Overview's coding colour, so tier blues mean
+  tiers only (locus_svg.TERMS); the Table's column is 'Gene region' (not 'Consequence'); from 992 px the SNP card
+  beside the Table starts and ends with the Table's box (portal.js; a short table leaves the card its full column).
 - Every colour lives in `palette.py`; templates and `portal.css` use classes and `var(--sp-*)` only (tested). SVGs embed literal hex.
 - New pages extend `base_portal.html`; figures use the `_figure.html` card (title, (i) definition, one SVG/PNG/TSV download menu; provenance only in the SVG `<desc>` and downloads).
 - No prototype caveat line on the pages (removed 2026-10-11: a dev version); Methods, the report and every download still

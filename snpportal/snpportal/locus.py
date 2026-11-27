@@ -461,7 +461,6 @@ def evidence(snp, weights, trait, synthetic=False, snps=()):
 SCORE_LABELS = {"active_elsewhere": "active elsewhere", "synonymous": "synonymous", "splice": "splice region",
                 "constrained": "conserved", "pike": "aligns to pike", "summit": "ATAC summit"}
 CHROMATIN_TERMS = ("active", "active_elsewhere", "weak")  # their blocks say what the chromatin chip would
-GENE_TERMS = ("coding", "synonymous", "splice", "utr")  # one colour for where the SNP is in a gene: tier blues mean tiers only
 
 
 def score_parts(snp, states=None, chosen=(), weights=None):
@@ -487,8 +486,7 @@ def score_parts(snp, states=None, chosen=(), weights=None):
         state = locus_svg.strongest(found) if found else None  # its strongest state, coloured as in the tiles
         tip = (f"{k.replace('_', ' ')}" + (f" ({state.replace('_', ' ')})" if state else "") + f": {conditions_text(r.partition(': ')[2])}"
                if k in CHROMATIN_TERMS and r else text)
-        colour = (palette.state(state)[0] if state else palette.REGIONS["coding"] if k in GENE_TERMS  # gene structure: the
-                  else locus_svg._colour(locus_svg.TERMS.get(k, (palette.GREY[500], k))[0]))  # Overview's coding colour, not a tier's
+        colour = palette.state(state)[0] if state else locus_svg._colour(locus_svg.TERMS.get(k, (palette.GREY[500], k))[0])
         out.append((label, t["weight"], colour, f"{tip} +{w}"))
     return sorted(out, key=lambda p: -p[1])
 

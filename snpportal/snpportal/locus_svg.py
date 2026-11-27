@@ -21,10 +21,10 @@ TERMS = {  # tier_terms term -> (state name or colour, label) for the 'why this 
     "active": ("Active_enhancer", "active in a condition"),
     "active_elsewhere": ("Flanking_upstream", "active elsewhere"),
     "weak": ("Primed_enhancer", "weak state"),
-    "coding": (palette.TIERS[1][0], "CDS"),
-    "synonymous": (palette.TIERS[1][0], "synonymous CDS"),
-    "splice": (palette.TIERS[2][0], "splice region"),
-    "utr": (palette.TIERS[3][0], "UTR"),
+    "coding": (palette.REGIONS["coding"], "CDS"),  # where the SNP is in a gene: the Overview's coding colour (G, 2026-11-27:
+    "synonymous": (palette.REGIONS["coding"], "synonymous CDS"),  # tier blues mean tiers only)
+    "splice": (palette.REGIONS["coding"], "splice region"),
+    "utr": (palette.REGIONS["coding"], "UTR"),
     "constrained": (palette.GREY[700], "GERP constrained"),
     "regbuild": (palette.REGBUILD, "Ensembl regulatory"),
     "molqtl": (palette.TISSUES["Gonad"], "molQTL lead (display only)"),

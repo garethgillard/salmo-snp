@@ -491,6 +491,8 @@ a.sp-card:hover { border-color: var(--sp-line-2); background: var(--sp-grey-50);
   #results:has(> #drawer) > * { grid-column: 1; min-width: 0; }
   #results > #drawer { grid-column: 2; grid-row: 1 / span 4; position: sticky; top: calc(var(--sp-nav-h) + .75rem);
     height: calc(100vh - var(--sp-nav-h) - 1.5rem); border: 1px solid var(--sp-line); border-radius: var(--sp-radius); }
+  /* portal.js: level with the Table's box, top and bottom */
+  #results > #drawer.sp-aligned:not(.sp-wide) { position: static; margin-top: var(--sp-card-top); height: var(--sp-card-h); }
 }
 @media (max-width: 991.98px) { #drawer { position: fixed; inset: 0; z-index: 1040; } }
 #results > #drawer.sp-wide { position: fixed; inset: 0; z-index: 1040; height: auto; border: 0; border-radius: 0; }  /* its locus browser */
