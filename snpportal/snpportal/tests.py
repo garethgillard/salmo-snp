@@ -186,9 +186,13 @@ class PortalTest(SimpleTestCase):
         self.assertIn(job["manifest_sha256"], "\n".join(comments))
         self.assertIn(job["weights_sha256"], "\n".join(comments))
         self.assertIn("PROVISIONAL", "\n".join(comments))
-        header = everything[len(comments)]
-        self.assertIn("chromatin_Brain_Immature_Female", header)
+        header = everything[len(comments)].split("\t")
+        self.assertIn("chromatin_states", header)  # the Table's columns: the 27 conditions in one (G, 2026-11-27, from users)
+        self.assertNotIn("chromatin_Brain_Immature_Female", header)
         self.assertIn("tier_evidence", header)
+        every = b"".join(self.client.get(url + "download/?columns=all").streaming_content).decode().splitlines()
+        self.assertIn("chromatin_Brain_Immature_Female", every[len(comments)].split("\t"))  # More formats: every column
+        self.assertLess(len(header), len(every[len(comments)].split("\t")) / 2)
         some = b"".join(self.client.get(url + "download/?max_tier=2").streaming_content).decode().splitlines()
         self.assertLess(len(some), len(everything))
         plain = b"".join(self.client.get(url + "download/?plain=1").streaming_content).decode()

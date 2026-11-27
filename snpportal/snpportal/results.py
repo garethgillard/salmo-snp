@@ -159,6 +159,23 @@ FILTER_COLUMNS = {"tier": "tier", "max_tier": "tier", "term": "score", "min_scor
                   "tissue": "chromatin", "maturity": "chromatin", "sex": "chromatin", "act": "chromatin", "known": "known",
                   "molqtl": "molqtl", "min_maf": "maf", "max_maf": "maf", "assay": "assay", "hide_lore": "assay", "track": "id"}  # hide_*: flags
 GWAS_COLUMNS = ("tier", "score", "id", "p", "beta", "pip", "gene", "region", "chromatin")
+EXPORT_COLUMNS = {  # Table column -> the result columns a TSV of it holds: what the Table shows, not all 95 columns (G,
+    # 2026-11-27, from users); {score} is each score layer; chromatin_states puts the 27 conditions' states in one column
+    "tier": ("tier",), "score": ("tier_score", "tier_evidence"), "size": ("end", "length", "svtype", "svlen"),
+    "p": ("p", "neglog10p"), "beta": ("beta", "se"), "pip": ("pip_uniform", "pip_functional"),
+    "gene": ("gene_name", "gene_id", "gene_distance", "gene_ortholog_human", "genes", "n_genes"),  # genes, n_genes: an SV's
+    "region": ("region_class", "coding_consequence", "coding_hgvsp", "region_classes"),
+    "chromatin": ("chromatin", "chromatin_states", "peaks"),
+    "known": ("known_locus", "known_locus_dist", "known_effect_allele", "known_effect_note"),
+    "molqtl": ("molqtl", "molqtl_tissues", "molqtl_kinds", "molqtl_best_bf"), "gerp": ("gerp", "gerp_score"), "pike": ("pike",),
+    "summit": ("summit_distance", "summit_rank", "summit_signal", "summit_condition"),
+    "regbuild": ("regbuild", "regbuild_type", "regbuild_id"), "scores": ("{score}_score", "{score}_percentile", "{score}_effect"),
+    "maf": ("maf", "af", "public_af_maf", "public_af_af"), "cm": ("cm_female", "cm_male"),
+    "assay": ("assay_status", "assay_reasons", "assay_flank"), "flags": ("blacklist", "lore", "strand_ambiguous", "flank_variants"),
+    "ref_check": ("ref_check",)}
+IDENTITY = ("chrom", "pos", "id", "ref", "alt")  # every TSV starts with these
+KEPT = ("on_chip", "dist_to_chip", "near_chip", "novel_functional",  # and ends with these where they exist: the chip
+        "selection_reason", "panel_rank", "design_score", "selection_purpose")  # comparison's, a picked panel's
 EXTRA = {"id": ("id", "chrom", "pos", "ref", "alt", "end", "svtype", "length"), "size": ("svtype", "svlen"), "tier": ("tier_score", "tier_evidence", "tier_terms", "coding_hgvsp", "known_locus",
                                                                 "known_locus_dist"), "known": ("known_locus_dist",),
          "gene": ("gene_ortholog_human", "gene_distance", "genes", "n_genes"),
@@ -1335,6 +1352,45 @@ def keep_selection(d, query):
 def selection_request(query):
     """A stand-in request whose GET is a saved selection, for filters()."""
     return SimpleNamespace(GET=QueryDict(query))
+
+
+def table_columns(d, types, gwas=False):
+    """The Table columns a job's saved selection shows: its Columns choice, else the defaults."""
+    q = QueryDict(selection(d))
+    available = [k for k, (_, _, needs, _) in COLUMNS.items() if not needs or any(c in types for c in needs)]
+    if q.get("cols"):
+        return [k for k in available if k == "id" or k in q.getlist("col")]
+    return [k for k in (GWAS_COLUMNS if gwas else DEFAULT_COLUMNS) if k in available]
+
+
+def export_select(types, keys, scores=()):
+    """The SELECT list of a TSV of the Table's columns `keys`: the SNP (chrom, pos, id, ref, alt), the result columns
+    behind each Table column in its order (EXPORT_COLUMNS), then the list's own columns (in_*) and those of a chip
+    comparison or a picked panel (KEPT)."""
+    out, seen = [], set()
+
+    def add(name, expr=None):
+        if name not in seen:
+            seen.add(name)
+            out.append(f"{expr} AS {jobs.ident(name)}" if expr else jobs.ident(name))
+    for name in IDENTITY:
+        if name in types:
+            add(name)
+    for key in keys:
+        for name in EXPORT_COLUMNS.get(key, ()):
+            for column in ([name.format(score=s) for s in scores] if "{score}" in name else [name]):
+                if column == "chromatin_states":
+                    conditions = [c for c in types if c.startswith("chromatin_") and c not in snpscore.score.NOT_CONDITIONS]
+                    if conditions:  # 'Brain_Immature_Female=Active_TSS; ...': the conditions with a state
+                        add(column, "nullif(concat_ws('; ', " + ", ".join(
+                            f"CASE WHEN {jobs.ident(c)} IS NOT NULL THEN {lit(c[len('chromatin_'):] + '=')} || {jobs.ident(c)} END"
+                            for c in conditions) + "), '')")
+                elif column in types:
+                    add(column)
+    for name in types:
+        if name.startswith("in_") or name in KEPT:
+            add(name)
+    return ", ".join(out)
 
 
 def panel_status(get):

@@ -53,7 +53,7 @@ BINDING = {"min_spacing": "the minimum spacing", "min_spacing_cm": "the minimum 
            "max_per_element": "the per-element cap"}
 CM_MAPS = {"mean": "sex-averaged", "female": "female", "male": "male"}  # lib.panel.CM_MAPS
 FORMATS = [  # (format, label, contents) of the Export tab's rows; vendor rows add their counts and checks
-    ("tsv", "Table (TSV)", "Every annotation column, one row per SNP."),
+    ("tsv", "Table (TSV)", "The columns the Table shows, one row per SNP; every column is under More formats."),
     ("kasp", "KASP", ""), ("illumina", "Illumina", ""), ("axiom", "Axiom", ""),
     ("agena", "Agena MassARRAY", ""), ("primer3", "Primer3 (amplicon, GT-seq)", ""),  # I14: layouts PROVISIONAL
     ("bundle", "Everything (zip)", "The table, BED and vendor files, with methods, provenance and figures."),
@@ -914,6 +914,12 @@ def export(request, key, job, fmt):
         return render(request, "snpportal/stub.html", {"nav": "score", "title": "Too many SNPs for a vendor file", "message":
                       f"Vendor files are for panels: this export has {n:,} SNPs, more than {cap:,}. Filter the Table "
                       "first, or add a selection to your Design panel, which makes vendor files for it."}, status=400)
+    if fmt == "tsv" and request.GET.get("columns") != "all":  # the Table's columns, not all (G, 2026-11-27, from users)
+        found = dict(con.execute(f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM {table})").fetchall())
+        shown = results.table_columns(d, found, job.get("input_kind") == "gwas")
+        columns = results.export_select(found, shown, [s for s, _ in jobs.score_layers(d)])
+        con.execute(f"CREATE OR REPLACE VIEW tsv AS SELECT file_row_number, {columns} FROM {table}")
+        table = "tsv"
     formats = ["tsv", "bed"] + (list(VENDORS) if n <= cap and not sv else [])
     notes = {"vendor_files": f"left out above {cap:,} SNPs"} if fmt == "bundle" and n > cap else {}
     named = {k: ("one of your own tracks" if k == "track" else v) for k, v in filters.items()}  # a track by name, not its id
@@ -1092,7 +1098,8 @@ def exports(request, key, job):
              href(fmt, **({"scope": "all"} if fmt == "priors" else {})))  # priors need every genotyped SNP: never a subset
             for fmt, name, about in MORE_FORMATS if fmt != "priors" or fmt in getattr(snp_export, "FORMATS", ()) and not sv]
     more = [(n, "chrom, start − 1 and end of each SV, and its name, for genome browsers" if sv and "BED" in n else a, h)
-            for n, a, h in more] + [("Table without # lines (TSV)", "for scripts", href("tsv", plain="1"))]
+            for n, a, h in more] + [("Table with every column (TSV)", "all the annotation columns", href("tsv", columns="all")),
+                                    ("Table without # lines (TSV)", "for scripts", href("tsv", plain="1"))]
     if notes:
         more += [(f"{fmt.upper() if fmt == 'kasp' else fmt.capitalize()}: keep SNPs that fail the assay check or are not checked, flagged", "",
                   href(fmt, include_failed="1")) for fmt in (("kasp",) if gwas else vendor)]
